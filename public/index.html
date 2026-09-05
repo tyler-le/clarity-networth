@@ -89,7 +89,7 @@
           <div class="portfolio-chart" id="investmentChart" aria-label="Portfolio value history"></div>
         </article>
         <div class="investment-focus-grid">
-          <article class="card allocation-card" id="investmentAllocationCard"><div class="card-label">Asset allocation</div><p class="spending-context" id="investmentAllocationInsight">Tap a category to explore its holdings.</p><div class="allocation-visual"><div class="investment-donut" id="investmentDonut"><span>—</span></div><div class="investment-allocation" id="investmentAllocation"></div></div></article>
+          <article class="card allocation-card" id="investmentAllocationCard"><div class="card-label">Asset allocation</div><p class="spending-context" id="investmentAllocationInsight">Tap a category to explore its holdings.</p><div class="allocation-visual"><div class="investment-donut" id="investmentDonut" role="button" tabindex="0" aria-label="Select an asset category"><span>—</span></div><div class="investment-allocation" id="investmentAllocation"></div></div></article>
           <article class="card investment-card" id="investmentAccountsCard"><div class="card-label">Where it’s held</div><div class="investment-accounts" id="investmentAccounts"></div></article>
         </div>
         <details class="card holdings-card" id="investmentHoldingsPanel"><summary><span>Explore holdings</span><small id="investmentPositionCount"></small></summary><div class="holdings-controls"><select id="investmentSort" aria-label="Sort holdings"><option value="value">Largest value</option><option value="performance">Best performance</option><option value="equity">Asset type</option></select></div><div id="investmentPositions"></div></details>
@@ -102,7 +102,7 @@
         </article>
         <article class="card spending-trend-card"><div class="card-top"><div><div class="card-label">Monthly pattern</div><p class="spending-context">Income and spending, side by side.</p></div><div class="trend-key" aria-label="Chart legend"><span><i class="income"></i>Income</span><span><i class="spend"></i>Spent</span></div></div><div class="trend-detail" id="trendDetail" aria-live="polite"></div><div class="spending-trend" id="spendingTrend"></div></article>
         <div class="spending-visual-grid">
-          <article class="card spending-mix-card"><div class="card-top"><div class="card-label">Your plan allocation</div><div class="allocation-toggle" aria-label="Allocation display"><button class="active" data-allocation-display="percentage">%</button><button data-allocation-display="amount">$</button></div></div><div class="spending-mix-content"><div class="spending-donut" id="spendingDonut"><span>—</span></div><div class="spending-legend" id="spendingLegend"></div></div></article>
+          <article class="card spending-mix-card"><div class="card-top"><div class="card-label">Your plan allocation</div><div class="allocation-toggle" aria-label="Allocation display"><button class="active" data-allocation-display="percentage">%</button><button data-allocation-display="amount">$</button></div></div><div class="spending-mix-content"><div class="spending-donut" id="spendingDonut" role="button" tabindex="0" aria-label="Select a plan category"><span>—</span></div><div class="spending-legend" id="spendingLegend"></div></div></article>
         </div>
         <details class="card spending-transactions" id="spendingTransactionsPanel">
           <summary><span>View categorized transactions</span><small id="spendingTransactionCount"></small></summary>

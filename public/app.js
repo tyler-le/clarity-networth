@@ -338,7 +338,8 @@ function renderSpending(data) {
   let cursor = 0;
   const stops = rows.map((row, index) => { const next = cursor + row.share * 100; const stop = `${spendingColors[index % spendingColors.length]} ${cursor.toFixed(2)}% ${next.toFixed(2)}%`; cursor = next; return stop; });
   donut.style.background = `conic-gradient(${stops.join(', ')})`;
-  donut.innerHTML = '<span>Plan<br>mix</span>';
+  const chosen = rows.find((row) => row.name === state.spendingCategory);
+  donut.innerHTML = chosen ? `<span><strong>${state.allocationDisplay === 'amount' ? fmt.format(chosen.amount) : `${chosen.percentage}%`}</strong><small>${escapeHtml(chosen.name)}</small></span>` : '<span>Plan<br>mix</span>';
   $('#spendingLegend').innerHTML = rows.slice(0, 5).map((row, index) => `<button class="legend-row" data-spending-category="${escapeHtml(row.name)}"><i style="background:${spendingColors[index % spendingColors.length]}"></i><span>${escapeHtml(row.name)}</span><strong>${state.allocationDisplay === 'amount' ? fmt.format(row.amount) : `${row.percentage}%`}</strong></button>`).join('');
   renderSpendingTransactions(selected);
 }
@@ -416,8 +417,9 @@ function renderInvestments(data) {
   if (allocation.length) {
     const largest = allocation[0];
     $('#investmentAllocationInsight').textContent = `${largest.name} is your largest allocation at ${Math.round(largest.share * 100)}%. Tap a category to explore it.`;
-    donut.style.background = `conic-gradient(${allocation.map((row, index) => { const next = cursor + row.share * 100; const stop = `${colors[index % colors.length]} ${cursor.toFixed(2)}% ${next.toFixed(2)}%`; cursor = next; return stop; }).join(', ')})`;
-    donut.innerHTML = `<span>${state.investmentFilter === 'all' ? 'Your<br>mix' : `${escapeHtml(state.investmentFilter)}<br>holdings`}</span>`;
+    const selected = allocation.find((row) => row.name === state.investmentFilter);
+    donut.style.background = `conic-gradient(${allocation.map((row, index) => { const next = cursor + row.share * 100; const color = state.investmentFilter === 'all' || row.name === state.investmentFilter ? colors[index % colors.length] : '#dde4dd'; const stop = `${color} ${cursor.toFixed(2)}% ${next.toFixed(2)}%`; cursor = next; return stop; }).join(', ')})`;
+    donut.innerHTML = selected ? `<span><strong>${fmt.format(selected.value)}</strong><small>${escapeHtml(selected.name)} · ${Math.round(selected.share * 100)}%</small></span>` : '<span><strong>Your mix</strong><small>Tap a category</small></span>';
     $('#investmentAllocation').innerHTML = `<button class="investment-allocation-row ${state.investmentFilter === 'all' ? 'active' : ''}" data-investment-filter="all"><i></i><span>All assets</span><strong>${fmt.format(data.total || 0)}</strong></button>${allocation.map((row, index) => `<button class="investment-allocation-row ${state.investmentFilter === row.name ? 'active' : ''}" data-investment-filter="${escapeHtml(row.name)}"><i style="background:${colors[index % colors.length]}"></i><span>${escapeHtml(row.name)}</span><small>${Math.round(row.share * 100)}%</small><strong>${fmt.format(row.value)}</strong></button>`).join('')}`;
   } else {
     donut.style.background = '#edf0eb'; donut.innerHTML = '<span>Awaiting<br>holdings</span>';
@@ -591,9 +593,45 @@ function openSpendingCategory(category) {
   if (!category) return;
   state.spendingCategory = category;
   $('#spendingTransactionsPanel').open = true;
-  renderSpendingTransactions(spendingForSelectedMonth(state.spending));
+  renderSpending(state.spending);
 }
 $('#spendingLegend').addEventListener('click', (event) => openSpendingCategory(event.target.closest('[data-spending-category]')?.dataset.spendingCategory));
+function donutSelection(event, element, rows) {
+  const rect = element.getBoundingClientRect();
+  const x = event.clientX - rect.left - rect.width / 2;
+  const y = event.clientY - rect.top - rect.height / 2;
+  if (Math.hypot(x, y) < rect.width * .18) return null;
+  const angle = (Math.atan2(y, x) * 180 / Math.PI + 450) % 360;
+  let cursor = 0;
+  return rows.find((row) => { cursor += Number(row.share || 0) * 360; return angle <= cursor; }) || null;
+}
+$('#spendingDonut').addEventListener('click', (event) => {
+  const selected = donutSelection(event, event.currentTarget, spendingForSelectedMonth(state.spending).categories || []);
+  if (selected) openSpendingCategory(selected.name);
+});
+$('#spendingDonut').addEventListener('keydown', (event) => {
+  if (!['Enter', ' '].includes(event.key)) return;
+  event.preventDefault();
+  const rows = spendingForSelectedMonth(state.spending).categories || [];
+  openSpendingCategory(state.spendingCategory === 'all' ? rows[0]?.name : state.spendingCategory);
+});
+$('#investmentDonut').addEventListener('click', (event) => {
+  const selected = donutSelection(event, event.currentTarget, state.investments?.allocation || []);
+  if (!selected) return;
+  state.investmentFilter = selected.name;
+  $('#investmentHoldingsPanel').open = true;
+  renderInvestments(state.investments);
+});
+$('#investmentDonut').addEventListener('keydown', (event) => {
+  if (!['Enter', ' '].includes(event.key)) return;
+  event.preventDefault();
+  const rows = state.investments?.allocation || [];
+  const selected = state.investmentFilter === 'all' ? rows[0] : rows.find((row) => row.name === state.investmentFilter);
+  if (!selected) return;
+  state.investmentFilter = selected.name;
+  $('#investmentHoldingsPanel').open = true;
+  renderInvestments(state.investments);
+});
 $('#spendingTransactions').addEventListener('change', async (event) => {
   const select = event.target.closest('[data-transaction-category]');
   if (!select) return;
