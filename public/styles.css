@@ -289,6 +289,7 @@ dialog::backdrop { background: rgba(10,15,10,.28); backdrop-filter: blur(3px); }
 .cashflow-headline { margin-top: 1px; color: var(--accent); font-size: 13px; font-weight: 720; }.cashflow-headline.negative { color: var(--danger); }
 .cashflow-sankey { height: 126px; margin-top: 15px; padding-top: 12px; overflow: hidden; border-top: 1px solid rgba(31,111,74,.11); }.cashflow-sankey svg { width: 100%; height: 100%; display: block; overflow: visible; }.cashflow-label { fill: #6e766f; font-size: 10px; font-weight: 650; }.cashflow-value { fill: #202420; font-size: 10px; font-weight: 740; }.cashflow-target { cursor: pointer; }.cashflow-target:hover rect { filter: brightness(.88); }.cashflow-target:hover .cashflow-label { fill: var(--accent); }
 @media (max-width: 460px) { .cashflow-sankey { height: 116px; }.cashflow-label, .cashflow-value { font-size: 9px; } }
+.cashflow-target:focus-visible rect:first-child { stroke: var(--accent); stroke-width: 2px; }
 
 /* The flow is the primary category visual, so it earns enough space to read. */
 .cashflow-sankey { height: 232px; margin-top: 18px; padding-top: 14px; }

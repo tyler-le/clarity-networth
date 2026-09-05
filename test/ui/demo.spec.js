@@ -45,6 +45,15 @@ test('cash-flow interactions lead from visual category to the relevant activity'
   await expect(page.locator('.spending-transaction-row').first()).toBeVisible();
 });
 
+test('the income source opens income activity from the cash-flow diagram', async ({ page }) => {
+  await openDemo(page);
+  await page.locator('.mobile-nav [data-view="spending"]').click();
+  await page.locator('#cashflowSankey [data-cashflow-category="Income"]').click();
+  await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
+  await expect(page.locator('#spendingCategoryFilter')).toHaveValue('Income');
+  await expect(page.locator('.income-transaction').first()).toBeVisible();
+});
+
 test('net-worth history can be scrubbed and always identifies the selected date', async ({ page }) => {
   await openDemo(page);
   const chart = page.locator('#netWorthChart');
