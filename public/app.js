@@ -72,7 +72,7 @@ function restoreNetWorthHero() {
   if (snaps.length < 2) {
     $('#netWorthDelta').textContent = 'Tracking starts today';
     const start = snaps[0]?.date ? new Date(`${snaps[0].date}T12:00:00`) : new Date();
-    $('#netWorthChartDate').textContent = `Tracking since ${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    $('#netWorthChartDate').textContent = `Tracking since ${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
     return;
   }
   const old = snaps.length > 1 ? Number(snaps[0].net_worth) : s.netWorth;
@@ -126,7 +126,7 @@ function renderLineChart(snapshots, summary) {
     const y = plotBottom - ((value - min) / (max - min)) * (plotBottom - plotTop);
     return `<line x1="${plotLeft}" y1="${y}" x2="${width - plotRight}" y2="${y}" class="chart-grid"/><text x="${plotLeft - 6}" y="${y + 3}" text-anchor="end" class="chart-axis-label">${axisCurrency(value)}</text>`;
   }).join('');
-  const dateLabel = (index) => new Date(`${snapshots[index].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+  const dateLabel = (index) => new Date(`${snapshots[index].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const xTicks = width > 420 ? [0, Math.floor((snapshots.length - 1) / 2), snapshots.length - 1] : [0, snapshots.length - 1];
   const xAxis = [...new Set(xTicks)].map((index) => `<text x="${points[index][0]}" y="${height - 5}" text-anchor="${index === 0 ? 'start' : index === snapshots.length - 1 ? 'end' : 'middle'}" class="chart-axis-label">${dateLabel(index)}</text>`).join('');
   el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img">
@@ -191,7 +191,7 @@ function renderLineChart(snapshots, summary) {
 function renderTimelineStart(el, snapshot, summary) {
   const value = Number(snapshot?.net_worth ?? summary?.netWorth ?? 0);
   const date = snapshot?.date ? new Date(`${snapshot.date}T12:00:00`) : new Date();
-  const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const width = Math.max(1, Math.round(el.clientWidth || 700));
   const height = Math.max(1, Math.round(el.clientHeight || 150));
   const baseline = Math.round(height * .75);
