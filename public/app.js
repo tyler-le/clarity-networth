@@ -317,6 +317,9 @@ function renderSpendingTrend(data) {
 
 function renderSpending(data) {
   if (!data) return;
+  // The range is the browsing context until a person chooses one exact month.
+  // In that state the range control intentionally has no active choice.
+  $$('[data-spending-range]').forEach((control) => control.classList.toggle('active', !state.spendingMonth && control.dataset.spendingRange === state.spendingRange));
   renderSpendingTrend(data);
   const selected = spendingForSelectedMonth(data);
   const total = Number(selected.total || 0);
@@ -598,6 +601,7 @@ $('#spendingTrend').addEventListener('click', (event) => {
   const row = state.spending?.monthly?.find((entry) => entry.month === month);
   if (!row) return;
   state.spendingMonth = month;
+  $$('[data-spending-range]').forEach((control) => control.classList.remove('active'));
   renderSpending(state.spending);
   $('#spendingTransactionsPanel').open = true;
 });
