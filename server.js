@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { OAuth2Client } from 'google-auth-library';
 import { hasLegacyStore, listUserStorageKeys, readStore, userStorageKey, writeStore, encrypt, decrypt, resetStore, removeDemoData } from './store.js';
-import { classifyTransaction, hideDuplicateAccounts, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotNetWorth, seedDemo } from './finance.js';
+import { classifyTransaction, hideDuplicateAccounts, investmentSummary, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotNetWorth, seedDemo } from './finance.js';
 import { plaidConfigured, plaidPost } from './plaid.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -51,7 +51,7 @@ function saveStore(user, store) {
 
 function activeStore(store) {
   if (!store.settings?.demo_mode) return store;
-  const demo = { ...store, accounts: [], transactions: [], snapshots: [], items: [] };
+  const demo = { ...store, accounts: [], positions: [], transactions: [], snapshots: [], items: [] };
   seedDemo(demo);
   return demo;
 }
@@ -143,7 +143,22 @@ async function refreshAccountsForItem(store, item) {
 
   const types = new Set((data.accounts || []).map((a) => a.type));
   if (types.has('investment')) {
-    try { await plaidPost('/investments/holdings/get', { access_token }); } catch (e) { console.warn('Investments not available:', e.message); }
+    try {
+      const holdingsData = await plaidPost('/investments/holdings/get', { access_token });
+      const securities = new Map((holdingsData.securities || []).map((security) => [security.security_id, security]));
+      store.positions = (store.positions || []).filter((position) => position.item_id !== item.id);
+      for (const holding of holdingsData.holdings || []) {
+        const security = securities.get(holding.security_id) || {};
+        store.positions.push({
+          id: `${item.id}:${holding.account_id}:${holding.security_id}`,
+          item_id: item.id, account_id: holding.account_id, security_id: holding.security_id,
+          name: security.name || holding.security_id, ticker: security.ticker_symbol || null,
+          type: security.type || 'other', quantity: Number(holding.quantity || 0),
+          price: Number(holding.institution_price || 0), value: Number(holding.institution_value || 0),
+          cost_basis: holding.cost_basis == null ? null : Number(holding.cost_basis), updated_at: new Date().toISOString(), demo: false
+        });
+      }
+    } catch (e) { console.warn('Investments not available:', e.message); }
   }
   if (types.has('credit') || types.has('loan')) {
     try { await plaidPost('/liabilities/get', { access_token }); } catch (e) { console.warn('Liabilities not available:', e.message); }
@@ -321,6 +336,10 @@ app.get('/api/spending', (req, res) => {
   res.json(spendingSummary(store, range));
 });
 
+app.get('/api/investments', (req, res) => {
+  res.json(investmentSummary(activeStore(loadStore(req.user))));
+});
+
 app.patch('/api/transactions/:id/category', (req, res) => {
   const bucket = req.body?.bucket;
   if (!['fixed', 'savings', 'investments', 'guilt_free'].includes(bucket)) return res.status(400).json({ error: 'Invalid plan category.' });
@@ -357,6 +376,7 @@ app.delete('/api/items/:id', (req, res) => {
   if (!item || item.demo) return res.status(404).json({ error: 'Connection not found.' });
   store.items = store.items.filter((candidate) => candidate.id !== item.id);
   store.accounts = store.accounts.filter((account) => account.item_id !== item.id);
+  store.positions = (store.positions || []).filter((position) => position.item_id !== item.id);
   store.transactions = store.transactions.filter((transaction) => transaction.item_id !== item.id);
   snapshotNetWorth(store);
   saveStore(req.user, store);

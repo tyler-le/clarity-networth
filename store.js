@@ -19,6 +19,7 @@ function storePath(userKey) {
 const emptyStore = () => ({
   items: [],
   accounts: [],
+  positions: [],
   transactions: [],
   snapshots: [],
   settings: {
@@ -67,10 +68,11 @@ export function writeStore(store, userKey) {
 }
 
 export function removeDemoData(store) {
-  const containsDemo = [store.items, store.accounts, store.transactions].some((records) => records.some((record) => record.demo));
+  const containsDemo = [store.items, store.accounts, store.positions || [], store.transactions].some((records) => records.some((record) => record.demo));
   if (!containsDemo) return false;
   store.items = store.items.filter((item) => !item.demo);
   store.accounts = store.accounts.filter((account) => !account.demo);
+  store.positions = (store.positions || []).filter((position) => !position.demo);
   store.transactions = store.transactions.filter((transaction) => !transaction.demo);
   // Existing snapshots do not carry a mode marker, so a mixed store cannot
   // distinguish real history from the demo baseline.

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { classifyTransaction, hideDuplicateAccounts, removeEstimatedNetWorthHistory, seedDemo, snapshotNetWorth, spendingSummary } from '../finance.js';
+import { classifyTransaction, hideDuplicateAccounts, investmentSummary, removeEstimatedNetWorthHistory, seedDemo, snapshotNetWorth, spendingSummary } from '../finance.js';
 import { filterSnapshots, scrubIndex } from '../public/chart-utils.js';
 
 test('estimated history is removed before the chart is served', () => {
@@ -93,6 +93,20 @@ test('monthly spending keeps income separate for comparison', () => {
   assert.equal(result.total, 900);
   assert.equal(result.income, 4200);
   assert.deepEqual(result.monthly, [{ month: '2026-09', amount: 900, income: 4200 }]);
+});
+
+test('investment summary separates portfolio total, allocation, and positions', () => {
+  const store = {
+    accounts: [{ id: 'ira', plaid_account_id: 'plaid-ira', name: 'Roth IRA', institution_name: 'Fidelity', type: 'investment', current_balance: 10000 }],
+    positions: [
+      { account_id: 'plaid-ira', name: 'US Equity Fund', ticker: 'VTI', type: 'etf', value: 7000, quantity: 20 },
+      { account_id: 'plaid-ira', name: 'Money market', ticker: 'SPAXX', type: 'cash', value: 2500, quantity: 2500 }
+    ]
+  };
+  const result = investmentSummary(store);
+  assert.equal(result.total, 10000);
+  assert.equal(result.positionsAvailable, true);
+  assert.deepEqual(result.allocation.map((row) => [row.name, row.value]), [['Funds', 7000], ['Cash', 2500], ['Cash & unclassified', 500]]);
 });
 
 test('demo mode provides seven years of usable account and spending history', () => {

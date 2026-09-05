@@ -8,6 +8,7 @@ const fmt2 = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD'
 const state = {
   dashboard: null,
   spending: null,
+  investments: null,
   networthRange: 'ytd',
   spendingRange: '1m',
   spendingMonth: null,
@@ -348,6 +349,18 @@ function renderSpendingTransactions(data) {
   }).join('') : '<p class="spending-empty">No posted transactions in this category for this period.</p>';
 }
 
+function renderInvestments(data) {
+  if (!data) return;
+  const accounts = data.accounts || [];
+  $('#investmentHero').innerHTML = `<article class="card investment-total-card"><div><div class="card-label">Total invested</div><div class="hero-number small">${fmt.format(data.total || 0)}</div><p>${accounts.length ? `${accounts.length} connected investment account${accounts.length === 1 ? '' : 's'}` : 'Connect an investment account to begin.'}</p></div><div class="investment-total-mark" aria-hidden="true">↗</div></article>`;
+  const allocation = data.allocation || [];
+  $('#investmentAllocation').innerHTML = allocation.length ? allocation.map((row, index) => `<div class="allocation-row"><div><span class="allocation-dot allocation-${index % 5}"></span>${escapeHtml(row.name)}</div><strong>${fmt.format(row.value)}</strong><i><b style="width:${Math.max(4, row.share * 100)}%"></b></i></div>`).join('') : '<p class="spending-empty">Allocation will appear when your institution provides positions.</p>';
+  $('#investmentAccounts').innerHTML = accounts.length ? accounts.map((account) => `<div class="investment-account-row"><div><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || '')}</span></div><b>${fmt.format(account.value)}</b></div>`).join('') : '<p class="spending-empty">No investment accounts connected.</p>';
+  const names = new Map(accounts.map((account) => [account.account_id, account.name]));
+  const positions = data.positions || [];
+  $('#investmentPositions').innerHTML = data.positionsAvailable ? positions.map((position) => `<div class="position-row"><div class="position-symbol">${escapeHtml(position.ticker || '•')}</div><div><strong>${escapeHtml(position.name)}</strong><span>${escapeHtml(names.get(position.account_id) || 'Investment account')} · ${Number(position.quantity || 0).toLocaleString('en-US', { maximumFractionDigits: 3 })} shares</span></div><b>${fmt.format(position.value)}</b></div>`).join('') : '<p class="positions-empty">Position details aren’t available from this connection yet. Your investment account balances still count toward total invested and net worth.</p>';
+}
+
 function renderDashboard() {
   const d = state.dashboard;
   if (!d) return;
@@ -367,11 +380,13 @@ function renderDashboard() {
 }
 
 async function loadAll() {
-  const [dashboard, spending] = await Promise.all([api('/api/dashboard'), api(`/api/spending?range=${state.spendingRange}`)]);
+  const [dashboard, spending, investments] = await Promise.all([api('/api/dashboard'), api(`/api/spending?range=${state.spendingRange}`), api('/api/investments')]);
   state.dashboard = dashboard;
   state.spending = spending;
+  state.investments = investments;
   renderDashboard();
   renderSpending(spending);
+  renderInvestments(investments);
   $('#monthLabel').textContent = 'Account overview';
 }
 

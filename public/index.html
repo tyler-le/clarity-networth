@@ -36,6 +36,7 @@
       <nav class="nav" aria-label="Main navigation">
         <button class="nav-item" data-view="spending"><span>◔</span>Spending</button>
         <button class="nav-item active" data-view="overview"><span>⌂</span>Net Worth</button>
+        <button class="nav-item" data-view="investments"><span>↗</span>Investments</button>
         <button class="nav-item" data-view="accounts"><span>▦</span>Accounts</button>
       </nav>
       <div class="sidebar-footer">
@@ -82,6 +83,15 @@
 
       </section>
 
+      <section id="investmentsView" class="view">
+        <div class="investment-hero" id="investmentHero"></div>
+        <div class="investment-grid">
+          <article class="card investment-card"><div class="card-label">Asset allocation</div><div class="allocation-list" id="investmentAllocation"></div></article>
+          <article class="card investment-card"><div class="card-label">Investment accounts</div><div class="investment-accounts" id="investmentAccounts"></div></article>
+        </div>
+        <article class="card positions-card"><div class="card-top"><div><div class="card-label">Positions</div><p class="spending-context">Your holdings across connected investment accounts.</p></div></div><div id="investmentPositions"></div></article>
+      </section>
+
       <section id="spendingView" class="view">
         <article class="card spending-hero-card">
           <div class="card-top"><div><div class="card-label">Spending</div><div class="spending-total" id="spendingTotal">—</div></div><div class="range-control" aria-label="Spending timeframe"><button class="active" data-spending-range="1m">1M</button><button data-spending-range="3m">3M</button><button data-spending-range="ytd">YTD</button><button data-spending-range="1y">1Y</button></div></div>
@@ -126,6 +136,7 @@
     <nav class="mobile-nav" aria-label="Mobile navigation">
       <button data-view="spending">◔<span>Spending</span></button>
       <button class="active" data-view="overview">⌂<span>Net Worth</span></button>
+      <button data-view="investments">↗<span>Investments</span></button>
       <button data-view="accounts">▦<span>Accounts</span></button>
     </nav>
   </div>

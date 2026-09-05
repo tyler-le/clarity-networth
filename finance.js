@@ -46,6 +46,39 @@ export function accountSide(type) {
   return 'asset';
 }
 
+function assetClass(type) {
+  const value = String(type || '').toLowerCase();
+  if (value === 'equity') return 'Equities';
+  if (value === 'etf' || value === 'mutual fund') return 'Funds';
+  if (value === 'fixed income') return 'Fixed income';
+  if (value === 'cash') return 'Cash';
+  if (value === 'cryptocurrency') return 'Crypto';
+  return 'Other';
+}
+
+export function investmentSummary(store) {
+  const accounts = store.accounts.filter((account) => !account.hidden && account.type === 'investment');
+  const accountIds = new Set(accounts.map((account) => account.plaid_account_id));
+  const positions = (store.positions || []).filter((position) => !position.hidden && accountIds.has(position.account_id));
+  const total = accounts.reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
+  const holdingsValue = positions.reduce((sum, position) => sum + Math.abs(Number(position.value || 0)), 0);
+  const allocation = new Map();
+  for (const position of positions) {
+    const name = assetClass(position.type);
+    allocation.set(name, (allocation.get(name) || 0) + Math.abs(Number(position.value || 0)));
+  }
+  const remaining = Math.max(0, total - holdingsValue);
+  if (remaining > 1) allocation.set('Cash & unclassified', (allocation.get('Cash & unclassified') || 0) + remaining);
+  const allocationRows = [...allocation.entries()].map(([name, value]) => ({ name, value, share: total ? value / total : 0 })).sort((a, b) => b.value - a.value);
+  return {
+    total,
+    accounts: accounts.map((account) => ({ id: account.id, account_id: account.plaid_account_id, name: account.nickname || account.name, institution_name: account.institution_name, subtype: account.subtype, value: Math.abs(Number(account.current_balance || 0)) })),
+    allocation: allocationRows,
+    positions: positions.sort((a, b) => Number(b.value || 0) - Number(a.value || 0)),
+    positionsAvailable: positions.length > 0
+  };
+}
+
 function normalizedAccountText(value) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
@@ -335,6 +368,14 @@ export function seedDemo(store) {
     { id: 'demo-credit', item_id: 'demo-bank', plaid_account_id: 'demo-credit', institution_name: 'Chase', name: 'Credit Card', type: 'credit', subtype: 'credit card', current_balance: 1160, updated_at: new Date().toISOString(), demo: true },
     { id: 'demo-auto', item_id: 'demo-bank', plaid_account_id: 'demo-auto', institution_name: 'Capital One', name: 'Auto loan', type: 'loan', subtype: 'auto', current_balance: 9350, updated_at: new Date().toISOString(), demo: true }
   ];
+  store.positions = [
+    ['demo-brokerage', 'VTI', 'Vanguard Total Stock Market ETF', 'etf', 92, 274, 25208],
+    ['demo-brokerage', 'BND', 'Vanguard Total Bond Market ETF', 'etf', 62, 73, 4526],
+    ['demo-roth', 'FSKAX', 'Fidelity Total Market Index Fund', 'mutual fund', 133, 151, 20083],
+    ['demo-roth', 'SPAXX', 'Fidelity Government Money Market Fund', 'cash', 1791, 1, 1791],
+    ['demo-401k', 'FXAIX', 'Fidelity 500 Index Fund', 'mutual fund', 183, 191, 34953],
+    ['demo-401k', 'FSPSX', 'Fidelity International Index Fund', 'mutual fund', 123, 72, 8856]
+  ].map(([account_id, ticker, name, type, quantity, price, value]) => ({ id: `demo-position-${ticker}-${account_id}`, item_id: 'demo-fidelity', account_id, ticker, name, type, quantity, price, value, demo: true }));
   const rows = [
     ['payroll-1', 'Payroll', -3100, d(1), 'income'],
     ['rent', 'Rent', 1650, d(1), 'fixed'],
