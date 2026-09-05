@@ -325,7 +325,10 @@ function renderSpending(data) {
   renderSpendingTrend(data);
   const selected = spendingForSelectedMonth(data);
   const total = Number(selected.total || 0);
+  const income = Number(selected.income || 0);
+  const remaining = income - total;
   $('#spendingTotal').textContent = fmt.format(total);
+  $('#spendingSummary').innerHTML = `<span><i class="income"></i>Income <strong>${fmt.format(income)}</strong></span><span class="${remaining >= 0 ? 'positive' : 'negative'}">${remaining >= 0 ? 'Left' : 'Over'} <strong>${fmt.format(Math.abs(remaining))}</strong></span>`;
   const rangeLabel = ({ '1m': 'this month', '3m': 'over the last 3 months', ytd: 'year to date', '1y': 'over the last year' })[data.range] || 'this month';
   const selectedMonthLabel = state.spendingMonth && new Date(`${state.spendingMonth}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   $('#spendingContext').textContent = total ? (selectedMonthLabel ? `Spending in ${selectedMonthLabel}` : `${fmt.format(selected.monthlyAverage)} monthly average · ${rangeLabel}`) : `No posted spending ${selectedMonthLabel || rangeLabel}. It can take a little time to arrive after connecting.`;
