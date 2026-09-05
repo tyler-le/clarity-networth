@@ -5,7 +5,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { OAuth2Client } from 'google-auth-library';
 import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
-import { hasLegacyStore, listUserStorageKeys, readStore, userStorageKey, writeStore, encrypt, decrypt, resetStore, removeDemoData } from './store.js';
+import { hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './store.js';
+import { databaseEnabled, readDatabaseStore, writeDatabaseStore } from './database.js';
 import { calculateFire, classifyTransaction, hideDuplicateAccounts, investmentSummary, reconstructInvestmentHistory, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
 import { loadHistoricalPrices } from './market-data.js';
 import { plaidConfigured, plaidPost } from './plaid.js';
@@ -26,7 +27,8 @@ const productionSecurityErrors = [
   !process.env.SESSION_SECRET ? 'SESSION_SECRET is required and must differ from DATA_ENCRYPTION_KEY.' : null,
   process.env.SESSION_SECRET && process.env.SESSION_SECRET === dataEncryptionSecret ? 'SESSION_SECRET must differ from DATA_ENCRYPTION_KEY.' : null,
   String(process.env.DEMO_MODE || 'true').toLowerCase() !== 'false' ? 'DEMO_MODE must be false.' : null,
-  !process.env.DATA_DIR ? 'DATA_DIR must point to persistent storage.' : null
+  !process.env.DATA_DIR ? 'DATA_DIR must point to persistent storage.' : null,
+  !process.env.DATABASE_URL ? 'DATABASE_URL is required.' : null
 ].filter(Boolean);
 
 function securityReady() {
@@ -67,26 +69,36 @@ app.use((_req, res, next) => {
 });
 app.use(express.static(path.join(__dirname, 'public')));
 
-function loadStore(user) {
+async function loadStore(user) {
   const key = user?.storageKey;
   if (!key) throw new Error('Authenticated user storage is required.');
-  let store = readStore(key);
+  let store = null;
+  if (databaseEnabled()) {
+    try { store = await readDatabaseStore(key); } catch (error) { console.error('Database store read failed:', error.message); throw new Error('Your secure financial store is temporarily unavailable.'); }
+  }
+  store = normalizeStore(store || readStore(key));
   const ownerEmail = String(process.env.OWNER_EMAIL || '').trim().toLowerCase();
   if (!store.accounts.length && !store.items.length && ownerEmail && user.email === ownerEmail && hasLegacyStore()) {
     store = readStore();
-    writeStore(store, key);
+    await saveStore(user, store);
   }
   if (String(process.env.DEMO_MODE || 'true').toLowerCase() === 'true') {
     seedDemo(store);
-    writeStore(store, key);
+    await saveStore(user, store);
   } else if (removeDemoData(store)) {
-    writeStore(store, key);
+    await saveStore(user, store);
   }
   return store;
 }
 
-function saveStore(user, store) {
-  writeStore(store, user.storageKey);
+async function saveStore(user, store) {
+  await saveStoreByKey(user.storageKey, store);
+}
+
+async function saveStoreByKey(storageKey, store) {
+  if (databaseEnabled()) await writeDatabaseStore(storageKey, store);
+  // Retain an encrypted recovery mirror while PostgreSQL is the primary store.
+  writeStore(store, storageKey);
 }
 
 function activeStore(store) {
@@ -427,13 +439,13 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-app.get('/api/dashboard', (req, res) => {
-  const store = loadStore(req.user);
+app.get('/api/dashboard', async (req, res) => {
+  const store = await loadStore(req.user);
   removeEstimatedNetWorthHistory(store);
   hideDuplicateAccounts(store);
   snapshotNetWorth(store);
   snapshotInvestments(store);
-  saveStore(req.user, store);
+  await saveStore(req.user, store);
   const visibleStore = activeStore(store);
   const summary = summarizeRange(visibleStore);
   const snapshots = visibleStore.snapshots.slice(-3650);
@@ -449,24 +461,24 @@ app.get('/api/dashboard', (req, res) => {
   });
 });
 
-app.get('/api/spending', (req, res) => {
+app.get('/api/spending', async (req, res) => {
   const range = ['1m', '3m', 'ytd', '1y'].includes(req.query.range) ? req.query.range : '1m';
-  const store = activeStore(loadStore(req.user));
+  const store = activeStore(await loadStore(req.user));
   res.json(spendingSummary(store, range));
 });
 
-app.get('/api/investments', (req, res) => {
-  res.json(investmentSummary(activeStore(loadStore(req.user))));
+app.get('/api/investments', async (req, res) => {
+  res.json(investmentSummary(activeStore(await loadStore(req.user))));
 });
 
-app.get('/api/retirement', (req, res) => {
-  const store = activeStore(loadStore(req.user));
+app.get('/api/retirement', async (req, res) => {
+  const store = activeStore(await loadStore(req.user));
   res.json(calculateFire(store, summarizeRange(store).netWorth));
 });
 
-app.patch('/api/settings/retirement', (req, res) => {
+app.patch('/api/settings/retirement', async (req, res) => {
   const fields = ['age', 'retirement_age', 'withdrawal_rate', 'real_return', 'lean_multiplier', 'fat_multiplier'];
-  const store = loadStore(req.user);
+  const store = await loadStore(req.user);
   store.settings.fire ||= {};
   for (const field of fields) {
     if (req.body?.[field] === undefined) continue;
@@ -475,67 +487,67 @@ app.patch('/api/settings/retirement', (req, res) => {
     store.settings.fire[field] = value;
   }
   if (Number(store.settings.fire.retirement_age) < Number(store.settings.fire.age)) return res.status(400).json({ error: 'Retirement age must be after current age.' });
-  saveStore(req.user, store);
+  await saveStore(req.user, store);
   const visibleStore = activeStore(store);
   res.json(calculateFire(visibleStore, summarizeRange(visibleStore).netWorth));
 });
 
-app.patch('/api/settings/appearance', (req, res) => {
+app.patch('/api/settings/appearance', async (req, res) => {
   const theme = String(req.body?.theme || '');
   if (!['light', 'dark'].includes(theme)) return res.status(400).json({ error: 'Appearance must be light or dark.' });
-  const store = loadStore(req.user);
+  const store = await loadStore(req.user);
   store.settings.appearance = { theme };
-  saveStore(req.user, store);
+  await saveStore(req.user, store);
   res.json(store.settings.appearance);
 });
 
-app.patch('/api/transactions/:id/category', (req, res) => {
+app.patch('/api/transactions/:id/category', async (req, res) => {
   const bucket = req.body?.bucket;
   if (!['fixed', 'savings', 'investments', 'guilt_free'].includes(bucket)) return res.status(400).json({ error: 'Invalid plan category.' });
-  const store = loadStore(req.user);
+  const store = await loadStore(req.user);
   const transaction = store.transactions.find((record) => record.id === req.params.id);
   if (!transaction || transaction.demo) return res.status(404).json({ error: 'Transaction not found.' });
   transaction.bucket = bucket;
   transaction.category_overridden = true;
-  saveStore(req.user, store);
+  await saveStore(req.user, store);
   res.json({ ok: true });
 });
 
-app.patch('/api/accounts/:id/nickname', (req, res) => {
+app.patch('/api/accounts/:id/nickname', async (req, res) => {
   const nickname = String(req.body?.nickname || '').trim().replace(/\s+/g, ' ');
   if (nickname.length > 60) return res.status(400).json({ error: 'Account name must be 60 characters or fewer.' });
-  const store = loadStore(req.user);
+  const store = await loadStore(req.user);
   const account = store.accounts.find((record) => record.id === req.params.id && !record.demo);
   if (!account) return res.status(404).json({ error: 'Account not found.' });
   account.nickname = nickname || null;
-  saveStore(req.user, store);
+  await saveStore(req.user, store);
   res.json({ ok: true, nickname: account.nickname });
 });
 
-app.patch('/api/positions/:id/asset-class', (req, res) => {
+app.patch('/api/positions/:id/asset-class', async (req, res) => {
   const assetClass = String(req.body?.asset_class || '').trim();
   const allowed = new Set(['', 'Equities', 'Funds', 'Fixed income', 'Cash', 'Crypto', 'Other']);
   if (!allowed.has(assetClass)) return res.status(400).json({ error: 'Invalid asset class.' });
-  const store = loadStore(req.user);
+  const store = await loadStore(req.user);
   const position = (store.positions || []).find((record) => record.id === req.params.id && !record.demo);
   if (!position) return res.status(404).json({ error: 'Holding not found.' });
   store.position_overrides ||= {};
   if (assetClass) store.position_overrides[position.id] = assetClass;
   else delete store.position_overrides[position.id];
   position.asset_class_override = assetClass || null;
-  saveStore(req.user, store);
+  await saveStore(req.user, store);
   res.json({ ok: true, asset_class_override: position.asset_class_override });
 });
 
-app.post('/api/demo-mode', (req, res) => {
-  const store = loadStore(req.user);
+app.post('/api/demo-mode', async (req, res) => {
+  const store = await loadStore(req.user);
   store.settings.demo_mode = Boolean(req.body?.enabled);
-  saveStore(req.user, store);
+  await saveStore(req.user, store);
   res.json({ ok: true, enabled: store.settings.demo_mode });
 });
 
-app.delete('/api/items/:id', (req, res) => {
-  const store = loadStore(req.user);
+app.delete('/api/items/:id', async (req, res) => {
+  const store = await loadStore(req.user);
   const item = store.items.find((candidate) => candidate.id === req.params.id);
   if (!item || item.demo) return res.status(404).json({ error: 'Connection not found.' });
   store.items = store.items.filter((candidate) => candidate.id !== item.id);
@@ -544,7 +556,7 @@ app.delete('/api/items/:id', (req, res) => {
   for (const key of Object.keys(store.position_overrides || {})) if (key.startsWith(`${item.id}:`)) delete store.position_overrides[key];
   store.transactions = store.transactions.filter((transaction) => transaction.item_id !== item.id);
   snapshotNetWorth(store);
-  saveStore(req.user, store);
+  await saveStore(req.user, store);
   res.json({ ok: true });
 });
 
@@ -575,7 +587,7 @@ app.post('/api/plaid/exchange_public_token', async (req, res) => {
     const { public_token, institution_name } = req.body;
     if (!public_token) return res.status(400).json({ error: 'public_token is required' });
     const exchanged = await plaidPost('/item/public_token/exchange', { public_token });
-    const store = loadStore(req.user);
+    const store = await loadStore(req.user);
     const item = {
       id: crypto.randomUUID(),
       plaid_item_id: exchanged.item_id,
@@ -596,7 +608,7 @@ app.post('/api/plaid/exchange_public_token', async (req, res) => {
     hideDuplicateAccounts(store);
     snapshotNetWorth(store);
     snapshotInvestments(store);
-    saveStore(req.user, store);
+    await saveStore(req.user, store);
     res.json({ ok: true, item: publicItem(item) });
   } catch (error) {
     res.status(error.status || 500).json({ error: error.message, plaid: error.plaid });
@@ -604,7 +616,7 @@ app.post('/api/plaid/exchange_public_token', async (req, res) => {
 });
 
 app.post('/api/sync', syncLimiter, async (_req, res) => {
-  const store = loadStore(_req.user);
+  const store = await loadStore(_req.user);
   const results = [];
   for (const item of store.items.filter((i) => !i.demo)) {
     try {
@@ -621,7 +633,7 @@ app.post('/api/sync', syncLimiter, async (_req, res) => {
   try { await backfillInvestmentHistory(store); } catch (error) { console.warn('Investment history reconstruction unavailable:', error.message); }
   snapshotNetWorth(store);
   snapshotInvestments(store);
-  saveStore(_req.user, store);
+  await saveStore(_req.user, store);
   res.json({ ok: results.every((r) => r.ok), results });
 });
 
@@ -650,7 +662,7 @@ app.post('/api/plaid/webhook', async (req, res) => {
   const itemId = req.body?.item_id;
   if (!itemId) return;
   for (const storageKey of listUserStorageKeys()) {
-    const store = readStore(storageKey);
+    const store = normalizeStore(databaseEnabled() ? await readDatabaseStore(storageKey) : readStore(storageKey));
     const item = store.items.find((candidate) => candidate.plaid_item_id === itemId);
     if (!item) continue;
     try {
@@ -658,7 +670,7 @@ app.post('/api/plaid/webhook', async (req, res) => {
       await refreshAccountsForItem(store, item);
       hideDuplicateAccounts(store);
       snapshotNetWorth(store);
-      writeStore(store, storageKey);
+      await saveStoreByKey(storageKey, store);
     } catch (error) {
       console.warn('Webhook sync failed:', error.message);
     }
@@ -666,19 +678,26 @@ app.post('/api/plaid/webhook', async (req, res) => {
   }
 });
 
-app.post('/api/reset-demo', (_req, res) => {
+app.post('/api/reset-demo', async (_req, res) => {
   if (String(process.env.DEMO_MODE || 'true').toLowerCase() !== 'true') return res.status(404).json({ error: 'Demo mode is disabled.' });
-  resetStore(_req.user.storageKey);
-  const store = readStore(_req.user.storageKey);
+  const store = await loadStore(_req.user);
+  store.items = [];
+  store.accounts = [];
+  store.positions = [];
+  store.investment_transactions = [];
+  store.market_prices = {};
+  store.investment_snapshots = [];
+  store.transactions = [];
+  store.snapshots = [];
   seedDemo(store);
-  saveStore(_req.user, store);
+  await saveStore(_req.user, store);
   res.json({ ok: true });
 });
 
-app.post('/api/clear-demo', (_req, res) => {
-  const store = loadStore(_req.user);
+app.post('/api/clear-demo', async (_req, res) => {
+  const store = await loadStore(_req.user);
   removeDemoData(store);
-  saveStore(_req.user, store);
+  await saveStore(_req.user, store);
   res.json({ ok: true });
 });
 

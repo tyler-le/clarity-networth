@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { closeDatabase, importLegacyStore, migrateDatabase } from '../database.js';
+import { readStore } from '../store.js';
 
 const dryRun = process.argv.includes('--dry-run');
 const dataDir = process.env.DATA_DIR;
@@ -15,8 +16,8 @@ let imported = 0;
 for (const filename of filenames) {
   const userKey = filename.slice(0, -'.json'.length);
   const filePath = path.join(usersDir, filename);
-  const [raw, stat] = await Promise.all([fs.readFile(filePath, 'utf8'), fs.stat(filePath)]);
-  const payload = JSON.parse(raw);
+  const stat = await fs.stat(filePath);
+  const payload = readStore(userKey);
   if (!dryRun) await importLegacyStore(userKey, payload, stat.mtime);
   imported += 1;
 }

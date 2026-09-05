@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { decryptPayload, encryptPayload, isEncryptedPayload } from './secure-payload.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
@@ -41,24 +42,29 @@ const emptyStore = () => ({
   }
 });
 
+export function normalizeStore(parsed) {
+  const defaults = emptyStore();
+  return {
+    ...defaults,
+    ...parsed,
+    settings: {
+      ...defaults.settings,
+      ...(parsed.settings || {}),
+      targets: { ...defaults.settings.targets, ...(parsed.settings?.targets || {}) },
+      fire: { ...defaults.settings.fire, ...(parsed.settings?.fire || {}) },
+      appearance: { ...defaults.settings.appearance, ...(parsed.settings?.appearance || {}) }
+    }
+  };
+}
+
 export function readStore(userKey) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const currentStorePath = storePath(userKey);
   if (!fs.existsSync(currentStorePath)) return emptyStore();
   try {
     const parsed = JSON.parse(fs.readFileSync(currentStorePath, 'utf8'));
-    const defaults = emptyStore();
-    return {
-      ...defaults,
-      ...parsed,
-      settings: {
-        ...defaults.settings,
-        ...(parsed.settings || {}),
-        targets: { ...defaults.settings.targets, ...(parsed.settings?.targets || {}) },
-        fire: { ...defaults.settings.fire, ...(parsed.settings?.fire || {}) },
-        appearance: { ...defaults.settings.appearance, ...(parsed.settings?.appearance || {}) }
-      }
-    };
+    const store = isEncryptedPayload(parsed?.payload_enc) ? JSON.parse(decryptPayload(parsed.payload_enc)) : parsed;
+    return normalizeStore(store);
   } catch {
     return emptyStore();
   }
@@ -69,7 +75,7 @@ export function writeStore(store, userKey) {
   const currentStorePath = storePath(userKey);
   fs.mkdirSync(path.dirname(currentStorePath), { recursive: true });
   const tmp = `${currentStorePath}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(store, null, 2));
+  fs.writeFileSync(tmp, JSON.stringify({ version: 1, payload_enc: encryptPayload(JSON.stringify(store)) }));
   fs.renameSync(tmp, currentStorePath);
 }
 
@@ -89,26 +95,12 @@ export function removeDemoData(store) {
   return true;
 }
 
-function encryptionKey() {
-  // ENCRYPTION_KEY remains a temporary migration fallback for existing stores.
-  // Production must use a distinct DATA_ENCRYPTION_KEY and SESSION_SECRET.
-  const raw = process.env.DATA_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY || 'development-only-key-change-me';
-  return crypto.createHash('sha256').update(raw).digest();
-}
-
 export function encrypt(text) {
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', encryptionKey(), iv);
-  const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return `${iv.toString('base64')}.${tag.toString('base64')}.${encrypted.toString('base64')}`;
+  return encryptPayload(text).slice(3);
 }
 
 export function decrypt(payload) {
-  const [ivB64, tagB64, dataB64] = payload.split('.');
-  const decipher = crypto.createDecipheriv('aes-256-gcm', encryptionKey(), Buffer.from(ivB64, 'base64'));
-  decipher.setAuthTag(Buffer.from(tagB64, 'base64'));
-  return Buffer.concat([decipher.update(Buffer.from(dataB64, 'base64')), decipher.final()]).toString('utf8');
+  return decryptPayload(`v1.${payload}`);
 }
 
 export function resetStore(userKey) {

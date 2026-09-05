@@ -14,7 +14,8 @@
     "db:migrate": "node scripts/migrate-database.js",
     "db:import-legacy": "node scripts/import-json-stores.js",
     "db:verify-legacy": "node scripts/verify-json-stores.js",
-    "test:ci": "node --check server.js && node --check store.js && node --check database.js && node --check scripts/migrate-database.js && node --check scripts/import-json-stores.js && node --check scripts/verify-json-stores.js && node --check finance.js && node --check plaid.js && node --check public/app.js && node --check public/chart-utils.js && npm run test:unit && npm run test:integration && npm run test:ui"
+    "data:encrypt-legacy": "node scripts/encrypt-legacy-stores.js",
+    "test:ci": "node --check server.js && node --check store.js && node --check secure-payload.js && node --check database.js && node --check scripts/migrate-database.js && node --check scripts/import-json-stores.js && node --check scripts/verify-json-stores.js && node --check scripts/encrypt-legacy-stores.js && node --check finance.js && node --check plaid.js && node --check public/app.js && node --check public/chart-utils.js && npm run test:unit && npm run test:integration && npm run test:ui"
   },
   "engines": {
     "node": ">=20"

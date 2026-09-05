@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import pg from 'pg';
+import { readStore } from '../store.js';
 
 const dataDir = process.env.DATA_DIR;
 if (!dataDir) throw new Error('DATA_DIR must point to the legacy JSON volume.');
@@ -18,8 +19,7 @@ try {
   let verified = 0;
   for (const filename of filenames) {
     const userKey = filename.slice(0, -'.json'.length);
-    const raw = await fs.readFile(path.join(usersDir, filename), 'utf8');
-    const sourceHash = crypto.createHash('sha256').update(JSON.stringify(JSON.parse(raw))).digest('hex');
+    const sourceHash = crypto.createHash('sha256').update(JSON.stringify(readStore(userKey))).digest('hex');
     const result = await pool.query('SELECT source_hash FROM financial_stores WHERE user_key = $1', [userKey]);
     if (result.rowCount !== 1 || result.rows[0].source_hash !== sourceHash) {
       throw new Error(`Database verification failed for a legacy store.`);
