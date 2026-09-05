@@ -581,7 +581,7 @@ function renderRetirement(data) {
     ['Standard', data.standard, data.progress?.standard, 'Your current lifestyle at retirement.'],
     ['Fat', data.fat, data.progress?.fat, 'More room for discretionary spending.']
   ];
-  $('#retirementPath').innerHTML = milestones.map(([name, target, progress, description], index) => `<button class="retirement-milestone ${index === 2 ? 'featured' : ''}" type="button" title="${escapeHtml(description)}"><span>${escapeHtml(name)}</span><strong>${fmt.format(target || 0)}</strong><i><b style="width:${Math.min(100, Number(progress || 0)).toFixed(1)}%"></b></i><small>${Math.min(999, Math.round(Number(progress || 0)))}% there</small></button>`).join('');
+  $('#retirementPath').innerHTML = milestones.map(([name, target, progress, description], index) => `<button class="retirement-milestone ${index === 2 ? 'featured' : ''}" type="button" data-retirement-milestone="${name.toLowerCase()}" aria-label="Learn about ${escapeHtml(name)} retirement"><span>${escapeHtml(name)}</span><strong>${fmt.format(target || 0)}</strong><i><b style="width:${Math.min(100, Number(progress || 0)).toFixed(1)}%"></b></i><small>${Math.min(999, Math.round(Number(progress || 0)))}% there</small></button>`).join('');
   const form = $('#retirementForm');
   form.age.value = data.age;
   form.retirement_age.value = data.retirementAge;
@@ -710,6 +710,40 @@ $('#retirementForm').addEventListener('submit', async (event) => {
   } catch (error) { showNotice(error.message); }
   finally { button.disabled = false; }
 });
+function openRetirementMilestone(name) {
+  const plan = state.retirement;
+  if (!plan) return;
+  const details = {
+    coast: {
+      label: 'COAST RETIREMENT', title: 'What is Coast FIRE?', value: plan.coast,
+      description: 'You have enough invested today that, if it grows until retirement, it could reach your Standard goal without more retirement contributions. You would still need income for today’s living costs.'
+    },
+    lean: {
+      label: 'LEAN RETIREMENT', title: 'What is Lean FIRE?', value: plan.lean,
+      description: `A smaller retirement target designed for a simpler lifestyle—about ${Math.round(Number(plan.leanMultiplier || .7) * 100)}% of your current annual spending.`
+    },
+    standard: {
+      label: 'STANDARD RETIREMENT', title: 'What is Standard retirement?', value: plan.standard,
+      description: 'The portfolio target intended to support your recent everyday lifestyle in retirement, using the withdrawal rate in your plan.'
+    },
+    fat: {
+      label: 'FAT RETIREMENT', title: 'What is Fat FIRE?', value: plan.fat,
+      description: `A larger retirement target for more flexibility and discretionary spending—about ${Math.round(Number(plan.fatMultiplier || 1.5) * 100)}% of your current annual spending.`
+    }
+  }[name];
+  if (!details) return;
+  $('#retirementInfoLabel').textContent = details.label;
+  $('#retirementInfoTitle').textContent = details.title;
+  $('#retirementInfoDescription').textContent = details.description;
+  $('#retirementInfoValue').textContent = `${fmt.format(details.value || 0)} target`;
+  $('#retirementInfoDialog').showModal();
+}
+
+$('#retirementPath').addEventListener('click', (event) => {
+  const milestone = event.target.closest('[data-retirement-milestone]');
+  if (milestone) openRetirementMilestone(milestone.dataset.retirementMilestone);
+});
+$('#retirementInfoClose').addEventListener('click', () => $('#retirementInfoDialog').close());
 $('#accountGrid').addEventListener('click', (event) => {
   const button = event.target.closest('[data-account-rename]');
   if (!button) return;

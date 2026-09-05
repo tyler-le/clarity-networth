@@ -77,3 +77,12 @@ test('portfolio history can be scrubbed just like net worth', async ({ page }) =
   await expect(page.locator('#investmentChartDate')).toHaveText(/\d{4}/);
   await expect(page.locator('#investmentTotal')).toHaveText(/\$/);
 });
+
+test('retirement milestones explain the planning terms on demand', async ({ page }) => {
+  await openDemo(page);
+  await page.locator('.mobile-nav [data-view="retirement"]').click();
+  await page.locator('[data-retirement-milestone="coast"]').click();
+  await expect(page.locator('#retirementInfoDialog')).toHaveAttribute('open', '');
+  await expect(page.locator('#retirementInfoTitle')).toHaveText('What is Coast FIRE?');
+  await expect(page.locator('#retirementInfoDescription')).toContainText('without more retirement contributions');
+});
