@@ -493,7 +493,7 @@ async function startGoogleSignIn() {
       } catch (error) { $('#authMessage').textContent = error.message; }
     }
   });
-  window.google.accounts.id.renderButton($('#googleSignIn'), { theme: 'outline', size: 'large', width: 280, text: 'signin_with' });
+  window.google.accounts.id.renderButton($('#googleSignIn'), { theme: 'outline', size: 'large', width: Math.min(360, Math.floor($('#googleSignIn').clientWidth || 360)), text: 'signin_with' });
 }
 
 async function initializeApp() {

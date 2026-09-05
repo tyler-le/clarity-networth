@@ -14,13 +14,21 @@
 </head>
 <body>
   <section class="auth-screen" id="authScreen">
-    <div class="auth-card">
-      <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 17.5h14M6.5 14.5l3.1-3.1 2.7 2.2 5.1-5.2" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17.4" cy="8.4" r="1.45" fill="currentColor"/></svg></span><span>Clarity</span></div>
-      <h1>Your finances, in focus.</h1>
-      <p>Sign in with Google to view your private financial workspace.</p>
-      <div id="googleSignIn"></div>
-      <div class="auth-message" id="authMessage"></div>
-    </div>
+    <div class="auth-halo auth-halo-one" aria-hidden="true"></div><div class="auth-halo auth-halo-two" aria-hidden="true"></div>
+    <main class="auth-card">
+      <div class="brand auth-brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 17.5h14M6.5 14.5l3.1-3.1 2.7 2.2 5.1-5.2" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17.4" cy="8.4" r="1.45" fill="currentColor"/></svg></span><span>Clarity</span></div>
+      <div class="auth-kicker"><i aria-hidden="true"></i> NET WORTH, SIMPLIFIED</div>
+      <h1>See your money<br><em>more clearly.</em></h1>
+      <p class="auth-intro">A calm, private home for your net worth and the accounts behind it.</p>
+      <div class="auth-preview" aria-hidden="true">
+        <div><span>NET WORTH</span><strong>$184,240</strong><small>↑ 12.4% this year</small></div>
+        <svg viewBox="0 0 240 62" preserveAspectRatio="none"><defs><linearGradient id="loginFill" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#1f6f4a" stop-opacity=".19"/><stop offset="1" stop-color="#1f6f4a" stop-opacity="0"/></linearGradient></defs><path d="M0 57L25 49 51 52 77 39 103 45 131 31 160 35 187 19 212 23 240 7V62H0Z" fill="url(#loginFill)"/><path d="M0 57L25 49 51 52 77 39 103 45 131 31 160 35 187 19 212 23 240 7" fill="none" stroke="#1f6f4a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="auth-divider"><span>Continue securely</span></div>
+      <div class="google-signin-wrap" id="googleSignIn"></div>
+      <div class="auth-message" id="authMessage" aria-live="polite"></div>
+      <p class="auth-note"><span aria-hidden="true">⌁</span> Your accounts stay private to you.</p>
+    </main>
   </section>
   <div class="shell hidden" id="appShell">
     <aside class="sidebar">
@@ -111,7 +119,7 @@
           <summary>Connected institutions</summary>
           <div id="connectionsList"></div>
         </details>
-        <article class="card demo-setting"><div><div class="card-label">Demo mode</div><p>Explore Clarity with a realistic sample household. Your real accounts remain private and untouched.</p></div><button class="secondary demo-toggle" id="demoToggle" aria-pressed="false">Try demo</button></article>
+        <article class="card demo-setting"><div><div class="card-label">Demo mode</div><p>Explore Clarity with a realistic financial profile. Your real accounts remain private and untouched.</p></div><button class="secondary demo-toggle" id="demoToggle" aria-pressed="false">Try demo</button></article>
         <button class="text-button sign-out-button" id="signOutButton">Sign out</button>
       </section>
     </main>
