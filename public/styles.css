@@ -406,3 +406,14 @@ html[data-theme="dark"] .dialog-close:hover { background: #2a332c; }
 .retirement-info-footer { display: flex; justify-content: flex-end; padding: 13px 20px; border-top: 1px solid #e8ede8; background: #fbfcfa; }
 .retirement-info-footer .primary { min-width: 88px; padding-block: 9px; border-radius: 10px; }
 @media (max-width: 560px) { .retirement-info-dialog { width: min(410px, calc(100vw - 24px)); border-radius: 17px; }.retirement-info-head { padding-inline: 18px; }.retirement-info-body { padding-inline: 18px; }.retirement-info-footer { padding-inline: 18px; }.retirement-info-footer .primary { width: 100%; } }
+
+/* Keep component-specific light gradients from punching bright holes through
+   the dark palette. These sit last intentionally, after component styles. */
+html[data-theme="dark"] .investment-card { border-color: var(--line); background: #1a201c; }
+html[data-theme="dark"] .investment-card .card-label { color: #a8b5aa; }
+html[data-theme="dark"] .allocation-card { border-color: var(--line); background: var(--card); }
+html[data-theme="dark"] .holdings-card summary:hover { background: #222a24; }
+html[data-theme="dark"] .retirement-info-dialog { border-color: #374239; background: #1b211d; }
+html[data-theme="dark"] .retirement-info-head, html[data-theme="dark"] .retirement-info-footer { border-color: var(--line); background: #202720; }
+html[data-theme="dark"] .retirement-info-head .card-label, html[data-theme="dark"] .retirement-info-dialog #retirementInfoDescription, html[data-theme="dark"] .retirement-info-note { color: var(--muted); }
+html[data-theme="dark"] .retirement-info-head .dialog-close:hover { background: #2a332c; }

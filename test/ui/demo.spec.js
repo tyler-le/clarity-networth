@@ -116,7 +116,9 @@ test('dark mode is a calm, persistent profile setting', async ({ page }) => {
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.getByRole('button', { name: /explore the demo/i }).click();
   await expect(page.locator('#appShell')).toBeVisible();
+  await page.locator('.mobile-nav [data-view="investments"]').click();
+  await expect(page.locator('.investment-card')).toHaveCSS('background-color', 'rgb(26, 32, 28)');
   await page.locator('#profileButton').click();
   await page.locator('#profileBack').click();
-  await expect(page.getByRole('heading', { name: 'Net Worth' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Investments' })).toBeVisible();
 });
