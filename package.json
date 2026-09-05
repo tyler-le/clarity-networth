@@ -11,7 +11,9 @@
     "test:unit": "node --test test/*.test.js",
     "test:integration": "node --test test/integration/*.test.js",
     "test:ui": "playwright test",
-    "test:ci": "node --check server.js && node --check store.js && node --check finance.js && node --check plaid.js && node --check public/app.js && node --check public/chart-utils.js && npm run test:unit && npm run test:integration && npm run test:ui"
+    "db:migrate": "node scripts/migrate-database.js",
+    "db:import-legacy": "node scripts/import-json-stores.js",
+    "test:ci": "node --check server.js && node --check store.js && node --check database.js && node --check scripts/migrate-database.js && node --check scripts/import-json-stores.js && node --check finance.js && node --check plaid.js && node --check public/app.js && node --check public/chart-utils.js && npm run test:unit && npm run test:integration && npm run test:ui"
   },
   "engines": {
     "node": ">=20"
@@ -20,7 +22,8 @@
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
     "google-auth-library": "^11.0.2",
-    "jose": "^6.2.12"
+    "jose": "^6.2.12",
+    "pg": "^8.23.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
