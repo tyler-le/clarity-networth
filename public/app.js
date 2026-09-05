@@ -11,6 +11,7 @@ const state = {
   networthRange: 'ytd',
   spendingRange: '1m',
   spendingMonth: null,
+  allocationDisplay: 'percentage',
   spendingCategory: 'all',
   spendingSort: 'recent',
   view: 'overview'
@@ -278,33 +279,54 @@ function renderConnections(items) {
 
 const spendingColors = ['#1f6f4a', '#7ea98b', '#d5a75f', '#b88692', '#9ca9bd', '#c4c9c1'];
 
+function allocationRows(transactions) {
+  const totals = new Map();
+  for (const transaction of transactions) totals.set(transaction.category, (totals.get(transaction.category) || 0) + Number(transaction.amount || 0));
+  const total = [...totals.values()].reduce((sum, value) => sum + value, 0);
+  const rows = [...totals.entries()].map(([name, amount]) => ({ name, amount, share: total ? amount / total : 0 }));
+  const rounded = rows.map((row) => ({ ...row, percentage: Math.floor(row.share * 100), remainder: row.share * 100 - Math.floor(row.share * 100) }));
+  let remaining = 100 - rounded.reduce((sum, row) => sum + row.percentage, 0);
+  [...rounded].sort((a, b) => b.remainder - a.remainder).forEach((row) => { if (remaining > 0) { row.percentage += 1; remaining -= 1; } });
+  return rounded.sort((a, b) => b.amount - a.amount);
+}
+
+function spendingForSelectedMonth(data) {
+  if (!state.spendingMonth) return data;
+  const transactions = (data.transactions || []).filter((transaction) => String(transaction.date).startsWith(state.spendingMonth));
+  const total = transactions.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  return { ...data, total, monthlyAverage: total, categories: allocationRows(transactions), transactions };
+}
+
+function renderSpendingTrend(data) {
+  const months = data.monthly || [];
+  const max = Math.max(...months.map((row) => row.amount), 1);
+  if (state.spendingMonth && !months.some((row) => row.month === state.spendingMonth)) state.spendingMonth = null;
+  $('#spendingTrend').innerHTML = months.length ? months.map((row) => `<button class="trend-column ${state.spendingMonth === row.month ? 'active' : ''}" type="button" data-spending-month="${row.month}" title="${escapeHtml(row.month)}: ${fmt.format(row.amount)}"><div class="trend-bar" style="height:${Math.max(8, row.amount / max * 100)}%"></div><span>${new Date(`${row.month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'short' })}</span></button>`).join('') : '<p class="spending-empty">Monthly patterns will appear once transactions arrive.</p>';
+}
+
 function renderSpending(data) {
   if (!data) return;
-  const total = Number(data.total || 0);
+  renderSpendingTrend(data);
+  const selected = spendingForSelectedMonth(data);
+  const total = Number(selected.total || 0);
   $('#spendingTotal').textContent = fmt.format(total);
   const rangeLabel = ({ '1m': 'this month', '3m': 'over the last 3 months', ytd: 'year to date', '1y': 'over the last year' })[data.range] || 'this month';
-  $('#spendingContext').textContent = total ? `${fmt.format(data.monthlyAverage)} monthly average · ${rangeLabel}` : `No posted spending ${rangeLabel}. It can take a little time to arrive after connecting.`;
-  const rows = data.categories || [];
+  const selectedMonthLabel = state.spendingMonth && new Date(`${state.spendingMonth}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  $('#spendingContext').textContent = total ? (selectedMonthLabel ? `Spending in ${selectedMonthLabel}` : `${fmt.format(selected.monthlyAverage)} monthly average · ${rangeLabel}`) : `No posted spending ${selectedMonthLabel || rangeLabel}. It can take a little time to arrive after connecting.`;
+  const rows = selected.categories || [];
   const donut = $('#spendingDonut');
   if (!rows.length) {
     donut.style.background = '#edf0eb'; donut.innerHTML = '<span>No data</span>';
     $('#spendingLegend').innerHTML = '<p class="spending-empty">Your category mix will appear here.</p>';
-    $('#topCategories').innerHTML = '<p class="spending-empty">No categories to show yet.</p>';
-    $('#spendingTrend').innerHTML = '<p class="spending-empty">Monthly patterns will appear once transactions arrive.</p>';
-    renderSpendingTransactions(data);
+    renderSpendingTransactions(selected);
     return;
   }
   let cursor = 0;
   const stops = rows.map((row, index) => { const next = cursor + row.share * 100; const stop = `${spendingColors[index % spendingColors.length]} ${cursor.toFixed(2)}% ${next.toFixed(2)}%`; cursor = next; return stop; });
   donut.style.background = `conic-gradient(${stops.join(', ')})`;
   donut.innerHTML = '<span>Plan<br>mix</span>';
-  $('#spendingLegend').innerHTML = rows.slice(0, 5).map((row, index) => `<button class="legend-row" data-spending-category="${escapeHtml(row.name)}"><i style="background:${spendingColors[index % spendingColors.length]}"></i><span>${escapeHtml(row.name)}</span><strong>${row.percentage}%</strong></button>`).join('');
-  $('#topCategories').innerHTML = rows.slice(0, 4).map((row, index) => `<button class="merchant-row" data-spending-category="${escapeHtml(row.name)}"><span class="merchant-rank">${index + 1}</span><span>${escapeHtml(row.name)}</span><strong>${fmt.format(row.amount)}</strong></button>`).join('');
-  const months = data.monthly || [];
-  const max = Math.max(...months.map((row) => row.amount), 1);
-  if (state.spendingMonth && !months.some((row) => row.month === state.spendingMonth)) state.spendingMonth = null;
-  $('#spendingTrend').innerHTML = months.length ? months.map((row) => `<button class="trend-column ${state.spendingMonth === row.month ? 'active' : ''}" type="button" data-spending-month="${row.month}" title="${escapeHtml(row.month)}: ${fmt.format(row.amount)}"><div class="trend-bar" style="height:${Math.max(8, row.amount / max * 100)}%"></div><span>${new Date(`${row.month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'short' })}</span></button>`).join('') : '<p class="spending-empty">Monthly patterns will appear once transactions arrive.</p>';
-  renderSpendingTransactions(data);
+  $('#spendingLegend').innerHTML = rows.slice(0, 5).map((row, index) => `<button class="legend-row" data-spending-category="${escapeHtml(row.name)}"><i style="background:${spendingColors[index % spendingColors.length]}"></i><span>${escapeHtml(row.name)}</span><strong>${state.allocationDisplay === 'amount' ? fmt.format(row.amount) : `${row.percentage}%`}</strong></button>`).join('');
+  renderSpendingTransactions(selected);
 }
 
 function renderSpendingTransactions(data) {
@@ -464,15 +486,19 @@ $$('[data-spending-range]').forEach((button) => button.addEventListener('click',
     renderSpending(state.spending);
   } catch (error) { showNotice(error.message); }
 }));
-$('#spendingCategoryFilter').addEventListener('change', (event) => { state.spendingCategory = event.target.value; renderSpendingTransactions(state.spending); });
-$('#spendingSort').addEventListener('change', (event) => { state.spendingSort = event.target.value; renderSpendingTransactions(state.spending); });
+$$('[data-allocation-display]').forEach((button) => button.addEventListener('click', () => {
+  state.allocationDisplay = button.dataset.allocationDisplay;
+  $$('[data-allocation-display]').forEach((control) => control.classList.toggle('active', control === button));
+  renderSpending(state.spending);
+}));
+$('#spendingCategoryFilter').addEventListener('change', (event) => { state.spendingCategory = event.target.value; renderSpendingTransactions(spendingForSelectedMonth(state.spending)); });
+$('#spendingSort').addEventListener('change', (event) => { state.spendingSort = event.target.value; renderSpendingTransactions(spendingForSelectedMonth(state.spending)); });
 function openSpendingCategory(category) {
   if (!category) return;
   state.spendingCategory = category;
   $('#spendingTransactionsPanel').open = true;
-  renderSpendingTransactions(state.spending);
+  renderSpendingTransactions(spendingForSelectedMonth(state.spending));
 }
-$('#topCategories').addEventListener('click', (event) => openSpendingCategory(event.target.closest('[data-spending-category]')?.dataset.spendingCategory));
 $('#spendingLegend').addEventListener('click', (event) => openSpendingCategory(event.target.closest('[data-spending-category]')?.dataset.spendingCategory));
 $('#spendingTransactions').addEventListener('change', async (event) => {
   const select = event.target.closest('[data-transaction-category]');
@@ -489,11 +515,8 @@ $('#spendingTrend').addEventListener('click', (event) => {
   const row = state.spending?.monthly?.find((entry) => entry.month === month);
   if (!row) return;
   state.spendingMonth = month;
-  $$('.trend-column').forEach((bar) => bar.classList.toggle('active', bar.dataset.spendingMonth === month));
-  $('#spendingTotal').textContent = fmt.format(row.amount);
-  $('#spendingContext').textContent = `Total spending in ${new Date(`${month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`;
+  renderSpending(state.spending);
   $('#spendingTransactionsPanel').open = true;
-  renderSpendingTransactions(state.spending);
 });
 
 function showAuthenticatedApp() {
