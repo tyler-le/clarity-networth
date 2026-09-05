@@ -735,7 +735,7 @@ function openRetirementMilestone(name) {
   $('#retirementInfoLabel').textContent = details.label;
   $('#retirementInfoTitle').textContent = details.title;
   $('#retirementInfoDescription').textContent = details.description;
-  $('#retirementInfoValue').textContent = `${fmt.format(details.value || 0)} target`;
+  $('#retirementInfoValue').textContent = fmt.format(details.value || 0);
   $('#retirementInfoDialog').showModal();
 }
 

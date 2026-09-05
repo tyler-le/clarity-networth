@@ -159,7 +159,19 @@
     </form>
   </dialog>
   <dialog class="retirement-info-dialog" id="retirementInfoDialog" aria-labelledby="retirementInfoTitle">
-    <form method="dialog"><button type="button" class="dialog-close" id="retirementInfoClose" aria-label="Close">×</button><div class="card-label" id="retirementInfoLabel">RETIREMENT MILESTONE</div><h2 id="retirementInfoTitle">—</h2><p id="retirementInfoDescription"></p><div class="retirement-info-value" id="retirementInfoValue">—</div><p class="retirement-info-note">This is a planning estimate based on your tracked spending and assumptions—not a guarantee.</p><button class="primary full" value="close">Got it</button></form>
+    <form method="dialog">
+      <header class="retirement-info-head">
+        <div class="card-label" id="retirementInfoLabel">RETIREMENT MILESTONE</div>
+        <button type="button" class="dialog-close" id="retirementInfoClose" aria-label="Close">×</button>
+      </header>
+      <div class="retirement-info-body">
+        <h2 id="retirementInfoTitle">—</h2>
+        <p id="retirementInfoDescription"></p>
+        <div class="retirement-info-target"><span>Your target</span><strong id="retirementInfoValue">—</strong></div>
+        <p class="retirement-info-note">A planning estimate based on your tracked spending and plan assumptions—not a guarantee.</p>
+      </div>
+      <footer class="retirement-info-footer"><button class="primary" value="close">Got it</button></footer>
+    </form>
   </dialog>
 
   <script type="module" src="/app.js"></script>

@@ -343,11 +343,20 @@ button:focus-visible, select:focus-visible, summary:focus-visible { outline: 3px
 /* Tapping a milestone teaches the term without making the retirement view denser. */
 .retirement-milestone { cursor: pointer; transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease; }
 .retirement-milestone:hover { transform: translateY(-2px); border-color: #bcd6c2; box-shadow: 0 8px 18px rgba(31,111,74,.09); }
-.retirement-info-dialog { width: min(430px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--line); border-radius: 22px; color: var(--ink); background: white; box-shadow: 0 24px 70px rgba(22,34,24,.22); }
-.retirement-info-dialog::backdrop { background: rgba(18,27,20,.34); backdrop-filter: blur(3px); }
-.retirement-info-dialog form { position: relative; padding: 27px 25px 24px; }
-.retirement-info-dialog h2 { margin: 6px 35px 10px 0; font-size: 25px; letter-spacing: -.045em; }
-.retirement-info-dialog #retirementInfoDescription { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
-.retirement-info-value { margin: 20px 0 11px; padding: 13px 14px; border-radius: 12px; color: var(--accent); background: var(--accent-soft); font-size: 18px; font-weight: 730; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
-.retirement-info-note { margin: 0 0 20px; color: var(--muted); font-size: 11px; line-height: 1.45; }
-.retirement-info-dialog .full { width: 100%; }
+.retirement-info-dialog { width: min(410px, calc(100vw - 32px)); overflow: hidden; padding: 0; border: 1px solid #dbe4dc; border-radius: 18px; color: var(--ink); background: #fff; box-shadow: 0 20px 60px rgba(22,34,24,.18); }
+.retirement-info-dialog::backdrop { background: rgba(25,34,26,.24); backdrop-filter: blur(2px); }
+.retirement-info-dialog form { display: grid; }
+.retirement-info-head { position: relative; display: flex; align-items: center; min-height: 54px; padding: 0 20px; border-bottom: 1px solid #e8ede8; background: #fbfcfa; }
+.retirement-info-head .card-label { color: #607163; }
+.retirement-info-head .dialog-close { position: static; margin-left: auto; width: 30px; height: 30px; border: 1px solid transparent; border-radius: 50%; font-size: 20px; }
+.retirement-info-head .dialog-close:hover { border-color: var(--line); background: white; color: var(--ink); }
+.retirement-info-body { padding: 22px 20px 19px; }
+.retirement-info-dialog h2 { margin: 0 0 9px; font-size: 24px; font-weight: 710; letter-spacing: -.045em; }
+.retirement-info-dialog #retirementInfoDescription { margin: 0; color: #657067; font-size: 14px; line-height: 1.55; }
+.retirement-info-target { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; margin-top: 21px; padding: 13px 0; border-top: 1px solid #e8ede8; border-bottom: 1px solid #e8ede8; }
+.retirement-info-target span { color: var(--muted); font-size: 12px; font-weight: 650; }
+.retirement-info-target strong { color: #155a39; font-size: 20px; font-weight: 730; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.retirement-info-note { margin: 13px 0 0; color: #7b847c; font-size: 11px; line-height: 1.45; }
+.retirement-info-footer { display: flex; justify-content: flex-end; padding: 13px 20px; border-top: 1px solid #e8ede8; background: #fbfcfa; }
+.retirement-info-footer .primary { min-width: 88px; padding-block: 9px; border-radius: 10px; }
+@media (max-width: 560px) { .retirement-info-dialog { width: min(410px, calc(100vw - 24px)); border-radius: 17px; }.retirement-info-head { padding-inline: 18px; }.retirement-info-body { padding-inline: 18px; }.retirement-info-footer { padding-inline: 18px; }.retirement-info-footer .primary { width: 100%; } }
