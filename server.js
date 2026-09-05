@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { OAuth2Client } from 'google-auth-library';
 import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './store.js';
-import { databaseEnabled, readDatabaseStore, writeDatabaseStore } from './database.js';
+import { databaseEnabled, migrateDatabase, readDatabaseStore, writeDatabaseStore } from './database.js';
 import { calculateFire, classifyTransaction, hideDuplicateAccounts, investmentSummary, reconstructInvestmentHistory, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
 import { loadHistoricalPrices } from './market-data.js';
 import { plaidConfigured, plaidPost } from './plaid.js';
@@ -705,9 +705,17 @@ app.use((_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')
 
 export { app };
 
-if (process.env.CLARITY_LISTEN !== 'false') {
+async function startServer() {
+  if (databaseEnabled()) await migrateDatabase();
   app.listen(port, () => {
     console.log(`Clarity running at http://localhost:${port}`);
     console.log(`Plaid: ${plaidConfigured() ? `configured (${process.env.PLAID_ENV || 'sandbox'})` : 'not configured — demo mode available'}`);
+  });
+}
+
+if (process.env.CLARITY_LISTEN !== 'false') {
+  startServer().catch((error) => {
+    console.error('Database migration failed; refusing to start:', error.message);
+    process.exitCode = 1;
   });
 }
