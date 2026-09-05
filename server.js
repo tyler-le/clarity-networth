@@ -351,8 +351,9 @@ app.post('/api/auth/logout', (_req, res) => {
 
 // A seeded store is created in memory for the public preview; it never reads
 // from or writes to a person's authenticated financial data.
-app.get('/api/demo-preview', (_req, res) => {
+app.get('/api/demo-preview', (req, res) => {
   const store = demoPreviewStore();
+  const range = ['1m', '3m', 'ytd', '1y'].includes(req.query.range) ? req.query.range : '1m';
   res.json({
     dashboard: {
       summary: summarizeRange(store),
@@ -362,7 +363,7 @@ app.get('/api/demo-preview', (_req, res) => {
       plaidConfigured: false,
       demoMode: true
     },
-    spending: spendingSummary(store, '1m'),
+    spending: spendingSummary(store, range),
     investments: investmentSummary(store)
   });
 });

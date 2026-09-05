@@ -503,7 +503,7 @@ function renderDashboard() {
 
 async function loadAll() {
   if (state.demoPreview) {
-    const preview = await api('/api/demo-preview');
+    const preview = await api(`/api/demo-preview?range=${state.spendingRange}`);
     state.dashboard = preview.dashboard;
     state.spending = preview.spending;
     state.investments = preview.investments;
@@ -521,6 +521,14 @@ async function loadAll() {
   renderSpending(spending);
   renderInvestments(investments);
   $('#monthLabel').textContent = 'Account overview';
+}
+
+async function loadSpending() {
+  if (state.demoPreview) {
+    const preview = await api(`/api/demo-preview?range=${state.spendingRange}`);
+    return preview.spending;
+  }
+  return api(`/api/spending?range=${state.spendingRange}`);
 }
 
 async function connectPlaid() {
@@ -629,7 +637,7 @@ $$('[data-spending-range]').forEach((button) => button.addEventListener('click',
   state.spendingMonth = null;
   $$('[data-spending-range]').forEach((control) => control.classList.toggle('active', control === button));
   try {
-    state.spending = await api(`/api/spending?range=${state.spendingRange}`);
+    state.spending = await loadSpending();
     renderSpending(state.spending);
   } catch (error) { showNotice(error.message); }
 }));
@@ -690,7 +698,7 @@ $('#spendingTransactions').addEventListener('change', async (event) => {
   select.disabled = true;
   try {
     await api(`/api/transactions/${select.dataset.transactionCategory}/category`, { method: 'PATCH', body: JSON.stringify({ bucket: select.value }) });
-    state.spending = await api(`/api/spending?range=${state.spendingRange}`);
+    state.spending = await loadSpending();
     renderSpending(state.spending);
   } catch (error) { showNotice(error.message); select.disabled = false; }
 });
