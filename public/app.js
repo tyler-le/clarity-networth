@@ -298,8 +298,10 @@ function allocationRows(transactions) {
 function spendingForSelectedMonth(data) {
   if (!state.spendingMonth) return data;
   const transactions = (data.transactions || []).filter((transaction) => String(transaction.date).startsWith(state.spendingMonth));
-  const total = transactions.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
-  return { ...data, total, monthlyAverage: total, categories: allocationRows(transactions), transactions };
+  const planTransactions = transactions.filter((transaction) => transaction.bucket !== 'income' && transaction.bucket !== 'transfer');
+  const total = planTransactions.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  const income = transactions.filter((transaction) => transaction.bucket === 'income').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  return { ...data, total, income, monthlyAverage: total, categories: allocationRows(planTransactions), transactions };
 }
 
 function renderSpendingTrend(data) {
