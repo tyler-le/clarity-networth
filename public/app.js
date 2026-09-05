@@ -406,15 +406,21 @@ function renderInvestments(data) {
   $('#investmentContext').textContent = accounts.length ? `${accounts.length} connected account${accounts.length === 1 ? '' : 's'}${started ? ` · Tracking since ${started}` : ' · Sync to begin tracking'}` : 'Connect an investment account to begin.';
   renderPortfolioChart(data);
   const allocation = data.allocation || [];
+  $('#investmentAllocationCard').classList.toggle('hidden', !data.positionsAvailable);
+  $('#investmentAccountsCard').classList.toggle('hidden', accounts.length < 2);
+  $('#investmentHoldingsPanel').classList.toggle('hidden', !data.positionsAvailable);
   let cursor = 0;
   const colors = ['#287143', '#7ea98b', '#d5a75f', '#9ca9bd', '#b88692', '#7d91a5'];
   const donut = $('#investmentDonut');
   if (allocation.length) {
+    const largest = allocation[0];
+    $('#investmentAllocationInsight').textContent = `${largest.name} is your largest allocation at ${Math.round(largest.share * 100)}%. Tap a category to explore it.`;
     donut.style.background = `conic-gradient(${allocation.map((row, index) => { const next = cursor + row.share * 100; const stop = `${colors[index % colors.length]} ${cursor.toFixed(2)}% ${next.toFixed(2)}%`; cursor = next; return stop; }).join(', ')})`;
     donut.innerHTML = `<span>${state.investmentFilter === 'all' ? 'Your<br>mix' : `${escapeHtml(state.investmentFilter)}<br>holdings`}</span>`;
     $('#investmentAllocation').innerHTML = `<button class="investment-allocation-row ${state.investmentFilter === 'all' ? 'active' : ''}" data-investment-filter="all"><i></i><span>All assets</span><strong>${fmt.format(data.total || 0)}</strong></button>${allocation.map((row, index) => `<button class="investment-allocation-row ${state.investmentFilter === row.name ? 'active' : ''}" data-investment-filter="${escapeHtml(row.name)}"><i style="background:${colors[index % colors.length]}"></i><span>${escapeHtml(row.name)}</span><small>${Math.round(row.share * 100)}%</small><strong>${fmt.format(row.value)}</strong></button>`).join('')}`;
   } else {
     donut.style.background = '#edf0eb'; donut.innerHTML = '<span>Awaiting<br>holdings</span>';
+    $('#investmentAllocationInsight').textContent = 'Allocation appears when your institution provides holdings.';
     $('#investmentAllocation').innerHTML = '<p class="spending-empty">Allocation appears when your institution provides holdings.</p>';
   }
   $('#investmentAccounts').innerHTML = accounts.length ? accounts.map((account) => `<div class="investment-account-row"><div><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || '')}</span></div><b>${fmt.format(account.value)}</b></div>`).join('') : '<p class="spending-empty">No investment accounts connected.</p>';
