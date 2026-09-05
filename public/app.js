@@ -324,23 +324,30 @@ function renderSpendingTrend(data) {
 
 function renderCashFlowSankey(data) {
   const el = $('#cashflowSankey');
-  const income = Number(data.income || 0), spending = Number(data.total || 0), rows = data.categories || [];
+  const income = Number(data.income || 0), spending = Number(data.total || 0), remaining = income - spending;
+  const rows = (data.categories || []).slice(0, 4);
   if (!income && !spending) { el.innerHTML = ''; return; }
-  const width = 700, height = 122, scale = 66 / Math.max(income, spending, 1);
-  const node = (x, y, h, color, label, value, category = '') => `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" class="cashflow-target"` : ''}><rect x="${x}" y="${y}" width="10" height="${h}" rx="4" fill="${color}"/><text x="${x + 15}" y="${y + 11}" class="cashflow-label">${escapeHtml(label)}</text><text x="${x + 15}" y="${y + 24}" class="cashflow-value">${fmt.format(value)}</text></g>`;
-  const curve = (fromX, fromY, toX, toY, amount, color) => `<path d="M ${fromX} ${fromY} C ${fromX + 88} ${fromY}, ${toX - 88} ${toY}, ${toX} ${toY}" fill="none" stroke="${color}" stroke-opacity=".42" stroke-width="${Math.max(5, amount * scale)}" stroke-linecap="round"/>`;
-  const leftH = Math.max(12, income * scale), spentH = Math.max(12, spending * scale), leftY = 28, spentY = 15, remaining = income - spending;
-  const remainingH = Math.max(remaining > 0 ? 10 : 0, remaining * scale), remainingY = spentY + spentH + 13;
-  let rightY = 10, right = '';
-  let paths = curve(62, leftY + Math.min(leftH / 2, 24), 270, spentY + Math.min(spentH / 2, 24), spending, '#c87862');
-  if (remaining > 0) paths += curve(62, leftY + leftH - 7, 270, remainingY + Math.min(remainingH / 2, 12), remaining, '#5b9a70');
-  for (const [index, row] of rows.entries()) {
-    const h = Math.max(8, Number(row.amount || 0) * scale), y = rightY, color = spendingColors[index % spendingColors.length];
-    rightY += h + 8;
-    paths += curve(280, spentY + Math.min(spentH / 2, 26), 528, y + Math.min(h / 2, 8), row.amount, color);
-    right += node(528, y, h, color, row.name, row.amount, row.name);
-  }
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Income flowing to spending categories">${paths}${node(52, leftY, leftH, '#5b9a70', 'Income', income)}${node(270, spentY, spentH, '#c87862', 'Spent', spending)}${remaining > 0 ? node(270, remainingY, remainingH, '#5b9a70', 'Left', remaining) : ''}${right}</svg>`;
+  // Use the rendered width as the SVG coordinate system on phones. This keeps
+  // labels at a readable size instead of shrinking a desktop SVG to fit.
+  const compact = el.clientWidth < 480;
+  const width = compact ? 390 : 720, height = 216;
+  const sourceX = 12, sourceW = compact ? 92 : 144;
+  const middleX = compact ? 119 : 258, middleW = compact ? 116 : 158;
+  const destinationX = compact ? 260 : 500, destinationW = compact ? 118 : 184;
+  const truncate = (label) => compact && label.length > 15 ? `${label.slice(0, 14)}…` : label;
+  const block = (x, y, w, color, label, value, category = '') => `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" class="cashflow-target"` : ''}><rect x="${x}" y="${y}" width="${w}" height="36" rx="8" fill="#fff" stroke="#e4e9e4"/><rect x="${x}" y="${y}" width="6" height="36" rx="3" fill="${color}"/><text x="${x + 13}" y="${y + 14}" class="cashflow-label">${escapeHtml(truncate(label))}</text><text x="${x + 13}" y="${y + 28}" class="cashflow-value">${fmt.format(value)}</text></g>`;
+  const flow = (fromX, fromY, toX, toY, ratio, color) => `<path d="M ${fromX} ${fromY} C ${fromX + (toX - fromX) * .42} ${fromY}, ${toX - (toX - fromX) * .42} ${toY}, ${toX} ${toY}" fill="none" stroke="${color}" stroke-opacity=".38" stroke-width="${Math.max(6, Math.min(30, ratio * 30))}" stroke-linecap="round"/>`;
+  const incomeY = 82, spentY = 35, remainingY = 135;
+  const destinationColors = ['#c87862', '#d78c70', '#d5a75f', '#b9685a'];
+  let paths = flow(sourceX + sourceW, incomeY + 18, middleX, spentY + 18, spending / Math.max(income, 1), '#c87862');
+  if (remaining > 0) paths += flow(sourceX + sourceW, incomeY + 18, middleX, remainingY + 18, remaining / Math.max(income, 1), '#5b9a70');
+  let destinations = '';
+  rows.forEach((row, index) => {
+    const y = 12 + index * 47, color = destinationColors[index % destinationColors.length];
+    paths += flow(middleX + middleW, spentY + 18, destinationX, y + 18, Number(row.amount || 0) / Math.max(spending, 1), color);
+    destinations += block(destinationX, y, destinationW, color, row.name, row.amount, row.name);
+  });
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Income flowing to money out and spending categories">${paths}${block(sourceX, incomeY, sourceW, '#287143', 'Income', income)}${block(middleX, spentY, middleW, '#c87862', 'Money out', spending)}${remaining > 0 ? block(middleX, remainingY, middleW, '#5b9a70', 'Left', remaining) : ''}${destinations}</svg>`;
 }
 
 function renderSpending(data) {
@@ -356,7 +363,7 @@ function renderSpending(data) {
   $('#spendingTotal').textContent = fmt.format(Math.abs(remaining));
   $('#cashflowHeadline').textContent = remaining >= 0 ? 'Left after spending' : 'Over income';
   $('#cashflowHeadline').className = `cashflow-headline ${remaining >= 0 ? 'positive' : 'negative'}`;
-  $('#spendingSummary').innerHTML = `<span><i class="income"></i>Income <strong>${fmt.format(income)}</strong></span><span>Spent <strong>${fmt.format(total)}</strong></span>`;
+  $('#spendingSummary').innerHTML = `<span class="income-flow"><i class="income"></i>Income <strong>${fmt.format(income)}</strong></span><span class="spend-flow"><i class="spend"></i>Money out <strong>${fmt.format(total)}</strong></span>`;
   const rangeLabel = ({ '1m': 'this month', '3m': 'over the last 3 months', ytd: 'year to date', '1y': 'over the last year' })[data.range] || 'this month';
   const selectedMonthLabel = state.spendingMonth && new Date(`${state.spendingMonth}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   $('#spendingContext').textContent = total || income ? (selectedMonthLabel ? `Cash flow in ${selectedMonthLabel}` : `Income minus money out · ${rangeLabel}`) : `No posted cash flow ${selectedMonthLabel || rangeLabel}. It can take a little time to arrive after connecting.`;
