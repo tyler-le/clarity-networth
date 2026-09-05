@@ -334,7 +334,7 @@ function renderCashFlowSankey(data) {
   const sourceX = 12, sourceW = compact ? 92 : 144;
   const middleX = compact ? 119 : 258, middleW = compact ? 116 : 158;
   const destinationX = compact ? 260 : 500, destinationW = compact ? 118 : 184;
-  const truncate = (label) => compact && label.length > 15 ? `${label.slice(0, 14)}…` : label;
+  const truncate = (label) => compact && label.length > 20 ? `${label.slice(0, 19)}…` : label;
   const block = (x, y, w, color, label, value, category = '') => `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" class="cashflow-target"` : ''}><rect x="${x}" y="${y}" width="${w}" height="36" rx="8" fill="#fff" stroke="#e4e9e4"/><rect x="${x}" y="${y}" width="6" height="36" rx="3" fill="${color}"/><text x="${x + 13}" y="${y + 14}" class="cashflow-label">${escapeHtml(truncate(label))}</text><text x="${x + 13}" y="${y + 28}" class="cashflow-value">${fmt.format(value)}</text></g>`;
   const flow = (fromX, fromY, toX, toY, ratio, color) => `<path d="M ${fromX} ${fromY} C ${fromX + (toX - fromX) * .42} ${fromY}, ${toX - (toX - fromX) * .42} ${toY}, ${toX} ${toY}" fill="none" stroke="${color}" stroke-opacity=".38" stroke-width="${Math.max(6, Math.min(30, ratio * 30))}" stroke-linecap="round"/>`;
   const incomeY = 82, spentY = 35, remainingY = 135;
