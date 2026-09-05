@@ -443,6 +443,24 @@ function renderPortfolioChart(data) {
   el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Portfolio value history"><defs><linearGradient id="portfolioFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".16"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs>${grid}${xAxis}<path d="${area}" fill="url(#portfolioFade)"/><path d="${line}" fill="none" stroke="#287143" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>${points.length === 1 ? `<circle cx="${points[0][0]}" cy="${points[0][1]}" r="5" fill="#287143"/>` : ''}</svg>`;
 }
 
+function aggregateHoldings(positions) {
+  const groups = new Map();
+  for (const position of positions) {
+    const key = String(position.ticker || position.name || position.id).trim().toLowerCase();
+    const group = groups.get(key) || { id: key, ticker: position.ticker, name: position.name, positions: [] };
+    group.positions.push(position);
+    groups.set(key, group);
+  }
+  return [...groups.values()].map((group) => {
+    const value = group.positions.reduce((sum, position) => sum + Number(position.value || 0), 0);
+    const costBasis = group.positions.every((position) => position.cost_basis != null)
+      ? group.positions.reduce((sum, position) => sum + Number(position.cost_basis || 0), 0) : null;
+    const classifications = [...new Set(group.positions.map((position) => assetClassLabel(position.type, position.asset_class_override)))];
+    const classification = classifications.length === 1 ? classifications[0] : 'Mixed';
+    return { ...group, value, costBasis, classification, gain: costBasis == null ? null : value - costBasis, gain_pct: costBasis ? (value - costBasis) / costBasis : null };
+  });
+}
+
 function renderInvestments(data) {
   if (!data) return;
   const accounts = data.accounts || [];
@@ -473,19 +491,22 @@ function renderInvestments(data) {
   }
   $('#investmentAccounts').innerHTML = accounts.length ? accounts.map((account) => `<div class="investment-account-row"><div><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || '')}</span></div><b>${fmt.format(account.value)}</b></div>`).join('') : '<p class="spending-empty">No investment accounts connected.</p>';
   const names = new Map(accounts.map((account) => [account.account_id, account.name]));
-  let positions = (data.positions || []).filter((position) => state.investmentFilter === 'all' || assetClassLabel(position.type, position.asset_class_override) === state.investmentFilter);
-  positions = [...positions].sort((a, b) => state.investmentSort === 'performance' ? Number(b.gain_pct ?? -Infinity) - Number(a.gain_pct ?? -Infinity) : state.investmentSort === 'equity' ? assetClassLabel(a.type, a.asset_class_override).localeCompare(assetClassLabel(b.type, b.asset_class_override)) || Number(b.value) - Number(a.value) : Number(b.value) - Number(a.value));
+  let positions = aggregateHoldings((data.positions || []).filter((position) => state.investmentFilter === 'all' || assetClassLabel(position.type, position.asset_class_override) === state.investmentFilter));
+  positions = [...positions].sort((a, b) => state.investmentSort === 'performance' ? Number(b.gain_pct ?? -Infinity) - Number(a.gain_pct ?? -Infinity) : state.investmentSort === 'equity' ? a.classification.localeCompare(b.classification) || Number(b.value) - Number(a.value) : Number(b.value) - Number(a.value));
   $('#investmentSort').value = state.investmentSort;
   $('#investmentHoldingsInsight').textContent = data.positionsAvailable ? `${positions.length} holding${positions.length === 1 ? '' : 's'}${state.investmentFilter === 'all' ? '' : ` · ${state.investmentFilter}`}` : 'Holdings appear when your institution provides them.';
   const visiblePositions = state.holdingsExpanded ? positions : positions.slice(0, 3);
   $('#investmentPositions').innerHTML = data.positionsAvailable ? visiblePositions.map((position) => {
     const gain = position.gain_pct;
     const performance = gain == null ? 'Performance unavailable' : `${gain >= 0 ? '+' : '−'}${Math.abs(gain * 100).toFixed(1)}%`;
-    const classification = assetClassLabel(position.type, position.asset_class_override);
     const canEdit = !state.demoPreview && !state.dashboard?.demoMode;
     const share = data.total ? Math.max(0, Number(position.value || 0) / Number(data.total) * 100) : 0;
-    const categoryControl = canEdit ? `<label>Asset type<select data-position-class="${escapeHtml(position.id)}" aria-label="Asset class for ${escapeHtml(position.name)}"><option value="" ${position.asset_class_override ? '' : 'selected'}>Automatic · ${escapeHtml(assetClassLabel(position.type))}</option>${['Equities', 'Funds', 'Fixed income', 'Cash', 'Crypto', 'Other'].map((option) => `<option value="${option}" ${position.asset_class_override === option ? 'selected' : ''}>${option}</option>`).join('')}</select></label>` : `<span>Asset type · ${escapeHtml(classification)}</span>`;
-    return `<details class="holding-row"><summary aria-label="${escapeHtml(position.name)}, ${fmt.format(position.value)}"><div class="position-symbol">${escapeHtml(position.ticker || '•')}</div><div class="holding-copy"><strong class="holding-ticker">${escapeHtml(position.ticker || 'Holding')}</strong><div class="holding-weight"><i><b style="width:${Math.min(100, share).toFixed(1)}%"></b></i><span>${Math.round(share)}%</span></div></div><div class="position-value"><b>${fmt.format(position.value)}</b><small class="${gain == null ? '' : gain >= 0 ? 'positive' : 'negative'}">${performance}</small></div></summary><div class="holding-detail"><strong>${escapeHtml(position.name)}</strong><span>${escapeHtml(classification)} · ${escapeHtml(names.get(position.account_id) || 'Investment account')}</span>${categoryControl}</div></details>`;
+    const accountBreakdown = position.positions.map((part) => {
+      const categoryControl = canEdit ? `<select data-position-class="${escapeHtml(part.id)}" aria-label="Asset class for ${escapeHtml(part.name)} in ${escapeHtml(names.get(part.account_id) || 'investment account')}"><option value="" ${part.asset_class_override ? '' : 'selected'}>Automatic · ${escapeHtml(assetClassLabel(part.type))}</option>${['Equities', 'Funds', 'Fixed income', 'Cash', 'Crypto', 'Other'].map((option) => `<option value="${option}" ${part.asset_class_override === option ? 'selected' : ''}>${option}</option>`).join('')}</select>` : '';
+      return `<div class="holding-account"><div><span>${escapeHtml(names.get(part.account_id) || 'Investment account')}</span><small>${escapeHtml(assetClassLabel(part.type, part.asset_class_override))}</small></div><b>${fmt.format(part.value)}</b>${categoryControl}</div>`;
+    }).join('');
+    const location = position.positions.length === 1 ? 'Held in 1 account' : `Held in ${position.positions.length} accounts`;
+    return `<details class="holding-row"><summary aria-label="${escapeHtml(position.name)}, ${fmt.format(position.value)}"><div class="position-symbol">${escapeHtml(position.ticker || '•')}</div><div class="holding-copy"><strong class="holding-ticker">${escapeHtml(position.ticker || 'Holding')}</strong><div class="holding-weight"><i><b style="width:${Math.min(100, share).toFixed(1)}%"></b></i><span>${Math.round(share)}%</span></div></div><div class="position-value"><b>${fmt.format(position.value)}</b><small class="${gain == null ? '' : gain >= 0 ? 'positive' : 'negative'}">${performance}</small></div></summary><div class="holding-detail"><strong>${escapeHtml(position.name)}</strong><span>${escapeHtml(position.classification)} · ${location}</span><div class="holding-account-list">${accountBreakdown}</div></div></details>`;
   }).join('') : '<p class="positions-empty">Position details aren’t available from this connection yet. Your investment account balances still count toward your portfolio and net worth.</p>';
   const more = $('#investmentHoldingsMore');
   more.classList.toggle('hidden', positions.length <= 3);
