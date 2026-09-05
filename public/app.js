@@ -403,7 +403,8 @@ function renderInvestments(data) {
   $('#investmentTotal').textContent = fmt.format(data.total || 0);
   const snapshots = portfolioSnapshots(data);
   const started = snapshots[0]?.date ? new Date(`${snapshots[0].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : null;
-  $('#investmentContext').textContent = accounts.length ? `${accounts.length} connected account${accounts.length === 1 ? '' : 's'}${started ? ` · Tracking since ${started}` : ' · Sync to begin tracking'}` : 'Connect an investment account to begin.';
+  const reconstructed = snapshots.some((snapshot) => snapshot.source === 'reconstructed');
+  $('#investmentContext').textContent = accounts.length ? `${accounts.length} connected account${accounts.length === 1 ? '' : 's'}${started ? ` · ${reconstructed ? `Reconstructed since ${started}` : `Tracking since ${started}`}` : ' · Sync to begin tracking'}` : 'Connect an investment account to begin.';
   renderPortfolioChart(data);
   const allocation = data.allocation || [];
   $('#investmentAllocationCard').classList.toggle('hidden', !data.positionsAvailable);

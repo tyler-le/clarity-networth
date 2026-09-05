@@ -36,6 +36,7 @@ By default, `DEMO_MODE=true`, so the dashboard opens with realistic sample data 
 PLAID_ENV=sandbox
 PLAID_CLIENT_ID=your_client_id
 PLAID_SECRET=your_sandbox_secret
+MARKETDATA_API_TOKEN=your_market_data_bearer_token
 ENCRYPTION_KEY=use-a-long-random-secret-here
 ```
 

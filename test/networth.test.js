@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { classifyTransaction, hideDuplicateAccounts, investmentSummary, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
+import { classifyTransaction, hideDuplicateAccounts, reconstructInvestmentHistory, investmentSummary, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
+import { normalizeCandles } from '../market-data.js';
 import { filterSnapshots, scrubIndex } from '../public/chart-utils.js';
 
 test('estimated history is removed before the chart is served', () => {
@@ -108,6 +109,24 @@ test('portfolio history keeps one verified investment value for each day', () =>
     { date: '2026-09-01', value: 1250, source: 'verified' },
     { date: '2026-09-02', value: 1250, source: 'verified' }
   ]);
+});
+
+test('investment reconstruction reverses later purchases and uses historical closes', () => {
+  const store = {
+    positions: [{ security_id: 'fund', ticker: 'VFINX', type: 'mutual fund', quantity: 10 }],
+    investment_transactions: [{ security_id: 'fund', ticker: 'VFINX', security_type: 'mutual fund', date: '2026-09-03', quantity: 2 }],
+    market_prices: { VFINX: { '2026-09-01': 100, '2026-09-05': 110 } }
+  };
+  const history = reconstructInvestmentHistory(store, '2026-09-05');
+  assert.equal(history.find((snapshot) => snapshot.date === '2026-09-01').value, 800);
+  assert.equal(history.at(-1).value, 1100);
+  assert.ok(history.every((snapshot) => snapshot.source === 'reconstructed'));
+});
+
+test('market candle parsing retains usable closes by session date', () => {
+  const prices = normalizeCandles({ s: 'ok', t: [1704168000], c: [301.53] });
+  assert.equal(Object.values(prices)[0], 301.53);
+  assert.equal(normalizeCandles({ s: 'no_data' }).constructor, Object);
 });
 
 test('investment summary separates portfolio total, allocation, and positions', () => {

@@ -91,6 +91,50 @@ export function snapshotInvestments(store, snapshotDate = new Date().toISOString
   if (store.investment_snapshots.length > 3650) store.investment_snapshots = store.investment_snapshots.slice(-3650);
 }
 
+function nearestPrice(prices, date) {
+  return Object.keys(prices || {}).filter((day) => day <= date).sort().at(-1) ? Number(prices[Object.keys(prices).filter((day) => day <= date).sort().at(-1)]) : null;
+}
+
+export function reconstructInvestmentHistory(store, endDate = new Date().toISOString().slice(0, 10), years = 1) {
+  const transactions = (store.investment_transactions || []).filter((transaction) => transaction.date <= endDate);
+  const current = new Map();
+  for (const position of store.positions || []) {
+    const entry = current.get(position.security_id) || { quantity: 0, ticker: position.ticker, type: position.type };
+    entry.quantity += Number(position.quantity || 0);
+    entry.ticker ||= position.ticker;
+    entry.type ||= position.type;
+    current.set(position.security_id, entry);
+  }
+  for (const transaction of transactions) {
+    if (!transaction.security_id) continue;
+    const entry = current.get(transaction.security_id) || { quantity: 0, ticker: transaction.ticker, type: transaction.security_type };
+    entry.ticker ||= transaction.ticker;
+    entry.type ||= transaction.security_type;
+    current.set(transaction.security_id, entry);
+  }
+  if (!current.size) return [];
+  const start = new Date(`${endDate}T12:00:00`);
+  start.setFullYear(start.getFullYear() - years);
+  start.setDate(1);
+  const dates = [];
+  for (const date = new Date(start); date <= new Date(`${endDate}T12:00:00`); date.setMonth(date.getMonth() + 1)) dates.push(new Date(date).toISOString().slice(0, 10));
+  if (dates.at(-1) !== endDate) dates.push(endDate);
+  const snapshots = [];
+  for (const date of dates) {
+    let value = 0;
+    let complete = true;
+    for (const [securityId, holding] of current) {
+      const quantity = holding.quantity - transactions.filter((transaction) => transaction.security_id === securityId && transaction.date > date).reduce((sum, transaction) => sum + Number(transaction.quantity || 0), 0);
+      if (!quantity) continue;
+      const price = holding.type === 'cash' ? 1 : nearestPrice(store.market_prices?.[holding.ticker], date);
+      if (!Number.isFinite(price)) { complete = false; break; }
+      value += quantity * price;
+    }
+    if (complete && Number.isFinite(value) && value >= 0) snapshots.push({ date, value: Math.round(value * 100) / 100, source: 'reconstructed' });
+  }
+  return snapshots;
+}
+
 function normalizedAccountText(value) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }

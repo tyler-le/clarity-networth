@@ -5,7 +5,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { OAuth2Client } from 'google-auth-library';
 import { hasLegacyStore, listUserStorageKeys, readStore, userStorageKey, writeStore, encrypt, decrypt, resetStore, removeDemoData } from './store.js';
-import { classifyTransaction, hideDuplicateAccounts, investmentSummary, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
+import { classifyTransaction, hideDuplicateAccounts, investmentSummary, reconstructInvestmentHistory, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
+import { loadHistoricalPrices } from './market-data.js';
 import { plaidConfigured, plaidPost } from './plaid.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -216,10 +217,17 @@ async function syncRetirementContributionsForItem(store, item) {
   let offset = 0;
   let total = Infinity;
   const accounts = new Map(store.accounts.map((account) => [account.plaid_account_id, account]));
+  store.investment_transactions ||= [];
   while (offset < total) {
     const data = await plaidPost('/investments/transactions/get', { access_token, start_date, end_date, options: { count: 500, offset } });
     total = Number(data.total_investment_transactions || 0);
+    const securities = new Map((data.securities || []).map((security) => [security.security_id, security]));
     for (const transaction of data.investment_transactions || []) {
+      const security = securities.get(transaction.security_id) || {};
+      const investmentId = transaction.investment_transaction_id;
+      const existingInvestment = store.investment_transactions.find((record) => record.id === investmentId);
+      const recorded = { id: investmentId, item_id: item.id, account_id: transaction.account_id, security_id: transaction.security_id || null, ticker: security.ticker_symbol || null, security_type: security.type || null, date: transaction.date, quantity: Number(transaction.quantity || 0), price: Number(transaction.price || 0), amount: Number(transaction.amount || 0), type: transaction.type || null, subtype: transaction.subtype || null };
+      if (existingInvestment) Object.assign(existingInvestment, recorded); else store.investment_transactions.push(recorded);
       const account = accounts.get(transaction.account_id);
       const name = String(transaction.name || '');
       const retirementAccount = /401\(?k\)?|403\(?b\)?|457|retirement|roth|\bira\b/i.test(`${account?.subtype || ''} ${account?.name || ''}`);
@@ -238,6 +246,38 @@ async function syncRetirementContributionsForItem(store, item) {
     }
     offset += 500;
   }
+}
+
+async function backfillInvestmentHistory(store) {
+  if (!process.env.MARKETDATA_API_TOKEN) return false;
+  const endDate = new Date().toISOString().slice(0, 10);
+  const historyYears = Math.max(1, Math.min(2, Number(process.env.MARKETDATA_HISTORY_YEARS || 1)));
+  const start = new Date();
+  start.setFullYear(start.getFullYear() - historyYears);
+  const startDate = start.toISOString().slice(0, 10);
+  const securities = new Map();
+  for (const position of store.positions || []) if (position.ticker && position.type !== 'cash') securities.set(position.ticker, { ticker: position.ticker, type: position.type });
+  for (const transaction of store.investment_transactions || []) if (transaction.ticker && transaction.security_type !== 'cash') securities.set(transaction.ticker, { ticker: transaction.ticker, type: transaction.security_type });
+  store.market_prices ||= {};
+  for (const security of securities.values()) {
+    const cached = store.market_prices[security.ticker] || {};
+    const latestCached = Object.keys(cached).sort().at(-1);
+    const recentEnough = latestCached && (new Date(`${endDate}T12:00:00`) - new Date(`${latestCached}T12:00:00`)) < 8 * 86400000;
+    if (Object.keys(cached).some((date) => date <= startDate) && recentEnough) continue;
+    try {
+      const prices = await loadHistoricalPrices({ symbol: security.ticker, securityType: security.type, from: startDate, to: endDate });
+      store.market_prices[security.ticker] = { ...cached, ...prices };
+    } catch (error) {
+      // A price provider outage must never remove an already-built chart.
+      console.warn(`Historical price refresh skipped for ${security.ticker}:`, error.message);
+    }
+  }
+  const reconstructed = reconstructInvestmentHistory(store, endDate, historyYears);
+  if (!reconstructed.length) return false;
+  const verified = (store.investment_snapshots || []).filter((snapshot) => snapshot.source === 'verified');
+  const verifiedDates = new Set(verified.map((snapshot) => snapshot.date));
+  store.investment_snapshots = [...reconstructed.filter((snapshot) => !verifiedDates.has(snapshot.date)), ...verified].sort((a, b) => a.date.localeCompare(b.date));
+  return true;
 }
 
 async function hydrateInstitutionBrand(item) {
@@ -444,6 +484,8 @@ app.post('/api/plaid/exchange_public_token', async (req, res) => {
     await hydrateInstitutionBrand(item);
     await refreshAccountsForItem(store, item);
     try { await syncTransactionsForItem(store, item); } catch (error) { console.warn('Transactions not ready:', error.message); }
+    try { await syncRetirementContributionsForItem(store, item); } catch (error) { console.warn('Investment history unavailable:', error.message); }
+    try { await backfillInvestmentHistory(store); } catch (error) { console.warn('Investment history reconstruction unavailable:', error.message); }
     hideDuplicateAccounts(store);
     snapshotNetWorth(store);
     snapshotInvestments(store);
@@ -469,6 +511,7 @@ app.post('/api/sync', async (_req, res) => {
       results.push({ item: item.institution_name, ok: false, error: error.message });
     }
   }
+  try { await backfillInvestmentHistory(store); } catch (error) { console.warn('Investment history reconstruction unavailable:', error.message); }
   snapshotNetWorth(store);
   snapshotInvestments(store);
   saveStore(_req.user, store);

@@ -21,6 +21,8 @@ const emptyStore = () => ({
   accounts: [],
   positions: [],
   position_overrides: {},
+  investment_transactions: [],
+  market_prices: {},
   investment_snapshots: [],
   transactions: [],
   snapshots: [],
@@ -75,6 +77,8 @@ export function removeDemoData(store) {
   store.items = store.items.filter((item) => !item.demo);
   store.accounts = store.accounts.filter((account) => !account.demo);
   store.positions = (store.positions || []).filter((position) => !position.demo);
+  store.investment_transactions = [];
+  store.market_prices = {};
   store.investment_snapshots = [];
   store.transactions = store.transactions.filter((transaction) => !transaction.demo);
   // Existing snapshots do not carry a mode marker, so a mixed store cannot
