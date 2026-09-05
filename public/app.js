@@ -15,6 +15,9 @@ const state = {
   allocationDisplay: 'percentage',
   spendingCategory: 'all',
   spendingSort: 'recent',
+  investmentRange: '1y',
+  investmentFilter: 'all',
+  investmentSort: 'value',
   view: 'overview'
 };
 
@@ -55,6 +58,7 @@ function setView(view) {
       renderLineChart(visibleSnapshots(state.dashboard.snapshots || []), state.dashboard.summary);
     });
   }
+  if (view === 'investments' && state.investments) requestAnimationFrame(() => renderInvestments(state.investments));
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -338,9 +342,9 @@ function renderSpending(data) {
 
 function renderSpendingTransactions(data) {
   const filter = $('#spendingCategoryFilter');
-  const categories = (data.categories || []).map((row) => row.name);
+  const categories = [...new Set((data.transactions || []).map((transaction) => transaction.category))];
   if (state.spendingCategory !== 'all' && !categories.includes(state.spendingCategory)) state.spendingCategory = 'all';
-  filter.innerHTML = `<option value="all">All plan categories</option>${categories.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('')}`;
+  filter.innerHTML = `<option value="all">All activity</option>${categories.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('')}`;
   filter.value = state.spendingCategory;
   $('#spendingSort').value = state.spendingSort;
   let rows = (data.transactions || []).filter((transaction) => (state.spendingCategory === 'all' || transaction.category === state.spendingCategory) && (!state.spendingMonth || String(transaction.date).startsWith(state.spendingMonth)));
@@ -348,23 +352,85 @@ function renderSpendingTransactions(data) {
   $('#spendingTransactionCount').textContent = `${rows.length} posted`;
   const options = [['fixed', 'Fixed costs'], ['savings', 'Savings'], ['investments', 'Investments'], ['guilt_free', 'Guilt-free']];
   $('#spendingTransactions').innerHTML = rows.length ? rows.map((transaction) => {
-    const categoryControl = state.dashboard?.demoMode
+    const categoryControl = transaction.bucket === 'income' || state.dashboard?.demoMode
       ? `<span class="transaction-category-label">${escapeHtml(transaction.category)}</span>`
       : `<select data-transaction-category="${escapeHtml(transaction.id)}" aria-label="Plan category for ${escapeHtml(transaction.name)}">${options.map(([value, label]) => `<option value="${value}" ${transaction.bucket === value ? 'selected' : ''}>${label}</option>`).join('')}</select>`;
-    return `<div class="spending-transaction-row"><div><strong>${escapeHtml(transaction.name)}</strong><span>${new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span></div><div class="transaction-plan"><b>${fmt.format(transaction.amount)}</b>${categoryControl}</div></div>`;
+    return `<div class="spending-transaction-row ${transaction.bucket === 'income' ? 'income-transaction' : ''}"><div><strong>${escapeHtml(transaction.name)}</strong><span>${new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span></div><div class="transaction-plan"><b>${transaction.bucket === 'income' ? '+' : ''}${fmt.format(transaction.amount)}</b>${categoryControl}</div></div>`;
   }).join('') : '<p class="spending-empty">No posted transactions in this category for this period.</p>';
+}
+
+function portfolioSnapshots(data) {
+  const snapshots = data.snapshots || [];
+  if (state.investmentRange === 'all' || !snapshots.length) return snapshots;
+  const latest = new Date(`${snapshots.at(-1).date}T12:00:00`);
+  const cutoff = new Date(latest);
+  cutoff.setFullYear(cutoff.getFullYear() - 1);
+  const visible = snapshots.filter((snapshot) => new Date(`${snapshot.date}T12:00:00`) >= cutoff);
+  return visible.length ? visible : snapshots.slice(-1);
+}
+
+function renderPortfolioChart(data) {
+  const el = $('#investmentChart');
+  if (el.clientWidth < 80 || el.clientHeight < 60) return;
+  const snapshots = portfolioSnapshots(data);
+  if (!snapshots.length) {
+    el.innerHTML = '<p class="spending-empty">Value history starts with your first successful sync.</p>';
+    return;
+  }
+  const width = Math.max(1, Math.round(el.clientWidth));
+  const height = Math.max(1, Math.round(el.clientHeight));
+  const plot = { left: 46, right: 6, top: 8, bottom: height - 23 };
+  const values = snapshots.map((snapshot) => Number(snapshot.value || 0));
+  let min = Math.min(...values), max = Math.max(...values);
+  const spread = max - min || Math.max(Math.abs(max) * .12, 1);
+  min -= spread * .1; max += spread * .1;
+  const points = values.map((value, index) => [plot.left + index / Math.max(values.length - 1, 1) * (width - plot.left - plot.right), plot.bottom - (value - min) / (max - min) * (plot.bottom - plot.top)]);
+  const line = points.map(([x, y], index) => `${index ? 'L' : 'M'} ${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
+  const area = `${line} L ${points.at(-1)[0]} ${plot.bottom} L ${points[0][0]} ${plot.bottom} Z`;
+  const label = (index) => new Date(`${snapshots[index].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+  const xIndices = [...new Set(width > 420 ? [0, Math.floor((snapshots.length - 1) / 2), snapshots.length - 1] : [0, snapshots.length - 1])];
+  const grid = [max, (max + min) / 2, min].map((value) => { const y = plot.bottom - (value - min) / (max - min) * (plot.bottom - plot.top); return `<line x1="${plot.left}" y1="${y}" x2="${width - plot.right}" y2="${y}" class="chart-grid"/><text x="${plot.left - 6}" y="${y + 3}" text-anchor="end" class="chart-axis-label">${axisCurrency(value)}</text>`; }).join('');
+  const xAxis = xIndices.map((index) => `<text x="${points[index][0]}" y="${height - 5}" text-anchor="${index === 0 ? 'start' : index === snapshots.length - 1 ? 'end' : 'middle'}" class="chart-axis-label">${label(index)}</text>`).join('');
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Portfolio value history"><defs><linearGradient id="portfolioFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".16"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs>${grid}${xAxis}<path d="${area}" fill="url(#portfolioFade)"/><path d="${line}" fill="none" stroke="#287143" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>${points.length === 1 ? `<circle cx="${points[0][0]}" cy="${points[0][1]}" r="5" fill="#287143"/>` : ''}</svg>`;
 }
 
 function renderInvestments(data) {
   if (!data) return;
   const accounts = data.accounts || [];
-  $('#investmentHero').innerHTML = `<article class="card investment-total-card"><div><div class="card-label">Total invested</div><div class="hero-number small">${fmt.format(data.total || 0)}</div><p>${accounts.length ? `${accounts.length} connected investment account${accounts.length === 1 ? '' : 's'}` : 'Connect an investment account to begin.'}</p></div><div class="investment-total-mark" aria-hidden="true">↗</div></article>`;
+  $('#investmentTotal').textContent = fmt.format(data.total || 0);
+  const snapshots = portfolioSnapshots(data);
+  const started = snapshots[0]?.date ? new Date(`${snapshots[0].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : null;
+  $('#investmentContext').textContent = accounts.length ? `${accounts.length} connected account${accounts.length === 1 ? '' : 's'}${started ? ` · Tracking since ${started}` : ' · Sync to begin tracking'}` : 'Connect an investment account to begin.';
+  renderPortfolioChart(data);
   const allocation = data.allocation || [];
-  $('#investmentAllocation').innerHTML = allocation.length ? allocation.map((row, index) => `<div class="allocation-row"><div><span class="allocation-dot allocation-${index % 5}"></span>${escapeHtml(row.name)}</div><strong>${fmt.format(row.value)}</strong><i><b style="width:${Math.max(4, row.share * 100)}%"></b></i></div>`).join('') : '<p class="spending-empty">Allocation will appear when your institution provides positions.</p>';
+  let cursor = 0;
+  const colors = ['#287143', '#7ea98b', '#d5a75f', '#9ca9bd', '#b88692', '#7d91a5'];
+  const donut = $('#investmentDonut');
+  if (allocation.length) {
+    donut.style.background = `conic-gradient(${allocation.map((row, index) => { const next = cursor + row.share * 100; const stop = `${colors[index % colors.length]} ${cursor.toFixed(2)}% ${next.toFixed(2)}%`; cursor = next; return stop; }).join(', ')})`;
+    donut.innerHTML = `<span>${state.investmentFilter === 'all' ? 'Your<br>mix' : `${escapeHtml(state.investmentFilter)}<br>holdings`}</span>`;
+    $('#investmentAllocation').innerHTML = `<button class="investment-allocation-row ${state.investmentFilter === 'all' ? 'active' : ''}" data-investment-filter="all"><i></i><span>All assets</span><strong>${fmt.format(data.total || 0)}</strong></button>${allocation.map((row, index) => `<button class="investment-allocation-row ${state.investmentFilter === row.name ? 'active' : ''}" data-investment-filter="${escapeHtml(row.name)}"><i style="background:${colors[index % colors.length]}"></i><span>${escapeHtml(row.name)}</span><small>${Math.round(row.share * 100)}%</small><strong>${fmt.format(row.value)}</strong></button>`).join('')}`;
+  } else {
+    donut.style.background = '#edf0eb'; donut.innerHTML = '<span>Awaiting<br>holdings</span>';
+    $('#investmentAllocation').innerHTML = '<p class="spending-empty">Allocation appears when your institution provides holdings.</p>';
+  }
   $('#investmentAccounts').innerHTML = accounts.length ? accounts.map((account) => `<div class="investment-account-row"><div><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || '')}</span></div><b>${fmt.format(account.value)}</b></div>`).join('') : '<p class="spending-empty">No investment accounts connected.</p>';
   const names = new Map(accounts.map((account) => [account.account_id, account.name]));
-  const positions = data.positions || [];
-  $('#investmentPositions').innerHTML = data.positionsAvailable ? positions.map((position) => `<div class="position-row"><div class="position-symbol">${escapeHtml(position.ticker || '•')}</div><div><strong>${escapeHtml(position.name)}</strong><span>${escapeHtml(names.get(position.account_id) || 'Investment account')} · ${Number(position.quantity || 0).toLocaleString('en-US', { maximumFractionDigits: 3 })} shares</span></div><b>${fmt.format(position.value)}</b></div>`).join('') : '<p class="positions-empty">Position details aren’t available from this connection yet. Your investment account balances still count toward total invested and net worth.</p>';
+  let positions = (data.positions || []).filter((position) => state.investmentFilter === 'all' || assetClassLabel(position.type) === state.investmentFilter);
+  positions = [...positions].sort((a, b) => state.investmentSort === 'performance' ? Number(b.gain_pct ?? -Infinity) - Number(a.gain_pct ?? -Infinity) : state.investmentSort === 'equity' ? assetClassLabel(a.type).localeCompare(assetClassLabel(b.type)) || Number(b.value) - Number(a.value) : Number(b.value) - Number(a.value));
+  $('#investmentSort').value = state.investmentSort;
+  $('#investmentPositionCount').textContent = data.positionsAvailable ? `${positions.length} holding${positions.length === 1 ? '' : 's'}` : 'Not available';
+  $('#investmentPositions').innerHTML = data.positionsAvailable ? positions.map((position) => { const gain = position.gain_pct; const performance = gain == null ? 'Performance unavailable' : `${gain >= 0 ? '+' : '−'}${Math.abs(gain * 100).toFixed(1)}%`; return `<div class="position-row"><div class="position-symbol">${escapeHtml(position.ticker || '•')}</div><div><strong>${escapeHtml(position.name)}</strong><span>${escapeHtml(assetClassLabel(position.type))} · ${escapeHtml(names.get(position.account_id) || 'Investment account')}</span></div><div class="position-value"><b>${fmt.format(position.value)}</b><small class="${gain == null ? '' : gain >= 0 ? 'positive' : 'negative'}">${performance}</small></div></div>`; }).join('') : '<p class="positions-empty">Position details aren’t available from this connection yet. Your investment account balances still count toward your portfolio and net worth.</p>';
+}
+
+function assetClassLabel(type) {
+  const value = String(type || '').toLowerCase();
+  if (value === 'equity') return 'Equities';
+  if (value === 'etf' || value === 'mutual fund') return 'Funds';
+  if (value === 'fixed income') return 'Fixed income';
+  if (value === 'cash') return 'Cash';
+  if (value === 'cryptocurrency') return 'Crypto';
+  return 'Other';
 }
 
 function renderDashboard() {
@@ -535,6 +601,22 @@ $('#spendingTrend').addEventListener('click', (event) => {
   renderSpending(state.spending);
   $('#spendingTransactionsPanel').open = true;
 });
+$$('[data-investment-range]').forEach((button) => button.addEventListener('click', () => {
+  state.investmentRange = button.dataset.investmentRange;
+  $$('[data-investment-range]').forEach((control) => control.classList.toggle('active', control === button));
+  renderInvestments(state.investments);
+}));
+$('#investmentAllocation').addEventListener('click', (event) => {
+  const filter = event.target.closest('[data-investment-filter]')?.dataset.investmentFilter;
+  if (!filter) return;
+  state.investmentFilter = filter;
+  $('#investmentHoldingsPanel').open = true;
+  renderInvestments(state.investments);
+});
+$('#investmentSort').addEventListener('change', (event) => {
+  state.investmentSort = event.target.value;
+  renderInvestments(state.investments);
+});
 
 function showAuthenticatedApp() {
   $('#authScreen').classList.add('hidden');
@@ -587,9 +669,11 @@ let chartResizeFrame;
 window.addEventListener('resize', () => {
   cancelAnimationFrame(chartResizeFrame);
   chartResizeFrame = requestAnimationFrame(() => {
-    if (!state.dashboard || state.view !== 'overview') return;
-    restoreNetWorthHero();
-    renderLineChart(visibleSnapshots(state.dashboard.snapshots || []), state.dashboard.summary);
+    if (state.view === 'overview' && state.dashboard) {
+      restoreNetWorthHero();
+      renderLineChart(visibleSnapshots(state.dashboard.snapshots || []), state.dashboard.summary);
+    }
+    if (state.view === 'investments' && state.investments) renderInvestments(state.investments);
   });
 });
 

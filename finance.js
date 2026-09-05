@@ -74,9 +74,20 @@ export function investmentSummary(store) {
     total,
     accounts: accounts.map((account) => ({ id: account.id, account_id: account.plaid_account_id, name: account.nickname || account.name, institution_name: account.institution_name, subtype: account.subtype, value: Math.abs(Number(account.current_balance || 0)) })),
     allocation: allocationRows,
-    positions: positions.sort((a, b) => Number(b.value || 0) - Number(a.value || 0)),
+    positions: positions.map((position) => ({ ...position, gain: position.cost_basis == null ? null : Number(position.value || 0) - Number(position.cost_basis), gain_pct: position.cost_basis ? (Number(position.value || 0) - Number(position.cost_basis)) / Number(position.cost_basis) : null })).sort((a, b) => Number(b.value || 0) - Number(a.value || 0)),
+    snapshots: (store.investment_snapshots || []).slice(-3650),
     positionsAvailable: positions.length > 0
   };
+}
+
+export function snapshotInvestments(store, snapshotDate = new Date().toISOString().slice(0, 10)) {
+  const value = store.accounts.filter((account) => !account.hidden && account.type === 'investment').reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
+  store.investment_snapshots ||= [];
+  const existing = store.investment_snapshots.find((snapshot) => snapshot.date === snapshotDate);
+  const snapshot = { date: snapshotDate, value, source: 'verified' };
+  if (existing) Object.assign(existing, snapshot); else store.investment_snapshots.push(snapshot);
+  store.investment_snapshots.sort((a, b) => a.date.localeCompare(b.date));
+  if (store.investment_snapshots.length > 3650) store.investment_snapshots = store.investment_snapshots.slice(-3650);
 }
 
 function normalizedAccountText(value) {
@@ -194,6 +205,14 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
   for (const transaction of incomeTransactions) {
     const month = String(transaction.date).slice(0, 7);
     monthlyIncome.set(month, (monthlyIncome.get(month) || 0) + Math.abs(Number(transaction.amount || 0)));
+    transactionRows.push({
+      id: transaction.id || transaction.plaid_transaction_id,
+      name: transaction.merchant_name || transaction.name || 'Income',
+      date: transaction.date,
+      amount: Math.abs(Number(transaction.amount || 0)),
+      category: 'Income',
+      bucket: 'income'
+    });
   }
   const eligibleTransactions = store.transactions.filter((transaction) => {
     if (transaction.pending || transaction.excluded || transaction.bucket === 'transfer' || Number(transaction.amount || 0) <= 0) return false;
@@ -375,7 +394,8 @@ export function seedDemo(store) {
     ['demo-roth', 'SPAXX', 'Fidelity Government Money Market Fund', 'cash', 1791, 1, 1791],
     ['demo-401k', 'FXAIX', 'Fidelity 500 Index Fund', 'mutual fund', 183, 191, 34953],
     ['demo-401k', 'FSPSX', 'Fidelity International Index Fund', 'mutual fund', 123, 72, 8856]
-  ].map(([account_id, ticker, name, type, quantity, price, value]) => ({ id: `demo-position-${ticker}-${account_id}`, item_id: 'demo-fidelity', account_id, ticker, name, type, quantity, price, value, demo: true }));
+  ].map(([account_id, ticker, name, type, quantity, price, value]) => ({ id: `demo-position-${ticker}-${account_id}`, item_id: 'demo-fidelity', account_id, ticker, name, type, quantity, price, value, cost_basis: Math.round(value * .9), demo: true }));
+  store.investment_snapshots = Array.from({ length: 84 }, (_, index) => { const date = new Date(now.getFullYear(), now.getMonth() - (83 - index), 1); return { date: date.toISOString().slice(0, 10), value: Math.round(21000 + index * 760 + Math.sin(index * .7) * 1800), source: 'verified' }; });
   const rows = [
     ['payroll-1', 'Payroll', -3100, d(1), 'income'],
     ['rent', 'Rent', 1650, d(1), 'fixed'],

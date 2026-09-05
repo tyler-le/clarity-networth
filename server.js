@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { OAuth2Client } from 'google-auth-library';
 import { hasLegacyStore, listUserStorageKeys, readStore, userStorageKey, writeStore, encrypt, decrypt, resetStore, removeDemoData } from './store.js';
-import { classifyTransaction, hideDuplicateAccounts, investmentSummary, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotNetWorth, seedDemo } from './finance.js';
+import { classifyTransaction, hideDuplicateAccounts, investmentSummary, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
 import { plaidConfigured, plaidPost } from './plaid.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -315,6 +315,7 @@ app.get('/api/dashboard', (req, res) => {
   removeEstimatedNetWorthHistory(store);
   hideDuplicateAccounts(store);
   snapshotNetWorth(store);
+  snapshotInvestments(store);
   saveStore(req.user, store);
   const visibleStore = activeStore(store);
   const summary = summarizeRange(visibleStore);
@@ -428,6 +429,7 @@ app.post('/api/plaid/exchange_public_token', async (req, res) => {
     try { await syncTransactionsForItem(store, item); } catch (error) { console.warn('Transactions not ready:', error.message); }
     hideDuplicateAccounts(store);
     snapshotNetWorth(store);
+    snapshotInvestments(store);
     saveStore(req.user, store);
     res.json({ ok: true, item: publicItem(item) });
   } catch (error) {
@@ -451,6 +453,7 @@ app.post('/api/sync', async (_req, res) => {
     }
   }
   snapshotNetWorth(store);
+  snapshotInvestments(store);
   saveStore(_req.user, store);
   res.json({ ok: results.every((r) => r.ok), results });
 });

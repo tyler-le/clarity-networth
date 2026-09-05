@@ -84,12 +84,15 @@
       </section>
 
       <section id="investmentsView" class="view">
-        <div class="investment-hero" id="investmentHero"></div>
-        <div class="investment-grid">
-          <article class="card investment-card"><div class="card-label">Asset allocation</div><div class="allocation-list" id="investmentAllocation"></div></article>
+        <article class="card portfolio-card">
+          <div class="card-top"><div><div class="card-label">Portfolio value</div><div class="portfolio-total" id="investmentTotal">—</div><p class="spending-context" id="investmentContext">Loading your portfolio…</p></div><div class="range-control" aria-label="Portfolio history timeframe"><button class="active" data-investment-range="1y">1Y</button><button data-investment-range="all">All</button></div></div>
+          <div class="portfolio-chart" id="investmentChart" aria-label="Portfolio value history"></div>
+        </article>
+        <div class="investment-focus-grid">
+          <article class="card allocation-card"><div class="card-label">Asset allocation</div><p class="spending-context">Tap a category to explore its holdings.</p><div class="allocation-visual"><div class="investment-donut" id="investmentDonut"><span>—</span></div><div class="investment-allocation" id="investmentAllocation"></div></div></article>
           <article class="card investment-card"><div class="card-label">Investment accounts</div><div class="investment-accounts" id="investmentAccounts"></div></article>
         </div>
-        <article class="card positions-card"><div class="card-top"><div><div class="card-label">Positions</div><p class="spending-context">Your holdings across connected investment accounts.</p></div></div><div id="investmentPositions"></div></article>
+        <details class="card holdings-card" id="investmentHoldingsPanel"><summary><span>Explore holdings</span><small id="investmentPositionCount"></small></summary><div class="holdings-controls"><select id="investmentSort" aria-label="Sort holdings"><option value="value">Largest value</option><option value="performance">Best performance</option><option value="equity">Asset type</option></select></div><div id="investmentPositions"></div></details>
       </section>
 
       <section id="spendingView" class="view">
