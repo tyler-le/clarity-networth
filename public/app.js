@@ -18,7 +18,8 @@ const state = {
   investmentRange: '1y',
   investmentFilter: 'all',
   investmentSort: 'value',
-  view: 'overview'
+  view: 'overview',
+  demoPreview: false
 };
 
 const accountGroupOrder = ['Cash', 'Savings', 'Investments', 'Credit cards', 'Loans & debt', 'Other'];
@@ -360,6 +361,9 @@ function renderSpending(data) {
   const selectedMonthLabel = state.spendingMonth && new Date(`${state.spendingMonth}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   $('#spendingContext').textContent = total || income ? (selectedMonthLabel ? `Cash flow in ${selectedMonthLabel}` : `Income minus money out · ${rangeLabel}`) : `No posted cash flow ${selectedMonthLabel || rangeLabel}. It can take a little time to arrive after connecting.`;
   renderCashFlowSankey(selected);
+  // The Sankey now owns the category story; the older donut is intentionally
+  // absent from the simplified cash-flow experience.
+  if (!$('#spendingDonut')) { renderSpendingTransactions(selected); return; }
   const rows = selected.categories || [];
   const donut = $('#spendingDonut');
   if (!rows.length) {
@@ -498,6 +502,17 @@ function renderDashboard() {
 }
 
 async function loadAll() {
+  if (state.demoPreview) {
+    const preview = await api('/api/demo-preview');
+    state.dashboard = preview.dashboard;
+    state.spending = preview.spending;
+    state.investments = preview.investments;
+    renderDashboard();
+    renderSpending(preview.spending);
+    renderInvestments(preview.investments);
+    $('#monthLabel').textContent = 'Demo workspace';
+    return;
+  }
   const [dashboard, spending, investments] = await Promise.all([api('/api/dashboard'), api(`/api/spending?range=${state.spendingRange}`), api('/api/investments')]);
   state.dashboard = dashboard;
   state.spending = spending;
@@ -509,6 +524,7 @@ async function loadAll() {
 }
 
 async function connectPlaid() {
+  if (state.demoPreview) { showNotice('Sign in to connect your own accounts.'); return; }
   try {
     const { link_token } = await api('/api/plaid/create_link_token', { method: 'POST', body: '{}' });
     if (!window.Plaid) throw new Error('Plaid Link failed to load. Check your internet connection.');
@@ -532,6 +548,7 @@ async function connectPlaid() {
 }
 
 async function syncAccounts() {
+  if (state.demoPreview) { showNotice('Sign in to sync your own accounts.'); return; }
   const buttons = $$('[data-sync-accounts]');
   buttons.forEach((button) => { button.disabled = true; button.textContent = '↻ Syncing…'; });
   try {
@@ -548,6 +565,7 @@ async function syncAccounts() {
 $$('[data-view]').forEach((button) => button.addEventListener('click', () => setView(button.dataset.view)));
 $('#profileButton').addEventListener('click', () => setView('profile'));
 $('#demoToggle').addEventListener('click', async () => {
+  if (state.demoPreview) { showNotice('You are already viewing the demo. Sign in to save changes or connect accounts.'); return; }
   const button = $('#demoToggle');
   button.disabled = true;
   try {
@@ -628,7 +646,7 @@ function openSpendingCategory(category) {
   $('#spendingTransactionsPanel').open = true;
   renderSpending(state.spending);
 }
-$('#spendingLegend').addEventListener('click', (event) => openSpendingCategory(event.target.closest('[data-spending-category]')?.dataset.spendingCategory));
+$('#spendingLegend')?.addEventListener('click', (event) => openSpendingCategory(event.target.closest('[data-spending-category]')?.dataset.spendingCategory));
 $('#cashflowSankey').addEventListener('click', (event) => openSpendingCategory(event.target.closest('[data-cashflow-category]')?.dataset.cashflowCategory));
 function donutSelection(event, element, rows) {
   const rect = element.getBoundingClientRect();
@@ -639,11 +657,11 @@ function donutSelection(event, element, rows) {
   let cursor = 0;
   return rows.find((row) => { cursor += Number(row.share || 0) * 360; return angle <= cursor; }) || null;
 }
-$('#spendingDonut').addEventListener('click', (event) => {
+$('#spendingDonut')?.addEventListener('click', (event) => {
   const selected = donutSelection(event, event.currentTarget, spendingForSelectedMonth(state.spending).categories || []);
   if (selected) openSpendingCategory(selected.name);
 });
-$('#spendingDonut').addEventListener('keydown', (event) => {
+$('#spendingDonut')?.addEventListener('keydown', (event) => {
   if (!['Enter', ' '].includes(event.key)) return;
   event.preventDefault();
   const rows = spendingForSelectedMonth(state.spending).categories || [];
@@ -718,6 +736,29 @@ function showAuthenticatedApp() {
   $('#appShell').classList.remove('hidden');
 }
 
+async function startDemoPreview() {
+  const button = $('#demoPreviewButton');
+  button.disabled = true;
+  button.textContent = 'Opening demo…';
+  state.demoPreview = true;
+  state.spendingMonth = null;
+  state.spendingCategory = 'all';
+  state.view = 'overview';
+  showAuthenticatedApp();
+  try {
+    await loadAll();
+    setView('overview');
+  } catch (error) {
+    state.demoPreview = false;
+    $('#appShell').classList.add('hidden');
+    $('#authScreen').classList.remove('hidden');
+    $('#authMessage').textContent = error.message;
+  } finally {
+    button.disabled = false;
+    button.innerHTML = 'Explore the demo <span aria-hidden="true">→</span>';
+  }
+}
+
 async function startGoogleSignIn() {
   const config = await api('/api/auth/config');
   if (!config.configured) {
@@ -750,9 +791,14 @@ async function initializeApp() {
   }
 }
 
+$('#demoPreviewButton').addEventListener('click', startDemoPreview);
+
 $('#signOutButton').addEventListener('click', async () => {
-  await api('/api/auth/logout', { method: 'POST', body: '{}' });
+  if (!state.demoPreview) await api('/api/auth/logout', { method: 'POST', body: '{}' });
+  state.demoPreview = false;
   state.dashboard = null;
+  state.spending = null;
+  state.investments = null;
   $('#appShell').classList.add('hidden');
   $('#authScreen').classList.remove('hidden');
   $('#googleSignIn').innerHTML = '';

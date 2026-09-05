@@ -26,6 +26,8 @@
       </div>
       <div class="auth-divider"><span>Continue securely</span></div>
       <div class="google-signin-wrap" id="googleSignIn"></div>
+      <button class="demo-preview-button" id="demoPreviewButton" type="button">Explore the demo <span aria-hidden="true">→</span></button>
+      <p class="auth-demo-note">No account or bank connection required.</p>
       <div class="auth-message" id="authMessage" aria-live="polite"></div>
       <p class="auth-note"><span aria-hidden="true">⌁</span> Your accounts stay private to you.</p>
     </main>
@@ -34,7 +36,7 @@
     <aside class="sidebar">
       <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 17.5h14M6.5 14.5l3.1-3.1 2.7 2.2 5.1-5.2" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17.4" cy="8.4" r="1.45" fill="currentColor"/></svg></span><span>Clarity</span></div>
       <nav class="nav" aria-label="Main navigation">
-        <button class="nav-item" data-view="spending"><span>◔</span>Spending</button>
+        <button class="nav-item" data-view="spending"><span>◔</span>Cash flow</button>
         <button class="nav-item active" data-view="overview"><span>⌂</span>Net Worth</button>
         <button class="nav-item" data-view="investments"><span>↗</span>Investments</button>
         <button class="nav-item" data-view="accounts"><span>▦</span>Accounts</button>
@@ -101,10 +103,7 @@
           <p class="spending-context" id="spendingContext">Loading cash flow…</p>
           <div class="cashflow-sankey" id="cashflowSankey" aria-label="Cash flow diagram"></div>
         </article>
-        <article class="card spending-trend-card"><div class="card-top"><div><div class="card-label">Monthly cash flow</div><p class="spending-context">Green is income. Coral is money out.</p></div><div class="trend-key" aria-label="Chart legend"><span><i class="income"></i>Income</span><span><i class="spend"></i>Spent</span></div></div><div class="trend-detail" id="trendDetail" aria-live="polite"></div><div class="spending-trend" id="spendingTrend"></div></article>
-        <div class="spending-visual-grid">
-          <article class="card spending-mix-card"><div class="card-top"><div><div class="card-label">Where money went</div><p class="spending-context">Spending, saving, and investing—income is shown above.</p></div><div class="allocation-toggle" aria-label="Allocation display"><button class="active" data-allocation-display="percentage">%</button><button data-allocation-display="amount">$</button></div></div><div class="spending-mix-content"><div class="spending-donut" id="spendingDonut" role="button" tabindex="0" aria-label="Select a plan category"><span>—</span></div><div class="spending-legend" id="spendingLegend"></div></div></article>
-        </div>
+        <article class="card spending-trend-card"><div class="card-top"><div><div class="card-label">Monthly cash flow</div><p class="spending-context">Compare income and money out across each month.</p></div><div class="trend-key" aria-label="Chart legend"><span><i class="income"></i>Income</span><span><i class="spend"></i>Money out</span></div></div><div class="trend-detail" id="trendDetail" aria-live="polite"></div><div class="spending-trend" id="spendingTrend"></div></article>
         <details class="card spending-transactions" id="spendingTransactionsPanel">
           <summary><span>View cash flow activity</span><small id="spendingTransactionCount"></small></summary>
           <div class="spending-transaction-controls"><select id="spendingCategoryFilter" aria-label="Transaction category"></select><select id="spendingSort" aria-label="Transaction sort"><option value="recent">Most recent</option><option value="highest">Highest cost</option></select></div>
@@ -134,7 +133,7 @@
     </main>
 
     <nav class="mobile-nav" aria-label="Mobile navigation">
-      <button data-view="spending">◔<span>Spending</span></button>
+      <button data-view="spending">◔<span>Cash flow</span></button>
       <button class="active" data-view="overview">⌂<span>Net Worth</span></button>
       <button data-view="investments">↗<span>Investments</span></button>
       <button data-view="accounts">▦<span>Accounts</span></button>

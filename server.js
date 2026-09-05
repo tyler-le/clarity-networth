@@ -57,6 +57,16 @@ function activeStore(store) {
   return demo;
 }
 
+function demoPreviewStore() {
+  const store = {
+    items: [], accounts: [], positions: [], position_overrides: {}, investment_transactions: [],
+    market_prices: {}, investment_snapshots: [], transactions: [], snapshots: [],
+    settings: { targets: { fixed: 50, savings: 10, investments: 10, guilt_free: 30 }, demo_mode: true }
+  };
+  seedDemo(store);
+  return store;
+}
+
 function readCookie(req, name) {
   const entry = String(req.headers.cookie || '').split(';').map((part) => part.trim()).find((part) => part.startsWith(`${name}=`));
   return entry ? decodeURIComponent(entry.slice(name.length + 1)) : null;
@@ -323,7 +333,7 @@ app.post('/api/auth/google', async (req, res) => {
     const payload = ticket.getPayload();
     const email = String(payload?.email || '').toLowerCase();
     if (!payload?.email_verified) return res.status(403).json({ error: 'A verified Google email is required.' });
-    if (allowedEmails.size && !allowedEmails.has(email)) return res.status(403).json({ error: 'Access is not available for this Google account.' });
+    if (allowedEmails.size && !allowedEmails.has(email)) return res.status(403).json({ error: 'This is an invite-only app. This Google account has not been invited yet.' });
     loginAttempts.delete(ip);
     const user = { email, name: String(payload.name || '') };
     setSession(res, user);
@@ -337,6 +347,24 @@ app.post('/api/auth/google', async (req, res) => {
 app.post('/api/auth/logout', (_req, res) => {
   res.clearCookie('clarity_session', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path: '/' });
   res.json({ ok: true });
+});
+
+// A seeded store is created in memory for the public preview; it never reads
+// from or writes to a person's authenticated financial data.
+app.get('/api/demo-preview', (_req, res) => {
+  const store = demoPreviewStore();
+  res.json({
+    dashboard: {
+      summary: summarizeRange(store),
+      accounts: store.accounts.filter((account) => !account.hidden).sort((a, b) => Number(b.current_balance || 0) - Number(a.current_balance || 0)),
+      snapshots: store.snapshots.slice(-3650),
+      items: [],
+      plaidConfigured: false,
+      demoMode: true
+    },
+    spending: spendingSummary(store, '1m'),
+    investments: investmentSummary(store)
+  });
 });
 
 app.use('/api', (req, res, next) => {
