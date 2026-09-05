@@ -36,14 +36,14 @@
     <aside class="sidebar">
       <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 17.5h14M6.5 14.5l3.1-3.1 2.7 2.2 5.1-5.2" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17.4" cy="8.4" r="1.45" fill="currentColor"/></svg></span><span>Clarity</span></div>
       <nav class="nav" aria-label="Main navigation">
-        <button class="nav-item" data-view="spending"><span>◔</span>Cash flow</button>
-        <button class="nav-item active" data-view="overview"><span>⌂</span>Net Worth</button>
-        <button class="nav-item" data-view="investments"><span>↗</span>Investments</button>
-        <button class="nav-item" data-view="accounts"><span>▦</span>Accounts</button>
+        <button class="nav-item" data-view="spending"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17.5h16M6.5 14l3-3 3 2.2 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Cash flow</button>
+        <button class="nav-item active" data-view="overview"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17.5h16M6.5 15l3-3.1 2.8 2.2 5.2-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Net Worth</button>
+        <button class="nav-item" data-view="investments"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v8h8A8 8 0 1 1 12 4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M15 4.6A7.5 7.5 0 0 1 19.4 9H15V4.6Z" fill="currentColor"/></svg>Investments</button>
+        <button class="nav-item" data-view="accounts"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 10h16M8 14h3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Accounts</button>
       </nav>
       <div class="sidebar-footer">
         <button class="sync-btn secondary" id="syncButton" data-sync-accounts>↻ Sync accounts</button>
-        <div class="tiny" id="syncStatus">Local-first MVP</div>
+        <div class="tiny" id="syncStatus">Ready to sync</div>
       </div>
     </aside>
 
@@ -55,7 +55,7 @@
         </div>
         <div class="top-actions">
           <button class="primary" id="connectButton">+ Connect account</button>
-          <button class="profile-button" id="profileButton" aria-label="Open profile"><span aria-hidden="true">♙</span><b>Profile</b></button>
+          <button class="profile-button" id="profileButton" aria-label="Open profile"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.1" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5.5 20c.8-3.4 3.2-5.2 6.5-5.2s5.7 1.8 6.5 5.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
         </div>
       </header>
 
@@ -91,7 +91,7 @@
           <div class="portfolio-chart" id="investmentChart" aria-label="Portfolio value history"></div>
         </article>
         <div class="investment-focus-grid">
-          <article class="card allocation-card" id="investmentAllocationCard"><div class="card-label">Asset allocation</div><p class="spending-context" id="investmentAllocationInsight">Tap a category to explore its holdings.</p><div class="allocation-visual"><div class="investment-donut" id="investmentDonut" role="button" tabindex="0" aria-label="Select an asset category"><span>—</span></div><div class="investment-allocation" id="investmentAllocation"></div></div></article>
+        <article class="card allocation-card" id="investmentAllocationCard"><div class="card-label">Asset allocation</div><p class="spending-context" id="investmentAllocationInsight">Select a category to see its holdings.</p><div class="allocation-visual"><div class="investment-donut" id="investmentDonut" role="button" tabindex="0" aria-label="Select an asset category"><span>—</span></div><div class="investment-allocation" id="investmentAllocation"></div></div></article>
           <article class="card investment-card" id="investmentAccountsCard"><div class="card-label">Where it’s held</div><div class="investment-accounts" id="investmentAccounts"></div></article>
         </div>
         <article class="card holdings-card" id="investmentHoldingsPanel"><div class="holdings-head"><div><div class="card-label">Holdings</div><p class="spending-context" id="investmentHoldingsInsight">Your largest investments, at a glance.</p></div><select id="investmentSort" aria-label="Sort holdings"><option value="value">Largest value</option><option value="performance">Best performance</option><option value="equity">Asset type</option></select></div><div class="holdings-list" id="investmentPositions"></div><button class="holdings-more hidden" id="investmentHoldingsMore" type="button"></button></article>
@@ -103,7 +103,7 @@
           <p class="spending-context" id="spendingContext">Loading cash flow…</p>
           <div class="cashflow-sankey" id="cashflowSankey" aria-label="Cash flow diagram"></div>
         </article>
-        <article class="card spending-trend-card"><div class="card-top"><div><div class="card-label">Monthly cash flow</div><p class="spending-context">Compare income and money out across each month.</p></div><div class="trend-key" aria-label="Chart legend"><span><i class="income"></i>Income</span><span><i class="spend"></i>Money out</span></div></div><div class="trend-detail" id="trendDetail" aria-live="polite"></div><div class="spending-trend" id="spendingTrend"></div></article>
+        <article class="card spending-trend-card"><div class="card-top"><div><div class="card-label">Monthly cash flow</div></div><div class="trend-key" aria-label="Chart legend"><span><i class="income"></i>Income</span><span><i class="spend"></i>Money out</span></div></div><div class="trend-detail" id="trendDetail" aria-live="polite"></div><div class="spending-trend" id="spendingTrend"></div></article>
         <details class="card spending-transactions" id="spendingTransactionsPanel">
           <summary><span>View cash flow activity</span><small id="spendingTransactionCount"></small></summary>
           <div class="spending-transaction-controls"><select id="spendingCategoryFilter" aria-label="Transaction category"></select><select id="spendingSort" aria-label="Transaction sort"><option value="recent">Most recent</option><option value="highest">Highest cost</option></select></div>
@@ -127,16 +127,16 @@
           <summary>Connected institutions</summary>
           <div id="connectionsList"></div>
         </details>
-        <article class="card demo-setting"><div><div class="card-label">Demo mode</div><p>Explore Clarity with a realistic financial profile. Your real accounts remain private and untouched.</p></div><button class="secondary demo-toggle" id="demoToggle" aria-pressed="false">Try demo</button></article>
+        <article class="card demo-setting"><div><div class="card-label">Demo mode</div><p>Preview sample data. Your accounts stay untouched.</p></div><button class="secondary demo-toggle" id="demoToggle" aria-pressed="false">Try demo</button></article>
         <button class="text-button sign-out-button" id="signOutButton">Sign out</button>
       </section>
     </main>
 
     <nav class="mobile-nav" aria-label="Mobile navigation">
-      <button data-view="spending">◔<span>Cash flow</span></button>
-      <button class="active" data-view="overview">⌂<span>Net Worth</span></button>
-      <button data-view="investments">↗<span>Investments</span></button>
-      <button data-view="accounts">▦<span>Accounts</span></button>
+      <button data-view="spending"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17.5h16M6.5 14l3-3 3 2.2 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Cash flow</span></button>
+      <button class="active" data-view="overview"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17.5h16M6.5 15l3-3.1 2.8 2.2 5.2-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Net Worth</span></button>
+      <button data-view="investments"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v8h8A8 8 0 1 1 12 4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M15 4.6A7.5 7.5 0 0 1 19.4 9H15V4.6Z" fill="currentColor"/></svg><span>Investments</span></button>
+      <button data-view="accounts"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 10h16M8 14h3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Accounts</span></button>
     </nav>
   </div>
   <dialog class="nickname-dialog" id="nicknameDialog" aria-labelledby="nicknameDialogTitle">

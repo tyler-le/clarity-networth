@@ -53,7 +53,16 @@ function setView(view) {
   state.view = view;
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === `${view}View`));
   $$('[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
-  $('#pageTitle').textContent = view === 'overview' ? 'Net Worth' : view === 'profile' ? 'Profile' : view[0].toUpperCase() + view.slice(1);
+  const pageMeta = {
+    overview: ['Net Worth', 'Your financial picture'],
+    spending: ['Cash flow', 'Income and money out'],
+    investments: ['Investments', 'Your portfolio'],
+    accounts: ['Accounts', 'What you own and owe'],
+    profile: ['Profile', 'Settings']
+  }[view] || [view[0].toUpperCase() + view.slice(1), ''];
+  $('#pageTitle').textContent = pageMeta[0];
+  $('#monthLabel').textContent = pageMeta[1];
+  $('#connectButton').classList.toggle('hidden', view !== 'accounts');
   if (view === 'overview' && state.dashboard) {
     requestAnimationFrame(() => {
       restoreNetWorthHero();
@@ -538,8 +547,9 @@ function renderDashboard() {
   renderConnections(d.items || []);
   $('#demoToggle').textContent = d.demoMode ? 'Exit demo' : 'Try demo';
   $('#demoToggle').setAttribute('aria-pressed', String(d.demoMode));
-  $('#setupCard').classList.toggle('hidden', d.plaidConfigured);
-  if (!d.plaidConfigured) showNotice('Demo mode is active. Add Plaid Sandbox credentials to .env to connect real institutions.');
+  $('#connectButton').classList.toggle('hidden', state.view !== 'accounts');
+  $('#setupCard').classList.toggle('hidden', d.plaidConfigured || state.demoPreview);
+  if (!d.plaidConfigured && !state.demoPreview) showNotice('Connect an account when you’re ready to see your own data.');
 }
 
 async function loadAll() {
