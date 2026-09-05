@@ -354,8 +354,11 @@ app.post('/api/plaid/create_link_token', async (req, res) => {
     const body = {
       user: { client_user_id: req.user.storageKey },
       client_name: 'Clarity',
-      products: ['transactions', 'investments'],
-      additional_consented_products: ['liabilities'],
+      // Transactions works across checking, credit, loan, and investment accounts.
+      // Requiring Investments would exclude institutions (such as a credit-card-only
+      // US Bank login) that have no compatible investment account.
+      products: ['transactions'],
+      additional_consented_products: ['investments', 'liabilities'],
       country_codes: ['US'],
       language: 'en',
       transactions: { days_requested: 365 }
