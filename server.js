@@ -14,6 +14,7 @@ const port = Number(process.env.PORT || 3000);
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const loginAttempts = new Map();
 const sessionSecret = crypto.createHash('sha256').update(process.env.ENCRYPTION_KEY || 'development-only-key-change-me').digest();
+const allowedEmails = new Set(String(process.env.ALLOWED_EMAILS || '').split(',').map((email) => email.trim().toLowerCase()).filter(Boolean));
 
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '1mb' }));
@@ -77,6 +78,7 @@ function verifySession(req) {
     const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
     if (!payload.email || !payload.exp || payload.exp < Date.now()) return null;
     const email = String(payload.email).toLowerCase();
+    if (allowedEmails.size && !allowedEmails.has(email)) return null;
     return { email, name: String(payload.name || ''), storageKey: userStorageKey(email) };
   } catch { return null; }
 }
@@ -262,6 +264,7 @@ app.post('/api/auth/google', async (req, res) => {
     const payload = ticket.getPayload();
     const email = String(payload?.email || '').toLowerCase();
     if (!payload?.email_verified) return res.status(403).json({ error: 'A verified Google email is required.' });
+    if (allowedEmails.size && !allowedEmails.has(email)) return res.status(403).json({ error: 'Access is not available for this Google account.' });
     loginAttempts.delete(ip);
     const user = { email, name: String(payload.name || '') };
     setSession(res, user);
