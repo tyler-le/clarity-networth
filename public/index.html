@@ -97,15 +97,16 @@
 
       <section id="spendingView" class="view">
         <article class="card spending-hero-card">
-          <div class="card-top"><div><div class="card-label">Spending</div><div class="spending-total" id="spendingTotal">—</div><div class="spending-summary" id="spendingSummary"></div></div><div class="range-control" aria-label="Spending timeframe"><button class="active" data-spending-range="1m">1M</button><button data-spending-range="3m">3M</button><button data-spending-range="ytd">YTD</button><button data-spending-range="1y">1Y</button></div></div>
-          <p class="spending-context" id="spendingContext">Loading spending…</p>
+          <div class="card-top"><div><div class="card-label">Cash flow</div><div class="spending-total" id="spendingTotal">—</div><div class="cashflow-headline" id="cashflowHeadline">Left after spending</div><div class="spending-summary" id="spendingSummary"></div></div><div class="range-control" aria-label="Cash flow timeframe"><button class="active" data-spending-range="1m">1M</button><button data-spending-range="3m">3M</button><button data-spending-range="ytd">YTD</button><button data-spending-range="1y">1Y</button></div></div>
+          <p class="spending-context" id="spendingContext">Loading cash flow…</p>
+          <div class="cashflow-sankey" id="cashflowSankey" aria-label="Cash flow diagram"></div>
         </article>
-        <article class="card spending-trend-card"><div class="card-top"><div><div class="card-label">Monthly pattern</div><p class="spending-context">Income and spending, side by side.</p></div><div class="trend-key" aria-label="Chart legend"><span><i class="income"></i>Income</span><span><i class="spend"></i>Spent</span></div></div><div class="trend-detail" id="trendDetail" aria-live="polite"></div><div class="spending-trend" id="spendingTrend"></div></article>
+        <article class="card spending-trend-card"><div class="card-top"><div><div class="card-label">Monthly cash flow</div><p class="spending-context">Green is income. Coral is money out.</p></div><div class="trend-key" aria-label="Chart legend"><span><i class="income"></i>Income</span><span><i class="spend"></i>Spent</span></div></div><div class="trend-detail" id="trendDetail" aria-live="polite"></div><div class="spending-trend" id="spendingTrend"></div></article>
         <div class="spending-visual-grid">
-          <article class="card spending-mix-card"><div class="card-top"><div class="card-label">Your plan allocation</div><div class="allocation-toggle" aria-label="Allocation display"><button class="active" data-allocation-display="percentage">%</button><button data-allocation-display="amount">$</button></div></div><div class="spending-mix-content"><div class="spending-donut" id="spendingDonut" role="button" tabindex="0" aria-label="Select a plan category"><span>—</span></div><div class="spending-legend" id="spendingLegend"></div></div></article>
+          <article class="card spending-mix-card"><div class="card-top"><div><div class="card-label">Where money went</div><p class="spending-context">Spending, saving, and investing—income is shown above.</p></div><div class="allocation-toggle" aria-label="Allocation display"><button class="active" data-allocation-display="percentage">%</button><button data-allocation-display="amount">$</button></div></div><div class="spending-mix-content"><div class="spending-donut" id="spendingDonut" role="button" tabindex="0" aria-label="Select a plan category"><span>—</span></div><div class="spending-legend" id="spendingLegend"></div></div></article>
         </div>
         <details class="card spending-transactions" id="spendingTransactionsPanel">
-          <summary><span>View categorized transactions</span><small id="spendingTransactionCount"></small></summary>
+          <summary><span>View cash flow activity</span><small id="spendingTransactionCount"></small></summary>
           <div class="spending-transaction-controls"><select id="spendingCategoryFilter" aria-label="Transaction category"></select><select id="spendingSort" aria-label="Transaction sort"><option value="recent">Most recent</option><option value="highest">Highest cost</option></select></div>
           <div id="spendingTransactions"></div>
         </details>

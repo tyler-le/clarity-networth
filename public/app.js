@@ -295,6 +295,10 @@ function allocationRows(transactions) {
   return rounded.sort((a, b) => b.amount - a.amount);
 }
 
+function compactCategoryLabel(name) {
+  return name === 'Guilt-free spending' ? 'Guilt-free' : name;
+}
+
 function spendingForSelectedMonth(data) {
   if (!state.spendingMonth) return data;
   const transactions = (data.transactions || []).filter((transaction) => String(transaction.date).startsWith(state.spendingMonth));
@@ -317,6 +321,27 @@ function renderSpendingTrend(data) {
   $('#spendingTrend').innerHTML = months.length ? months.map((row) => `<button class="trend-column ${state.spendingMonth === row.month ? 'active' : ''}" type="button" data-spending-month="${row.month}" title="${escapeHtml(row.month)}: Income ${fmt.format(row.income || 0)} · Spent ${fmt.format(row.amount)}"><div class="trend-bars"><i class="trend-bar income" style="height:${Number(row.income || 0) ? Math.max(5, Number(row.income || 0) / max * 100) : 0}%"></i><i class="trend-bar spending" style="height:${Number(row.amount || 0) ? Math.max(5, Number(row.amount || 0) / max * 100) : 0}%"></i></div><span>${new Date(`${row.month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'short' })}</span></button>`).join('') : '<p class="spending-empty">Monthly patterns will appear once transactions arrive.</p>';
 }
 
+function renderCashFlowSankey(data) {
+  const el = $('#cashflowSankey');
+  const income = Number(data.income || 0), spending = Number(data.total || 0), rows = data.categories || [];
+  if (!income && !spending) { el.innerHTML = ''; return; }
+  const width = 700, height = 122, scale = 66 / Math.max(income, spending, 1);
+  const node = (x, y, h, color, label, value, category = '') => `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" class="cashflow-target"` : ''}><rect x="${x}" y="${y}" width="10" height="${h}" rx="4" fill="${color}"/><text x="${x + 15}" y="${y + 11}" class="cashflow-label">${escapeHtml(label)}</text><text x="${x + 15}" y="${y + 24}" class="cashflow-value">${fmt.format(value)}</text></g>`;
+  const curve = (fromX, fromY, toX, toY, amount, color) => `<path d="M ${fromX} ${fromY} C ${fromX + 88} ${fromY}, ${toX - 88} ${toY}, ${toX} ${toY}" fill="none" stroke="${color}" stroke-opacity=".42" stroke-width="${Math.max(5, amount * scale)}" stroke-linecap="round"/>`;
+  const leftH = Math.max(12, income * scale), spentH = Math.max(12, spending * scale), leftY = 28, spentY = 15, remaining = income - spending;
+  const remainingH = Math.max(remaining > 0 ? 10 : 0, remaining * scale), remainingY = spentY + spentH + 13;
+  let rightY = 10, right = '';
+  let paths = curve(62, leftY + Math.min(leftH / 2, 24), 270, spentY + Math.min(spentH / 2, 24), spending, '#c87862');
+  if (remaining > 0) paths += curve(62, leftY + leftH - 7, 270, remainingY + Math.min(remainingH / 2, 12), remaining, '#5b9a70');
+  for (const [index, row] of rows.entries()) {
+    const h = Math.max(8, Number(row.amount || 0) * scale), y = rightY, color = spendingColors[index % spendingColors.length];
+    rightY += h + 8;
+    paths += curve(280, spentY + Math.min(spentH / 2, 26), 528, y + Math.min(h / 2, 8), row.amount, color);
+    right += node(528, y, h, color, row.name, row.amount, row.name);
+  }
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Income flowing to spending categories">${paths}${node(52, leftY, leftH, '#5b9a70', 'Income', income)}${node(270, spentY, spentH, '#c87862', 'Spent', spending)}${remaining > 0 ? node(270, remainingY, remainingH, '#5b9a70', 'Left', remaining) : ''}${right}</svg>`;
+}
+
 function renderSpending(data) {
   if (!data) return;
   // The range is the browsing context until a person chooses one exact month.
@@ -327,11 +352,14 @@ function renderSpending(data) {
   const total = Number(selected.total || 0);
   const income = Number(selected.income || 0);
   const remaining = income - total;
-  $('#spendingTotal').textContent = fmt.format(total);
-  $('#spendingSummary').innerHTML = `<span><i class="income"></i>Income <strong>${fmt.format(income)}</strong></span><span class="${remaining >= 0 ? 'positive' : 'negative'}">${remaining >= 0 ? 'Left' : 'Over'} <strong>${fmt.format(Math.abs(remaining))}</strong></span>`;
+  $('#spendingTotal').textContent = fmt.format(Math.abs(remaining));
+  $('#cashflowHeadline').textContent = remaining >= 0 ? 'Left after spending' : 'Over income';
+  $('#cashflowHeadline').className = `cashflow-headline ${remaining >= 0 ? 'positive' : 'negative'}`;
+  $('#spendingSummary').innerHTML = `<span><i class="income"></i>Income <strong>${fmt.format(income)}</strong></span><span>Spent <strong>${fmt.format(total)}</strong></span>`;
   const rangeLabel = ({ '1m': 'this month', '3m': 'over the last 3 months', ytd: 'year to date', '1y': 'over the last year' })[data.range] || 'this month';
   const selectedMonthLabel = state.spendingMonth && new Date(`${state.spendingMonth}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  $('#spendingContext').textContent = total ? (selectedMonthLabel ? `Spending in ${selectedMonthLabel}` : `${fmt.format(selected.monthlyAverage)} monthly average · ${rangeLabel}`) : `No posted spending ${selectedMonthLabel || rangeLabel}. It can take a little time to arrive after connecting.`;
+  $('#spendingContext').textContent = total || income ? (selectedMonthLabel ? `Cash flow in ${selectedMonthLabel}` : `Income minus money out · ${rangeLabel}`) : `No posted cash flow ${selectedMonthLabel || rangeLabel}. It can take a little time to arrive after connecting.`;
+  renderCashFlowSankey(selected);
   const rows = selected.categories || [];
   const donut = $('#spendingDonut');
   if (!rows.length) {
@@ -344,7 +372,7 @@ function renderSpending(data) {
   const stops = rows.map((row, index) => { const next = cursor + row.share * 100; const stop = `${spendingColors[index % spendingColors.length]} ${cursor.toFixed(2)}% ${next.toFixed(2)}%`; cursor = next; return stop; });
   donut.style.background = `conic-gradient(${stops.join(', ')})`;
   const chosen = rows.find((row) => row.name === state.spendingCategory);
-  donut.innerHTML = chosen ? `<span><strong>${state.allocationDisplay === 'amount' ? fmt.format(chosen.amount) : `${chosen.percentage}%`}</strong><small>${escapeHtml(chosen.name)}</small></span>` : '<span>Plan<br>mix</span>';
+  donut.innerHTML = chosen ? `<span><strong>${state.allocationDisplay === 'amount' ? fmt.format(chosen.amount) : `${chosen.percentage}%`}</strong><small>${escapeHtml(compactCategoryLabel(chosen.name))}</small></span>` : '<span>Plan<br>mix</span>';
   $('#spendingLegend').innerHTML = rows.slice(0, 5).map((row, index) => `<button class="legend-row" data-spending-category="${escapeHtml(row.name)}"><i style="background:${spendingColors[index % spendingColors.length]}"></i><span>${escapeHtml(row.name)}</span><strong>${state.allocationDisplay === 'amount' ? fmt.format(row.amount) : `${row.percentage}%`}</strong></button>`).join('');
   renderSpendingTransactions(selected);
 }
@@ -601,6 +629,7 @@ function openSpendingCategory(category) {
   renderSpending(state.spending);
 }
 $('#spendingLegend').addEventListener('click', (event) => openSpendingCategory(event.target.closest('[data-spending-category]')?.dataset.spendingCategory));
+$('#cashflowSankey').addEventListener('click', (event) => openSpendingCategory(event.target.closest('[data-cashflow-category]')?.dataset.cashflowCategory));
 function donutSelection(event, element, rows) {
   const rect = element.getBoundingClientRect();
   const x = event.clientX - rect.left - rect.width / 2;
