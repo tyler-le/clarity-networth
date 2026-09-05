@@ -4,6 +4,7 @@ const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
 const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const fmt2 = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const themeStorageKey = 'clarity-theme';
 
 const state = {
   dashboard: null,
@@ -21,6 +22,7 @@ const state = {
   investmentSort: 'value',
   holdingsExpanded: false,
   view: 'overview',
+  returnView: 'overview',
   demoPreview: false
 };
 
@@ -50,7 +52,19 @@ function showNotice(message, tone = 'warn') {
   if (tone === 'success') setTimeout(() => el.classList.add('hidden'), 3200);
 }
 
+function applyTheme(theme, persist = true) {
+  const dark = theme === 'dark';
+  document.documentElement.dataset.theme = dark ? 'dark' : '';
+  $('#themeColor')?.setAttribute('content', dark ? '#111513' : '#f6f7f4');
+  const toggle = $('#themeToggle');
+  if (toggle) toggle.checked = dark;
+  if (persist) {
+    try { localStorage.setItem(themeStorageKey, dark ? 'dark' : 'light'); } catch { /* Appearance preference can remain session-only. */ }
+  }
+}
+
 function setView(view) {
+  if (view !== 'profile') state.returnView = view;
   state.view = view;
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === `${view}View`));
   $$('[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
@@ -65,6 +79,8 @@ function setView(view) {
   $('#pageTitle').textContent = pageMeta[0];
   $('#monthLabel').textContent = pageMeta[1];
   $('#connectButton').classList.toggle('hidden', view !== 'accounts');
+  $('#profileBack').classList.toggle('hidden', view !== 'profile');
+  $('#profileButton').classList.toggle('hidden', view === 'profile');
   if (view === 'overview' && state.dashboard) {
     requestAnimationFrame(() => {
       restoreNetWorthHero();
@@ -424,10 +440,12 @@ function portfolioSnapshots(data) {
   const snapshots = data.snapshots || [];
   if (state.investmentRange === 'all' || !snapshots.length) return snapshots;
   const latest = new Date(`${snapshots.at(-1).date}T12:00:00`);
-  const cutoff = new Date(latest);
-  cutoff.setFullYear(cutoff.getFullYear() - 1);
-  const visible = snapshots.filter((snapshot) => new Date(`${snapshot.date}T12:00:00`) >= cutoff);
+  const visible = filterSnapshots(snapshots, state.investmentRange, latest);
   return visible.length ? visible : snapshots.slice(-1);
+}
+
+function investmentRangeLabel(range) {
+  return ({ '1m': 'last month', '3m': 'last 3 months', ytd: 'year to date', '1y': 'last year', all: 'all history' })[range] || 'last year';
 }
 
 function renderPortfolioChart(data) {
@@ -459,7 +477,7 @@ function renderPortfolioChart(data) {
   const tooltip = el.querySelector('.chart-tooltip');
   let active = false;
   const restore = () => {
-    $('#investmentTotal').textContent = fmt.format(data.total || 0);
+    $('#investmentTotal').textContent = fmt.format(Number(snapshots.at(-1)?.value ?? data.total ?? 0));
     $('#investmentChartDate').textContent = 'Drag across the chart to view history';
   };
   const showPoint = (event) => {
@@ -505,11 +523,17 @@ function aggregateHoldings(positions) {
 function renderInvestments(data) {
   if (!data) return;
   const accounts = data.accounts || [];
-  $('#investmentTotal').textContent = fmt.format(data.total || 0);
   const snapshots = portfolioSnapshots(data);
+  const endSnapshot = snapshots.at(-1);
+  const startSnapshot = snapshots[0];
+  const displayedTotal = Number(endSnapshot?.value ?? data.total ?? 0);
+  const periodChange = snapshots.length > 1 ? displayedTotal - Number(startSnapshot?.value || 0) : null;
+  const periodLabel = investmentRangeLabel(state.investmentRange);
+  $('#investmentTotal').textContent = fmt.format(displayedTotal);
   const started = snapshots[0]?.date ? new Date(`${snapshots[0].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : null;
   const reconstructed = snapshots.some((snapshot) => snapshot.source === 'reconstructed');
-  $('#investmentContext').textContent = accounts.length ? `${accounts.length} connected account${accounts.length === 1 ? '' : 's'}${started ? ` · ${reconstructed ? `Reconstructed since ${started}` : `Tracking since ${started}`}` : ' · Sync to begin tracking'}` : 'Connect an investment account to begin.';
+  const changeCopy = periodChange == null ? (started ? `Tracking since ${started}` : 'Sync to begin tracking') : `${periodChange >= 0 ? '+' : '−'}${fmt.format(Math.abs(periodChange))} ${periodLabel}`;
+  $('#investmentContext').textContent = accounts.length ? `${accounts.length} connected account${accounts.length === 1 ? '' : 's'} · ${changeCopy}` : 'Connect an investment account to begin.';
   $('#investmentChartDate').textContent = snapshots.length > 1 ? 'Drag across the chart to view history' : started ? `Tracking since ${started}` : 'Historical value appears after sync.';
   renderPortfolioChart(data);
   const allocation = data.allocation || [];
@@ -521,7 +545,7 @@ function renderInvestments(data) {
   const donut = $('#investmentDonut');
   if (allocation.length) {
     const largest = allocation[0];
-    $('#investmentAllocationInsight').textContent = `${largest.name} is your largest allocation at ${Math.round(largest.share * 100)}%. Tap a category to explore it.`;
+    $('#investmentAllocationInsight').textContent = `${largest.name} is your largest allocation at ${Math.round(largest.share * 100)}%. Current mix · ${periodLabel} selected.`;
     const selected = allocation.find((row) => row.name === state.investmentFilter);
     donut.style.background = `conic-gradient(${allocation.map((row, index) => { const next = cursor + row.share * 100; const color = state.investmentFilter === 'all' || row.name === state.investmentFilter ? colors[index % colors.length] : '#dde4dd'; const stop = `${color} ${cursor.toFixed(2)}% ${next.toFixed(2)}%`; cursor = next; return stop; }).join(', ')})`;
     donut.innerHTML = selected ? `<span><strong>${fmt.format(selected.value)}</strong><small>${escapeHtml(selected.name)} · ${Math.round(selected.share * 100)}%</small></span>` : '<span><strong>Your mix</strong><small>Tap a category</small></span>';
@@ -531,12 +555,12 @@ function renderInvestments(data) {
     $('#investmentAllocationInsight').textContent = 'Allocation appears when your institution provides holdings.';
     $('#investmentAllocation').innerHTML = '<p class="spending-empty">Allocation appears when your institution provides holdings.</p>';
   }
-  $('#investmentAccounts').innerHTML = accounts.length ? accounts.map((account) => `<div class="investment-account-row"><div><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || '')}</span></div><b>${fmt.format(account.value)}</b></div>`).join('') : '<p class="spending-empty">No investment accounts connected.</p>';
+  $('#investmentAccounts').innerHTML = accounts.length ? accounts.map((account) => `<div class="investment-account-row"><div><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || '')} · Current value</span></div><b>${fmt.format(account.value)}</b></div>`).join('') : '<p class="spending-empty">No investment accounts connected.</p>';
   const names = new Map(accounts.map((account) => [account.account_id, account.name]));
   let positions = aggregateHoldings((data.positions || []).filter((position) => state.investmentFilter === 'all' || assetClassLabel(position.type, position.asset_class_override) === state.investmentFilter));
   positions = [...positions].sort((a, b) => state.investmentSort === 'performance' ? Number(b.gain_pct ?? -Infinity) - Number(a.gain_pct ?? -Infinity) : state.investmentSort === 'equity' ? a.classification.localeCompare(b.classification) || Number(b.value) - Number(a.value) : Number(b.value) - Number(a.value));
   $('#investmentSort').value = state.investmentSort;
-  $('#investmentHoldingsInsight').textContent = data.positionsAvailable ? `${positions.length} holding${positions.length === 1 ? '' : 's'}${state.investmentFilter === 'all' ? '' : ` · ${state.investmentFilter}`}` : 'Holdings appear when your institution provides them.';
+  $('#investmentHoldingsInsight').textContent = data.positionsAvailable ? `${positions.length} current holding${positions.length === 1 ? '' : 's'}${state.investmentFilter === 'all' ? '' : ` · ${state.investmentFilter}`} · ${periodLabel} selected` : 'Holdings appear when your institution provides them.';
   const visiblePositions = state.holdingsExpanded ? positions : positions.slice(0, 3);
   $('#investmentPositions').innerHTML = data.positionsAvailable ? visiblePositions.map((position) => {
     const gain = position.gain_pct;
@@ -683,6 +707,9 @@ async function syncAccounts() {
 
 $$('[data-view]').forEach((button) => button.addEventListener('click', () => setView(button.dataset.view)));
 $('#profileButton').addEventListener('click', () => setView('profile'));
+$('#profileBack').addEventListener('click', () => setView(state.returnView || 'overview'));
+applyTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light', false);
+$('#themeToggle').addEventListener('change', (event) => applyTheme(event.target.checked ? 'dark' : 'light'));
 $('#demoToggle').addEventListener('click', async () => {
   if (state.demoPreview) { showNotice('You are already viewing the demo. Sign in to save changes or connect accounts.'); return; }
   const button = $('#demoToggle');

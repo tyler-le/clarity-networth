@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#f6f7f4" />
+  <meta name="theme-color" id="themeColor" content="#f6f7f4" />
   <title>Clarity — Net Worth</title>
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://cdn.plaid.com" />
+  <script>try { if (localStorage.getItem('clarity-theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch {}</script>
   <link rel="stylesheet" href="/styles.css" />
   <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -51,6 +52,7 @@
     <main class="main">
       <header class="topbar">
         <div>
+          <button class="profile-back hidden" id="profileBack" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 5-7 7 7 7M8 12h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
           <div class="eyebrow" id="monthLabel">This month</div>
           <h1 id="pageTitle">Net Worth</h1>
         </div>
@@ -88,7 +90,7 @@
 
       <section id="investmentsView" class="view">
         <article class="card portfolio-card">
-          <div class="card-top"><div><div class="card-label">Portfolio value</div><div class="portfolio-total" id="investmentTotal">—</div><p class="spending-context" id="investmentContext">Loading your portfolio…</p></div><div class="range-control" aria-label="Portfolio history timeframe"><button class="active" data-investment-range="1y">1Y</button><button data-investment-range="all">All</button></div></div>
+          <div class="card-top"><div><div class="card-label">Portfolio value</div><div class="portfolio-total" id="investmentTotal">—</div><p class="spending-context" id="investmentContext">Loading your portfolio…</p></div><div class="range-control" aria-label="Portfolio history timeframe"><button data-investment-range="1m">1M</button><button data-investment-range="3m">3M</button><button data-investment-range="ytd">YTD</button><button class="active" data-investment-range="1y">1Y</button><button data-investment-range="all">All</button></div></div>
           <div class="chart-context"><span id="investmentChartDate">Drag across the chart to view history</span></div>
           <div class="portfolio-chart" id="investmentChart" aria-label="Scrubbable portfolio value history"></div>
         </article>
@@ -135,6 +137,7 @@
           <summary>Connected institutions</summary>
           <div id="connectionsList"></div>
         </details>
+        <article class="card appearance-setting"><div><div class="card-label">Appearance</div><p>A softer palette for low-light viewing.</p></div><label class="theme-toggle"><span>Dark mode</span><input id="themeToggle" type="checkbox" role="switch" aria-label="Use dark mode" /><i aria-hidden="true"></i></label></article>
         <article class="card demo-setting"><div><div class="card-label">Demo mode</div><p>Preview sample data. Your accounts stay untouched.</p></div><button class="secondary demo-toggle" id="demoToggle" aria-pressed="false">Try demo</button></article>
         <button class="text-button sign-out-button" id="signOutButton">Sign out</button>
       </section>

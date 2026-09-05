@@ -87,6 +87,15 @@ test('portfolio history can be scrubbed just like net worth', async ({ page }) =
   await expect(page.locator('#investmentTotal')).toHaveText(/\$/);
 });
 
+test('investment timeframes keep the portfolio context in sync', async ({ page }) => {
+  await openDemo(page);
+  await page.locator('.mobile-nav [data-view="investments"]').click();
+  await page.locator('[data-investment-range="3m"]').click();
+  await expect(page.locator('[data-investment-range="3m"]')).toHaveClass(/active/);
+  await expect(page.locator('#investmentContext')).toContainText('last 3 months');
+  await expect(page.locator('#investmentHoldingsInsight')).toContainText('last 3 months selected');
+});
+
 test('retirement milestones explain the planning terms on demand', async ({ page }) => {
   await openDemo(page);
   await page.locator('.mobile-nav [data-view="retirement"]').click();
@@ -94,4 +103,20 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await expect(page.locator('#retirementInfoDialog')).toHaveAttribute('open', '');
   await expect(page.locator('#retirementInfoTitle')).toHaveText('What is Coast FIRE?');
   await expect(page.locator('#retirementInfoDescription')).toContainText('without more retirement contributions');
+});
+
+test('dark mode is a calm, persistent profile setting', async ({ page }) => {
+  await openDemo(page);
+  await page.locator('#profileButton').click();
+  const toggle = page.locator('#themeToggle');
+  await expect(toggle).not.toBeChecked();
+  await toggle.check();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.getByRole('button', { name: /explore the demo/i }).click();
+  await expect(page.locator('#appShell')).toBeVisible();
+  await page.locator('#profileButton').click();
+  await page.locator('#profileBack').click();
+  await expect(page.getByRole('heading', { name: 'Net Worth' })).toBeVisible();
 });

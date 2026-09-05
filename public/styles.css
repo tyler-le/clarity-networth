@@ -9,6 +9,18 @@
   --danger: #a84444;
   --shadow: 0 10px 30px rgba(30, 38, 31, 0.05);
 }
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111513;
+  --card: #1a201c;
+  --ink: #edf2ee;
+  --muted: #9da89f;
+  --line: #303a32;
+  --accent: #76bb8d;
+  --accent-soft: #203a2a;
+  --danger: #eb9691;
+  --shadow: 0 10px 30px rgba(0,0,0,.16);
+}
 * { box-sizing: border-box; }
 body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); }
 .auth-screen { isolation: isolate; position: relative; min-height: 100dvh; display: grid; place-items: center; overflow: hidden; padding: 28px 20px; background: #f5f7f3; }
@@ -35,6 +47,7 @@ button { cursor: pointer; }
 .tiny { color: var(--muted); font-size: 11px; text-align: center; margin-top: 10px; }
 .main { margin-left: 230px; padding: 36px 46px 64px; max-width: 1440px; }
 .topbar { display: flex; justify-content: space-between; gap: 24px; align-items: center; margin-bottom: 28px; }
+.profile-back { display: inline-flex; align-items: center; gap: 4px; margin: 0 0 5px -7px; padding: 5px 7px; border: 0; border-radius: 8px; color: var(--muted); background: transparent; font-size: 12px; font-weight: 650; }.profile-back:hover { color: var(--ink); background: rgba(110,125,112,.09); }.profile-back svg { width: 15px; height: 15px; }
 h1,h2,h3,p { margin-top: 0; }
 h1 { font-size: 30px; margin-bottom: 0; letter-spacing: -0.03em; }
 h2 { font-size: 20px; margin-bottom: 0; letter-spacing: -0.02em; }
@@ -269,6 +282,7 @@ dialog::backdrop { background: rgba(10,15,10,.28); backdrop-filter: blur(3px); }
 .profile-button { height: 38px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 19px; padding: 0 11px; background: white; color: var(--muted); font-size: 15px; }.profile-button b { font-size: 12px; }
 .topbar #monthLabel { display: none; }
 .profile-sync { margin: -6px 0 16px; }
+.appearance-setting { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 16px; padding: 18px 20px; }.appearance-setting p { margin: 5px 0 0; color: var(--muted); font-size: 12px; }.theme-toggle { display: inline-flex; align-items: center; gap: 9px; flex: 0 0 auto; color: var(--muted); font-size: 12px; font-weight: 650; cursor: pointer; }.theme-toggle input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; }.theme-toggle i { position: relative; width: 38px; height: 23px; border: 1px solid #cfd8d0; border-radius: 99px; background: #e8ede8; transition: background .18s ease, border-color .18s ease; }.theme-toggle i::after { content: ''; position: absolute; top: 3px; left: 3px; width: 15px; height: 15px; border-radius: 50%; background: white; box-shadow: 0 1px 3px rgba(18,28,20,.2); transition: transform .18s ease; }.theme-toggle input:checked + i { border-color: var(--accent); background: var(--accent); }.theme-toggle input:checked + i::after { transform: translateX(15px); }.theme-toggle input:focus-visible + i { outline: 3px solid rgba(77,155,104,.32); outline-offset: 3px; }
 
 /* Paired bars make income and spending directly comparable without occlusion. */
 .trend-key i, .trend-detail i { width: 8px; height: 8px; border-radius: 3px; }.trend-detail .income { background: #5b9a70; }.trend-detail .spend { background: #c87862; }.trend-detail { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 13px; min-height: 30px; margin-top: 15px; color: var(--muted); font-size: 11px; }.trend-detail > span { flex-basis: 100%; font-weight: 680; }.trend-detail strong, .trend-detail b { display: inline-flex; align-items: center; gap: 5px; color: var(--ink); font-size: 12px; }.trend-detail b { margin-left: auto; }.spending-trend { margin-top: 6px; }.trend-bars { position: static; display: flex; align-items: end; justify-content: center; gap: 3px; width: min(36px, 100%); height: 100%; }.trend-bar { position: static; display: block; width: calc(50% - 2px); min-height: 0; border-radius: 6px 6px 2px 2px; }.trend-bar.income { z-index: auto; inset-inline: auto; background: #5b9a70; opacity: .82; }.trend-bar.spending { z-index: auto; left: auto; width: calc(50% - 2px); background: #c87862; }.trend-column.active .trend-bar.income, .trend-column:hover .trend-bar.income { background: #287143; opacity: 1; }.trend-column.active .trend-bar.spending, .trend-column:hover .trend-bar.spending { background: #aa4f42; }
@@ -340,6 +354,37 @@ button:focus-visible, select:focus-visible, summary:focus-visible { outline: 3px
 @media (max-width: 460px) {
   .target-breakdown { grid-template-columns: repeat(4, 1fr); }
 }
+
+/* Dark mode uses layered charcoal surfaces—not black and white—so the visual
+   hierarchy stays quiet and extended reading remains comfortable. */
+html[data-theme="dark"] body, html[data-theme="dark"] .auth-screen { background: var(--bg); }
+html[data-theme="dark"] .sidebar { background: #151a17; }
+html[data-theme="dark"] .nav-item, html[data-theme="dark"] .sync-btn { color: #b5bdb6; }
+html[data-theme="dark"] .profile-back:hover { color: var(--ink); background: #252e27; }
+html[data-theme="dark"] .nav-item:hover, html[data-theme="dark"] .nav-item.active { background: #222a24; color: var(--ink); }
+html[data-theme="dark"] .sync-btn, html[data-theme="dark"] .secondary, html[data-theme="dark"] input, html[data-theme="dark"] select { border-color: var(--line); background: #202720; color: var(--ink); }
+html[data-theme="dark"] .mobile-nav { border-color: #303a32; background: rgba(23,29,25,.95); }
+html[data-theme="dark"] .mobile-nav button { color: #9da89f; }
+html[data-theme="dark"] .mobile-nav button.active { background: #263128; color: var(--ink); }
+html[data-theme="dark"] .range-control, html[data-theme="dark"] .allocation-toggle { background: #222a24; }
+html[data-theme="dark"] .range-control button.active, html[data-theme="dark"] .allocation-toggle button.active { background: #303b32; color: var(--ink); box-shadow: none; }
+html[data-theme="dark"] .retirement-hero, html[data-theme="dark"] .portfolio-card { border-color: #344637; background: linear-gradient(135deg, #1b2a20 0%, #1a201c 62%); }
+html[data-theme="dark"] .retirement-milestone, html[data-theme="dark"] .retirement-milestone.featured { border-color: #354239; background: #202820; box-shadow: none; }
+html[data-theme="dark"] .retirement-age-chip, html[data-theme="dark"] .retirement-assumption, html[data-theme="dark"] .retirement-info-target { background: #203a2a; }
+html[data-theme="dark"] .retirement-total, html[data-theme="dark"] .retirement-info-target strong { color: #8bcaa0; }
+html[data-theme="dark"] .holding-detail, html[data-theme="dark"] .holding-account-list, html[data-theme="dark"] .holdings-more, html[data-theme="dark"] .spending-transaction-controls, html[data-theme="dark"] .retirement-form { border-color: var(--line); background: #202720; }
+html[data-theme="dark"] .holding-account, html[data-theme="dark"] .holding-account-list { background: #1c231e; }
+html[data-theme="dark"] .investment-donut::before, html[data-theme="dark"] .spending-donut::before { background: var(--card); }
+html[data-theme="dark"] .account-collection, html[data-theme="dark"] .accounts-summary { background: var(--card); }
+html[data-theme="dark"] .institution-logo, html[data-theme="dark"] .institution-fallback, html[data-theme="dark"] .connection-logo, html[data-theme="dark"] .connection-fallback { border-color: var(--line); background: #252d27; }
+html[data-theme="dark"] .connections-panel { border-color: var(--line); background: #1a201c; }
+html[data-theme="dark"] .theme-toggle i { border-color: #4a554b; background: #303a32; }
+html[data-theme="dark"] .theme-toggle i::after { background: #dfe8e0; }
+html[data-theme="dark"] dialog, html[data-theme="dark"] .nickname-dialog, html[data-theme="dark"] .retirement-info-dialog { border-color: #374239; background: #1b211d; }
+html[data-theme="dark"] .retirement-info-head, html[data-theme="dark"] .retirement-info-footer { border-color: var(--line); background: #202720; }
+html[data-theme="dark"] .retirement-info-target { border-color: var(--line); }
+html[data-theme="dark"] .dialog-close:hover { background: #2a332c; }
+@media (max-width: 560px) { .appearance-setting { padding-inline: 16px; }.theme-toggle > span { display: none; } }
 
 /* Tapping a milestone teaches the term without making the retirement view denser. */
 .retirement-milestone { cursor: pointer; transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease; }
