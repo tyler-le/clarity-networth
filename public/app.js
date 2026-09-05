@@ -377,7 +377,7 @@ function renderPortfolioChart(data) {
   if (el.clientWidth < 80 || el.clientHeight < 60) return;
   const snapshots = portfolioSnapshots(data);
   if (!snapshots.length) {
-    el.innerHTML = '<p class="spending-empty">Value history starts with your first successful sync.</p>';
+    el.innerHTML = `<div class="portfolio-snapshot"><span class="portfolio-snapshot-mark" aria-hidden="true">↗</span><div><strong>Portfolio snapshot</strong><p>Your current balance and allocation are up to date. Historical value will resume automatically when price history is available.</p></div></div>`;
     return;
   }
   const width = Math.max(1, Math.round(el.clientWidth));
