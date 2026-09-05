@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { classifyTransaction, hideDuplicateAccounts, reconstructInvestmentHistory, investmentSummary, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
+import { calculateFire, classifyTransaction, hideDuplicateAccounts, reconstructInvestmentHistory, investmentSummary, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
 import { normalizeCandles } from '../market-data.js';
 import { filterSnapshots, scrubIndex } from '../public/chart-utils.js';
 
@@ -170,6 +170,26 @@ test('fixed costs stay limited to essential obligations', () => {
   assert.equal(classifyTransaction({ amount: 75, personal_finance_category: { primary: 'TRANSPORTATION', detailed: 'TRANSPORTATION_GAS' } }), 'fixed');
   assert.equal(classifyTransaction({ amount: 400, personal_finance_category: { primary: 'TRAVEL', detailed: 'TRAVEL_FLIGHTS' } }), 'guilt_free');
   assert.equal(classifyTransaction({ amount: 500, name: 'Payment Thank You', personal_finance_category: { primary: 'LOAN_PAYMENTS', detailed: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT' } }), 'transfer');
+});
+
+test('retirement presets calculate coast, lean, standard, fat, and a projected retirement value', () => {
+  const store = {
+    settings: { fire: { age: 35, retirement_age: 65, withdrawal_rate: 4, real_return: 5, lean_multiplier: 70, fat_multiplier: 150 } },
+    transactions: [
+      { date: '2026-09-01', amount: 3000, bucket: 'fixed' },
+      { date: '2026-09-02', amount: 1000, bucket: 'guilt_free' },
+      { date: '2026-09-03', amount: 500, bucket: 'investments' },
+      { date: '2026-09-04', amount: 250, bucket: 'savings' }
+    ]
+  };
+  const plan = calculateFire(store, 100000);
+  assert.equal(plan.annualSpend, 48000);
+  assert.equal(plan.standard, 1200000);
+  assert.equal(plan.lean, 840000);
+  assert.equal(plan.fat, 1800000);
+  assert.ok(plan.coast < plan.standard);
+  assert.ok(plan.projectedAtRetirement > 100000);
+  assert.equal(plan.progress.standard, 100000 / 1200000 * 100);
 });
 
 test('each signed-in identity has an isolated persistent store', async () => {

@@ -392,6 +392,7 @@ export function calculateFire(store, netWorth) {
     progress: {
       lean: progress(lean),
       coast: progress(coast),
+      standard: progress(standard),
       fat: progress(fat)
     }
   };

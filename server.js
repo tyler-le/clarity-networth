@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { OAuth2Client } from 'google-auth-library';
 import { hasLegacyStore, listUserStorageKeys, readStore, userStorageKey, writeStore, encrypt, decrypt, resetStore, removeDemoData } from './store.js';
-import { classifyTransaction, hideDuplicateAccounts, investmentSummary, reconstructInvestmentHistory, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
+import { calculateFire, classifyTransaction, hideDuplicateAccounts, investmentSummary, reconstructInvestmentHistory, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
 import { loadHistoricalPrices } from './market-data.js';
 import { plaidConfigured, plaidPost } from './plaid.js';
 
@@ -364,7 +364,8 @@ app.get('/api/demo-preview', (req, res) => {
       demoMode: true
     },
     spending: spendingSummary(store, range),
-    investments: investmentSummary(store)
+    investments: investmentSummary(store),
+    retirement: calculateFire(store, summarizeRange(store).netWorth)
   });
 });
 
@@ -409,6 +410,27 @@ app.get('/api/spending', (req, res) => {
 
 app.get('/api/investments', (req, res) => {
   res.json(investmentSummary(activeStore(loadStore(req.user))));
+});
+
+app.get('/api/retirement', (req, res) => {
+  const store = activeStore(loadStore(req.user));
+  res.json(calculateFire(store, summarizeRange(store).netWorth));
+});
+
+app.patch('/api/settings/retirement', (req, res) => {
+  const fields = ['age', 'retirement_age', 'withdrawal_rate', 'real_return', 'lean_multiplier', 'fat_multiplier'];
+  const store = loadStore(req.user);
+  store.settings.fire ||= {};
+  for (const field of fields) {
+    if (req.body?.[field] === undefined) continue;
+    const value = Number(req.body[field]);
+    if (!Number.isFinite(value)) return res.status(400).json({ error: `Invalid ${field}.` });
+    store.settings.fire[field] = value;
+  }
+  if (Number(store.settings.fire.retirement_age) < Number(store.settings.fire.age)) return res.status(400).json({ error: 'Retirement age must be after current age.' });
+  saveStore(req.user, store);
+  const visibleStore = activeStore(store);
+  res.json(calculateFire(visibleStore, summarizeRange(visibleStore).netWorth));
 });
 
 app.patch('/api/transactions/:id/category', (req, res) => {
@@ -586,7 +608,11 @@ app.post('/api/clear-demo', (_req, res) => {
 
 app.use((_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-app.listen(port, () => {
-  console.log(`Clarity running at http://localhost:${port}`);
-  console.log(`Plaid: ${plaidConfigured() ? `configured (${process.env.PLAID_ENV || 'sandbox'})` : 'not configured — demo mode available'}`);
-});
+export { app };
+
+if (process.env.CLARITY_LISTEN !== 'false') {
+  app.listen(port, () => {
+    console.log(`Clarity running at http://localhost:${port}`);
+    console.log(`Plaid: ${plaidConfigured() ? `configured (${process.env.PLAID_ENV || 'sandbox'})` : 'not configured — demo mode available'}`);
+  });
+}

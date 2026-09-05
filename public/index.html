@@ -37,8 +37,9 @@
       <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 17.5h14M6.5 14.5l3.1-3.1 2.7 2.2 5.1-5.2" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17.4" cy="8.4" r="1.45" fill="currentColor"/></svg></span><span>Clarity</span></div>
       <nav class="nav" aria-label="Main navigation">
         <button class="nav-item" data-view="spending"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h13m0 0-3-3m3 3-3 3M20 16H7m0 0 3-3m-3 3 3 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Cash flow</button>
-        <button class="nav-item active" data-view="overview"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17.5h16M6.5 15l3-3.1 2.8 2.2 5.2-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Net Worth</button>
         <button class="nav-item" data-view="investments"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v8h8A8 8 0 1 1 12 4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M15 4.6A7.5 7.5 0 0 1 19.4 9H15V4.6Z" fill="currentColor"/></svg>Investments</button>
+        <button class="nav-item active" data-view="overview"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17.5h16M6.5 15l3-3.1 2.8 2.2 5.2-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Net Worth</button>
+        <button class="nav-item" data-view="retirement"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V4l12 4-12 4M5 12h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Retirement</button>
         <button class="nav-item" data-view="accounts"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 10h16M8 14h3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Accounts</button>
       </nav>
       <div class="sidebar-footer">
@@ -88,13 +89,20 @@
       <section id="investmentsView" class="view">
         <article class="card portfolio-card">
           <div class="card-top"><div><div class="card-label">Portfolio value</div><div class="portfolio-total" id="investmentTotal">—</div><p class="spending-context" id="investmentContext">Loading your portfolio…</p></div><div class="range-control" aria-label="Portfolio history timeframe"><button class="active" data-investment-range="1y">1Y</button><button data-investment-range="all">All</button></div></div>
-          <div class="portfolio-chart" id="investmentChart" aria-label="Portfolio value history"></div>
+          <div class="chart-context"><span id="investmentChartDate">Drag across the chart to view history</span></div>
+          <div class="portfolio-chart" id="investmentChart" aria-label="Scrubbable portfolio value history"></div>
         </article>
         <div class="investment-focus-grid">
         <article class="card allocation-card" id="investmentAllocationCard"><div class="card-label">Asset allocation</div><p class="spending-context" id="investmentAllocationInsight">Select a category to see its holdings.</p><div class="allocation-visual"><div class="investment-donut" id="investmentDonut" role="button" tabindex="0" aria-label="Select an asset category"><span>—</span></div><div class="investment-allocation" id="investmentAllocation"></div></div></article>
           <article class="card investment-card" id="investmentAccountsCard"><div class="card-label">Where it’s held</div><div class="investment-accounts" id="investmentAccounts"></div></article>
         </div>
         <article class="card holdings-card" id="investmentHoldingsPanel"><div class="holdings-head"><div><div class="card-label">Holdings</div><p class="spending-context" id="investmentHoldingsInsight">Your largest investments, at a glance.</p></div><select id="investmentSort" aria-label="Sort holdings"><option value="value">Largest value</option><option value="performance">Best performance</option><option value="equity">Asset type</option></select></div><div class="holdings-list" id="investmentPositions"></div><button class="holdings-more hidden" id="investmentHoldingsMore" type="button"></button></article>
+      </section>
+
+      <section id="retirementView" class="view">
+        <article class="card retirement-hero"><div class="card-top"><div><div class="card-label">Retirement outlook</div><div class="retirement-total" id="retirementProjection">—</div><p class="spending-context" id="retirementProjectionContext">Projected at retirement</p></div><div class="retirement-age-chip" id="retirementAgeChip">—</div></div><div class="retirement-path" id="retirementPath" aria-label="Retirement milestone progress"></div></article>
+        <article class="card retirement-spend"><div><div class="card-label">Your retirement baseline</div><div class="retirement-spend-number" id="retirementSpend">—</div><p class="spending-context" id="retirementSpendContext">Based on your recent everyday spending.</p></div><div class="retirement-assumption" id="retirementAssumption">—</div></article>
+        <details class="card retirement-adjust" id="retirementAdjust"><summary><span>Adjust plan</span><small>Optional</small></summary><p>These are starting assumptions, not a prediction. Change only what you know.</p><form id="retirementForm" class="retirement-form"><label>Current age<input name="age" type="number" min="18" max="100" /></label><label>Retire at<input name="retirement_age" type="number" min="18" max="100" /></label><label>Withdrawal rate<input name="withdrawal_rate" type="number" min="1" max="10" step="0.1" /></label><label>Real return<input name="real_return" type="number" min="-5" max="12" step="0.1" /></label><button class="primary" type="submit">Update plan</button></form></details>
       </section>
 
       <section id="spendingView" class="view">
@@ -134,8 +142,9 @@
 
     <nav class="mobile-nav" aria-label="Mobile navigation">
       <button data-view="spending"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h13m0 0-3-3m3 3-3 3M20 16H7m0 0 3-3m-3 3 3 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Cash flow</span></button>
-      <button class="active" data-view="overview"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17.5h16M6.5 15l3-3.1 2.8 2.2 5.2-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Net Worth</span></button>
       <button data-view="investments"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v8h8A8 8 0 1 1 12 4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M15 4.6A7.5 7.5 0 0 1 19.4 9H15V4.6Z" fill="currentColor"/></svg><span>Investments</span></button>
+      <button class="active" data-view="overview"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17.5h16M6.5 15l3-3.1 2.8 2.2 5.2-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Net Worth</span></button>
+      <button data-view="retirement"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V4l12 4-12 4M5 12h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Retire</span></button>
       <button data-view="accounts"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 10h16M8 14h3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Accounts</span></button>
     </nav>
   </div>

@@ -9,6 +9,7 @@ const state = {
   dashboard: null,
   spending: null,
   investments: null,
+  retirement: null,
   networthRange: 'ytd',
   spendingRange: '1m',
   spendingMonth: null,
@@ -57,6 +58,7 @@ function setView(view) {
     overview: ['Net Worth', 'Your financial picture'],
     spending: ['Cash flow', 'Income and money out'],
     investments: ['Investments', 'Your portfolio'],
+    retirement: ['Retirement', 'A simple plan for later'],
     accounts: ['Accounts', 'What you own and owe'],
     profile: ['Profile', 'Settings']
   }[view] || [view[0].toUpperCase() + view.slice(1), ''];
@@ -70,6 +72,7 @@ function setView(view) {
     });
   }
   if (view === 'investments' && state.investments) requestAnimationFrame(() => renderInvestments(state.investments));
+  if (view === 'retirement' && state.retirement) requestAnimationFrame(() => renderRetirement(state.retirement));
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -449,7 +452,36 @@ function renderPortfolioChart(data) {
   const xIndices = [...new Set(width > 420 ? [0, Math.floor((snapshots.length - 1) / 2), snapshots.length - 1] : [0, snapshots.length - 1])];
   const grid = [max, (max + min) / 2, min].map((value) => { const y = plot.bottom - (value - min) / (max - min) * (plot.bottom - plot.top); return `<line x1="${plot.left}" y1="${y}" x2="${width - plot.right}" y2="${y}" class="chart-grid"/><text x="${plot.left - 6}" y="${y + 3}" text-anchor="end" class="chart-axis-label">${axisCurrency(value)}</text>`; }).join('');
   const xAxis = xIndices.map((index) => `<text x="${points[index][0]}" y="${height - 5}" text-anchor="${index === 0 ? 'start' : index === snapshots.length - 1 ? 'end' : 'middle'}" class="chart-axis-label">${label(index)}</text>`).join('');
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Portfolio value history"><defs><linearGradient id="portfolioFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".16"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs>${grid}${xAxis}<path d="${area}" fill="url(#portfolioFade)"/><path d="${line}" fill="none" stroke="#287143" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>${points.length === 1 ? `<circle cx="${points[0][0]}" cy="${points[0][1]}" r="5" fill="#287143"/>` : ''}</svg>`;
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Scrubbable portfolio value history"><defs><linearGradient id="portfolioFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".16"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs>${grid}${xAxis}<path d="${area}" fill="url(#portfolioFade)"/><path d="${line}" fill="none" stroke="#287143" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>${points.length === 1 ? `<circle cx="${points[0][0]}" cy="${points[0][1]}" r="5" fill="#287143"/>` : ''}<line class="scrub-line" x1="0" y1="${plot.top}" x2="0" y2="${plot.bottom}"/><circle class="scrub-dot" cx="0" cy="0" r="5"/></svg><div class="chart-tooltip hidden"></div>`;
+  if (snapshots.length < 2) return;
+  const scrubLine = el.querySelector('.scrub-line');
+  const scrubDot = el.querySelector('.scrub-dot');
+  const tooltip = el.querySelector('.chart-tooltip');
+  let active = false;
+  const restore = () => {
+    $('#investmentTotal').textContent = fmt.format(data.total || 0);
+    $('#investmentChartDate').textContent = 'Drag across the chart to view history';
+  };
+  const showPoint = (event) => {
+    const rect = el.getBoundingClientRect();
+    const relativeX = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+    const index = scrubIndex({ clientX: event.clientX, left: rect.left, width: rect.width, pointCount: snapshots.length });
+    const snapshot = snapshots[index];
+    const [x, y] = points[index];
+    scrubLine.setAttribute('x1', x); scrubLine.setAttribute('x2', x);
+    scrubDot.setAttribute('cx', x); scrubDot.setAttribute('cy', y);
+    scrubLine.classList.add('visible'); scrubDot.classList.add('visible');
+    tooltip.classList.remove('hidden');
+    tooltip.style.left = `${Math.max(8, Math.min(rect.width - 8, relativeX))}px`;
+    tooltip.textContent = fmt.format(Number(snapshot.value || 0));
+    $('#investmentTotal').textContent = fmt.format(Number(snapshot.value || 0));
+    $('#investmentChartDate').textContent = new Date(`${snapshot.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+  el.addEventListener('pointerdown', (event) => { active = true; el.setPointerCapture?.(event.pointerId); showPoint(event); });
+  el.addEventListener('pointermove', (event) => { if (event.pointerType === 'mouse' || active) showPoint(event); });
+  el.addEventListener('pointerup', (event) => { active = false; el.releasePointerCapture?.(event.pointerId); });
+  el.addEventListener('pointercancel', () => { active = false; });
+  el.addEventListener('pointerleave', (event) => { if (event.pointerType === 'mouse' && !active) { scrubLine.classList.remove('visible'); scrubDot.classList.remove('visible'); tooltip.classList.add('hidden'); restore(); } });
 }
 
 function aggregateHoldings(positions) {
@@ -478,6 +510,7 @@ function renderInvestments(data) {
   const started = snapshots[0]?.date ? new Date(`${snapshots[0].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : null;
   const reconstructed = snapshots.some((snapshot) => snapshot.source === 'reconstructed');
   $('#investmentContext').textContent = accounts.length ? `${accounts.length} connected account${accounts.length === 1 ? '' : 's'}${started ? ` · ${reconstructed ? `Reconstructed since ${started}` : `Tracking since ${started}`}` : ' · Sync to begin tracking'}` : 'Connect an investment account to begin.';
+  $('#investmentChartDate').textContent = snapshots.length > 1 ? 'Drag across the chart to view history' : started ? `Tracking since ${started}` : 'Historical value appears after sync.';
   renderPortfolioChart(data);
   const allocation = data.allocation || [];
   $('#investmentAllocationCard').classList.toggle('hidden', !data.positionsAvailable);
@@ -533,6 +566,29 @@ function assetClassLabel(type, override = null) {
   return 'Other';
 }
 
+function renderRetirement(data) {
+  if (!data) return;
+  state.retirement = data;
+  $('#retirementProjection').textContent = fmt.format(data.projectedAtRetirement || 0);
+  $('#retirementProjectionContext').textContent = `Projected at age ${data.retirementAge} if you keep saving ${fmt.format(data.annualContributions || 0)}/yr`;
+  $('#retirementAgeChip').textContent = `${data.yearsToRetirement} years to go`;
+  $('#retirementSpend').textContent = fmt.format(data.annualSpend || 0);
+  $('#retirementSpendContext').textContent = data.monthsObserved ? `Yearly lifestyle spending · based on ${data.monthsObserved} month${data.monthsObserved === 1 ? '' : 's'} of activity` : 'Connect spending accounts to personalize this baseline.';
+  $('#retirementAssumption').textContent = `${data.withdrawalRate}% withdrawal · ${data.realReturn}% real growth`;
+  const milestones = [
+    ['Coast', data.coast, data.progress?.coast, 'Your investments could grow to the standard goal by retirement.'],
+    ['Lean', data.lean, data.progress?.lean, 'A simpler version of your current lifestyle.'],
+    ['Standard', data.standard, data.progress?.standard, 'Your current lifestyle at retirement.'],
+    ['Fat', data.fat, data.progress?.fat, 'More room for discretionary spending.']
+  ];
+  $('#retirementPath').innerHTML = milestones.map(([name, target, progress, description], index) => `<button class="retirement-milestone ${index === 2 ? 'featured' : ''}" type="button" title="${escapeHtml(description)}"><span>${escapeHtml(name)}</span><strong>${fmt.format(target || 0)}</strong><i><b style="width:${Math.min(100, Number(progress || 0)).toFixed(1)}%"></b></i><small>${Math.min(999, Math.round(Number(progress || 0)))}% there</small></button>`).join('');
+  const form = $('#retirementForm');
+  form.age.value = data.age;
+  form.retirement_age.value = data.retirementAge;
+  form.withdrawal_rate.value = data.withdrawalRate;
+  form.real_return.value = data.realReturn;
+}
+
 function renderDashboard() {
   const d = state.dashboard;
   if (!d) return;
@@ -558,19 +614,23 @@ async function loadAll() {
     state.dashboard = preview.dashboard;
     state.spending = preview.spending;
     state.investments = preview.investments;
+    state.retirement = preview.retirement;
     renderDashboard();
     renderSpending(preview.spending);
     renderInvestments(preview.investments);
+    renderRetirement(preview.retirement);
     $('#monthLabel').textContent = 'Demo workspace';
     return;
   }
-  const [dashboard, spending, investments] = await Promise.all([api('/api/dashboard'), api(`/api/spending?range=${state.spendingRange}`), api('/api/investments')]);
+  const [dashboard, spending, investments, retirement] = await Promise.all([api('/api/dashboard'), api(`/api/spending?range=${state.spendingRange}`), api('/api/investments'), api('/api/retirement')]);
   state.dashboard = dashboard;
   state.spending = spending;
   state.investments = investments;
+  state.retirement = retirement;
   renderDashboard();
   renderSpending(spending);
   renderInvestments(investments);
+  renderRetirement(retirement);
   $('#monthLabel').textContent = 'Account overview';
 }
 
@@ -636,6 +696,20 @@ $('#demoToggle').addEventListener('click', async () => {
 });
 $('#connectButton').addEventListener('click', connectPlaid);
 $$('[data-sync-accounts]').forEach((button) => button.addEventListener('click', syncAccounts));
+$('#retirementForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (state.demoPreview || state.dashboard?.demoMode) { showNotice('Sign in to save changes to your own plan.'); return; }
+  const form = new FormData(event.currentTarget);
+  const button = event.currentTarget.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    state.retirement = await api('/api/settings/retirement', { method: 'PATCH', body: JSON.stringify(Object.fromEntries(form)) });
+    renderRetirement(state.retirement);
+    $('#retirementAdjust').open = false;
+    showNotice('Retirement plan updated.', 'success');
+  } catch (error) { showNotice(error.message); }
+  finally { button.disabled = false; }
+});
 $('#accountGrid').addEventListener('click', (event) => {
   const button = event.target.closest('[data-account-rename]');
   if (!button) return;
