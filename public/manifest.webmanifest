@@ -1,0 +1,12 @@
+{
+  "name": "Clarity Net Worth",
+  "short_name": "Clarity",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f7f4",
+  "theme_color": "#f6f7f4",
+  "description": "A focused net worth and account tracker",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

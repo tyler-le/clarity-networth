@@ -1,0 +1,411 @@
+export function classifyTransaction(tx) {
+  const primary = (tx.personal_finance_category?.primary || '').toUpperCase();
+  const detailed = (tx.personal_finance_category?.detailed || '').toUpperCase();
+  const name = `${tx.merchant_name || ''} ${tx.name || ''}`.toUpperCase();
+
+  if (tx.amount < 0 && (primary.includes('INCOME') || detailed.includes('INCOME') || name.includes('PAYROLL'))) {
+    return 'income';
+  }
+
+  if (detailed.includes('INVESTMENT') || detailed.includes('RETIREMENT')) return 'investments';
+  if (detailed.includes('SAVINGS')) return 'savings';
+
+  if (
+    primary.includes('TRANSFER') ||
+    detailed.includes('TRANSFER') ||
+    detailed.includes('CREDIT_CARD_PAYMENT') ||
+    name.includes('PAYMENT THANK YOU') ||
+    name.includes('AUTOPAY PAYMENT')
+  ) return 'transfer';
+
+  // Vacation travel is discretionary by default. It is intentionally checked
+  // before everyday transport essentials such as gas and public transit.
+  if (/TRAVEL|AIRLINE|LODGING|HOTEL|VACATION|CAR_RENTAL|RIDESHARE|TAXI/.test(`${primary} ${detailed} ${name}`)) return 'guilt_free';
+
+  // Fixed costs are recurring or essential obligations—not a generic bucket
+  // for all needs. Dining, shopping, entertainment, and ambiguous merchants
+  // stay guilt-free unless the user explicitly categorizes them otherwise.
+  const fixedHints = [
+    'RENT', 'MORTGAGE', 'HOME_IMPROVEMENT', 'UTILITIES', 'ELECTRIC', 'WATER', 'SEWER',
+    'INSURANCE', 'GROCER', 'GAS', 'PUBLIC_TRANSIT', 'PARKING', 'TOLL', 'AUTO_PAYMENT',
+    'CAR_PAYMENT', 'PHONE', 'INTERNET', 'CABLE', 'LOAN_PAYMENT', 'DEBT_PAYMENT',
+    'CHILDCARE', 'DAYCARE', 'MEDICAL', 'PHARMACY'
+  ];
+  const fixedMerchantHints = [
+    'RENT', 'MORTGAGE', 'GEICO', 'STATE FARM', 'PROGRESSIVE', 'VERIZON', 'AT&T',
+    'T-MOBILE', 'COMCAST', 'XFINITY', 'SPECTRUM', 'GAS STATION', 'SHELL', 'CHEVRON',
+    'COSTCO GAS', 'DAYCARE', 'CHILDCARE'
+  ];
+  if (fixedHints.some((hint) => primary.includes(hint) || detailed.includes(hint)) || fixedMerchantHints.some((hint) => name.includes(hint))) return 'fixed';
+
+  return 'guilt_free';
+}
+
+export function accountSide(type) {
+  if (type === 'credit' || type === 'loan') return 'liability';
+  return 'asset';
+}
+
+function normalizedAccountText(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+export function hideDuplicateAccounts(store) {
+  const groups = new Map();
+  for (const account of store.accounts) {
+    const mask = String(account.mask || '').trim();
+    // The final account digits are required for automatic hiding. This avoids
+    // treating two real same-named accounts as duplicates when their identity
+    // cannot be verified.
+    if (!mask) continue;
+    const key = [
+      normalizedAccountText(account.institution_name),
+      normalizedAccountText(account.official_name || account.name),
+      normalizedAccountText(account.type),
+      normalizedAccountText(account.subtype),
+      mask
+    ].join('|');
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(account);
+  }
+
+  let hidden = 0;
+  for (const matches of groups.values()) {
+    if (matches.length < 2) continue;
+    matches.sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')));
+    const [winner, ...duplicates] = matches;
+    winner.hidden = false;
+    delete winner.hidden_reason;
+    delete winner.duplicate_of;
+    for (const duplicate of duplicates) {
+      if (!duplicate.hidden || duplicate.hidden_reason !== 'duplicate') hidden += 1;
+      duplicate.hidden = true;
+      duplicate.hidden_reason = 'duplicate';
+      duplicate.duplicate_of = winner.id;
+    }
+  }
+  return hidden;
+}
+
+export function summarize(store, month = new Date().toISOString().slice(0, 7)) {
+  return summarizeRange(store, month, '1m');
+}
+
+export function summarizeRange(store, month = new Date().toISOString().slice(0, 7), range = '1m') {
+  const accounts = store.accounts.filter((a) => !a.hidden);
+  const assets = accounts
+    .filter((a) => accountSide(a.type) === 'asset')
+    .reduce((sum, a) => sum + Number(a.current_balance || 0), 0);
+  const liabilities = accounts
+    .filter((a) => accountSide(a.type) === 'liability')
+    .reduce((sum, a) => sum + Math.max(Number(a.current_balance || 0), 0), 0);
+
+  const anchor = new Date(`${month}-01T12:00:00`);
+  const end = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
+  const start = new Date(anchor);
+  if (range === '3m') start.setMonth(start.getMonth() - 2);
+  else if (range === 'ytd') start.setMonth(0);
+  else if (range === '1y') start.setMonth(start.getMonth() - 11);
+  const startDate = start.toISOString().slice(0, 10);
+  const endDate = end.toISOString().slice(0, 10);
+  const monthTx = store.transactions.filter((t) => t.date >= startDate && t.date <= endDate && !t.pending);
+  const spend = { fixed: 0, savings: 0, investments: 0, guilt_free: 0 };
+  let income = 0;
+
+  for (const tx of monthTx) {
+    if (tx.excluded || tx.bucket === 'transfer') continue;
+    if (tx.bucket === 'income') {
+      income += Math.abs(Number(tx.amount || 0));
+      continue;
+    }
+    if (spend[tx.bucket] !== undefined && tx.amount > 0) spend[tx.bucket] += Number(tx.amount || 0);
+  }
+
+  const totalOut = Object.values(spend).reduce((a, b) => a + b, 0);
+  const remaining = income - totalOut;
+  return { assets, liabilities, netWorth: assets - liabilities, income, spend, totalOut, remaining, month, range, startDate, endDate };
+}
+
+function spendingStartDate(range, anchor = new Date()) {
+  const start = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  if (range === '3m') start.setMonth(start.getMonth() - 2);
+  else if (range === 'ytd') start.setMonth(0);
+  else if (range === '1y') start.setMonth(start.getMonth() - 11);
+  return start.toISOString().slice(0, 10);
+}
+
+function spendingCategory(transaction) {
+  // The visual follows the Conscious Spending Plan's four intentional
+  // allocations. Detailed merchant categories stay in Plaid data rather than
+  // turning the main view into an unreadable bank-style category list.
+  return {
+    fixed: 'Fixed costs',
+    savings: 'Savings',
+    investments: 'Investments',
+    guilt_free: 'Guilt-free spending'
+  }[transaction.bucket] || 'Guilt-free spending';
+}
+
+export function spendingSummary(store, range = '1m', anchor = new Date()) {
+  const startDate = spendingStartDate(range, anchor);
+  const endDate = anchor.toISOString().slice(0, 10);
+  const categories = new Map();
+  const merchants = new Map();
+  const monthly = new Map();
+  const transactionRows = [];
+  const eligibleTransactions = store.transactions.filter((transaction) => {
+    if (transaction.pending || transaction.excluded || transaction.bucket === 'transfer' || Number(transaction.amount || 0) <= 0) return false;
+    return transaction.date >= startDate && transaction.date <= endDate;
+  });
+  const verifiedInvestmentContributions = eligibleTransactions.filter((transaction) => transaction.source === 'investment_transaction' && transaction.bucket === 'investments');
+  for (const transaction of eligibleTransactions) {
+    const matchingVerifiedContribution = transaction.source !== 'investment_transaction' && transaction.bucket === 'investments' && verifiedInvestmentContributions.some((contribution) => Math.abs(Number(contribution.amount) - Number(transaction.amount)) < .01 && Math.abs(new Date(`${contribution.date}T12:00:00`) - new Date(`${transaction.date}T12:00:00`)) <= 7 * 86400000);
+    if (matchingVerifiedContribution) continue;
+    const amount = Number(transaction.amount);
+    const category = spendingCategory(transaction);
+    categories.set(category, (categories.get(category) || 0) + amount);
+    const merchant = transaction.merchant_name || transaction.name || 'Unrecognized merchant';
+    merchants.set(merchant, (merchants.get(merchant) || 0) + amount);
+    const month = String(transaction.date).slice(0, 7);
+    monthly.set(month, (monthly.get(month) || 0) + amount);
+    transactionRows.push({
+      id: transaction.id || transaction.plaid_transaction_id,
+      name: merchant,
+      date: transaction.date,
+      amount,
+      category,
+      bucket: transaction.bucket
+    });
+  }
+  const total = [...categories.values()].reduce((sum, amount) => sum + amount, 0);
+  const categoryRows = [...categories.entries()]
+    .map(([name, amount]) => ({ name, amount, share: total ? amount / total : 0 }))
+    .sort((a, b) => b.amount - a.amount);
+  // Allocate the leftover percentage points by largest remainder so the UI
+  // always reconciles to 100%, rather than showing independently rounded values.
+  const wholePercent = categoryRows.map((row) => Math.floor(row.share * 100));
+  let remainingPercent = 100 - wholePercent.reduce((sum, value) => sum + value, 0);
+  [...categoryRows.keys()].sort((a, b) => (categoryRows[b].share * 100 % 1) - (categoryRows[a].share * 100 % 1)).forEach((index) => {
+    if (remainingPercent > 0) { wholePercent[index] += 1; remainingPercent -= 1; }
+  });
+  categoryRows.forEach((row, index) => { row.percentage = total ? wholePercent[index] : 0; });
+  const topMerchants = [...merchants.entries()]
+    .map(([name, amount]) => ({ name, amount }))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 3);
+  const monthCount = range === '1m' ? 1 : range === '3m' ? 3 : range === 'ytd' ? anchor.getMonth() + 1 : 12;
+  const monthlyRows = [...monthly.entries()].map(([month, amount]) => ({ month, amount })).sort((a, b) => a.month.localeCompare(b.month));
+  return { range, startDate, endDate, total, monthlyAverage: total / monthCount, categories: categoryRows, topMerchants, monthly: monthlyRows, transactions: transactionRows };
+}
+
+function monthId(dateString) {
+  return String(dateString || '').slice(0, 7);
+}
+
+export function annualizedLivingSpend(store) {
+  const eligible = store.transactions
+    .filter((t) => !t.pending && !t.excluded && Number(t.amount || 0) > 0 && (t.bucket === 'fixed' || t.bucket === 'guilt_free'))
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+  if (!eligible.length) return { annualSpend: 0, monthlyAverage: 0, monthsObserved: 0 };
+
+  const latest = new Date(`${monthId(eligible.at(-1).date)}-01T12:00:00`);
+  const start = new Date(latest);
+  start.setMonth(start.getMonth() - 11);
+  const startMonth = start.toISOString().slice(0, 7);
+  const latestMonth = latest.toISOString().slice(0, 7);
+
+  const trailing = eligible.filter((t) => {
+    const m = monthId(t.date);
+    return m >= startMonth && m <= latestMonth;
+  });
+  const observedMonths = [...new Set(trailing.map((t) => monthId(t.date)))];
+  const total = trailing.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+  const monthsObserved = Math.max(observedMonths.length, 1);
+  const monthlyAverage = total / monthsObserved;
+  return { annualSpend: monthlyAverage * 12, monthlyAverage, monthsObserved };
+}
+
+function annualizedContributions(store) {
+  const eligible = store.transactions
+    .filter((t) => !t.pending && !t.excluded && Number(t.amount || 0) > 0 && (t.bucket === 'savings' || t.bucket === 'investments'))
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  if (!eligible.length) return { annualContributions: 0, monthsObserved: 0 };
+
+  const latest = new Date(`${monthId(eligible.at(-1).date)}-01T12:00:00`);
+  const start = new Date(latest);
+  start.setMonth(start.getMonth() - 11);
+  const startMonth = start.toISOString().slice(0, 7);
+  const trailing = eligible.filter((transaction) => monthId(transaction.date) >= startMonth && monthId(transaction.date) <= monthId(latest.toISOString()));
+  const monthsObserved = Math.max(new Set(trailing.map((transaction) => monthId(transaction.date))).size, 1);
+  const total = trailing.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  return { annualContributions: total / monthsObserved * 12, monthsObserved };
+}
+
+export function calculateFire(store, netWorth) {
+  const settings = store.settings?.fire || {};
+  const age = Math.max(18, Number(settings.age || 27));
+  const retirementAge = Math.max(age, Number(settings.retirement_age || 65));
+  const withdrawalRate = Math.max(0.1, Number(settings.withdrawal_rate || 4)) / 100;
+  const realReturn = Math.max(-0.9, Number(settings.real_return ?? 5)) / 100;
+  const leanMultiplier = Math.max(1, Number(settings.lean_multiplier || 70)) / 100;
+  const fatMultiplier = Math.max(1, Number(settings.fat_multiplier || 150)) / 100;
+  const spend = annualizedLivingSpend(store);
+  const contributions = annualizedContributions(store);
+
+  const standard = spend.annualSpend > 0 ? spend.annualSpend / withdrawalRate : 0;
+  const lean = standard * leanMultiplier;
+  const fat = standard * fatMultiplier;
+  const yearsToRetirement = Math.max(0, retirementAge - age);
+  const coast = standard > 0 ? standard / Math.pow(1 + realReturn, yearsToRetirement) : 0;
+  const futureValueFactor = realReturn === 0 ? yearsToRetirement : (Math.pow(1 + realReturn, yearsToRetirement) - 1) / realReturn;
+  const projectedAtRetirement = Number(netWorth || 0) * Math.pow(1 + realReturn, yearsToRetirement) + contributions.annualContributions * futureValueFactor;
+  const progress = (target) => target > 0 ? Math.max(0, Number(netWorth || 0)) / target * 100 : 0;
+
+  return {
+    age,
+    retirementAge,
+    withdrawalRate: withdrawalRate * 100,
+    realReturn: realReturn * 100,
+    leanMultiplier: leanMultiplier * 100,
+    fatMultiplier: fatMultiplier * 100,
+    annualSpend: spend.annualSpend,
+    monthlySpend: spend.monthlyAverage,
+    monthsObserved: spend.monthsObserved,
+    annualContributions: contributions.annualContributions,
+    contributionMonthsObserved: contributions.monthsObserved,
+    yearsToRetirement,
+    projectedAtRetirement,
+    standard,
+    lean,
+    coast,
+    fat,
+    progress: {
+      lean: progress(lean),
+      coast: progress(coast),
+      fat: progress(fat)
+    }
+  };
+}
+
+export function snapshotNetWorth(store, snapshotDate = new Date().toISOString().slice(0, 10)) {
+  const summary = summarize(store);
+  const date = snapshotDate;
+  const existing = store.snapshots.find((s) => s.date === date);
+  const snap = { date, assets: summary.assets, liabilities: summary.liabilities, net_worth: summary.netWorth, source: 'verified' };
+  if (existing) Object.assign(existing, snap);
+  else store.snapshots.push(snap);
+  store.snapshots.sort((a, b) => a.date.localeCompare(b.date));
+  if (store.snapshots.length > 730) store.snapshots = store.snapshots.slice(-730);
+  return snap;
+}
+
+export function removeEstimatedNetWorthHistory(store) {
+  const before = store.snapshots.length;
+  store.snapshots = store.snapshots.filter((snapshot) => snapshot.source !== 'estimated');
+  return store.snapshots.length !== before;
+}
+
+export function seedDemo(store) {
+  if (store.accounts.length || store.transactions.length || store.snapshots.length) {
+    if (store.accounts.length && store.accounts.every((account) => account.demo)) addDemoHistory(store);
+    return store;
+  }
+  const now = new Date();
+  const month = now.toISOString().slice(0, 7);
+  const d = (day) => `${month}-${String(day).padStart(2, '0')}`;
+  store.accounts = [
+    { id: 'demo-checking', item_id: 'demo-bank', plaid_account_id: 'demo-checking', institution_name: 'Chase', name: 'Checking', type: 'depository', subtype: 'checking', current_balance: 5200, available_balance: 5000, updated_at: new Date().toISOString(), demo: true },
+    { id: 'demo-hysa', item_id: 'demo-bank', plaid_account_id: 'demo-hysa', institution_name: 'Ally', name: 'High Yield Savings', type: 'depository', subtype: 'savings', current_balance: 12500, available_balance: 12500, updated_at: new Date().toISOString(), demo: true },
+    { id: 'demo-brokerage', item_id: 'demo-fidelity', plaid_account_id: 'demo-brokerage', institution_name: 'Fidelity', name: 'Brokerage', type: 'investment', subtype: 'brokerage', current_balance: 18200, updated_at: new Date().toISOString(), demo: true },
+    { id: 'demo-roth', item_id: 'demo-fidelity', plaid_account_id: 'demo-roth', institution_name: 'Fidelity', name: 'Roth IRA', type: 'investment', subtype: 'ira', current_balance: 26400, updated_at: new Date().toISOString(), demo: true },
+    { id: 'demo-401k', item_id: 'demo-fidelity', plaid_account_id: 'demo-401k', institution_name: 'Fidelity', name: '401(k)', type: 'investment', subtype: '401k', current_balance: 43800, updated_at: new Date().toISOString(), demo: true },
+    { id: 'demo-credit', item_id: 'demo-bank', plaid_account_id: 'demo-credit', institution_name: 'Chase', name: 'Credit Card', type: 'credit', subtype: 'credit card', current_balance: 1160, updated_at: new Date().toISOString(), demo: true },
+    { id: 'demo-auto', item_id: 'demo-bank', plaid_account_id: 'demo-auto', institution_name: 'Capital One', name: 'Auto loan', type: 'loan', subtype: 'auto', current_balance: 9350, updated_at: new Date().toISOString(), demo: true }
+  ];
+  const rows = [
+    ['payroll-1', 'Payroll', -3100, d(1), 'income'],
+    ['rent', 'Rent', 1650, d(1), 'fixed'],
+    ['brokerage-transfer', 'Fidelity Brokerage', 350, d(2), 'investments'],
+    ['hysa-transfer', 'Ally Savings', 250, d(2), 'savings'],
+    ['groceries-1', 'Trader Joe’s', 132.48, d(3), 'fixed'],
+    ['restaurant-1', 'Din Tai Fung', 84.76, d(4), 'guilt_free'],
+    ['internet', 'Google Fiber', 70, d(5), 'fixed'],
+    ['gym', 'Gym Membership', 45, d(6), 'fixed'],
+    ['shopping', 'Uniqlo', 126.40, d(7), 'guilt_free'],
+    ['coffee', 'Coffee Shop', 8.75, d(8), 'guilt_free'],
+    ['gas', 'Shell', 58.20, d(9), 'fixed'],
+    ['credit-payment', 'Credit Card Payment', 1600, d(10), 'transfer'],
+    ['payroll-2', 'Payroll', -3100, d(15), 'income'],
+    ['groceries-2', 'Costco', 184.29, d(16), 'fixed'],
+    ['flight', 'Southwest Airlines', 286.12, d(18), 'guilt_free'],
+    ['utilities', 'SDG&E', 151.60, d(20), 'fixed'],
+    ['restaurant-2', 'Sushi', 112.30, d(21), 'guilt_free']
+  ];
+  const demoPfc = (merchant) => /Rent|Fiber|SDG|Gym/.test(merchant) ? 'RENT_AND_UTILITIES' : /Trader|Costco|Sushi|Coffee/.test(merchant) ? 'FOOD_AND_DRINK' : /Shell/.test(merchant) ? 'TRANSPORTATION' : /Uniqlo/.test(merchant) ? 'GENERAL_MERCHANDISE' : /Southwest/.test(merchant) ? 'TRAVEL' : '';
+  store.transactions = rows.map(([id, merchant, amount, date, bucket]) => ({
+    id, plaid_transaction_id: id, account_id: amount < 0 ? 'demo-checking' : 'demo-credit',
+    merchant_name: merchant, name: merchant, amount, date, bucket, excluded: false, pending: false,
+    pfc_primary: demoPfc(merchant), pfc_detailed: '', demo: true
+  }));
+
+  const base = 84000;
+  store.snapshots = Array.from({ length: 90 }, (_, i) => {
+    const dt = new Date(now);
+    dt.setDate(now.getDate() - (89 - i));
+    const drift = i * 110 + Math.sin(i / 4.2) * 1100 + Math.sin(i / 12) * 650;
+    const liabilities = Math.max(10450, 11500 - i * 11);
+    return { date: dt.toISOString().slice(0, 10), assets: base + drift + liabilities, liabilities, net_worth: base + drift };
+  });
+  addDemoHistory(store);
+  return store;
+}
+
+function addDemoHistory(store) {
+  const now = new Date();
+  const existingTransactionIds = new Set(store.transactions.map((transaction) => transaction.id));
+  const existingSnapshotDates = new Set(store.snapshots.map((snapshot) => snapshot.date));
+
+  // Seven years of monthly records make the demo useful across every chart
+  // range, while the detailed current month keeps the drill-down believable.
+  const historyMonths = 84;
+  const demoCurrentNetWorth = 95590;
+  const demoStartingNetWorth = 26000;
+  for (let monthsAgo = 1; monthsAgo <= historyMonths; monthsAgo += 1) {
+    const date = new Date(now.getFullYear(), now.getMonth() - monthsAgo, 1);
+    const month = date.toISOString().slice(0, 7);
+    const variation = Math.round(Math.sin(monthsAgo * 1.7) * 110);
+    const rows = [
+      ['payroll', 'Payroll', -6200, 'income', 'demo-checking'],
+      ['rent', 'Rent', 1650, 'fixed', 'demo-credit'],
+      ['essentials', 'Groceries & utilities', 690 + variation, 'fixed', 'demo-credit'],
+      ['saving', 'Ally Savings', 250, 'savings', 'demo-credit'],
+      ['investing', 'Fidelity Brokerage', 350, 'investments', 'demo-credit'],
+      ['flex', 'Dining & leisure', 520 - variation, 'guilt_free', 'demo-credit']
+    ];
+    for (const [kind, merchant, amount, bucket, accountId] of rows) {
+      const id = `demo-history-${month}-${kind}`;
+      if (existingTransactionIds.has(id)) continue;
+      store.transactions.push({
+        id, plaid_transaction_id: id, account_id: accountId, merchant_name: merchant, name: merchant,
+        amount, date: `${month}-15`, bucket, excluded: false, pending: false,
+        pfc_primary: '', pfc_detailed: '', demo: true
+      });
+    }
+
+    const snapshotDate = `${month}-28`;
+    if (!existingSnapshotDates.has(snapshotDate)) {
+      const progress = (historyMonths - monthsAgo) / historyMonths;
+      const netWorth = Math.round(demoStartingNetWorth + (demoCurrentNetWorth - demoStartingNetWorth) * progress + Math.sin(progress * 16) * 1800);
+      const liabilities = Math.round(16500 - progress * 7150);
+      store.snapshots.push({
+        date: snapshotDate,
+        assets: netWorth + liabilities,
+        liabilities,
+        net_worth: netWorth
+      });
+    }
+  }
+  store.transactions.sort((a, b) => a.date.localeCompare(b.date));
+  store.snapshots.sort((a, b) => a.date.localeCompare(b.date));
+}

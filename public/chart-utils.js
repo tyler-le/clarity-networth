@@ -1,0 +1,21 @@
+export function netWorthRangeBounds(range, anchor = new Date()) {
+  const end = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
+  if (range === 'all') return { startDate: null, endDate: end.toISOString().slice(0, 10) };
+  const start = new Date(end);
+  if (range === 'ytd') start.setMonth(0, 1);
+  else if (range === '1y') start.setFullYear(start.getFullYear() - 1);
+  else if (range === '3y') start.setFullYear(start.getFullYear() - 3);
+  else if (range === '5y') start.setFullYear(start.getFullYear() - 5);
+  return { startDate: start.toISOString().slice(0, 10), endDate: end.toISOString().slice(0, 10) };
+}
+
+export function filterSnapshots(snapshots, range, anchor = new Date()) {
+  const { startDate, endDate } = netWorthRangeBounds(range, anchor);
+  return snapshots.filter((snapshot) => (!startDate || snapshot.date >= startDate) && snapshot.date <= endDate);
+}
+
+export function scrubIndex({ clientX, left, width, pointCount }) {
+  if (pointCount < 2 || width <= 0) return 0;
+  const ratio = Math.max(0, Math.min(1, (clientX - left) / width));
+  return Math.round(ratio * (pointCount - 1));
+}
