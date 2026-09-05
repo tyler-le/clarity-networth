@@ -216,7 +216,7 @@ function isDebt(a) {
 
 function displayBalance(a) {
   const value = Math.abs(Number(a.current_balance || 0));
-  return `${isDebt(a) ? '−' : '+'}${fmt2.format(value)}`;
+  return fmt2.format(value);
 }
 
 function accountDescriptor(value) {
@@ -242,7 +242,7 @@ function groupedAccounts(accounts) {
 
 function accountRow(a) {
   return `<div class="account-row">
-    <div class="account-meta"><div class="account-icon">${escapeHtml((a.institution_name || a.name || '?')[0])}</div><div><div class="account-name">${escapeHtml(a.name)}</div><div class="account-inst">${escapeHtml(a.institution_name || '')} · ${escapeHtml(a.subtype || a.type)}</div></div></div>
+    <div class="account-meta"><div class="account-icon">${escapeHtml((a.institution_name || a.name || '?')[0])}</div><div><div class="account-name">${escapeHtml(a.nickname || a.name)}</div><div class="account-inst">${escapeHtml(a.institution_name || '')} · ${escapeHtml(a.subtype || a.type)}</div></div></div>
     <div class="account-balance ${isDebt(a) ? 'negative' : 'positive'}">${displayBalance(a)}</div>
   </div>`;
 }
@@ -257,14 +257,14 @@ function renderAccounts(accounts) {
 
   const totalAssets = accounts.filter((account) => !isDebt(account)).reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
   const totalDebt = accounts.filter(isDebt).reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
-  $('#accountsSummary').innerHTML = `<div><span>Net worth</span><strong>${fmt.format(totalAssets - totalDebt)}</strong></div><div><span>Assets</span><strong class="positive">+${fmt.format(totalAssets)}</strong></div><div><span>Debt</span><strong class="negative">−${fmt.format(totalDebt)}</strong></div>`;
+  $('#accountsSummary').innerHTML = `<div><span>Net worth</span><strong>${fmt.format(totalAssets - totalDebt)}</strong></div><div><span>You have</span><strong class="positive">${fmt.format(totalAssets)}</strong></div><div><span>You owe</span><strong class="negative">${fmt.format(totalDebt)}</strong></div>`;
   $('#accountGrid').innerHTML = grouped.map(([name, items]) => {
     const debt = items.every(isDebt);
     const total = items.reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
     return `<details class="account-collection ${debt ? 'debt' : 'asset'}">
-      <summary class="account-collection-head"><span class="account-collection-icon" aria-hidden="true">${accountGroupIcons[name] || '◇'}</span><div><h2>${name}</h2><p>${items.length} account${items.length === 1 ? '' : 's'}</p></div><strong class="account-collection-total ${debt ? 'negative' : 'positive'}">${debt ? '−' : '+'}${fmt.format(total)}</strong></summary>
+      <summary class="account-collection-head"><span class="account-collection-icon" aria-hidden="true">${accountGroupIcons[name] || '◇'}</span><div><h2>${name}</h2><p>${items.length} account${items.length === 1 ? '' : 's'}</p></div><div class="account-collection-total ${debt ? 'negative' : 'positive'}"><span>${debt ? 'Owed' : 'Held'}</span><strong>${fmt.format(total)}</strong></div></summary>
       <div class="account-collection-items">${items.map((account) => `<article class="account-item ${debt ? 'debt' : 'asset'}">
-        ${institutionMark(account)}<div class="account-copy"><div class="account-name">${escapeHtml(account.name)}</div><div class="account-inst">${escapeHtml(account.institution_name || '')} · ${escapeHtml(accountDescriptor(account.subtype || account.type))}</div><div class="account-inline-balance ${debt ? 'negative' : 'positive'}">${displayBalance(account)}</div></div>
+        ${institutionMark(account)}<div class="account-copy"><div class="account-name">${escapeHtml(account.nickname || account.name)}</div><div class="account-inst">${escapeHtml(account.institution_name || '')} · ${escapeHtml(accountDescriptor(account.subtype || account.type))}</div><div class="account-inline-balance ${debt ? 'negative' : 'positive'}">${displayBalance(account)}</div></div><button class="account-rename" data-account-rename="${escapeHtml(account.id)}" data-account-name="${escapeHtml(account.nickname || account.name)}" aria-label="Rename ${escapeHtml(account.nickname || account.name)}">✎</button>
       </article>`).join('')}</div>
     </details>`;
   }).join('');
@@ -408,6 +408,33 @@ $('#demoToggle').addEventListener('click', async () => {
 });
 $('#connectButton').addEventListener('click', connectPlaid);
 $('#syncButton').addEventListener('click', syncAccounts);
+$('#accountGrid').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-account-rename]');
+  if (!button) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const dialog = $('#nicknameDialog');
+  dialog.dataset.accountId = button.dataset.accountRename;
+  $('#nicknameInput').value = button.dataset.accountName || '';
+  dialog.showModal();
+  $('#nicknameInput').focus();
+  $('#nicknameInput').select();
+});
+$('#nicknameForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const dialog = $('#nicknameDialog');
+  const save = $('#nicknameSave');
+  save.disabled = true;
+  try {
+    await api(`/api/accounts/${dialog.dataset.accountId}/nickname`, { method: 'PATCH', body: JSON.stringify({ nickname: $('#nicknameInput').value }) });
+    dialog.close();
+    await loadAll();
+    showNotice('Account name updated.', 'success');
+  } catch (error) { showNotice(error.message); }
+  finally { save.disabled = false; }
+});
+$('#nicknameCancel').addEventListener('click', () => $('#nicknameDialog').close());
+$('#nicknameClose').addEventListener('click', () => $('#nicknameDialog').close());
 $('#connectionsList').addEventListener('click', async (event) => {
   const button = event.target.closest('[data-unlink]');
   if (!button) return;

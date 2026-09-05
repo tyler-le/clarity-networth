@@ -130,6 +130,16 @@
       <button data-view="accounts">▦<span>Accounts</span></button>
     </nav>
   </div>
+  <dialog class="nickname-dialog" id="nicknameDialog" aria-labelledby="nicknameDialogTitle">
+    <form method="dialog" id="nicknameForm">
+      <button type="button" class="dialog-close" id="nicknameClose" aria-label="Close">×</button>
+      <div class="card-label">ACCOUNT NAME</div>
+      <h2 id="nicknameDialogTitle">Rename account</h2>
+      <p>Use a name that is easy for you to recognize. It won’t change anything at your bank.</p>
+      <input id="nicknameInput" name="nickname" maxlength="60" autocomplete="off" placeholder="e.g. Travel card" />
+      <div class="dialog-actions"><button type="button" class="secondary dialog-cancel" id="nicknameCancel">Cancel</button><button class="primary" id="nicknameSave" value="default">Save name</button></div>
+    </form>
+  </dialog>
 
   <script type="module" src="/app.js"></script>
 </body>

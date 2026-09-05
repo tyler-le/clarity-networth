@@ -123,6 +123,9 @@ async function refreshAccountsForItem(store, item) {
       institution_logo: item.institution_logo || null,
       institution_color: item.institution_color || null,
       name: account.name,
+      // Plaid's name may already be an institution/user nickname. Preserve any
+      // Clarity-specific label separately so normal account refreshes never erase it.
+      nickname: existing?.nickname || null,
       official_name: account.official_name,
       mask: account.mask,
       type: account.type,
@@ -328,6 +331,17 @@ app.patch('/api/transactions/:id/category', (req, res) => {
   transaction.category_overridden = true;
   saveStore(req.user, store);
   res.json({ ok: true });
+});
+
+app.patch('/api/accounts/:id/nickname', (req, res) => {
+  const nickname = String(req.body?.nickname || '').trim().replace(/\s+/g, ' ');
+  if (nickname.length > 60) return res.status(400).json({ error: 'Account name must be 60 characters or fewer.' });
+  const store = loadStore(req.user);
+  const account = store.accounts.find((record) => record.id === req.params.id && !record.demo);
+  if (!account) return res.status(404).json({ error: 'Account not found.' });
+  account.nickname = nickname || null;
+  saveStore(req.user, store);
+  res.json({ ok: true, nickname: account.nickname });
 });
 
 app.post('/api/demo-mode', (req, res) => {

@@ -238,7 +238,7 @@ dialog::backdrop { background: rgba(10,15,10,.28); backdrop-filter: blur(3px); }
 .account-collection.debt .account-collection-icon { background: #f8eeee; color: var(--danger); }
 .account-collection-head h2 { margin: 0; font-size: 17px; }
 .account-collection-head p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
-.account-collection-total { padding-right: 16px; font-size: 14px; font-variant-numeric: tabular-nums; }
+.account-collection-total { display: grid; justify-items: end; gap: 2px; padding-right: 16px; font-variant-numeric: tabular-nums; }.account-collection-total span { color: var(--muted); font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; }.account-collection-total strong { font-size: 14px; }
 .account-collection-head::after { content: '›'; position: absolute; right: 13px; top: 17px; color: var(--muted); font-size: 18px; transition: transform .16s ease; }
 .account-collection[open] .account-collection-head::after { transform: rotate(90deg); }
 .account-collection-items { display: grid; }
@@ -248,10 +248,12 @@ dialog::backdrop { background: rgba(10,15,10,.28); backdrop-filter: blur(3px); }
 .institution-logo { padding: 3px; }
 .institution-fallback { color: #68726a; background: #f7f9f6; }
 .institution-fallback svg { width: 18px; height: 18px; }
-.account-copy { min-width: 0; }
+.account-copy { min-width: 0; flex: 1; }
 .account-item .account-name { font-size: 14px; font-weight: 690; }
 .account-item .account-inst { margin-top: 2px; font-size: 11px; }
 .account-inline-balance { margin-top: 8px; font-size: 17px; font-weight: 740; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.account-rename { align-self: center; width: 29px; height: 29px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); font-size: 16px; opacity: .58; }.account-item:hover .account-rename, .account-rename:focus-visible { opacity: 1; }.account-rename:hover { border-color: var(--line); background: #f7f9f6; color: var(--accent); }
+.nickname-dialog { width: min(390px, calc(100vw - 36px)); padding: 0; border: 1px solid var(--line); border-radius: 20px; color: var(--ink); background: white; box-shadow: 0 24px 70px rgba(22,34,24,.22); }.nickname-dialog::backdrop { background: rgba(18,27,20,.34); backdrop-filter: blur(3px); }.nickname-dialog form { position: relative; padding: 25px; }.nickname-dialog h2 { margin: 5px 0 7px; font-size: 24px; letter-spacing: -.04em; }.nickname-dialog p { margin: 0 0 19px; color: var(--muted); font-size: 13px; line-height: 1.5; }.nickname-dialog input { width: 100%; border: 1px solid var(--line); border-radius: 11px; padding: 12px; outline: none; color: var(--ink); background: #fbfcfa; }.nickname-dialog input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }.dialog-close { position: absolute; top: 15px; right: 16px; width: 28px; height: 28px; border: 0; border-radius: 8px; color: var(--muted); background: transparent; font-size: 22px; line-height: 1; }.dialog-close:hover { background: #f2f4f0; }.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }.dialog-actions button { border: 0; padding: 9px 12px; border-radius: 10px; font-weight: 700; }.dialog-actions .secondary { border: 1px solid var(--line); }
 .connections-panel { margin-top: 16px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.58); }
 .connections-panel summary { padding: 13px 15px; color: var(--muted); cursor: pointer; font-size: 12px; font-weight: 680; }
 .connections-panel[open] summary { border-bottom: 1px solid var(--line); }
