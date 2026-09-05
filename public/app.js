@@ -299,9 +299,9 @@ function spendingForSelectedMonth(data) {
 
 function renderSpendingTrend(data) {
   const months = data.monthly || [];
-  const max = Math.max(...months.map((row) => row.amount), 1);
+  const max = Math.max(...months.flatMap((row) => [Number(row.amount || 0), Number(row.income || 0)]), 1);
   if (state.spendingMonth && !months.some((row) => row.month === state.spendingMonth)) state.spendingMonth = null;
-  $('#spendingTrend').innerHTML = months.length ? months.map((row) => `<button class="trend-column ${state.spendingMonth === row.month ? 'active' : ''}" type="button" data-spending-month="${row.month}" title="${escapeHtml(row.month)}: ${fmt.format(row.amount)}"><div class="trend-bar" style="height:${Math.max(8, row.amount / max * 100)}%"></div><span>${new Date(`${row.month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'short' })}</span></button>`).join('') : '<p class="spending-empty">Monthly patterns will appear once transactions arrive.</p>';
+  $('#spendingTrend').innerHTML = months.length ? months.map((row) => `<button class="trend-column ${state.spendingMonth === row.month ? 'active' : ''}" type="button" data-spending-month="${row.month}" title="${escapeHtml(row.month)}: Income ${fmt.format(row.income || 0)} · Spent ${fmt.format(row.amount)}"><div class="trend-bars"><i class="trend-bar income" style="height:${Number(row.income || 0) ? Math.max(5, Number(row.income || 0) / max * 100) : 0}%"></i><i class="trend-bar spending" style="height:${Number(row.amount || 0) ? Math.max(5, Number(row.amount || 0) / max * 100) : 0}%"></i></div><span>${new Date(`${row.month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'short' })}</span></button>`).join('') : '<p class="spending-empty">Monthly patterns will appear once transactions arrive.</p>';
 }
 
 function renderSpending(data) {

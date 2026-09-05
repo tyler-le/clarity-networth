@@ -83,6 +83,18 @@ test('spending summary excludes transfers and groups only transactions in the se
   assert.deepEqual(result.topMerchants, [{ name: 'Cafe', amount: 80 }]);
 });
 
+test('monthly spending keeps income separate for comparison', () => {
+  const store = { transactions: [
+    { date: '2026-09-01', amount: -4200, bucket: 'income', merchant_name: 'Payroll' },
+    { date: '2026-09-02', amount: 900, bucket: 'fixed', merchant_name: 'Rent' },
+    { date: '2026-08-30', amount: -4000, bucket: 'income', merchant_name: 'Payroll' }
+  ] };
+  const result = spendingSummary(store, '1m', new Date('2026-09-05T12:00:00'));
+  assert.equal(result.total, 900);
+  assert.equal(result.income, 4200);
+  assert.deepEqual(result.monthly, [{ month: '2026-09', amount: 900, income: 4200 }]);
+});
+
 test('demo mode provides seven years of usable account and spending history', () => {
   const store = { accounts: [], transactions: [], snapshots: [] };
   seedDemo(store);

@@ -152,7 +152,16 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
   const categories = new Map();
   const merchants = new Map();
   const monthly = new Map();
+  const monthlyIncome = new Map();
   const transactionRows = [];
+  const incomeTransactions = store.transactions.filter((transaction) => {
+    if (transaction.pending || transaction.excluded || transaction.bucket !== 'income') return false;
+    return transaction.date >= startDate && transaction.date <= endDate;
+  });
+  for (const transaction of incomeTransactions) {
+    const month = String(transaction.date).slice(0, 7);
+    monthlyIncome.set(month, (monthlyIncome.get(month) || 0) + Math.abs(Number(transaction.amount || 0)));
+  }
   const eligibleTransactions = store.transactions.filter((transaction) => {
     if (transaction.pending || transaction.excluded || transaction.bucket === 'transfer' || Number(transaction.amount || 0) <= 0) return false;
     return transaction.date >= startDate && transaction.date <= endDate;
@@ -194,8 +203,11 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 3);
   const monthCount = range === '1m' ? 1 : range === '3m' ? 3 : range === 'ytd' ? anchor.getMonth() + 1 : 12;
-  const monthlyRows = [...monthly.entries()].map(([month, amount]) => ({ month, amount })).sort((a, b) => a.month.localeCompare(b.month));
-  return { range, startDate, endDate, total, monthlyAverage: total / monthCount, categories: categoryRows, topMerchants, monthly: monthlyRows, transactions: transactionRows };
+  const monthlyRows = [...new Set([...monthly.keys(), ...monthlyIncome.keys()])]
+    .map((month) => ({ month, amount: monthly.get(month) || 0, income: monthlyIncome.get(month) || 0 }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+  const income = [...monthlyIncome.values()].reduce((sum, amount) => sum + amount, 0);
+  return { range, startDate, endDate, total, income, monthlyAverage: total / monthCount, categories: categoryRows, topMerchants, monthly: monthlyRows, transactions: transactionRows };
 }
 
 function monthId(dateString) {
