@@ -201,6 +201,7 @@ test('each signed-in identity has an isolated persistent store', async () => {
   const partnerKey = store.userStorageKey('partner@example.com');
   store.writeStore({ accounts: [{ id: 'owner-account' }], items: [], transactions: [], snapshots: [], settings: {} }, ownerKey);
   assert.equal(store.readStore(ownerKey).accounts[0].id, 'owner-account');
+  assert.equal(store.readStore(ownerKey).settings.appearance.theme, 'light');
   assert.equal(store.readStore(partnerKey).accounts.length, 0);
   assert.notEqual(ownerKey, partnerKey);
   fs.rmSync(tempDir, { recursive: true, force: true });

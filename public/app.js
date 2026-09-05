@@ -651,6 +651,7 @@ async function loadAll() {
   state.spending = spending;
   state.investments = investments;
   state.retirement = retirement;
+  applyTheme(dashboard.appearance?.theme || 'light', false);
   renderDashboard();
   renderSpending(spending);
   renderInvestments(investments);
@@ -709,7 +710,17 @@ $$('[data-view]').forEach((button) => button.addEventListener('click', () => set
 $('#profileButton').addEventListener('click', () => setView('profile'));
 $('#profileBack').addEventListener('click', () => setView(state.returnView || 'overview'));
 applyTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light', false);
-$('#themeToggle').addEventListener('change', (event) => applyTheme(event.target.checked ? 'dark' : 'light'));
+$('#themeToggle').addEventListener('change', async (event) => {
+  const theme = event.target.checked ? 'dark' : 'light';
+  applyTheme(theme);
+  if (state.demoPreview) return;
+  try {
+    const appearance = await api('/api/settings/appearance', { method: 'PATCH', body: JSON.stringify({ theme }) });
+    state.dashboard.appearance = appearance;
+  } catch {
+    showNotice('Your appearance preference will stay on this device, but could not be saved to your profile.');
+  }
+});
 $('#demoToggle').addEventListener('click', async () => {
   if (state.demoPreview) { showNotice('You are already viewing the demo. Sign in to save changes or connect accounts.'); return; }
   const button = $('#demoToggle');

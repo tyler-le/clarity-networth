@@ -398,7 +398,8 @@ app.get('/api/dashboard', (req, res) => {
     snapshots,
     items: visibleStore.items.map(publicItem),
     plaidConfigured: plaidConfigured(),
-    demoMode: Boolean(store.settings?.demo_mode) || visibleStore.accounts.some((a) => a.demo)
+    demoMode: Boolean(store.settings?.demo_mode) || visibleStore.accounts.some((a) => a.demo),
+    appearance: store.settings?.appearance || { theme: 'light' }
   });
 });
 
@@ -431,6 +432,15 @@ app.patch('/api/settings/retirement', (req, res) => {
   saveStore(req.user, store);
   const visibleStore = activeStore(store);
   res.json(calculateFire(visibleStore, summarizeRange(visibleStore).netWorth));
+});
+
+app.patch('/api/settings/appearance', (req, res) => {
+  const theme = String(req.body?.theme || '');
+  if (!['light', 'dark'].includes(theme)) return res.status(400).json({ error: 'Appearance must be light or dark.' });
+  const store = loadStore(req.user);
+  store.settings.appearance = { theme };
+  saveStore(req.user, store);
+  res.json(store.settings.appearance);
 });
 
 app.patch('/api/transactions/:id/category', (req, res) => {

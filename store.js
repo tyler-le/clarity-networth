@@ -36,7 +36,8 @@ const emptyStore = () => ({
       lean_multiplier: 70,
       fat_multiplier: 150
     },
-    demo_mode: false
+    demo_mode: false,
+    appearance: { theme: 'light' }
   }
 });
 
@@ -54,7 +55,8 @@ export function readStore(userKey) {
         ...defaults.settings,
         ...(parsed.settings || {}),
         targets: { ...defaults.settings.targets, ...(parsed.settings?.targets || {}) },
-        fire: { ...defaults.settings.fire, ...(parsed.settings?.fire || {}) }
+        fire: { ...defaults.settings.fire, ...(parsed.settings?.fire || {}) },
+        appearance: { ...defaults.settings.appearance, ...(parsed.settings?.appearance || {}) }
       }
     };
   } catch {
