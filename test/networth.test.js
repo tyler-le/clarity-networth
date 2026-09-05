@@ -114,7 +114,7 @@ test('investment summary separates portfolio total, allocation, and positions', 
   const store = {
     accounts: [{ id: 'ira', plaid_account_id: 'plaid-ira', name: 'Roth IRA', institution_name: 'Fidelity', type: 'investment', current_balance: 10000 }],
     positions: [
-      { account_id: 'plaid-ira', name: 'US Equity Fund', ticker: 'VTI', type: 'etf', value: 7000, cost_basis: 6300, quantity: 20 },
+      { account_id: 'plaid-ira', name: 'US Equity Fund', ticker: 'VTI', type: 'etf', value: 7000, cost_basis: 6300, quantity: 20, asset_class_override: 'Equities' },
       { account_id: 'plaid-ira', name: 'Money market', ticker: 'SPAXX', type: 'cash', value: 2500, quantity: 2500 }
     ]
   };
@@ -123,7 +123,7 @@ test('investment summary separates portfolio total, allocation, and positions', 
   assert.equal(result.positionsAvailable, true);
   assert.equal(result.positions[0].gain, 700);
   assert.equal(result.positions[0].gain_pct, 700 / 6300);
-  assert.deepEqual(result.allocation.map((row) => [row.name, row.value]), [['Funds', 7000], ['Cash', 2500], ['Cash & unclassified', 500]]);
+  assert.deepEqual(result.allocation.map((row) => [row.name, row.value]), [['Equities', 7000], ['Cash', 2500], ['Cash & unclassified', 500]]);
 });
 
 test('demo mode provides seven years of usable account and spending history', () => {

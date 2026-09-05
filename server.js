@@ -149,11 +149,12 @@ async function refreshAccountsForItem(store, item) {
       store.positions = (store.positions || []).filter((position) => position.item_id !== item.id);
       for (const holding of holdingsData.holdings || []) {
         const security = securities.get(holding.security_id) || {};
+        const id = `${item.id}:${holding.account_id}:${holding.security_id}`;
         store.positions.push({
-          id: `${item.id}:${holding.account_id}:${holding.security_id}`,
+          id,
           item_id: item.id, account_id: holding.account_id, security_id: holding.security_id,
           name: security.name || holding.security_id, ticker: security.ticker_symbol || null,
-          type: security.type || 'other', quantity: Number(holding.quantity || 0),
+          type: security.type || 'other', asset_class_override: store.position_overrides?.[id] || null, quantity: Number(holding.quantity || 0),
           price: Number(holding.institution_price || 0), value: Number(holding.institution_value || 0),
           cost_basis: holding.cost_basis == null ? null : Number(holding.cost_basis), updated_at: new Date().toISOString(), demo: false
         });
@@ -364,6 +365,21 @@ app.patch('/api/accounts/:id/nickname', (req, res) => {
   res.json({ ok: true, nickname: account.nickname });
 });
 
+app.patch('/api/positions/:id/asset-class', (req, res) => {
+  const assetClass = String(req.body?.asset_class || '').trim();
+  const allowed = new Set(['', 'Equities', 'Funds', 'Fixed income', 'Cash', 'Crypto', 'Other']);
+  if (!allowed.has(assetClass)) return res.status(400).json({ error: 'Invalid asset class.' });
+  const store = loadStore(req.user);
+  const position = (store.positions || []).find((record) => record.id === req.params.id && !record.demo);
+  if (!position) return res.status(404).json({ error: 'Holding not found.' });
+  store.position_overrides ||= {};
+  if (assetClass) store.position_overrides[position.id] = assetClass;
+  else delete store.position_overrides[position.id];
+  position.asset_class_override = assetClass || null;
+  saveStore(req.user, store);
+  res.json({ ok: true, asset_class_override: position.asset_class_override });
+});
+
 app.post('/api/demo-mode', (req, res) => {
   const store = loadStore(req.user);
   store.settings.demo_mode = Boolean(req.body?.enabled);
@@ -378,6 +394,7 @@ app.delete('/api/items/:id', (req, res) => {
   store.items = store.items.filter((candidate) => candidate.id !== item.id);
   store.accounts = store.accounts.filter((account) => account.item_id !== item.id);
   store.positions = (store.positions || []).filter((position) => position.item_id !== item.id);
+  for (const key of Object.keys(store.position_overrides || {})) if (key.startsWith(`${item.id}:`)) delete store.position_overrides[key];
   store.transactions = store.transactions.filter((transaction) => transaction.item_id !== item.id);
   snapshotNetWorth(store);
   saveStore(req.user, store);

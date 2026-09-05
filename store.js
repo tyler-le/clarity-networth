@@ -20,6 +20,7 @@ const emptyStore = () => ({
   items: [],
   accounts: [],
   positions: [],
+  position_overrides: {},
   investment_snapshots: [],
   transactions: [],
   snapshots: [],

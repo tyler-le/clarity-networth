@@ -46,7 +46,8 @@ export function accountSide(type) {
   return 'asset';
 }
 
-function assetClass(type) {
+function assetClass(type, override = null) {
+  if (override) return override;
   const value = String(type || '').toLowerCase();
   if (value === 'equity') return 'Equities';
   if (value === 'etf' || value === 'mutual fund') return 'Funds';
@@ -64,7 +65,7 @@ export function investmentSummary(store) {
   const holdingsValue = positions.reduce((sum, position) => sum + Math.abs(Number(position.value || 0)), 0);
   const allocation = new Map();
   for (const position of positions) {
-    const name = assetClass(position.type);
+    const name = assetClass(position.type, position.asset_class_override);
     allocation.set(name, (allocation.get(name) || 0) + Math.abs(Number(position.value || 0)));
   }
   const remaining = Math.max(0, total - holdingsValue);

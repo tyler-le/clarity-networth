@@ -419,14 +419,15 @@ function renderInvestments(data) {
   }
   $('#investmentAccounts').innerHTML = accounts.length ? accounts.map((account) => `<div class="investment-account-row"><div><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || '')}</span></div><b>${fmt.format(account.value)}</b></div>`).join('') : '<p class="spending-empty">No investment accounts connected.</p>';
   const names = new Map(accounts.map((account) => [account.account_id, account.name]));
-  let positions = (data.positions || []).filter((position) => state.investmentFilter === 'all' || assetClassLabel(position.type) === state.investmentFilter);
-  positions = [...positions].sort((a, b) => state.investmentSort === 'performance' ? Number(b.gain_pct ?? -Infinity) - Number(a.gain_pct ?? -Infinity) : state.investmentSort === 'equity' ? assetClassLabel(a.type).localeCompare(assetClassLabel(b.type)) || Number(b.value) - Number(a.value) : Number(b.value) - Number(a.value));
+  let positions = (data.positions || []).filter((position) => state.investmentFilter === 'all' || assetClassLabel(position.type, position.asset_class_override) === state.investmentFilter);
+  positions = [...positions].sort((a, b) => state.investmentSort === 'performance' ? Number(b.gain_pct ?? -Infinity) - Number(a.gain_pct ?? -Infinity) : state.investmentSort === 'equity' ? assetClassLabel(a.type, a.asset_class_override).localeCompare(assetClassLabel(b.type, b.asset_class_override)) || Number(b.value) - Number(a.value) : Number(b.value) - Number(a.value));
   $('#investmentSort').value = state.investmentSort;
   $('#investmentPositionCount').textContent = data.positionsAvailable ? `${positions.length} holding${positions.length === 1 ? '' : 's'}` : 'Not available';
-  $('#investmentPositions').innerHTML = data.positionsAvailable ? positions.map((position) => { const gain = position.gain_pct; const performance = gain == null ? 'Performance unavailable' : `${gain >= 0 ? '+' : '−'}${Math.abs(gain * 100).toFixed(1)}%`; return `<div class="position-row"><div class="position-symbol">${escapeHtml(position.ticker || '•')}</div><div><strong>${escapeHtml(position.name)}</strong><span>${escapeHtml(assetClassLabel(position.type))} · ${escapeHtml(names.get(position.account_id) || 'Investment account')}</span></div><div class="position-value"><b>${fmt.format(position.value)}</b><small class="${gain == null ? '' : gain >= 0 ? 'positive' : 'negative'}">${performance}</small></div></div>`; }).join('') : '<p class="positions-empty">Position details aren’t available from this connection yet. Your investment account balances still count toward your portfolio and net worth.</p>';
+  $('#investmentPositions').innerHTML = data.positionsAvailable ? positions.map((position) => { const gain = position.gain_pct; const performance = gain == null ? 'Performance unavailable' : `${gain >= 0 ? '+' : '−'}${Math.abs(gain * 100).toFixed(1)}%`; const classification = assetClassLabel(position.type, position.asset_class_override); return `<div class="position-row"><div class="position-symbol">${escapeHtml(position.ticker || '•')}</div><div><strong>${escapeHtml(position.name)}</strong><span>${escapeHtml(classification)} · ${escapeHtml(names.get(position.account_id) || 'Investment account')}</span><select class="position-class-select" data-position-class="${escapeHtml(position.id)}" aria-label="Asset class for ${escapeHtml(position.name)}"><option value="" ${position.asset_class_override ? '' : 'selected'}>Automatic · ${escapeHtml(assetClassLabel(position.type))}</option>${['Equities', 'Funds', 'Fixed income', 'Cash', 'Crypto', 'Other'].map((option) => `<option value="${option}" ${position.asset_class_override === option ? 'selected' : ''}>${option}</option>`).join('')}</select></div><div class="position-value"><b>${fmt.format(position.value)}</b><small class="${gain == null ? '' : gain >= 0 ? 'positive' : 'negative'}">${performance}</small></div></div>`; }).join('') : '<p class="positions-empty">Position details aren’t available from this connection yet. Your investment account balances still count toward your portfolio and net worth.</p>';
 }
 
-function assetClassLabel(type) {
+function assetClassLabel(type, override = null) {
+  if (override) return override;
   const value = String(type || '').toLowerCase();
   if (value === 'equity') return 'Equities';
   if (value === 'etf' || value === 'mutual fund') return 'Funds';
@@ -620,6 +621,17 @@ $('#investmentAllocation').addEventListener('click', (event) => {
 $('#investmentSort').addEventListener('change', (event) => {
   state.investmentSort = event.target.value;
   renderInvestments(state.investments);
+});
+$('#investmentPositions').addEventListener('change', async (event) => {
+  const select = event.target.closest('[data-position-class]');
+  if (!select) return;
+  select.disabled = true;
+  try {
+    await api(`/api/positions/${encodeURIComponent(select.dataset.positionClass)}/asset-class`, { method: 'PATCH', body: JSON.stringify({ asset_class: select.value }) });
+    state.investments = await api('/api/investments');
+    renderInvestments(state.investments);
+    showNotice(select.value ? 'Holding classification updated.' : 'Using the institution classification.', 'success');
+  } catch (error) { showNotice(error.message); select.disabled = false; }
 });
 
 function showAuthenticatedApp() {
