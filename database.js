@@ -83,6 +83,30 @@ export async function writeDatabaseStore(userKey, payload) {
   return importLegacyStore(userKey, payload, new Date());
 }
 
+export async function recordAuditEvent(userKey, eventType) {
+  if (!/^[a-f0-9]{64}$/.test(userKey)) throw new Error('Invalid user storage key.');
+  await getPool().query(
+    'INSERT INTO audit_events (id, user_key, event_type) VALUES ($1, $2, $3)',
+    [crypto.randomUUID(), userKey, eventType]
+  );
+}
+
+export async function deleteDatabaseStore(userKey) {
+  if (!/^[a-f0-9]{64}$/.test(userKey)) throw new Error('Invalid user storage key.');
+  const client = await getPool().connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM financial_stores WHERE user_key = $1', [userKey]);
+    await client.query('INSERT INTO audit_events (id, user_key, event_type) VALUES ($1, $2, $3)', [crypto.randomUUID(), userKey, 'account_deleted']);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function closeDatabase() {
   if (pool) await pool.end();
   pool = undefined;

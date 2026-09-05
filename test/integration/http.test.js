@@ -64,6 +64,8 @@ integrationTest('protects personal financial endpoints without a session', async
     ['get', '/api/spending?range=1y'],
     ['get', '/api/investments'],
     ['get', '/api/retirement'],
+    ['get', '/api/data-export'],
+    ['delete', '/api/account'],
     ['post', '/api/sync']
   ]) {
     const response = await request(app)[method](pathname).send({});

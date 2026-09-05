@@ -5,8 +5,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { OAuth2Client } from 'google-auth-library';
 import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
-import { hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './store.js';
-import { databaseEnabled, migrateDatabase, readDatabaseStore, writeDatabaseStore } from './database.js';
+import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './store.js';
+import { databaseEnabled, deleteDatabaseStore, migrateDatabase, readDatabaseStore, recordAuditEvent, writeDatabaseStore } from './database.js';
 import { calculateFire, classifyTransaction, hideDuplicateAccounts, investmentSummary, reconstructInvestmentHistory, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
 import { loadHistoricalPrices } from './market-data.js';
 import { plaidConfigured, plaidPost } from './plaid.js';
@@ -499,6 +499,32 @@ app.patch('/api/settings/appearance', async (req, res) => {
   store.settings.appearance = { theme };
   await saveStore(req.user, store);
   res.json(store.settings.appearance);
+});
+
+app.get('/api/data-export', async (req, res) => {
+  const store = await loadStore(req.user);
+  // Connection tokens and sync cursors are service credentials, not portable
+  // user data. They are intentionally excluded from an export.
+  const exportStore = {
+    ...store,
+    items: store.items.map(({ access_token_enc, cursor, ...item }) => item)
+  };
+  await recordAuditEvent(req.user.storageKey, 'data_exported');
+  res.setHeader('Content-Disposition', 'attachment; filename="clarity-financial-data.json"');
+  res.json({ schemaVersion: 1, exportedAt: new Date().toISOString(), data: exportStore });
+});
+
+app.delete('/api/account', async (req, res) => {
+  if (String(req.body?.confirmation || '') !== 'DELETE') return res.status(400).json({ error: 'Enter DELETE to permanently remove your data.' });
+  const store = await loadStore(req.user);
+  for (const item of store.items.filter((item) => !item.demo && item.access_token_enc)) {
+    try { await plaidPost('/item/remove', { access_token: decrypt(item.access_token_enc) }); }
+    catch (error) { console.warn('Plaid connection revocation skipped:', error.message); }
+  }
+  await deleteDatabaseStore(req.user.storageKey);
+  deleteStore(req.user.storageKey);
+  res.clearCookie('clarity_session', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path: '/' });
+  res.json({ ok: true });
 });
 
 app.patch('/api/transactions/:id/category', async (req, res) => {

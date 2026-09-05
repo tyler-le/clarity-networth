@@ -107,6 +107,11 @@ export function resetStore(userKey) {
   writeStore(emptyStore(), userKey);
 }
 
+export function deleteStore(userKey) {
+  const currentStorePath = storePath(userKey);
+  if (fs.existsSync(currentStorePath)) fs.rmSync(currentStorePath);
+}
+
 export function userStorageKey(email) {
   return crypto.createHash('sha256').update(String(email).trim().toLowerCase()).digest('hex');
 }

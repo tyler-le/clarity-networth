@@ -732,6 +732,41 @@ $('#demoToggle').addEventListener('click', async () => {
   } catch (error) { showNotice(error.message); }
   finally { button.disabled = false; }
 });
+$('#exportDataButton').addEventListener('click', async () => {
+  if (state.demoPreview) { showNotice('Sign in to export your own data.'); return; }
+  const button = $('#exportDataButton');
+  button.disabled = true;
+  try {
+    const response = await fetch('/api/data-export', { credentials: 'same-origin' });
+    if (!response.ok) throw new Error((await response.json()).error || 'Could not export your data.');
+    const blob = await response.blob();
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'clarity-financial-data.json';
+    link.click();
+    URL.revokeObjectURL(link.href);
+    showNotice('Your data download is ready.', 'success');
+  } catch (error) { showNotice(error.message); }
+  finally { button.disabled = false; }
+});
+$('#deleteAccountButton').addEventListener('click', async () => {
+  if (state.demoPreview) { showNotice('Demo data is not saved to an account.'); return; }
+  if (!window.confirm('Permanently delete your connected financial data? This cannot be undone.')) return;
+  const confirmation = window.prompt('Type DELETE to permanently remove your account and data.');
+  if (confirmation !== 'DELETE') { showNotice('Account deletion was cancelled.'); return; }
+  const button = $('#deleteAccountButton');
+  button.disabled = true;
+  try {
+    await api('/api/account', { method: 'DELETE', body: JSON.stringify({ confirmation }) });
+    state.dashboard = null;
+    $('#appShell').classList.add('hidden');
+    $('#authScreen').classList.remove('hidden');
+    $('#googleSignIn').innerHTML = '';
+    $('#authMessage').textContent = 'Your account and saved financial data have been deleted.';
+    await startGoogleSignIn();
+  } catch (error) { showNotice(error.message); }
+  finally { button.disabled = false; }
+});
 $('#connectButton').addEventListener('click', connectPlaid);
 $$('[data-sync-accounts]').forEach((button) => button.addEventListener('click', syncAccounts));
 $('#retirementForm').addEventListener('submit', async (event) => {
