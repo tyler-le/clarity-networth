@@ -90,7 +90,9 @@ export function removeDemoData(store) {
 }
 
 function encryptionKey() {
-  const raw = process.env.ENCRYPTION_KEY || 'development-only-key-change-me';
+  // ENCRYPTION_KEY remains a temporary migration fallback for existing stores.
+  // Production must use a distinct DATA_ENCRYPTION_KEY and SESSION_SECRET.
+  const raw = process.env.DATA_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY || 'development-only-key-change-me';
   return crypto.createHash('sha256').update(raw).digest();
 }
 

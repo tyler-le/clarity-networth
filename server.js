@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { OAuth2Client } from 'google-auth-library';
+import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { hasLegacyStore, listUserStorageKeys, readStore, userStorageKey, writeStore, encrypt, decrypt, resetStore, removeDemoData } from './store.js';
 import { calculateFire, classifyTransaction, hideDuplicateAccounts, investmentSummary, reconstructInvestmentHistory, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
 import { loadHistoricalPrices } from './market-data.js';
@@ -14,16 +15,54 @@ const app = express();
 const port = Number(process.env.PORT || 3000);
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const loginAttempts = new Map();
-const sessionSecret = crypto.createHash('sha256').update(process.env.ENCRYPTION_KEY || 'development-only-key-change-me').digest();
+const isProduction = process.env.NODE_ENV === 'production';
+const dataEncryptionSecret = process.env.DATA_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY || '';
+const sessionSecretValue = process.env.SESSION_SECRET || (!isProduction ? dataEncryptionSecret || 'development-only-key-change-me' : '');
+const sessionSecret = crypto.createHash('sha256').update(sessionSecretValue || crypto.randomBytes(32)).digest();
 const allowedEmails = new Set(String(process.env.ALLOWED_EMAILS || '').split(',').map((email) => email.trim().toLowerCase()).filter(Boolean));
 
+const productionSecurityErrors = [
+  !dataEncryptionSecret || dataEncryptionSecret === 'development-only-key-change-me' ? 'DATA_ENCRYPTION_KEY is required.' : null,
+  !process.env.SESSION_SECRET ? 'SESSION_SECRET is required and must differ from DATA_ENCRYPTION_KEY.' : null,
+  process.env.SESSION_SECRET && process.env.SESSION_SECRET === dataEncryptionSecret ? 'SESSION_SECRET must differ from DATA_ENCRYPTION_KEY.' : null,
+  String(process.env.DEMO_MODE || 'true').toLowerCase() !== 'false' ? 'DEMO_MODE must be false.' : null,
+  !process.env.DATA_DIR ? 'DATA_DIR must point to persistent storage.' : null
+].filter(Boolean);
+
+function securityReady() {
+  return !isProduction || productionSecurityErrors.length === 0;
+}
+
+function createRateLimiter({ limit, windowMs, key = (req) => req.ip || req.socket.remoteAddress || 'unknown' }) {
+  const buckets = new Map();
+  return (req, res, next) => {
+    const now = Date.now();
+    const bucketKey = key(req);
+    const entries = (buckets.get(bucketKey) || []).filter((time) => time > now - windowMs);
+    if (entries.length >= limit) {
+      res.setHeader('Retry-After', Math.ceil(windowMs / 1000));
+      return res.status(429).json({ error: 'Too many requests. Please try again shortly.' });
+    }
+    entries.push(now);
+    buckets.set(bucketKey, entries);
+    next();
+  };
+}
+
+const demoLimiter = createRateLimiter({ limit: 60, windowMs: 60_000 });
+const authLimiter = createRateLimiter({ limit: 20, windowMs: 10 * 60_000 });
+const privateLimiter = createRateLimiter({ limit: 240, windowMs: 60_000, key: (req) => req.user?.storageKey || req.ip || 'unknown' });
+const syncLimiter = createRateLimiter({ limit: 8, windowMs: 10 * 60_000, key: (req) => req.user?.storageKey || req.ip || 'unknown' });
+
 app.set('trust proxy', 1);
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '1mb', verify: (req, _res, buffer) => { req.rawBody = Buffer.from(buffer); } }));
 app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'same-origin');
   res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' https://cdn.plaid.com https://accounts.google.com; frame-src https://cdn.plaid.com https://accounts.google.com; connect-src 'self' https://accounts.google.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' https://cdn.plaid.com https://accounts.google.com; frame-src https://cdn.plaid.com https://accounts.google.com; connect-src 'self' https://accounts.google.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
+  if (isProduction) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   next();
 });
 app.use(express.static(path.join(__dirname, 'public')));
@@ -100,7 +139,7 @@ function setSession(res, user) {
 }
 
 function authConfigured() {
-  return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.ENCRYPTION_KEY && process.env.ENCRYPTION_KEY !== 'development-only-key-change-me');
+  return Boolean(securityReady() && process.env.GOOGLE_CLIENT_ID && dataEncryptionSecret && dataEncryptionSecret !== 'development-only-key-change-me');
 }
 
 function publicUser(user) {
@@ -309,7 +348,7 @@ async function hydrateInstitutionBrand(item) {
 }
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, plaidConfigured: plaidConfigured(), environment: process.env.PLAID_ENV || 'sandbox' });
+  res.status(securityReady() ? 200 : 503).json({ ok: securityReady(), plaidConfigured: plaidConfigured(), environment: process.env.PLAID_ENV || 'sandbox', securityReady: securityReady() });
 });
 
 app.get('/api/auth/config', (_req, res) => {
@@ -322,7 +361,7 @@ app.get('/api/auth/me', (req, res) => {
   res.json({ user: publicUser(user) });
 });
 
-app.post('/api/auth/google', async (req, res) => {
+app.post('/api/auth/google', authLimiter, async (req, res) => {
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
   const attempts = loginAttempts.get(ip) || [];
   const recent = attempts.filter((time) => time > Date.now() - 10 * 60 * 1000);
@@ -351,7 +390,7 @@ app.post('/api/auth/logout', (_req, res) => {
 
 // A seeded store is created in memory for the public preview; it never reads
 // from or writes to a person's authenticated financial data.
-app.get('/api/demo-preview', (req, res) => {
+app.get('/api/demo-preview', demoLimiter, (req, res) => {
   const store = demoPreviewStore();
   const range = ['1m', '3m', 'ytd', '1y'].includes(req.query.range) ? req.query.range : '1m';
   res.json({
@@ -373,11 +412,18 @@ app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/auth/') || req.path === '/health' || req.path === '/plaid/webhook') return next();
   const user = verifySession(req);
   if (!user) return res.status(401).json({ error: 'Sign in required.' });
+  if (!securityReady()) return res.status(503).json({ error: 'The service is not securely configured.' });
   if (['POST', 'PATCH', 'DELETE'].includes(req.method) && req.headers.origin) {
     const expectedOrigin = `${req.protocol}://${req.get('host')}`;
     if (req.headers.origin !== expectedOrigin) return res.status(403).json({ error: 'Invalid request origin.' });
   }
   req.user = user;
+  privateLimiter(req, res, next);
+});
+
+app.use('/api', (req, res, next) => {
+  if (req.path.startsWith('/auth/') || req.path === '/health' || req.path === '/plaid/webhook' || !req.user) return next();
+  res.setHeader('Cache-Control', 'no-store');
   next();
 });
 
@@ -557,7 +603,7 @@ app.post('/api/plaid/exchange_public_token', async (req, res) => {
   }
 });
 
-app.post('/api/sync', async (_req, res) => {
+app.post('/api/sync', syncLimiter, async (_req, res) => {
   const store = loadStore(_req.user);
   const results = [];
   for (const item of store.items.filter((i) => !i.demo)) {
@@ -579,7 +625,27 @@ app.post('/api/sync', async (_req, res) => {
   res.json({ ok: results.every((r) => r.ok), results });
 });
 
+async function verifyPlaidWebhook(req) {
+  const token = req.get('Plaid-Verification');
+  if (!token || !req.rawBody?.length) return false;
+  try {
+    const header = decodeProtectedHeader(token);
+    if (header.alg !== 'ES256' || typeof header.kid !== 'string') return false;
+    const verification = await plaidPost('/webhook_verification_key/get', { key_id: header.kid });
+    const key = await importJWK(verification.key, 'ES256');
+    const { payload } = await jwtVerify(token, key, { algorithms: ['ES256'], clockTolerance: '30s' });
+    const expectedHash = crypto.createHash('sha256').update(req.rawBody).digest('hex');
+    return typeof payload.request_body_sha256 === 'string'
+      && payload.request_body_sha256.length === expectedHash.length
+      && crypto.timingSafeEqual(Buffer.from(payload.request_body_sha256), Buffer.from(expectedHash));
+  } catch (error) {
+    console.warn('Rejected Plaid webhook:', error.message);
+    return false;
+  }
+}
+
 app.post('/api/plaid/webhook', async (req, res) => {
+  if (!await verifyPlaidWebhook(req)) return res.sendStatus(401);
   res.sendStatus(200);
   const itemId = req.body?.item_id;
   if (!itemId) return;

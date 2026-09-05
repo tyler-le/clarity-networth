@@ -35,6 +35,7 @@ integrationTest('serves the app shell with defensive browser headers', async () 
   assert.match(response.text, /Explore the demo/);
   assert.match(response.headers['content-security-policy'], /default-src 'self'/);
   assert.equal(response.headers['x-frame-options'], 'DENY');
+  assert.match(response.headers['permissions-policy'], /camera=\(\)/);
 });
 
 integrationTest('serves a complete public demo without a session', async () => {
@@ -77,4 +78,9 @@ integrationTest('does not expose sign-in configuration secrets', async () => {
   assert.deepEqual(Object.keys(response.body).sort(), ['configured', 'googleClientId']);
   assert.equal(response.body.configured, false);
   assert.equal(response.body.googleClientId, null);
+});
+
+integrationTest('rejects unsigned Plaid webhooks before processing financial data', async () => {
+  const response = await request(app).post('/api/plaid/webhook').send({ item_id: 'untrusted-item' });
+  assert.equal(response.status, 401);
 });
