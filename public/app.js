@@ -366,8 +366,7 @@ function renderSpending(data) {
   $('#spendingSummary').innerHTML = `<span class="income-flow"><i class="income"></i>Income <strong>${fmt.format(income)}</strong></span><span class="spend-flow"><i class="spend"></i>Money out <strong>${fmt.format(total)}</strong></span>`;
   const rangeLabel = ({ '1m': 'this month', '3m': 'over the last 3 months', ytd: 'year to date', '1y': 'over the last year' })[data.range] || 'this month';
   const selectedMonthLabel = state.spendingMonth && new Date(`${state.spendingMonth}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  const largest = (selected.categories || [])[0];
-  $('#spendingContext').textContent = total || income ? (largest ? `Largest outflow · ${largest.name} ${fmt.format(largest.amount)}` : `Cash flow ${selectedMonthLabel ? `in ${selectedMonthLabel}` : rangeLabel}`) : `No posted cash flow ${selectedMonthLabel || rangeLabel}. It can take a little time to arrive after connecting.`;
+  $('#spendingContext').textContent = total || income ? (selectedMonthLabel || ({ '1m': 'This month', '3m': 'Last 3 months', ytd: 'Year to date', '1y': 'Last year' })[data.range] || rangeLabel) : `No posted cash flow ${selectedMonthLabel || rangeLabel}. It can take a little time to arrive after connecting.`;
   renderCashFlowSankey(selected);
   // The Sankey now owns the category story; the older donut is intentionally
   // absent from the simplified cash-flow experience.
