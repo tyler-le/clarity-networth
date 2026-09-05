@@ -18,6 +18,7 @@ const state = {
   investmentRange: '1y',
   investmentFilter: 'all',
   investmentSort: 'value',
+  holdingsExpanded: false,
   view: 'overview',
   demoPreview: false
 };
@@ -475,8 +476,19 @@ function renderInvestments(data) {
   let positions = (data.positions || []).filter((position) => state.investmentFilter === 'all' || assetClassLabel(position.type, position.asset_class_override) === state.investmentFilter);
   positions = [...positions].sort((a, b) => state.investmentSort === 'performance' ? Number(b.gain_pct ?? -Infinity) - Number(a.gain_pct ?? -Infinity) : state.investmentSort === 'equity' ? assetClassLabel(a.type, a.asset_class_override).localeCompare(assetClassLabel(b.type, b.asset_class_override)) || Number(b.value) - Number(a.value) : Number(b.value) - Number(a.value));
   $('#investmentSort').value = state.investmentSort;
-  $('#investmentPositionCount').textContent = data.positionsAvailable ? `${positions.length} holding${positions.length === 1 ? '' : 's'}` : 'Not available';
-  $('#investmentPositions').innerHTML = data.positionsAvailable ? positions.map((position) => { const gain = position.gain_pct; const performance = gain == null ? 'Performance unavailable' : `${gain >= 0 ? '+' : '−'}${Math.abs(gain * 100).toFixed(1)}%`; const classification = assetClassLabel(position.type, position.asset_class_override); return `<div class="position-row"><div class="position-symbol">${escapeHtml(position.ticker || '•')}</div><div><strong>${escapeHtml(position.name)}</strong><span>${escapeHtml(classification)} · ${escapeHtml(names.get(position.account_id) || 'Investment account')}</span><select class="position-class-select" data-position-class="${escapeHtml(position.id)}" aria-label="Asset class for ${escapeHtml(position.name)}"><option value="" ${position.asset_class_override ? '' : 'selected'}>Automatic · ${escapeHtml(assetClassLabel(position.type))}</option>${['Equities', 'Funds', 'Fixed income', 'Cash', 'Crypto', 'Other'].map((option) => `<option value="${option}" ${position.asset_class_override === option ? 'selected' : ''}>${option}</option>`).join('')}</select></div><div class="position-value"><b>${fmt.format(position.value)}</b><small class="${gain == null ? '' : gain >= 0 ? 'positive' : 'negative'}">${performance}</small></div></div>`; }).join('') : '<p class="positions-empty">Position details aren’t available from this connection yet. Your investment account balances still count toward your portfolio and net worth.</p>';
+  $('#investmentHoldingsInsight').textContent = data.positionsAvailable ? `${positions.length} holding${positions.length === 1 ? '' : 's'}${state.investmentFilter === 'all' ? '' : ` · ${state.investmentFilter}`}` : 'Holdings appear when your institution provides them.';
+  const visiblePositions = state.holdingsExpanded ? positions : positions.slice(0, 3);
+  $('#investmentPositions').innerHTML = data.positionsAvailable ? visiblePositions.map((position) => {
+    const gain = position.gain_pct;
+    const performance = gain == null ? 'Performance unavailable' : `${gain >= 0 ? '+' : '−'}${Math.abs(gain * 100).toFixed(1)}%`;
+    const classification = assetClassLabel(position.type, position.asset_class_override);
+    const canEdit = !state.demoPreview && !state.dashboard?.demoMode;
+    const categoryControl = canEdit ? `<label>Asset type<select data-position-class="${escapeHtml(position.id)}" aria-label="Asset class for ${escapeHtml(position.name)}"><option value="" ${position.asset_class_override ? '' : 'selected'}>Automatic · ${escapeHtml(assetClassLabel(position.type))}</option>${['Equities', 'Funds', 'Fixed income', 'Cash', 'Crypto', 'Other'].map((option) => `<option value="${option}" ${position.asset_class_override === option ? 'selected' : ''}>${option}</option>`).join('')}</select></label>` : `<span>Asset type · ${escapeHtml(classification)}</span>`;
+    return `<details class="holding-row"><summary><div class="position-symbol">${escapeHtml(position.ticker || '•')}</div><div class="holding-copy"><strong>${escapeHtml(position.name)}</strong><span>${escapeHtml(classification)} · ${escapeHtml(names.get(position.account_id) || 'Investment account')}</span></div><div class="position-value"><b>${fmt.format(position.value)}</b><small class="${gain == null ? '' : gain >= 0 ? 'positive' : 'negative'}">${performance}</small></div></summary><div class="holding-detail">${categoryControl}</div></details>`;
+  }).join('') : '<p class="positions-empty">Position details aren’t available from this connection yet. Your investment account balances still count toward your portfolio and net worth.</p>';
+  const more = $('#investmentHoldingsMore');
+  more.classList.toggle('hidden', positions.length <= 3);
+  more.textContent = state.holdingsExpanded ? 'Show fewer holdings' : `View all ${positions.length} holdings`;
 }
 
 function assetClassLabel(type, override = null) {
@@ -686,7 +698,7 @@ $('#investmentDonut').addEventListener('click', (event) => {
   const selected = donutSelection(event, event.currentTarget, state.investments?.allocation || []);
   if (!selected) return;
   state.investmentFilter = selected.name;
-  $('#investmentHoldingsPanel').open = true;
+  state.holdingsExpanded = true;
   renderInvestments(state.investments);
 });
 $('#investmentDonut').addEventListener('keydown', (event) => {
@@ -696,7 +708,7 @@ $('#investmentDonut').addEventListener('keydown', (event) => {
   const selected = state.investmentFilter === 'all' ? rows[0] : rows.find((row) => row.name === state.investmentFilter);
   if (!selected) return;
   state.investmentFilter = selected.name;
-  $('#investmentHoldingsPanel').open = true;
+  state.holdingsExpanded = true;
   renderInvestments(state.investments);
 });
 $('#spendingTransactions').addEventListener('change', async (event) => {
@@ -727,11 +739,15 @@ $('#investmentAllocation').addEventListener('click', (event) => {
   const filter = event.target.closest('[data-investment-filter]')?.dataset.investmentFilter;
   if (!filter) return;
   state.investmentFilter = filter;
-  $('#investmentHoldingsPanel').open = true;
+  state.holdingsExpanded = true;
   renderInvestments(state.investments);
 });
 $('#investmentSort').addEventListener('change', (event) => {
   state.investmentSort = event.target.value;
+  renderInvestments(state.investments);
+});
+$('#investmentHoldingsMore').addEventListener('click', () => {
+  state.holdingsExpanded = !state.holdingsExpanded;
   renderInvestments(state.investments);
 });
 $('#investmentPositions').addEventListener('change', async (event) => {
