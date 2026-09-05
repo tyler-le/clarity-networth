@@ -302,6 +302,12 @@ function renderSpendingTrend(data) {
   const months = data.monthly || [];
   const max = Math.max(...months.flatMap((row) => [Number(row.amount || 0), Number(row.income || 0)]), 1);
   if (state.spendingMonth && !months.some((row) => row.month === state.spendingMonth)) state.spendingMonth = null;
+  const detail = months.find((row) => row.month === state.spendingMonth) || months.at(-1);
+  if (detail) {
+    const label = new Date(`${detail.month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const remaining = Number(detail.income || 0) - Number(detail.amount || 0);
+    $('#trendDetail').innerHTML = `<span>${state.spendingMonth ? label : `Latest · ${label}`}</span><strong><i class="income"></i>${fmt.format(detail.income || 0)}</strong><strong><i class="spend"></i>${fmt.format(detail.amount || 0)}</strong><b class="${remaining >= 0 ? 'positive' : 'negative'}">${remaining >= 0 ? 'Left' : 'Over'} ${fmt.format(Math.abs(remaining))}</b>`;
+  } else $('#trendDetail').innerHTML = '';
   $('#spendingTrend').innerHTML = months.length ? months.map((row) => `<button class="trend-column ${state.spendingMonth === row.month ? 'active' : ''}" type="button" data-spending-month="${row.month}" title="${escapeHtml(row.month)}: Income ${fmt.format(row.income || 0)} · Spent ${fmt.format(row.amount)}"><div class="trend-bars"><i class="trend-bar income" style="height:${Number(row.income || 0) ? Math.max(5, Number(row.income || 0) / max * 100) : 0}%"></i><i class="trend-bar spending" style="height:${Number(row.amount || 0) ? Math.max(5, Number(row.amount || 0) / max * 100) : 0}%"></i></div><span>${new Date(`${row.month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'short' })}</span></button>`).join('') : '<p class="spending-empty">Monthly patterns will appear once transactions arrive.</p>';
 }
 
@@ -414,9 +420,8 @@ async function connectPlaid() {
 }
 
 async function syncAccounts() {
-  const btn = $('#syncButton');
-  btn.disabled = true;
-  btn.textContent = '↻ Syncing…';
+  const buttons = $$('[data-sync-accounts]');
+  buttons.forEach((button) => { button.disabled = true; button.textContent = '↻ Syncing…'; });
   try {
     const result = await api('/api/sync', { method: 'POST', body: '{}' });
     await loadAll();
@@ -425,10 +430,7 @@ async function syncAccounts() {
     $('#syncStatus').textContent = `Last sync ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
   } catch (error) {
     showNotice(error.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '↻ Sync accounts';
-  }
+  } finally { buttons.forEach((button) => { button.disabled = false; button.textContent = '↻ Sync accounts'; }); }
 }
 
 $$('[data-view]').forEach((button) => button.addEventListener('click', () => setView(button.dataset.view)));
@@ -444,7 +446,7 @@ $('#demoToggle').addEventListener('click', async () => {
   finally { button.disabled = false; }
 });
 $('#connectButton').addEventListener('click', connectPlaid);
-$('#syncButton').addEventListener('click', syncAccounts);
+$$('[data-sync-accounts]').forEach((button) => button.addEventListener('click', syncAccounts));
 $('#accountGrid').addEventListener('click', (event) => {
   const button = event.target.closest('[data-account-rename]');
   if (!button) return;
