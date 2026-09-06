@@ -569,3 +569,19 @@ html[data-theme="dark"] .auth-halo { display: none; }
 .auth-legal a { color: inherit; text-decoration: none; }
 .auth-legal a:hover { color: var(--green); }
 .auth-legal span { margin: 0 7px; }
+
+/* Retirement is a short path, not a wall of calculator inputs. */
+.retirement-ladder-heading { margin-top: 24px; }
+.retirement-ladder-heading p { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
+.retirement-path { margin-top: 12px; }
+.retirement-milestone.complete { border-color: #c6dfcc; background: #f8fcf8; }
+.retirement-lifestyles { display: grid; gap: 16px; margin-top: 16px; padding: 21px 24px; }
+.retirement-lifestyles-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.retirement-lifestyle-paths { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
+.retirement-lifestyle { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #fafcf9; }
+.retirement-lifestyle.featured { border-color: #bcd6c2; background: #f5faf6; }
+.retirement-lifestyle span, .retirement-lifestyle small { color: var(--muted); font-size: 10px; font-weight: 650; }
+.retirement-lifestyle strong { font-size: 18px; letter-spacing: -.035em; }
+html[data-theme="dark"] .retirement-lifestyles { background: #1c1f1d; }
+html[data-theme="dark"] .retirement-milestone.complete, html[data-theme="dark"] .retirement-lifestyle, html[data-theme="dark"] .retirement-lifestyle.featured { border-color: #353936; background: #222522; }
+@media (max-width: 760px) { .retirement-lifestyles-head { align-items: flex-start; flex-direction: column; gap: 8px; }.retirement-lifestyle-paths { grid-template-columns: 1fr; } }

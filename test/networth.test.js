@@ -381,6 +381,10 @@ test('retirement presets calculate coast, lean, standard, fat, and a projected r
   assert.equal(plan.standard, 1200000);
   assert.equal(plan.lean, 840000);
   assert.equal(plan.fat, 1800000);
+  assert.equal(plan.essentialAnnualSpend, 36000);
+  assert.equal(plan.lifestyles[0].target, 900000);
+  assert.equal(plan.ladder[0].target, 9000);
+  assert.equal(plan.ladder[1].target, 18000);
   assert.ok(plan.coast < plan.standard);
   assert.ok(plan.projectedAtRetirement > 100000);
   assert.equal(plan.progress.standard, 100000 / 1200000 * 100);

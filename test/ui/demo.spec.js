@@ -253,6 +253,10 @@ test('investment timeframes keep the portfolio context in sync', async ({ page }
 test('retirement milestones explain the planning terms on demand', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'retirement');
+  await expect(page.locator('#retirementPath')).toContainText('Emergency fund');
+  await expect(page.locator('#retirementPath')).toContainText('Work-break runway');
+  await expect(page.locator('#retirementLifestylePaths')).toContainText('Essentials covered');
+  await expect(page.locator('#retirementLifestylePaths')).toContainText('Current lifestyle');
   await page.locator('[data-retirement-milestone="coast"]').click();
   await expect(page.locator('#retirementInfoDialog')).toHaveAttribute('open', '');
   await expect(page.locator('#retirementInfoTitle')).toHaveText('What is Coast FIRE?');

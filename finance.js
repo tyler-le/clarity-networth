@@ -693,9 +693,10 @@ export function annualizedLivingSpend(store) {
   });
   const observedMonths = [...new Set(trailing.map((t) => monthId(t.date)))];
   const total = trailing.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+  const essentialTotal = trailing.filter((transaction) => transaction.bucket === 'fixed').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const monthsObserved = Math.max(observedMonths.length, 1);
   const monthlyAverage = total / monthsObserved;
-  return { annualSpend: monthlyAverage * 12, monthlyAverage, monthsObserved };
+  return { annualSpend: monthlyAverage * 12, monthlyAverage, essentialAnnualSpend: essentialTotal / monthsObserved * 12, essentialMonthlySpend: essentialTotal / monthsObserved, monthsObserved };
 }
 
 function annualizedContributions(store) {
@@ -724,15 +725,21 @@ export function calculateFire(store, netWorth) {
   const fatMultiplier = Math.max(1, Number(settings.fat_multiplier || 150)) / 100;
   const spend = annualizedLivingSpend(store);
   const contributions = annualizedContributions(store);
+  const investedAssets = (store.accounts || []).filter((account) => !account.hidden && account.type === 'investment').reduce((sum, account) => sum + Math.max(0, Number(account.current_balance || 0)), 0);
+  const freedomBalance = investedAssets || Math.max(0, Number(netWorth || 0));
+  const cashBalance = (store.accounts || []).filter((account) => !account.hidden && account.type === 'depository').reduce((sum, account) => sum + Math.max(0, Number(account.current_balance || 0)), 0);
 
   const standard = spend.annualSpend > 0 ? spend.annualSpend / withdrawalRate : 0;
   const lean = standard * leanMultiplier;
   const fat = standard * fatMultiplier;
+  const essential = spend.essentialAnnualSpend > 0 ? spend.essentialAnnualSpend / withdrawalRate : lean;
   const yearsToRetirement = Math.max(0, retirementAge - age);
   const coast = standard > 0 ? standard / Math.pow(1 + realReturn, yearsToRetirement) : 0;
   const futureValueFactor = realReturn === 0 ? yearsToRetirement : (Math.pow(1 + realReturn, yearsToRetirement) - 1) / realReturn;
-  const projectedAtRetirement = Number(netWorth || 0) * Math.pow(1 + realReturn, yearsToRetirement) + contributions.annualContributions * futureValueFactor;
-  const progress = (target) => target > 0 ? Math.max(0, Number(netWorth || 0)) / target * 100 : 0;
+  const projectedAtRetirement = freedomBalance * Math.pow(1 + realReturn, yearsToRetirement) + contributions.annualContributions * futureValueFactor;
+  const progress = (target, balance = freedomBalance) => target > 0 ? Math.max(0, balance) / target * 100 : 0;
+  const emergencyFund = spend.essentialMonthlySpend * 3;
+  const runway = spend.essentialMonthlySpend * 6;
 
   return {
     age,
@@ -743,15 +750,30 @@ export function calculateFire(store, netWorth) {
     fatMultiplier: fatMultiplier * 100,
     annualSpend: spend.annualSpend,
     monthlySpend: spend.monthlyAverage,
+    essentialAnnualSpend: spend.essentialAnnualSpend,
+    essentialMonthlySpend: spend.essentialMonthlySpend,
     monthsObserved: spend.monthsObserved,
     annualContributions: contributions.annualContributions,
     contributionMonthsObserved: contributions.monthsObserved,
+    investedAssets,
+    freedomBalance,
     yearsToRetirement,
     projectedAtRetirement,
     standard,
     lean,
     coast,
     fat,
+    lifestyles: [
+      { key: 'essential', name: 'Essentials covered', target: essential, detail: 'Your fixed, everyday costs' },
+      { key: 'current', name: 'Current lifestyle', target: standard, detail: 'Your recent everyday spending' },
+      { key: 'more', name: 'More room', target: fat, detail: 'Extra flexibility and discretionary spending' }
+    ],
+    ladder: [
+      { key: 'emergency', name: 'Emergency fund', detail: '3 months of essentials', target: emergencyFund, progress: progress(emergencyFund, cashBalance), complete: cashBalance >= emergencyFund && emergencyFund > 0 },
+      { key: 'runway', name: 'Work-break runway', detail: '6 months of essentials', target: runway, progress: progress(runway, cashBalance), complete: cashBalance >= runway && runway > 0 },
+      { key: 'coast', name: 'Coast FI', detail: 'Growth could carry you to retirement', target: coast, progress: progress(coast), complete: freedomBalance >= coast && coast > 0 },
+      { key: 'standard', name: 'Financial independence', detail: 'Your current lifestyle', target: standard, progress: progress(standard), complete: freedomBalance >= standard && standard > 0 }
+    ],
     progress: {
       lean: progress(lean),
       coast: progress(coast),

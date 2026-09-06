@@ -846,16 +846,15 @@ function renderRetirement(data) {
   $('#retirementProjection').textContent = fmt.format(data.projectedAtRetirement || 0);
   $('#retirementProjectionContext').textContent = `Projected at age ${data.retirementAge} if you keep saving ${fmt.format(data.annualContributions || 0)}/yr`;
   $('#retirementAgeChip').textContent = `${data.yearsToRetirement} years to go`;
-  $('#retirementSpend').textContent = fmt.format(data.annualSpend || 0);
-  $('#retirementSpendContext').textContent = data.monthsObserved ? `Yearly lifestyle spending · based on ${data.monthsObserved} month${data.monthsObserved === 1 ? '' : 's'} of activity` : 'Connect spending accounts to personalize this baseline.';
+  $('#retirementSpendContext').textContent = data.monthsObserved ? `Based on ${data.monthsObserved} month${data.monthsObserved === 1 ? '' : 's'} of everyday spending.` : 'Connect spending accounts to personalize these paths.';
   $('#retirementAssumption').textContent = `${data.withdrawalRate}% withdrawal · ${data.realReturn}% real growth`;
-  const milestones = [
-    ['Coast', data.coast, data.progress?.coast, 'Your investments could grow to the standard goal by retirement.'],
-    ['Lean', data.lean, data.progress?.lean, 'A simpler version of your current lifestyle.'],
-    ['Standard', data.standard, data.progress?.standard, 'Your current lifestyle at retirement.'],
-    ['Fat', data.fat, data.progress?.fat, 'More room for discretionary spending.']
-  ];
-  $('#retirementPath').innerHTML = milestones.map(([name, target, progress, description], index) => `<button class="retirement-milestone ${index === 2 ? 'featured' : ''}" type="button" data-retirement-milestone="${name.toLowerCase()}" aria-label="Learn about ${escapeHtml(name)} retirement"><span>${escapeHtml(name)}</span><strong>${fmt.format(target || 0)}</strong><i><b style="width:${Math.min(100, Number(progress || 0)).toFixed(1)}%"></b></i><small>${Math.min(999, Math.round(Number(progress || 0)))}% there</small></button>`).join('');
+  $('#retirementPath').innerHTML = (data.ladder || []).map((step) => {
+    const interactive = ['coast', 'standard'].includes(step.key);
+    const tag = interactive ? 'button' : 'div';
+    const action = interactive ? ` type="button" data-retirement-milestone="${step.key}" aria-label="Learn about ${escapeHtml(step.name)}"` : '';
+    return `<${tag} class="retirement-milestone ${step.complete ? 'complete' : ''}"${action}><span>${step.complete ? '✓ ' : ''}${escapeHtml(step.name)}</span><strong>${fmt.format(step.target || 0)}</strong><i><b style="width:${Math.min(100, Number(step.progress || 0)).toFixed(1)}%"></b></i><small>${escapeHtml(step.detail)}</small></${tag}>`;
+  }).join('');
+  $('#retirementLifestylePaths').innerHTML = (data.lifestyles || []).map((path, index) => `<div class="retirement-lifestyle ${index === 1 ? 'featured' : ''}"><span>${escapeHtml(path.name)}</span><strong>${fmt.format(path.target || 0)}</strong><small>${escapeHtml(path.detail)}</small></div>`).join('');
   const form = $('#retirementForm');
   form.age.value = data.age;
   form.retirement_age.value = data.retirementAge;
