@@ -103,6 +103,33 @@ test('cash-flow diagram stays readable on mobile and expands in-app', async ({ p
   await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
 });
 
+test('cash-flow quality holds across phone, tablet, laptop, and wide desktop', async ({ page }) => {
+  const viewports = [
+    { name: 'phone', width: 390, height: 844 },
+    { name: 'tablet', width: 768, height: 1024 },
+    { name: 'laptop', width: 1280, height: 800 },
+    { name: 'wide desktop', width: 1680, height: 1000 }
+  ];
+  for (const viewport of viewports) {
+    await page.setViewportSize(viewport);
+    await openDemo(page);
+    const navigation = viewport.width < 700 ? '.mobile-nav' : '.sidebar';
+    await page.locator(`${navigation} [data-view="spending"]`).click();
+    const diagram = page.locator('#cashflowSankey');
+    await expect(diagram.locator('svg')).toBeVisible();
+    await expect(diagram).toContainText('Take-home');
+    const edgeWidths = await diagram.locator('.cashflow-flow').evaluateAll((paths) => paths.map((path) => Number(path.getAttribute('stroke-width'))));
+    expect(Math.max(...edgeWidths)).toBeLessThanOrEqual(48);
+    expect(Math.max(...edgeWidths)).toBeGreaterThan(Math.min(...edgeWidths));
+    const nodeBoxes = await diagram.locator('.cashflow-target rect:first-child').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect()));
+    expect(nodeBoxes.every((box) => box.width > 0 && box.height > 0)).toBe(true);
+    await page.locator('#cashflowExpand').click();
+    await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
+    await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
+    await page.locator('#cashflowDialogClose').click();
+  }
+});
+
 test('the income source opens income activity from the cash-flow diagram', async ({ page }) => {
   await openDemo(page);
   await page.locator('.mobile-nav [data-view="spending"]').click();
