@@ -79,6 +79,13 @@ export async function readDatabaseStore(userKey) {
   return JSON.parse(decryptPayload(encrypted));
 }
 
+// The scheduler needs opaque storage keys only; financial payloads remain
+// encrypted and are never inspected by this query.
+export async function listDatabaseStoreKeys() {
+  const result = await getPool().query('SELECT user_key FROM financial_stores');
+  return result.rows.map((row) => row.user_key);
+}
+
 export async function writeDatabaseStore(userKey, payload) {
   return importLegacyStore(userKey, payload, new Date());
 }

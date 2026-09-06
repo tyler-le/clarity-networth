@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { OAuth2Client } from 'google-auth-library';
 import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './store.js';
-import { databaseEnabled, deleteDatabaseStore, migrateDatabase, readDatabaseStore, recordAuditEvent, writeDatabaseStore } from './database.js';
+import { databaseEnabled, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, writeDatabaseStore } from './database.js';
 import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentLinkBalances, investmentSummary, reconstructInvestmentHistory, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
 import { loadHistoricalPrices } from './market-data.js';
 import { plaidConfigured, plaidPost } from './plaid.js';
@@ -21,6 +21,8 @@ const dataEncryptionSecret = process.env.DATA_ENCRYPTION_KEY || process.env.ENCR
 const sessionSecretValue = process.env.SESSION_SECRET || (!isProduction ? dataEncryptionSecret || 'development-only-key-change-me' : '');
 const sessionSecret = crypto.createHash('sha256').update(sessionSecretValue || crypto.randomBytes(32)).digest();
 const allowedEmails = new Set(String(process.env.ALLOWED_EMAILS || '').split(',').map((email) => email.trim().toLowerCase()).filter(Boolean));
+const DAILY_SYNC_INTERVAL_MS = Math.max(60 * 60 * 1000, Number(process.env.DAILY_SYNC_INTERVAL_MS) || 24 * 60 * 60 * 1000);
+const userSyncQueues = new Map();
 
 const productionSecurityErrors = [
   !dataEncryptionSecret || dataEncryptionSecret === 'development-only-key-change-me' ? 'DATA_ENCRYPTION_KEY is required.' : null,
@@ -54,7 +56,6 @@ function createRateLimiter({ limit, windowMs, key = (req) => req.ip || req.socke
 const demoLimiter = createRateLimiter({ limit: 60, windowMs: 60_000 });
 const authLimiter = createRateLimiter({ limit: 20, windowMs: 10 * 60_000 });
 const privateLimiter = createRateLimiter({ limit: 240, windowMs: 60_000, key: (req) => req.user?.storageKey || req.ip || 'unknown' });
-const syncLimiter = createRateLimiter({ limit: 8, windowMs: 10 * 60_000, key: (req) => req.user?.storageKey || req.ip || 'unknown' });
 
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '1mb', verify: (req, _res, buffer) => { req.rawBody = Buffer.from(buffer); } }));
@@ -252,6 +253,89 @@ async function refreshAccountsForItem(store, item) {
   if (types.has('credit') || types.has('loan')) {
     try { await plaidPost('/liabilities/get', { access_token }); } catch (e) { console.warn('Liabilities not available:', e.message); }
   }
+}
+
+// Keep automated refreshes serial per person. A Plaid webhook and the daily
+// refresh can otherwise read the same encrypted store concurrently and let an
+// older write overwrite a newer one.
+function queueUserSync(storageKey, task) {
+  const previous = userSyncQueues.get(storageKey) || Promise.resolve();
+  const next = previous.catch(() => undefined).then(task);
+  userSyncQueues.set(storageKey, next);
+  return next.finally(() => {
+    if (userSyncQueues.get(storageKey) === next) userSyncQueues.delete(storageKey);
+  });
+}
+
+async function syncItem(store, item) {
+  await hydrateInstitutionBrand(item);
+  await refreshAccountsForItem(store, item);
+  // Transaction availability can lag a connection or institution update.
+  // Keep a successful balance refresh instead of failing the entire item.
+  try { await syncTransactionsForItem(store, item); } catch (error) { console.warn('Transactions sync failed:', error.message); }
+  try { await syncRetirementContributionsForItem(store, item); } catch (error) { console.warn('Investment contribution sync unavailable:', error.message); }
+  item.last_synced_at = new Date().toISOString();
+}
+
+async function syncStoreItems(store) {
+  const results = [];
+  for (const item of store.items.filter((candidate) => !candidate.demo)) {
+    try {
+      await syncItem(store, item);
+      results.push({ item: item.institution_name, ok: true });
+    } catch (error) {
+      console.warn(`Account refresh failed for ${item.institution_name}:`, error.message);
+      results.push({ item: item.institution_name, ok: false });
+    }
+  }
+  hideDuplicateAccounts(store);
+  try { await backfillInvestmentHistory(store); } catch (error) { console.warn('Investment history reconstruction unavailable:', error.message); }
+  snapshotNetWorth(store);
+  snapshotInvestments(store);
+  return results;
+}
+
+async function scheduledDailySync() {
+  let storageKeys = listUserStorageKeys();
+  if (databaseEnabled()) {
+    try { storageKeys = [...new Set([...storageKeys, ...(await listDatabaseStoreKeys())])]; }
+    catch (error) { console.error('Daily sync could not enumerate secure stores:', error.message); return; }
+  }
+  for (const storageKey of storageKeys) {
+    await queueUserSync(storageKey, async () => {
+      try {
+        const persisted = databaseEnabled() ? await readDatabaseStore(storageKey) : null;
+        const store = normalizeStore(persisted || readStore(storageKey));
+        if (!store.items.some((item) => !item.demo)) return;
+        await syncStoreItems(store);
+        await saveStoreByKey(storageKey, store);
+      } catch (error) {
+        // One person's unavailable institution or store must never block the
+        // rest of the daily queue. Existing encrypted data stays intact.
+        console.error('Daily sync failed for a financial store:', error.message);
+      }
+    });
+  }
+}
+
+function millisecondsUntilDailySync() {
+  const now = new Date();
+  const next = new Date(now);
+  // Quiet off-peak window. Webhooks still refresh changes sooner; this is the
+  // guaranteed daily catch-up.
+  next.setUTCHours(10, 0, 0, 0);
+  if (next <= now) next.setUTCDate(next.getUTCDate() + 1);
+  return next.getTime() - now.getTime();
+}
+
+function scheduleDailySync() {
+  const delay = Math.min(millisecondsUntilDailySync(), DAILY_SYNC_INTERVAL_MS);
+  const first = setTimeout(() => {
+    scheduledDailySync().catch((error) => console.error('Daily sync scheduler failed:', error.message));
+    const interval = setInterval(() => scheduledDailySync().catch((error) => console.error('Daily sync scheduler failed:', error.message)), DAILY_SYNC_INTERVAL_MS);
+    interval.unref?.();
+  }, delay);
+  first.unref?.();
 }
 
 // Deployments can happen immediately after someone connects an account. Cover
@@ -787,10 +871,7 @@ app.post('/api/plaid/exchange_public_token', async (req, res) => {
       demo: false
     };
     store.items.push(item);
-    await hydrateInstitutionBrand(item);
-    await refreshAccountsForItem(store, item);
-    try { await syncTransactionsForItem(store, item); } catch (error) { console.warn('Transactions not ready:', error.message); }
-    try { await syncRetirementContributionsForItem(store, item); } catch (error) { console.warn('Investment history unavailable:', error.message); }
+    await syncItem(store, item);
     try { await backfillInvestmentHistory(store); } catch (error) { console.warn('Investment history reconstruction unavailable:', error.message); }
     hideDuplicateAccounts(store);
     snapshotNetWorth(store);
@@ -800,28 +881,6 @@ app.post('/api/plaid/exchange_public_token', async (req, res) => {
   } catch (error) {
     res.status(error.status || 500).json({ error: error.message, plaid: error.plaid });
   }
-});
-
-app.post('/api/sync', syncLimiter, async (_req, res) => {
-  const store = await loadStore(_req.user);
-  const results = [];
-  for (const item of store.items.filter((i) => !i.demo)) {
-    try {
-      await hydrateInstitutionBrand(item);
-      await refreshAccountsForItem(store, item);
-      try { await syncTransactionsForItem(store, item); } catch (error) { console.warn('Transactions sync failed:', error.message); }
-      try { await syncRetirementContributionsForItem(store, item); } catch (error) { console.warn('Investment contribution sync unavailable:', error.message); }
-      hideDuplicateAccounts(store);
-      results.push({ item: item.institution_name, ok: true });
-    } catch (error) {
-      results.push({ item: item.institution_name, ok: false, error: error.message });
-    }
-  }
-  try { await backfillInvestmentHistory(store); } catch (error) { console.warn('Investment history reconstruction unavailable:', error.message); }
-  snapshotNetWorth(store);
-  snapshotInvestments(store);
-  await saveStore(_req.user, store);
-  res.json({ ok: results.every((r) => r.ok), results });
 });
 
 async function verifyPlaidWebhook(req) {
@@ -848,21 +907,26 @@ app.post('/api/plaid/webhook', async (req, res) => {
   res.sendStatus(200);
   const itemId = req.body?.item_id;
   if (!itemId) return;
-  for (const storageKey of listUserStorageKeys()) {
-    const store = normalizeStore(databaseEnabled() ? await readDatabaseStore(storageKey) : readStore(storageKey));
-    const item = store.items.find((candidate) => candidate.plaid_item_id === itemId);
-    if (!item) continue;
-    try {
-      await hydrateInstitutionBrand(item);
-      await refreshAccountsForItem(store, item);
-      hideDuplicateAccounts(store);
-      snapshotNetWorth(store);
-      await saveStoreByKey(storageKey, store);
-    } catch (error) {
-      console.warn('Webhook sync failed:', error.message);
+  try {
+    let storageKeys = listUserStorageKeys();
+    if (databaseEnabled()) storageKeys = [...new Set([...storageKeys, ...(await listDatabaseStoreKeys())])];
+    for (const storageKey of storageKeys) {
+      const found = await queueUserSync(storageKey, async () => {
+        const persisted = databaseEnabled() ? await readDatabaseStore(storageKey) : null;
+        const store = normalizeStore(persisted || readStore(storageKey));
+        const item = store.items.find((candidate) => candidate.plaid_item_id === itemId);
+        if (!item) return false;
+        await syncItem(store, item);
+        hideDuplicateAccounts(store);
+        try { await backfillInvestmentHistory(store); } catch (error) { console.warn('Investment history reconstruction unavailable:', error.message); }
+        snapshotNetWorth(store);
+        snapshotInvestments(store);
+        await saveStoreByKey(storageKey, store);
+        return true;
+      });
+      if (found) return;
     }
-    return;
-  }
+  } catch (error) { console.warn('Webhook sync failed:', error.message); }
 });
 
 app.post('/api/reset-demo', async (_req, res) => {
@@ -898,6 +962,7 @@ async function startServer() {
     console.log(`Clarity running at http://localhost:${port}`);
     console.log(`Plaid: ${plaidConfigured() ? `configured (${process.env.PLAID_ENV || 'sandbox'})` : 'not configured — demo mode available'}`);
   });
+  scheduleDailySync();
 }
 
 if (process.env.CLARITY_LISTEN !== 'false') {

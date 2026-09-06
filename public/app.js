@@ -897,21 +897,6 @@ function showConnectionOnboarding() {
   if (dialog?.showModal) dialog.showModal();
 }
 
-async function syncAccounts() {
-  if (state.demoPreview) { showNotice('Sign in to sync your own accounts.'); return; }
-  const buttons = $$('[data-sync-accounts]');
-  buttons.forEach((button) => { button.disabled = true; button.textContent = '↻ Syncing…'; });
-  try {
-    const result = await api('/api/sync', { method: 'POST', body: '{}' });
-    await loadAll();
-    const failed = result.results?.filter((r) => !r.ok) || [];
-    showNotice(failed.length ? 'Some accounts could not refresh. Your existing data is unchanged; please try again later.' : 'Accounts synced.', failed.length ? 'warn' : 'success');
-    $('#syncStatus').textContent = `Last sync ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
-  } catch (error) {
-    showNotice('We couldn’t refresh your accounts right now. Your existing data is still available; please try again shortly.');
-  } finally { buttons.forEach((button) => { button.disabled = false; button.textContent = '↻ Sync accounts'; }); }
-}
-
 $$('[data-view]').forEach((button) => button.addEventListener('click', () => setView(button.dataset.view)));
 $('#profileButton').addEventListener('click', () => setView('profile'));
 $('#profileBack').addEventListener('click', () => setView(state.returnView || 'overview'));
@@ -976,7 +961,6 @@ $('#deleteAccountButton').addEventListener('click', async () => {
 $$('[data-connect-account]').forEach((button) => button.addEventListener('click', connectPlaid));
 $('#connectButton').addEventListener('click', connectPlaid);
 $('#viewNetWorthAfterConnection').addEventListener('click', () => setView('overview'));
-$$('[data-sync-accounts]').forEach((button) => button.addEventListener('click', syncAccounts));
 $('#retirementForm').addEventListener('submit', async (event) => {
   event.preventDefault();
   if (state.demoPreview || state.dashboard?.demoMode) { showNotice('Sign in to save changes to your own plan.'); return; }
