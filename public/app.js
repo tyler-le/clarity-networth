@@ -568,7 +568,7 @@ function renderCashFlowSankey(data) {
     paths += flow(middleX + middleW, spendY + 18, destinationX, y + 18, Number(row.amount || 0) / Math.max(actualSpend, 1), 'var(--outflow-muted)');
     categories += block(destinationX, y, destinationW, 'var(--outflow-muted)', row.name, row.amount, row.key);
   });
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Take-home income split into spending, saving, and investing">${paths}${block(sourceX, incomeY, sourceW, 'var(--income)', 'Take-home income', income, 'income', true)}${block(middleX, spendY, middleW, 'var(--outflow)', 'Actual spend', actualSpend, 'actual_spend')}${block(middleX, saveY, middleW, 'var(--save)', 'Save', savings, 'savings')}${block(middleX, investY, middleW, 'var(--invest)', 'Invest', investments, 'investments')}${categories}</svg>`;
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Take-home income split into spending, saving, and investing">${paths}${block(sourceX, incomeY, sourceW, 'var(--income)', compact ? 'Income' : 'Take-home income', income, 'income', true)}${block(middleX, spendY, middleW, 'var(--outflow)', 'Actual spend', actualSpend, 'actual_spend')}${block(middleX, saveY, middleW, 'var(--save)', 'Save', savings, 'savings')}${block(middleX, investY, middleW, 'var(--invest)', 'Invest', investments, 'investments')}${categories}</svg>`;
 }
 
 function renderSpending(data) {
@@ -1189,9 +1189,8 @@ $$('[data-cashflow-display]').forEach((button) => button.addEventListener('click
   $$('[data-cashflow-display]').forEach((control) => control.classList.toggle('active', control === button));
   renderSpending(state.spending);
 }));
-$('#cashflowExpand').addEventListener('click', async () => {
-  try { await $('#cashflowSankey').requestFullscreen?.(); } catch { showNotice('Could not expand the diagram in this browser.'); }
-});
+$('#cashflowExpand').addEventListener('click', () => { const dialog = $('#cashflowDialog'); $('#cashflowDialogContent').innerHTML = $('#cashflowSankey').innerHTML; dialog.showModal(); });
+$('#cashflowDialogClose').addEventListener('click', () => $('#cashflowDialog').close());
 $$('[data-allocation-display]').forEach((button) => button.addEventListener('click', () => {
   state.allocationDisplay = button.dataset.allocationDisplay;
   $$('[data-allocation-display]').forEach((control) => control.classList.toggle('active', control === button));

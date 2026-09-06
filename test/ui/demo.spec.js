@@ -94,6 +94,15 @@ test('cash-flow diagram can switch between dollars and take-home-income percenta
   await expect(page.locator('#spendingContext')).toContainText('last 6 completed months');
 });
 
+test('cash-flow diagram stays readable on mobile and expands in-app', async ({ page }) => {
+  await openDemo(page);
+  await page.locator('.mobile-nav [data-view="spending"]').click();
+  await expect(page.locator('#cashflowSankey')).toContainText('Income');
+  await page.locator('#cashflowExpand').click();
+  await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
+  await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
+});
+
 test('the income source opens income activity from the cash-flow diagram', async ({ page }) => {
   await openDemo(page);
   await page.locator('.mobile-nav [data-view="spending"]').click();
