@@ -878,6 +878,10 @@ function renderDashboard() {
 async function loadAll() {
   const shouldShowSkeleton = !state.dashboard;
   let skeletonTimer;
+  // The visual skeleton is intentionally delayed to avoid flashing on quick
+  // requests, but assistive technology and interaction tests still need an
+  // immediate, reliable signal that the application is not ready yet.
+  $('#appShell')?.setAttribute('aria-busy', 'true');
   if (shouldShowSkeleton) skeletonTimer = setTimeout(() => setInitialLoading(true), 180);
   setAppStatus('Refreshing your financial picture…');
   try {

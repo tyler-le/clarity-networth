@@ -12,6 +12,7 @@ async function openDemo(page) {
   // rendered financial value before interacting with responsive navigation;
   // otherwise a test can click during the intentional loading transition.
   await expect(page.locator('#netWorth')).toHaveText(/\$/);
+  await expect(page.locator('#appShell')).toHaveAttribute('aria-busy', 'false');
 }
 
 async function goToView(page, view) {

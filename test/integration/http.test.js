@@ -12,7 +12,12 @@ const previousEnvironment = {
   DATA_DIR: process.env.DATA_DIR,
   NODE_ENV: process.env.NODE_ENV,
   DEMO_MODE: process.env.DEMO_MODE,
-  ENCRYPTION_KEY: process.env.ENCRYPTION_KEY
+  ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+  PLAID_CLIENT_ID: process.env.PLAID_CLIENT_ID,
+  PLAID_SECRET: process.env.PLAID_SECRET,
+  PLAID_ENV: process.env.PLAID_ENV,
+  DOTENV_CONFIG_PATH: process.env.DOTENV_CONFIG_PATH
 };
 
 process.env.CLARITY_LISTEN = 'false';
@@ -20,6 +25,17 @@ process.env.DATA_DIR = dataDir;
 process.env.NODE_ENV = 'test';
 process.env.DEMO_MODE = 'false';
 process.env.ENCRYPTION_KEY = 'integration-test-encryption-key';
+// dotenv loads the developer's real configuration before this test module.
+// Integration tests must never use those provider credentials: doing so both
+// breaks local/CI parity and risks a billable request during verification.
+delete process.env.GOOGLE_CLIENT_ID;
+delete process.env.PLAID_CLIENT_ID;
+delete process.env.PLAID_SECRET;
+delete process.env.PLAID_ENV;
+// server.js imports dotenv/config. Point it at an empty test-only path so it
+// cannot load the repository's developer .env after the credentials above
+// have been removed.
+process.env.DOTENV_CONFIG_PATH = path.join(dataDir, 'no-provider-credentials.env');
 const { app } = await import(`../../server.js?integration=${Date.now()}`);
 const { deleteStore, writeStore } = await import('../../store.js');
 const integrationTest = process.env.CODEX_SANDBOX_NETWORK_DISABLED ? test.skip : test;

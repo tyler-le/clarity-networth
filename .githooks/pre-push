@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+
+printf '%s\n' 'Running Clarity’s full local verification before push…'
+CODEX_SANDBOX_NETWORK_DISABLED= npm run test:ci
