@@ -37,6 +37,13 @@ test('a new visitor can explore the complete demo without signing in', async ({ 
   await page.locator('[data-spending-range="1y"]').click();
   await expect(page.locator('.trend-column')).toHaveCount(12);
   await expect(page.locator('.trend-month')).toHaveCount(12);
+  const positiveBarsStayAboveZero = await page.locator('#spendingTrend svg').evaluate((svg) => {
+    const zero = Number(svg.querySelector('.trend-grid.zero')?.getAttribute('y1'));
+    return [...svg.querySelectorAll('.trend-column rect')]
+      .filter((bar) => bar.getAttribute('fill') === 'var(--income)')
+      .every((bar) => Number(bar.getAttribute('y')) + Number(bar.getAttribute('height')) <= zero + .01);
+  });
+  expect(positiveBarsStayAboveZero).toBe(true);
   await expect(page.locator('#cashflowSankey svg')).toBeVisible();
   await expect(page.locator('#recurringCharges')).toBeVisible();
 

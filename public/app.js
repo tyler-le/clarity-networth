@@ -479,8 +479,10 @@ function renderSpendingTrend(data) {
   const barWidth = Math.min(compact ? 22 : 34, step * .62);
   const bars = months.map((row, index) => {
     const value = values[index], x = plot.left + step * index + (step - barWidth) / 2;
-    const y = value >= 0 ? zeroY - value * scale : zeroY;
-    const barHeight = Math.max(value ? 3 : 0, Math.abs(value) * scale);
+    // Small positive values still need a visible bar, but that minimum must
+    // grow upward from zero—not spill across it and resemble a deficit.
+    const barHeight = Math.max(value ? 6 : 0, Math.abs(value) * scale);
+    const y = value >= 0 ? zeroY - barHeight : zeroY;
     const label = new Date(`${row.month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'short' });
     const title = `${row.month}: Income ${fmt.format(row.income || 0)} · Money out ${fmt.format(row.amount || 0)} · ${value >= 0 ? 'Left' : 'Over'} ${fmt.format(Math.abs(value))}`;
     return `<g class="trend-column ${state.spendingMonth === row.month ? 'active' : ''}" data-spending-month="${row.month}" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} cash flow activity" title="${escapeHtml(title)}"><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="5" fill="${value >= 0 ? 'var(--income)' : 'var(--outflow)'}"/><text x="${(x + barWidth / 2).toFixed(1)}" y="${height - 10}" text-anchor="middle" class="trend-month">${label}</text></g>`;
