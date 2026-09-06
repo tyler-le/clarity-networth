@@ -298,10 +298,10 @@ async function syncRetirementContributionsForItem(store, item) {
       if (existingInvestment) Object.assign(existingInvestment, recorded); else store.investment_transactions.push(recorded);
       const account = accounts.get(transaction.account_id);
       const name = String(transaction.name || '');
-      const retirementAccount = /401\(?k\)?|403\(?b\)?|457|retirement|roth|\bira\b/i.test(`${account?.subtype || ''} ${account?.name || ''}`);
+      const payrollBenefitAccount = /401\(?k\)?|403\(?b\)?|457|retirement|roth|\bira\b|\bhsa\b|health savings/i.test(`${account?.subtype || ''} ${account?.name || ''}`);
       // Do not treat trades, dividends, or price changes as plan contributions.
-      const contribution = /contribution|employee.*deferral|payroll.*deferral|401\(?k\)?.*deposit|ira.*deposit/i.test(name);
-      if (!retirementAccount || !contribution) continue;
+      const contribution = /contribution|employee.*deferral|payroll.*deferral|401\(?k\)?.*deposit|ira.*deposit|hsa.*deposit|health savings.*deposit/i.test(name);
+      if (!payrollBenefitAccount || !contribution) continue;
       const plaid_transaction_id = `investment:${transaction.investment_transaction_id}`;
       const existing = store.transactions.find((record) => record.plaid_transaction_id === plaid_transaction_id);
       const normalized = {

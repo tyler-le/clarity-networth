@@ -178,8 +178,12 @@ test('pre-tax retirement contributions remain visible without distorting take-ho
   assert.equal(result.actualSpend, 0);
   assert.equal(result.savingsAndInvestments, 7000);
   assert.equal(result.preTaxRetirement, 7000);
-  assert.equal(result.transactions.length, 1);
-  assert.equal(result.transactions[0].name, 'Fidelity transfer');
+  assert.equal(result.transactions.length, 2);
+  assert.equal(result.transactions.find((transaction) => transaction.name === 'Fidelity transfer').flowGroup, 'save_invest');
+  assert.deepEqual(result.transactions.find((transaction) => transaction.flowKey === 'payroll_retirement'), {
+    id: 'ira', name: 'IRA contribution', date: '2026-09-02', amount: 7000,
+    category: 'Payroll retirement', bucket: 'pre_tax_retirement', flowKey: 'payroll_retirement', flowLabel: 'Payroll retirement', flowGroup: 'payroll_retirement'
+  });
 });
 
 test('fixed costs stay limited to essential obligations', () => {

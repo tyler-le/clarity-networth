@@ -478,7 +478,8 @@ function renderSpending(data) {
   $('#cashflowHeadline').textContent = remaining >= 0 ? 'Left after spending and saving' : 'More allocated than income';
   $('#cashflowHeadline').className = `cashflow-headline ${remaining >= 0 ? 'positive' : 'negative'}`;
   const preTaxNote = $('#cashflowPreTax');
-  preTaxNote.innerHTML = preTaxRetirement ? `<span class="cashflow-payroll-mark" aria-hidden="true">↗</span><div><span>PAYROLL RETIREMENT</span><strong>${fmt.format(preTaxRetirement)}</strong><p>Saved before it reached your bank account — outside this cash-flow view.</p></div>` : '';
+  preTaxNote.innerHTML = preTaxRetirement ? `<span class="cashflow-payroll-mark" aria-hidden="true">↗</span><div><span>PAYROLL CONTRIBUTIONS</span><strong>${fmt.format(preTaxRetirement)}</strong><p>401(k), HSA, and similar contributions saved before reaching your bank account.</p></div><i class="cashflow-payroll-chevron" aria-hidden="true">›</i>` : '';
+  preTaxNote.setAttribute('aria-label', `View ${fmt.format(preTaxRetirement)} in payroll contributions`);
   preTaxNote.classList.toggle('hidden', !preTaxRetirement);
   const rangeLabel = ({ '1m': 'this month', '3m': 'over the last 3 months', ytd: 'year to date', '1y': 'over the last year' })[data.range] || 'this month';
   const selectedMonthLabel = state.spendingMonth && new Date(`${state.spendingMonth}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -520,10 +521,10 @@ function renderSpendingTransactions(data) {
   $('#spendingTransactionCount').textContent = `${rows.length} posted`;
   const options = [['fixed', 'Fixed costs'], ['savings', 'Savings'], ['investments', 'Investments'], ['guilt_free', 'Guilt-free']];
   $('#spendingTransactions').innerHTML = rows.length ? rows.map((transaction) => {
-    const categoryControl = transaction.bucket === 'income' || state.dashboard?.demoMode
+    const categoryControl = ['income', 'pre_tax_retirement'].includes(transaction.bucket) || state.dashboard?.demoMode
       ? `<span class="transaction-category-label">${escapeHtml(transaction.category)}</span>`
       : `<select data-transaction-category="${escapeHtml(transaction.id)}" aria-label="Plan category for ${escapeHtml(transaction.name)}">${options.map(([value, label]) => `<option value="${value}" ${transaction.bucket === value ? 'selected' : ''}>${label}</option>`).join('')}</select>`;
-    return `<div class="spending-transaction-row ${transaction.bucket === 'income' ? 'income-transaction' : ''}"><div><strong>${escapeHtml(transaction.name)}</strong><span>${new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span></div><div class="transaction-plan"><b>${transaction.bucket === 'income' ? '+' : ''}${fmt.format(transaction.amount)}</b>${categoryControl}</div></div>`;
+    return `<div class="spending-transaction-row ${transaction.bucket === 'income' ? 'income-transaction' : ''} ${transaction.bucket === 'pre_tax_retirement' ? 'payroll-transaction' : ''}"><div><strong>${escapeHtml(transaction.name)}</strong><span>${new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span></div><div class="transaction-plan"><b>${transaction.bucket === 'income' ? '+' : ''}${fmt.format(transaction.amount)}</b>${categoryControl}</div></div>`;
   }).join('') : '<p class="spending-empty">No posted transactions in this category for this period.</p>';
 }
 
@@ -1017,6 +1018,7 @@ $('#cashflowSankey').addEventListener('keydown', (event) => {
   event.preventDefault();
   openSpendingCategory(target.dataset.cashflowCategory);
 });
+$('#cashflowPreTax').addEventListener('click', () => openSpendingCategory('payroll_retirement'));
 function donutSelection(event, element, rows) {
   const rect = element.getBoundingClientRect();
   const x = event.clientX - rect.left - rect.width / 2;

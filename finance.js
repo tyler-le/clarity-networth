@@ -318,7 +318,22 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
   });
   for (const transaction of preTaxRetirementTransactions) {
     const month = String(transaction.date).slice(0, 7);
-    monthlyPreTaxRetirement.set(month, (monthlyPreTaxRetirement.get(month) || 0) + Math.abs(Number(transaction.amount || 0)));
+    const amount = Math.abs(Number(transaction.amount || 0));
+    monthlyPreTaxRetirement.set(month, (monthlyPreTaxRetirement.get(month) || 0) + amount);
+    // These are intentionally available in the activity drawer even though
+    // they stay outside take-home cash flow. A person should be able to see
+    // exactly which payroll deductions make up this companion total.
+    transactionRows.push({
+      id: transaction.id || transaction.plaid_transaction_id,
+      name: transaction.merchant_name || transaction.name || 'Payroll contribution',
+      date: transaction.date,
+      amount,
+      category: 'Payroll retirement',
+      bucket: 'pre_tax_retirement',
+      flowKey: 'payroll_retirement',
+      flowLabel: 'Payroll retirement',
+      flowGroup: 'payroll_retirement'
+    });
   }
   const eligibleTransactions = store.transactions.filter((transaction) => {
     if (transaction.pending || transaction.excluded || transaction.bucket === 'transfer' || (transaction.source === 'investment_transaction' && transaction.bucket === 'investments') || Number(transaction.amount || 0) <= 0) return false;
@@ -534,6 +549,12 @@ export function seedDemo(store) {
     merchant_name: merchant, name: merchant, amount, date, bucket, excluded: false, pending: false,
     pfc_primary: demoPfc(merchant), pfc_detailed: '', demo: true
   }));
+  store.transactions.push({
+    id: 'demo-401k-contribution', plaid_transaction_id: 'demo-401k-contribution', account_id: 'demo-401k',
+    merchant_name: '401(k) employee contribution', name: '401(k) employee contribution', amount: 750, date: d(15),
+    bucket: 'investments', excluded: false, pending: false, pfc_primary: 'RETIREMENT_CONTRIBUTION',
+    pfc_detailed: '', source: 'investment_transaction', demo: true
+  });
 
   const base = 84000;
   store.snapshots = Array.from({ length: 90 }, (_, i) => {
@@ -576,6 +597,15 @@ function addDemoHistory(store) {
         id, plaid_transaction_id: id, account_id: accountId, merchant_name: merchant, name: merchant,
         amount, date: `${month}-15`, bucket, excluded: false, pending: false,
         pfc_primary: '', pfc_detailed: '', demo: true
+      });
+    }
+    const contributionId = `demo-history-${month}-401k`;
+    if (!existingTransactionIds.has(contributionId)) {
+      store.transactions.push({
+        id: contributionId, plaid_transaction_id: contributionId, account_id: 'demo-401k',
+        merchant_name: '401(k) employee contribution', name: '401(k) employee contribution', amount: 750,
+        date: `${month}-15`, bucket: 'investments', excluded: false, pending: false,
+        pfc_primary: 'RETIREMENT_CONTRIBUTION', pfc_detailed: '', source: 'investment_transaction', demo: true
       });
     }
 

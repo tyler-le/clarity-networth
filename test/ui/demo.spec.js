@@ -64,6 +64,16 @@ test('the income source opens income activity from the cash-flow diagram', async
   await expect(page.locator('.income-transaction').first()).toBeVisible();
 });
 
+test('payroll contributions open their own cash-flow activity', async ({ page }) => {
+  await openDemo(page);
+  await page.locator('.mobile-nav [data-view="spending"]').click();
+  await expect(page.locator('#cashflowPreTax')).toBeVisible();
+  await page.locator('#cashflowPreTax').click();
+  await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
+  await expect(page.locator('#spendingCategoryFilter')).toHaveValue('payroll_retirement');
+  await expect(page.locator('.payroll-transaction').first()).toContainText('401(k)');
+});
+
 test('net-worth history can be scrubbed and always identifies the selected date', async ({ page }) => {
   await openDemo(page);
   const chart = page.locator('#netWorthChart');
