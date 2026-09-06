@@ -241,13 +241,15 @@ function recurringMerchantKey(transaction) {
 }
 
 // Plaid's recurring-streams product is not required for this lightweight
-// signal. We only surface patterns the person's own posted activity supports.
+// signal. We only surface a conservative monthly-bill pattern the person's
+// own posted activity supports—never ordinary food, shopping, or weekly use.
 export function recurringCharges(store, anchor = new Date()) {
   const today = anchor.toISOString().slice(0, 10);
   const windowStart = new Date(anchor); windowStart.setDate(windowStart.getDate() - 190);
   const groups = new Map();
   for (const transaction of store.transactions || []) {
-    if (transaction.pending || transaction.excluded || transaction.bucket === 'transfer' || Number(transaction.amount || 0) <= 0 || transaction.date < windowStart.toISOString().slice(0, 10)) continue;
+    const category = `${transaction.pfc_primary || ''} ${transaction.pfc_detailed || ''}`.toUpperCase();
+    if (transaction.pending || transaction.excluded || transaction.bucket === 'transfer' || Number(transaction.amount || 0) <= 0 || transaction.date < windowStart.toISOString().slice(0, 10) || /FOOD_AND_DRINK|GROCER/.test(category)) continue;
     const key = recurringMerchantKey(transaction);
     if (key.length < 3) continue;
     const row = groups.get(key) || { key, name: transaction.merchant_name || transaction.name || 'Recurring charge', transactions: [] };
@@ -255,16 +257,24 @@ export function recurringCharges(store, anchor = new Date()) {
   }
   const charges = [];
   for (const group of groups.values()) {
-    const rows = group.transactions.sort((a, b) => String(a.date).localeCompare(String(b.date)));
-    if (rows.length < 2) continue;
+    const rowsByMonth = new Map();
+    for (const row of group.transactions.sort((a, b) => String(a.date).localeCompare(String(b.date)))) {
+      const month = String(row.date).slice(0, 7);
+      rowsByMonth.set(month, [...(rowsByMonth.get(month) || []), row]);
+    }
+    // A recurring bill normally posts once per month. Multiple charges in a
+    // month are a useful signal that this merchant is ordinary activity.
+    const rows = [...rowsByMonth.values()].filter((monthRows) => monthRows.length === 1).map(([row]) => row);
+    if (rows.length < 3) continue;
     const intervals = rows.slice(1).map((row, index) => Math.round((new Date(`${row.date}T12:00:00`) - new Date(`${rows[index].date}T12:00:00`)) / 86400000));
     const interval = [...intervals].sort((a, b) => a - b)[Math.floor(intervals.length / 2)];
-    if (!((interval >= 24 && interval <= 38) || (interval >= 6 && interval <= 9))) continue;
+    const dayOfMonth = rows.map((row) => Number(String(row.date).slice(-2)));
+    if (!(interval >= 24 && interval <= 38) || Math.max(...dayOfMonth) - Math.min(...dayOfMonth) > 5) continue;
     const latest = rows.at(-1), previous = rows.at(-2);
     const next = new Date(`${latest.date}T12:00:00`); next.setDate(next.getDate() + interval);
     const amount = Math.abs(Number(latest.amount || 0));
     const previousAmount = Math.abs(Number(previous.amount || 0));
-    charges.push({ key: group.key, name: group.name, amount, interval, cadence: interval <= 10 ? 'weekly' : 'monthly', lastDate: latest.date, nextDate: next.toISOString().slice(0, 10), change: previousAmount ? (amount - previousAmount) / previousAmount : 0 });
+    charges.push({ key: group.key, name: group.name, amount, interval, cadence: 'monthly', lastDate: latest.date, nextDate: next.toISOString().slice(0, 10), change: previousAmount ? (amount - previousAmount) / previousAmount : 0 });
   }
   const recurring = charges.sort((a, b) => b.amount - a.amount).slice(0, 4);
   return {

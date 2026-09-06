@@ -143,6 +143,9 @@ test('recurring charge awareness identifies cadence and a meaningful increase', 
     { date: '2026-06-03', amount: 15, bucket: 'guilt_free', merchant_name: 'Stream Plus' },
     { date: '2026-07-03', amount: 15, bucket: 'guilt_free', merchant_name: 'Stream Plus' },
     { date: '2026-08-03', amount: 20, bucket: 'guilt_free', merchant_name: 'Stream Plus' },
+    { date: '2026-06-08', amount: 35, bucket: 'guilt_free', merchant_name: 'Occasional cafe', pfc_primary: 'FOOD_AND_DRINK' },
+    { date: '2026-07-09', amount: 35, bucket: 'guilt_free', merchant_name: 'Occasional cafe', pfc_primary: 'FOOD_AND_DRINK' },
+    { date: '2026-08-10', amount: 35, bucket: 'guilt_free', merchant_name: 'Occasional cafe', pfc_primary: 'FOOD_AND_DRINK' },
     { date: '2026-06-15', amount: 1400, bucket: 'fixed', merchant_name: 'Rent' },
     { date: '2026-07-15', amount: 1400, bucket: 'fixed', merchant_name: 'Rent' },
     { date: '2026-08-15', amount: 1400, bucket: 'fixed', merchant_name: 'Rent' }
@@ -151,6 +154,7 @@ test('recurring charge awareness identifies cadence and a meaningful increase', 
   assert.deepEqual(recurring.recurring.map((charge) => [charge.name, charge.cadence]), [['Rent', 'monthly'], ['Stream Plus', 'monthly']]);
   assert.equal(recurring.increases[0].name, 'Stream Plus');
   assert.ok(Math.abs(recurring.increases[0].change - (20 / 15 - 1)) < 1e-9);
+  assert.ok(!recurring.recurring.some((charge) => charge.name === 'Occasional cafe'));
 });
 
 test('portfolio history keeps one verified investment value for each day', () => {
