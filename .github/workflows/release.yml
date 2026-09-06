@@ -19,6 +19,8 @@ concurrency:
 env:
   RAILWAY_PROJECT_ID: d8950f3f-2f64-408a-b183-7d5414306da1
   RAILWAY_SERVICE: clarity-networth
+  RAILWAY_STAGING_ENVIRONMENT: d13ce25d-49d5-413d-98fa-979090d1ef05
+  RAILWAY_PRODUCTION_ENVIRONMENT: 583ca560-3c5a-4b8c-957b-6ee524e45fcc
   STAGING_URL: https://clarity-networth-staging.up.railway.app
   PRODUCTION_URL: https://clarity-networth-production.up.railway.app
 
@@ -57,7 +59,7 @@ jobs:
       - name: Deploy this verified commit to staging
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: npx --yes @railway/cli@latest up --ci --project "$RAILWAY_PROJECT_ID" --service "$RAILWAY_SERVICE" --environment staging --message "GitHub Actions $GITHUB_SHA"
+        run: npx --yes @railway/cli@latest up --ci --project "$RAILWAY_PROJECT_ID" --service "$RAILWAY_SERVICE" --environment "$RAILWAY_STAGING_ENVIRONMENT" --message "GitHub Actions $GITHUB_SHA"
       - name: Smoke test staging
         run: |
           for attempt in {1..30}; do
@@ -82,7 +84,7 @@ jobs:
       - name: Deploy the staged commit to production
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: npx --yes @railway/cli@latest up --ci --project "$RAILWAY_PROJECT_ID" --service "$RAILWAY_SERVICE" --environment production --message "GitHub Actions $GITHUB_SHA"
+        run: npx --yes @railway/cli@latest up --ci --project "$RAILWAY_PROJECT_ID" --service "$RAILWAY_SERVICE" --environment "$RAILWAY_PRODUCTION_ENVIRONMENT" --message "GitHub Actions $GITHUB_SHA"
       - name: Smoke test production
         run: |
           for attempt in {1..30}; do
