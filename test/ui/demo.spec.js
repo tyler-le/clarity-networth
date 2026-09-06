@@ -185,6 +185,11 @@ test('net-worth history can be scrubbed and always identifies the selected date'
   await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.55);
   await expect(page.locator('#netWorthChartDate')).toHaveText(/\d{4}/);
   await expect(page.locator('#netWorthDelta')).toContainText('Assets');
+  const selectedDate = await page.locator('#netWorthChartDate').boundingBox();
+  const chartSvg = await chart.locator('svg').boundingBox();
+  expect(selectedDate && chartSvg && selectedDate.y + selectedDate.height <= chartSvg.y).toBe(true);
+  const xAxisLabels = await chart.locator('.chart-x-axis-label').allTextContents();
+  expect(new Set(xAxisLabels).size).toBe(xAxisLabels.length);
   const afterScrub = await chart.boundingBox();
   expect(afterScrub?.y).toBe(box.y);
 });

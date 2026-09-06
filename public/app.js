@@ -276,15 +276,17 @@ function renderLineChart(snapshots, summary) {
   const yTicks = [max, (max + min) / 2, min];
   const yAxis = yTicks.map((value) => {
     const y = plotBottom - ((value - min) / (max - min)) * (plotBottom - plotTop);
-    return `<line x1="${plotLeft}" y1="${y}" x2="${width - plotRight}" y2="${y}" class="chart-grid"/><text x="${plotLeft - 6}" y="${y + 3}" text-anchor="end" class="chart-axis-label">${axisCurrency(value)}</text>`;
+    return `<line x1="${plotLeft}" y1="${y}" x2="${width - plotRight}" y2="${y}" class="chart-grid"/><text x="${plotLeft - 6}" y="${y + 3}" text-anchor="end" class="chart-axis-label chart-y-axis-label">${axisCurrency(value)}</text>`;
   }).join('');
   // Repeating "Sep 2026" across a short range looks like a broken axis. Use
   // days while every available point is in the same calendar month, then
   // graduate to month/year as the selected range expands.
   const sameMonth = new Date(domainStart).getFullYear() === new Date(domainEnd).getFullYear() && new Date(domainStart).getMonth() === new Date(domainEnd).getMonth();
   const dateLabel = (time) => new Date(time).toLocaleDateString('en-US', sameMonth ? { month: 'short', day: 'numeric' } : { month: 'short', year: 'numeric' });
-  const tickTimes = width > 420 ? [domainStart, (domainStart + domainEnd) / 2, domainEnd] : [domainStart, domainEnd];
-  const xAxis = tickTimes.map((time, index) => `<text x="${(plotLeft + ((time - domainStart) / (domainEnd - domainStart)) * (width - plotLeft - plotRight)).toFixed(1)}" y="${height - 5}" text-anchor="${index === 0 ? 'start' : index === tickTimes.length - 1 ? 'end' : 'middle'}" class="chart-axis-label">${dateLabel(time)}</text>`).join('');
+  // Short spans need distinct days, not three calendar labels that round to
+  // the same day. Longer spans retain a middle label for quick orientation.
+  const tickTimes = sameMonth || width <= 420 ? [domainStart, domainEnd] : [domainStart, (domainStart + domainEnd) / 2, domainEnd];
+  const xAxis = tickTimes.map((time, index) => `<text x="${(plotLeft + ((time - domainStart) / (domainEnd - domainStart)) * (width - plotLeft - plotRight)).toFixed(1)}" y="${height - 5}" text-anchor="${index === 0 ? 'start' : index === tickTimes.length - 1 ? 'end' : 'middle'}" class="chart-axis-label chart-x-axis-label">${dateLabel(time)}</text>`).join('');
   el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img">
     <defs><linearGradient id="areaFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f6f4a" stop-opacity=".16"/><stop offset="1" stop-color="#1f6f4a" stop-opacity="0"/></linearGradient></defs>
     ${yAxis}${xAxis}<path d="${area}" fill="url(#areaFade)"/><path d="${d}" fill="none" stroke="#1f6f4a" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>
