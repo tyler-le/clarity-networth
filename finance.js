@@ -171,53 +171,6 @@ export function reconstructInvestmentHistory(store, endDate = new Date().toISOSt
   return snapshots;
 }
 
-// Rebuild only the portion of net-worth history supported by complete account
-// ledgers. This intentionally returns no point instead of assuming a past
-// balance for an unsupported account such as a loan without balance history.
-export function reconstructNetWorthHistory(store, endDate = new Date().toISOString().slice(0, 10), years = 2) {
-  const end = new Date(`${endDate}T12:00:00`);
-  const start = new Date(end);
-  start.setFullYear(start.getFullYear() - years);
-  const startDate = start.toISOString().slice(0, 10);
-  const accounts = (store.accounts || []).filter((account) => !account.hidden);
-  const unsupported = accounts.filter((account) => !['depository', 'credit', 'investment'].includes(account.type) && Math.abs(Number(account.current_balance || 0)) > 1);
-  if (unsupported.length) return [];
-  const byAccount = new Map();
-  for (const transaction of store.transactions || []) {
-    if (transaction.pending || transaction.excluded || !transaction.account_id || transaction.date > endDate) continue;
-    if (!byAccount.has(transaction.account_id)) byAccount.set(transaction.account_id, []);
-    byAccount.get(transaction.account_id).push(transaction);
-  }
-  let coverageStart = startDate;
-  for (const account of accounts.filter((account) => ['depository', 'credit'].includes(account.type) && Math.abs(Number(account.current_balance || 0)) > 1)) {
-    const history = byAccount.get(account.plaid_account_id) || [];
-    const earliest = history.map((transaction) => transaction.date).sort().at(0);
-    if (!earliest) return [];
-    if (earliest > coverageStart) coverageStart = earliest;
-  }
-  const investments = accounts.filter((account) => account.type === 'investment');
-  const investmentHistory = (store.investment_snapshots || []).filter((snapshot) => snapshot.date >= startDate && snapshot.date <= endDate);
-  if (investments.length && !investmentHistory.length) return [];
-  const dates = investments.length
-    ? investmentHistory.map((snapshot) => snapshot.date).filter((date) => date >= coverageStart)
-    : Array.from({ length: years * 12 + 1 }, (_, index) => {
-      const date = new Date(end.getFullYear(), end.getMonth() - (years * 12 - index), 1);
-      return date.toISOString().slice(0, 10);
-    }).filter((date) => date >= coverageStart && date <= endDate);
-  const investmentAt = (date) => investmentHistory.filter((snapshot) => snapshot.date <= date).sort((a, b) => a.date.localeCompare(b.date)).at(-1);
-  return dates.map((date) => {
-    let assets = 0, liabilities = 0;
-    for (const account of accounts) {
-      if (account.type === 'investment') continue;
-      const changesAfter = (byAccount.get(account.plaid_account_id) || []).filter((transaction) => transaction.date > date).reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
-      const balance = account.type === 'credit' ? Number(account.current_balance || 0) - changesAfter : Number(account.current_balance || 0) + changesAfter;
-      if (account.type === 'credit') liabilities += Math.max(0, balance); else assets += Math.max(0, balance);
-    }
-    if (investments.length) assets += Number(investmentAt(date)?.value || 0);
-    return { date, assets: Math.round(assets * 100) / 100, liabilities: Math.round(liabilities * 100) / 100, net_worth: Math.round((assets - liabilities) * 100) / 100, source: 'reconstructed' };
-  }).filter((snapshot) => Number.isFinite(snapshot.net_worth));
-}
-
 function normalizedAccountText(value) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }

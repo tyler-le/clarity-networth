@@ -7,7 +7,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './store.js';
 import { databaseEnabled, deleteDatabaseStore, migrateDatabase, readDatabaseStore, recordAuditEvent, writeDatabaseStore } from './database.js';
-import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentLinkBalances, investmentSummary, reconstructInvestmentHistory, reconstructNetWorthHistory, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
+import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentLinkBalances, investmentSummary, reconstructInvestmentHistory, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
 import { loadHistoricalPrices } from './market-data.js';
 import { plaidConfigured, plaidPost } from './plaid.js';
 
@@ -560,9 +560,7 @@ app.get('/api/dashboard', async (req, res) => {
   await saveStore(req.user, store);
   const visibleStore = activeStore(store);
   const summary = summarizeRange(visibleStore);
-  const verifiedByDate = new Map(visibleStore.snapshots.map((snapshot) => [snapshot.date, snapshot]));
-  for (const snapshot of reconstructNetWorthHistory(visibleStore)) if (!verifiedByDate.has(snapshot.date)) verifiedByDate.set(snapshot.date, snapshot);
-  const snapshots = [...verifiedByDate.values()].sort((a, b) => a.date.localeCompare(b.date)).slice(-3650);
+  const snapshots = visibleStore.snapshots.slice(-3650);
   const accounts = visibleStore.accounts.filter((account) => !account.hidden).sort((a, b) => Number(b.current_balance || 0) - Number(a.current_balance || 0));
   res.json({
     summary,

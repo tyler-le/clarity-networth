@@ -427,7 +427,6 @@ function flowCategoryRows(transactions) {
 
 function renderSpendingTrend(data) {
   const months = data.monthly || [];
-  const max = Math.max(...months.flatMap((row) => [Number(row.amount || 0), Number(row.income || 0)]), 1);
   if (state.spendingMonth && !months.some((row) => row.month === state.spendingMonth)) state.spendingMonth = null;
   const detail = months.find((row) => row.month === state.spendingMonth) || months.at(-1);
   if (detail) {
@@ -435,7 +434,38 @@ function renderSpendingTrend(data) {
     const remaining = Number(detail.income || 0) - Number(detail.amount || 0);
     $('#trendDetail').innerHTML = `<span>${state.spendingMonth ? label : `Latest · ${label}`}</span><strong><i class="income"></i>${fmt.format(detail.income || 0)}</strong><strong><i class="spend"></i>${fmt.format(detail.amount || 0)}</strong><b class="${remaining >= 0 ? 'positive' : 'negative'}">${remaining >= 0 ? 'Left' : 'Over'} ${fmt.format(Math.abs(remaining))}</b>`;
   } else $('#trendDetail').innerHTML = '';
-  $('#spendingTrend').innerHTML = months.length ? months.map((row) => `<button class="trend-column ${state.spendingMonth === row.month ? 'active' : ''}" type="button" data-spending-month="${row.month}" title="${escapeHtml(row.month)}: Income ${fmt.format(row.income || 0)} · Spent ${fmt.format(row.amount)}"><div class="trend-bars"><i class="trend-bar income" style="height:${Number(row.income || 0) ? Math.max(5, Number(row.income || 0) / max * 100) : 0}%"></i><i class="trend-bar spending" style="height:${Number(row.amount || 0) ? Math.max(5, Number(row.amount || 0) / max * 100) : 0}%"></i></div><span>${new Date(`${row.month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'short' })}</span></button>`).join('') : '<p class="spending-empty">Monthly patterns will appear once transactions arrive.</p>';
+  const chart = $('#spendingTrend');
+  if (!months.length) { chart.innerHTML = '<p class="spending-empty">Monthly patterns will appear once transactions arrive.</p>'; return; }
+  // A single diverging bar answers the useful monthly question immediately:
+  // did more money come in than go out? The selected-month summary preserves
+  // the underlying income and outflow values without making the bars overlap.
+  const compact = chart.clientWidth < 480;
+  const width = compact ? 390 : 720, height = 210, plot = { left: compact ? 39 : 48, right: 10, top: 12, bottom: 174 };
+  const values = months.map((row) => Number(row.income || 0) - Number(row.amount || 0));
+  const maxAbs = Math.max(...values.map((value) => Math.abs(value)), 1);
+  const zeroY = (plot.top + plot.bottom) / 2;
+  const scale = Math.min(zeroY - plot.top, plot.bottom - zeroY) / maxAbs;
+  const money = (value) => {
+    const prefix = value < 0 ? '−' : '';
+    const absolute = Math.abs(value);
+    return `${prefix}${absolute >= 1000 ? `$${Math.round(absolute / 1000)}k` : fmt.format(absolute)}`;
+  };
+  const ticks = [maxAbs, maxAbs / 2, 0, -maxAbs / 2, -maxAbs].map((value) => {
+    const y = zeroY - value * scale;
+    return `<g><line x1="${plot.left}" y1="${y.toFixed(1)}" x2="${width - plot.right}" y2="${y.toFixed(1)}" class="trend-grid ${value === 0 ? 'zero' : ''}"/><text x="${plot.left - 7}" y="${(y + 4).toFixed(1)}" text-anchor="end" class="trend-axis">${money(value)}</text></g>`;
+  }).join('');
+  const step = (width - plot.left - plot.right) / months.length;
+  const barWidth = Math.min(compact ? 22 : 34, step * .62);
+  const bars = months.map((row, index) => {
+    const value = values[index], x = plot.left + step * index + (step - barWidth) / 2;
+    const y = value >= 0 ? zeroY - value * scale : zeroY;
+    const barHeight = Math.max(value ? 3 : 0, Math.abs(value) * scale);
+    const label = new Date(`${row.month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'short' });
+    const showLabel = months.length <= 6 || index % 2 === 0 || index === months.length - 1;
+    const title = `${row.month}: Income ${fmt.format(row.income || 0)} · Money out ${fmt.format(row.amount || 0)} · ${value >= 0 ? 'Left' : 'Over'} ${fmt.format(Math.abs(value))}`;
+    return `<g class="trend-column ${state.spendingMonth === row.month ? 'active' : ''}" data-spending-month="${row.month}" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} cash flow activity" title="${escapeHtml(title)}"><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="5" fill="${value >= 0 ? 'var(--income)' : 'var(--outflow)'}"/>${showLabel ? `<text x="${(x + barWidth / 2).toFixed(1)}" y="${height - 10}" text-anchor="middle" class="trend-month">${label}</text>` : ''}</g>`;
+  }).join('');
+  chart.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Monthly cash flow. Green bars above zero show money left after cash outflow; coral bars below zero show months where cash outflow exceeded income.">${ticks}${bars}</svg>`;
 }
 
 function renderCashFlowSankey(data) {
@@ -443,34 +473,29 @@ function renderCashFlowSankey(data) {
   const income = Number(data.income || 0), actualSpend = Number(data.actualSpend || 0), savings = Number(data.savings || 0), investments = Number(data.investments || 0);
   if (!income && !actualSpend && !savings && !investments) { el.innerHTML = ''; return; }
   const compact = el.clientWidth < 480;
-  const width = compact ? 390 : 720, height = 216, plot = { left: compact ? 37 : 48, right: 10, top: 14, bottom: 180 };
-  const net = income - actualSpend - savings - investments;
-  const displayValue = (value) => {
+  const width = compact ? 390 : 720, height = 216;
+  const sourceX = 12, sourceW = compact ? 88 : 132;
+  const middleX = compact ? 112 : 244, middleW = compact ? 112 : 150;
+  const destinationX = compact ? 242 : 458, destinationW = compact ? 136 : 230;
+  const displayValue = (value, isIncome = false) => {
     if (state.cashflowDisplay === 'amount') return fmt.format(value);
     if (!income) return '—';
-    return `${Math.round(Math.abs(value) / income * 100)}%`;
+    return `${Math.round((isIncome ? 1 : value / income) * 100)}%`;
   };
-  const positiveMax = Math.max(income, net, 1), negativeMax = Math.max(actualSpend, savings, investments, -net, 1);
-  const available = plot.bottom - plot.top;
-  const zeroY = plot.top + available * (positiveMax / (positiveMax + negativeMax));
-  const positiveScale = (zeroY - plot.top) / positiveMax, negativeScale = (plot.bottom - zeroY) / negativeMax;
-  const moneyAxis = (value) => state.cashflowDisplay === 'percentage' ? (income ? `${Math.round(value / income * 100)}%` : '—') : (Math.abs(value) >= 1000 ? `$${Math.round(value / 1000)}k` : fmt.format(value));
-  const ticks = [positiveMax, positiveMax / 2, 0, -negativeMax / 2, -negativeMax].map((value) => {
-    const y = value >= 0 ? zeroY - value * positiveScale : zeroY - value * negativeScale;
-    return `<g><line x1="${plot.left}" y1="${y.toFixed(1)}" x2="${width - plot.right}" y2="${y.toFixed(1)}" class="cashflow-grid ${value === 0 ? 'zero' : ''}"/><text x="${plot.left - 7}" y="${(y + 4).toFixed(1)}" text-anchor="end" class="cashflow-axis">${moneyAxis(value)}</text></g>`;
-  }).join('');
-  const bars = [
-    ['Income', income, 'var(--income)', 'income'], ['Spend', -actualSpend, 'var(--outflow)', 'actual_spend'], ['Save', -savings, 'var(--save)', 'savings'], ['Invest', -investments, 'var(--invest)', 'investments'], ['Net', net, net >= 0 ? 'var(--accent)' : 'var(--danger)', 'all']
-  ];
-  const step = (width - plot.left - plot.right) / bars.length, barWidth = Math.min(compact ? 42 : 62, step * .62);
-  const renderedBars = bars.map(([label, value, color, category], index) => {
-    const x = plot.left + step * index + (step - barWidth) / 2;
-    const y = value >= 0 ? zeroY - value * positiveScale : zeroY;
-    const h = Math.max(2, Math.abs(value) * (value >= 0 ? positiveScale : negativeScale));
-    const valueY = value >= 0 ? Math.max(plot.top + 10, y - 7) : Math.min(plot.bottom - 3, y + h + 13);
-    return `<g data-cashflow-category="${category}" class="cashflow-target cashflow-bar" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${h.toFixed(1)}" rx="7" fill="${color}"/><text x="${(x + barWidth / 2).toFixed(1)}" y="${valueY.toFixed(1)}" text-anchor="middle" class="cashflow-value">${displayValue(value)}</text><text x="${(x + barWidth / 2).toFixed(1)}" y="${height - 10}" text-anchor="middle" class="cashflow-label">${label}</text></g>`;
-  }).join('');
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Cash flow chart with income above zero and money out below zero">${ticks}${renderedBars}</svg>`;
+  const block = (x, y, w, color, label, value, category = '', isIncome = false) => `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><rect x="${x}" y="${y}" width="${w}" height="36" rx="8" fill="var(--sankey-surface)" stroke="var(--sankey-border)"/><rect x="${x}" y="${y}" width="6" height="36" rx="3" fill="${color}"/><text x="${x + 13}" y="${y + 14}" class="cashflow-label">${escapeHtml(label)}</text><text x="${x + 13}" y="${y + 28}" class="cashflow-value">${displayValue(value, isIncome)}</text></g>`;
+  const flow = (fromX, fromY, toX, toY, ratio, color) => `<path class="cashflow-flow" d="M ${fromX} ${fromY} C ${fromX + (toX - fromX) * .42} ${fromY}, ${toX - (toX - fromX) * .42} ${toY}, ${toX} ${toY}" fill="none" stroke="${color}" stroke-opacity=".38" stroke-width="${Math.max(6, Math.min(30, ratio * 30))}" stroke-linecap="round"/>`;
+  const incomeY = 89, spendY = 18, saveY = 90, investY = 162;
+  const actualCategories = (data.actualSpendCategories || []).slice(0, 4);
+  let paths = flow(sourceX + sourceW, incomeY + 18, middleX, spendY + 18, actualSpend / Math.max(income, 1), 'var(--outflow)');
+  paths += flow(sourceX + sourceW, incomeY + 18, middleX, saveY + 18, savings / Math.max(income, 1), 'var(--save)');
+  paths += flow(sourceX + sourceW, incomeY + 18, middleX, investY + 18, investments / Math.max(income, 1), 'var(--invest)');
+  let categories = '';
+  actualCategories.forEach((row, index) => {
+    const y = 12 + index * 47;
+    paths += flow(middleX + middleW, spendY + 18, destinationX, y + 18, Number(row.amount || 0) / Math.max(actualSpend, 1), 'var(--outflow-muted)');
+    categories += block(destinationX, y, destinationW, 'var(--outflow-muted)', row.name, row.amount, row.key);
+  });
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Take-home income split into spending, saving, and investing">${paths}${block(sourceX, incomeY, sourceW, 'var(--income)', 'Take-home income', income, 'income', true)}${block(middleX, spendY, middleW, 'var(--outflow)', 'Actual spend', actualSpend, 'actual_spend')}${block(middleX, saveY, middleW, 'var(--save)', 'Save', savings, 'savings')}${block(middleX, investY, middleW, 'var(--invest)', 'Invest', investments, 'investments')}${categories}</svg>`;
 }
 
 function renderSpending(data) {
@@ -1102,6 +1127,13 @@ $('#spendingTrend').addEventListener('click', (event) => {
   $$('[data-spending-range]').forEach((control) => control.classList.remove('active'));
   renderSpending(state.spending);
   $('#spendingTransactionsPanel').open = true;
+});
+$('#spendingTrend').addEventListener('keydown', (event) => {
+  if (!['Enter', ' '].includes(event.key)) return;
+  const target = event.target.closest('[data-spending-month]');
+  if (!target) return;
+  event.preventDefault();
+  target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 });
 $$('[data-investment-range]').forEach((button) => button.addEventListener('click', () => {
   state.investmentRange = button.dataset.investmentRange;
