@@ -236,6 +236,23 @@ test('investment summary separates portfolio total, allocation, and positions', 
   assert.deepEqual(result.unclassifiedAccounts, [{ account_id: 'plaid-ira', name: 'Roth IRA', institution_name: 'Fidelity', balance: 10000, holdings_value: 9500, difference: 500 }]);
 });
 
+test('manual holdings fill only an institution-reported position gap', () => {
+  const store = {
+    accounts: [
+      { plaid_account_id: 'missing', name: 'Brokerage', institution_name: 'Example Broker', type: 'investment', current_balance: 3000 },
+      { plaid_account_id: 'reported', name: 'IRA', institution_name: 'Example Broker', type: 'investment', current_balance: 1000 }
+    ],
+    positions: [{ id: 'reported-position', account_id: 'reported', name: 'Cash', ticker: 'CASH', type: 'cash', value: 1000 }],
+    manual_holdings: [{ id: 'manual-position', account_id: 'missing', name: 'Broad market fund', ticker: 'FUND', asset_class: 'Funds', value: 3000 }]
+  };
+  const result = investmentSummary(store);
+  assert.equal(result.total, 4000);
+  assert.deepEqual(result.unclassifiedAccounts, []);
+  assert.deepEqual(result.allocation.map((row) => [row.name, row.value]), [['Funds', 3000], ['Cash', 1000]]);
+  assert.equal(result.positions.find((position) => position.id === 'manual-position').manual, true);
+  assert.equal(result.positions.find((position) => position.id === 'manual-position').gain, null);
+});
+
 test('demo mode provides seven years of usable account and spending history', () => {
   const store = { accounts: [], transactions: [], snapshots: [] };
   seedDemo(store);

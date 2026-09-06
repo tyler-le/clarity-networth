@@ -237,7 +237,11 @@ function renderLineChart(snapshots, summary) {
     const y = plotBottom - ((value - min) / (max - min)) * (plotBottom - plotTop);
     return `<line x1="${plotLeft}" y1="${y}" x2="${width - plotRight}" y2="${y}" class="chart-grid"/><text x="${plotLeft - 6}" y="${y + 3}" text-anchor="end" class="chart-axis-label">${axisCurrency(value)}</text>`;
   }).join('');
-  const dateLabel = (time) => new Date(time).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  // Repeating "Sep 2026" across a short range looks like a broken axis. Use
+  // days while every available point is in the same calendar month, then
+  // graduate to month/year as the selected range expands.
+  const sameMonth = new Date(domainStart).getFullYear() === new Date(domainEnd).getFullYear() && new Date(domainStart).getMonth() === new Date(domainEnd).getMonth();
+  const dateLabel = (time) => new Date(time).toLocaleDateString('en-US', sameMonth ? { month: 'short', day: 'numeric' } : { month: 'short', year: 'numeric' });
   const tickTimes = width > 420 ? [domainStart, (domainStart + domainEnd) / 2, domainEnd] : [domainStart, domainEnd];
   const xAxis = tickTimes.map((time, index) => `<text x="${(plotLeft + ((time - domainStart) / (domainEnd - domainStart)) * (width - plotLeft - plotRight)).toFixed(1)}" y="${height - 5}" text-anchor="${index === 0 ? 'start' : index === tickTimes.length - 1 ? 'end' : 'middle'}" class="chart-axis-label">${dateLabel(time)}</text>`).join('');
   el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img">
@@ -730,7 +734,9 @@ function renderInvestments(data) {
     $('#investmentPositions').innerHTML = affected.length ? affected.map((account) => {
       const missing = Number(account.difference) > 0;
       const amount = Math.abs(Number(account.difference || 0));
-      return `<div class="unclassified-account-row"><div class="unclassified-mark" aria-hidden="true">?</div><div><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || 'Institution')} · ${missing ? 'No matching holdings returned' : 'Holdings currently exceed the account balance'}</span></div><b class="${missing ? '' : 'negative'}">${missing ? '' : '−'}${fmt.format(amount)}</b></div>`;
+      const canEdit = !state.demoPreview && !state.dashboard?.demoMode;
+      const action = missing && canEdit ? `<button type="button" class="manual-holding-button" data-add-manual-holding="${escapeHtml(account.account_id)}" data-manual-account-name="${escapeHtml(account.name)}" data-manual-remaining="${amount}">Add holding</button>` : '';
+      return `<div class="unclassified-account-row"><div class="unclassified-mark" aria-hidden="true">?</div><div><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || 'Institution')} · ${missing ? 'No matching holdings returned' : 'Holdings currently exceed the account balance'}</span></div><div class="unclassified-actions"><b class="${missing ? '' : 'negative'}">${missing ? '' : '−'}${fmt.format(amount)}</b>${action}</div></div>`;
     }).join('') : '<p class="positions-empty">All investment account balances match their returned holdings.</p>';
     $('#investmentHoldingsMore').classList.add('hidden');
     return;
@@ -745,7 +751,8 @@ function renderInvestments(data) {
     const share = data.total ? Math.max(0, Number(position.value || 0) / Number(data.total) * 100) : 0;
     const accountBreakdown = position.positions.map((part) => {
       const categoryControl = canEdit ? `<select data-position-class="${escapeHtml(part.id)}" aria-label="Asset class for ${escapeHtml(part.name)} in ${escapeHtml(names.get(part.account_id) || 'investment account')}"><option value="" ${part.asset_class_override ? '' : 'selected'}>Automatic · ${escapeHtml(assetClassLabel(part.type))}</option>${['Equities', 'Funds', 'Fixed income', 'Cash', 'Crypto', 'Other'].map((option) => `<option value="${option}" ${part.asset_class_override === option ? 'selected' : ''}>${option}</option>`).join('')}</select>` : '';
-      return `<div class="holding-account"><div><span>${escapeHtml(names.get(part.account_id) || 'Investment account')}</span><small>${escapeHtml(assetClassLabel(part.type, part.asset_class_override))}</small></div><b>${fmt.format(part.value)}</b>${categoryControl}</div>`;
+      const manualControl = canEdit && part.manual ? `<button type="button" class="manual-holding-remove" data-remove-manual-holding="${escapeHtml(part.id)}">Remove</button>` : categoryControl;
+      return `<div class="holding-account"><div><span>${escapeHtml(names.get(part.account_id) || 'Investment account')}</span><small>${part.manual ? 'Manual · ' : ''}${escapeHtml(assetClassLabel(part.type, part.asset_class_override))}</small></div><b>${fmt.format(part.value)}</b>${manualControl}</div>`;
     }).join('');
     const location = position.positions.length === 1 ? 'Held in 1 account' : `Held in ${position.positions.length} accounts`;
     return `<details class="holding-row"><summary aria-label="${escapeHtml(position.name)}, ${fmt.format(position.value)}"><div class="position-symbol">${escapeHtml(position.ticker || '•')}</div><div class="holding-copy"><strong class="holding-ticker">${escapeHtml(position.ticker || 'Holding')}</strong><div class="holding-weight"><i><b style="width:${Math.min(100, share).toFixed(1)}%"></b></i><span>${Math.round(share)}%</span></div></div><div class="position-value"><b>${fmt.format(position.value)}</b><small class="${gain == null ? '' : gain >= 0 ? 'positive' : 'negative'}">${performance}</small></div></summary><div class="holding-detail"><strong>${escapeHtml(position.name)}</strong><span>${escapeHtml(position.classification)} · ${location}</span><div class="holding-account-list">${accountBreakdown}</div></div></details>`;
@@ -1217,6 +1224,50 @@ $('#investmentPositions').addEventListener('change', async (event) => {
     showNotice(select.value ? 'Holding classification updated.' : 'Using the institution classification.', 'success');
   } catch (error) { showNotice(error.message); select.disabled = false; }
 });
+$('#investmentPositions').addEventListener('click', async (event) => {
+  const add = event.target.closest('[data-add-manual-holding]');
+  if (add) {
+    const dialog = $('#manualHoldingDialog');
+    dialog.dataset.accountId = add.dataset.addManualHolding;
+    $('#manualHoldingHelp').textContent = `Your institution did not return holdings for ${add.dataset.manualAccountName}. Add up to ${fmt.format(Number(add.dataset.manualRemaining || 0))} so your allocation is accurate. This does not change anything at your institution.`;
+    $('#manualHoldingTicker').value = '';
+    $('#manualHoldingName').value = '';
+    $('#manualHoldingClass').value = 'Other';
+    $('#manualHoldingValue').value = Number(add.dataset.manualRemaining || 0).toFixed(2);
+    dialog.showModal();
+    $('#manualHoldingTicker').focus();
+    return;
+  }
+  const remove = event.target.closest('[data-remove-manual-holding]');
+  if (!remove) return;
+  if (!window.confirm('Remove this manual holding? Your institution data will stay unchanged.')) return;
+  remove.disabled = true;
+  try {
+    state.investments = await api(`/api/manual-holdings/${encodeURIComponent(remove.dataset.removeManualHolding)}`, { method: 'DELETE' });
+    renderInvestments(state.investments);
+    showNotice('Manual holding removed.', 'success');
+  } catch (error) { showNotice(error.message); remove.disabled = false; }
+});
+$('#manualHoldingForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const dialog = $('#manualHoldingDialog');
+  const save = $('#manualHoldingSave');
+  save.disabled = true;
+  try {
+    state.investments = await api(`/api/investment-accounts/${encodeURIComponent(dialog.dataset.accountId)}/manual-holdings`, {
+      method: 'POST',
+      body: JSON.stringify({ ticker: $('#manualHoldingTicker').value, name: $('#manualHoldingName').value, asset_class: $('#manualHoldingClass').value, value: $('#manualHoldingValue').value })
+    });
+    state.investmentFilter = 'all';
+    state.holdingsExpanded = true;
+    dialog.close();
+    renderInvestments(state.investments);
+    showNotice('Manual holding added.', 'success');
+  } catch (error) { showNotice(error.message); }
+  finally { save.disabled = false; }
+});
+$('#manualHoldingCancel').addEventListener('click', () => $('#manualHoldingDialog').close());
+$('#manualHoldingClose').addEventListener('click', () => $('#manualHoldingDialog').close());
 
 function showAuthenticatedApp() {
   $('#authScreen').classList.add('hidden');

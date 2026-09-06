@@ -60,7 +60,21 @@ function assetClass(type, override = null) {
 export function investmentSummary(store) {
   const accounts = store.accounts.filter((account) => !account.hidden && account.type === 'investment');
   const accountIds = new Set(accounts.map((account) => account.plaid_account_id));
-  const positions = (store.positions || []).filter((position) => !position.hidden && accountIds.has(position.account_id));
+  const providerPositions = (store.positions || []).filter((position) => !position.hidden && accountIds.has(position.account_id));
+  // A provider can return an investment account balance without its positions.
+  // Manual entries fill only that unexplained balance; reported positions remain
+  // intact, so this works the same way across institutions.
+  const manualPositions = (store.manual_holdings || [])
+    .filter((position) => accountIds.has(position.account_id))
+    .map((position) => ({
+      ...position,
+      type: 'other',
+      asset_class_override: position.asset_class,
+      quantity: null,
+      cost_basis: null,
+      manual: true
+    }));
+  const positions = [...providerPositions, ...manualPositions];
   const total = accounts.reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
   const holdingsValue = positions.reduce((sum, position) => sum + Math.abs(Number(position.value || 0)), 0);
   const holdingsByAccount = new Map();

@@ -21,6 +21,7 @@ const emptyStore = () => ({
   items: [],
   accounts: [],
   positions: [],
+  manual_holdings: [],
   position_overrides: {},
   investment_transactions: [],
   investment_link_events: [],
@@ -86,6 +87,7 @@ export function removeDemoData(store) {
   store.items = store.items.filter((item) => !item.demo);
   store.accounts = store.accounts.filter((account) => !account.demo);
   store.positions = (store.positions || []).filter((position) => !position.demo);
+  store.manual_holdings = (store.manual_holdings || []).filter((position) => !position.demo);
   store.investment_transactions = [];
   store.market_prices = {};
   store.investment_snapshots = [];

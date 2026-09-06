@@ -182,6 +182,19 @@
       <div class="dialog-actions"><button type="button" class="secondary dialog-cancel" id="nicknameCancel">Cancel</button><button class="primary" id="nicknameSave" value="default">Save name</button></div>
     </form>
   </dialog>
+  <dialog class="nickname-dialog manual-holding-dialog" id="manualHoldingDialog" aria-labelledby="manualHoldingDialogTitle">
+    <form id="manualHoldingForm">
+      <button type="button" class="dialog-close" id="manualHoldingClose" aria-label="Close">×</button>
+      <div class="card-label">MANUAL HOLDING</div>
+      <h2 id="manualHoldingDialogTitle">Add a holding</h2>
+      <p id="manualHoldingHelp">Your institution did not return holdings for this balance. Add the missing position so your allocation is accurate. This does not change anything at your institution.</p>
+      <label>Security or ticker<input id="manualHoldingTicker" name="ticker" maxlength="24" autocomplete="off" placeholder="e.g. VTI" required /></label>
+      <label>Display name <input id="manualHoldingName" name="name" maxlength="80" autocomplete="off" placeholder="Optional" /></label>
+      <label>Asset type<select id="manualHoldingClass" name="asset_class"><option value="Other">Other</option><option value="Equities">Equities</option><option value="Funds">Funds</option><option value="Fixed income">Fixed income</option><option value="Cash">Cash</option><option value="Crypto">Crypto</option></select></label>
+      <label>Current value<input id="manualHoldingValue" name="value" type="number" min="0.01" step="0.01" inputmode="decimal" required /></label>
+      <div class="dialog-actions"><button type="button" class="secondary" id="manualHoldingCancel">Cancel</button><button class="primary" id="manualHoldingSave" type="submit">Add holding</button></div>
+    </form>
+  </dialog>
   <dialog class="retirement-info-dialog" id="retirementInfoDialog" aria-labelledby="retirementInfoTitle">
     <form method="dialog">
       <header class="retirement-info-head">

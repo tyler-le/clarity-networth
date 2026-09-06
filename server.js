@@ -122,14 +122,14 @@ async function saveStoreByKey(storageKey, store) {
 
 function activeStore(store) {
   if (!store.settings?.demo_mode) return store;
-  const demo = { ...store, accounts: [], positions: [], transactions: [], snapshots: [], items: [] };
+  const demo = { ...store, accounts: [], positions: [], manual_holdings: [], transactions: [], snapshots: [], items: [] };
   seedDemo(demo);
   return demo;
 }
 
 function demoPreviewStore() {
   const store = {
-    items: [], accounts: [], positions: [], position_overrides: {}, investment_transactions: [],
+    items: [], accounts: [], positions: [], manual_holdings: [], position_overrides: {}, investment_transactions: [],
     market_prices: {}, investment_snapshots: [], transactions: [], snapshots: [],
     settings: { targets: { fixed: 50, savings: 10, investments: 10, guilt_free: 30 }, demo_mode: true }
   };
@@ -681,6 +681,38 @@ app.patch('/api/positions/:id/asset-class', async (req, res) => {
   res.json({ ok: true, asset_class_override: position.asset_class_override });
 });
 
+const holdingAssetClasses = new Set(['Equities', 'Funds', 'Fixed income', 'Cash', 'Crypto', 'Other']);
+
+app.post('/api/investment-accounts/:id/manual-holdings', async (req, res) => {
+  const ticker = String(req.body?.ticker || '').trim().replace(/\s+/g, ' ').toUpperCase();
+  const name = String(req.body?.name || '').trim().replace(/\s+/g, ' ');
+  const assetClass = String(req.body?.asset_class || '').trim();
+  const value = Number(req.body?.value);
+  if ((!ticker && !name) || ticker.length > 24 || name.length > 80) return res.status(400).json({ error: 'Enter a security name or ticker within the allowed length.' });
+  if (!holdingAssetClasses.has(assetClass)) return res.status(400).json({ error: 'Choose an asset type.' });
+  if (!Number.isFinite(value) || value <= 0) return res.status(400).json({ error: 'Enter a current value greater than $0.' });
+  const store = await loadStore(req.user);
+  const account = store.accounts.find((record) => record.plaid_account_id === req.params.id && record.type === 'investment' && !record.hidden && !record.demo);
+  if (!account) return res.status(404).json({ error: 'Investment account not found.' });
+  const reportedValue = (store.positions || []).filter((position) => position.account_id === account.plaid_account_id && !position.hidden).reduce((sum, position) => sum + Math.abs(Number(position.value || 0)), 0);
+  const manualValue = (store.manual_holdings || []).filter((position) => position.account_id === account.plaid_account_id).reduce((sum, position) => sum + Math.abs(Number(position.value || 0)), 0);
+  const remaining = Math.max(0, Math.abs(Number(account.current_balance || 0)) - reportedValue - manualValue);
+  if (value > remaining + 0.01) return res.status(400).json({ error: `This is more than the ${remaining.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} not represented by returned holdings.` });
+  store.manual_holdings ||= [];
+  store.manual_holdings.push({ id: `manual:${crypto.randomUUID()}`, account_id: account.plaid_account_id, ticker, name: name || ticker, asset_class: assetClass, value: Math.round(value * 100) / 100, created_at: new Date().toISOString() });
+  await saveStore(req.user, store);
+  res.json(investmentSummary(activeStore(store)));
+});
+
+app.delete('/api/manual-holdings/:id', async (req, res) => {
+  const store = await loadStore(req.user);
+  const index = (store.manual_holdings || []).findIndex((position) => position.id === req.params.id);
+  if (index < 0) return res.status(404).json({ error: 'Manual holding not found.' });
+  store.manual_holdings.splice(index, 1);
+  await saveStore(req.user, store);
+  res.json(investmentSummary(activeStore(store)));
+});
+
 app.post('/api/demo-mode', async (req, res) => {
   const store = await loadStore(req.user);
   store.settings.demo_mode = Boolean(req.body?.enabled);
@@ -695,6 +727,8 @@ app.delete('/api/items/:id', async (req, res) => {
   store.items = store.items.filter((candidate) => candidate.id !== item.id);
   store.accounts = store.accounts.filter((account) => account.item_id !== item.id);
   store.positions = (store.positions || []).filter((position) => position.item_id !== item.id);
+  const remainingAccountIds = new Set(store.accounts.map((account) => account.plaid_account_id));
+  store.manual_holdings = (store.manual_holdings || []).filter((position) => remainingAccountIds.has(position.account_id));
   for (const key of Object.keys(store.position_overrides || {})) if (key.startsWith(`${item.id}:`)) delete store.position_overrides[key];
   store.transactions = store.transactions.filter((transaction) => transaction.item_id !== item.id);
   snapshotNetWorth(store);
