@@ -478,7 +478,7 @@ function renderSpending(data) {
   $('#cashflowHeadline').textContent = remaining >= 0 ? 'Left after spending and saving' : 'More allocated than income';
   $('#cashflowHeadline').className = `cashflow-headline ${remaining >= 0 ? 'positive' : 'negative'}`;
   const preTaxNote = $('#cashflowPreTax');
-  preTaxNote.textContent = preTaxRetirement ? `Plus ${fmt.format(preTaxRetirement)} saved to retirement through payroll — not included above because it never reached your bank account.` : '';
+  preTaxNote.innerHTML = preTaxRetirement ? `<span class="cashflow-payroll-mark" aria-hidden="true">↗</span><div><span>PAYROLL RETIREMENT</span><strong>${fmt.format(preTaxRetirement)}</strong><p>Saved before it reached your bank account — outside this cash-flow view.</p></div>` : '';
   preTaxNote.classList.toggle('hidden', !preTaxRetirement);
   const rangeLabel = ({ '1m': 'this month', '3m': 'over the last 3 months', ytd: 'year to date', '1y': 'over the last year' })[data.range] || 'this month';
   const selectedMonthLabel = state.spendingMonth && new Date(`${state.spendingMonth}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
