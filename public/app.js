@@ -1007,8 +1007,17 @@ $('#spendingSort').addEventListener('change', (event) => { state.spendingSort = 
 function openSpendingCategory(category) {
   if (!category) return;
   state.spendingCategory = category;
-  $('#spendingTransactionsPanel').open = true;
+  const panel = $('#spendingTransactionsPanel');
+  panel.open = true;
   renderSpending(state.spending);
+  // A Sankey or payroll tap happens well above the activity drawer on a
+  // phone. Bring the filtered result into view so the interaction has an
+  // obvious, immediate outcome instead of appearing to do nothing.
+  requestAnimationFrame(() => {
+    const summary = panel.querySelector('summary');
+    summary?.focus({ preventScroll: true });
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 }
 $('#spendingLegend')?.addEventListener('click', (event) => openSpendingCategory(event.target.closest('[data-spending-category]')?.dataset.spendingCategory));
 $('#cashflowSankey').addEventListener('click', (event) => openSpendingCategory(event.target.closest('[data-cashflow-category]')?.dataset.cashflowCategory));

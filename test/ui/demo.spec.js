@@ -75,6 +75,7 @@ test('payroll contributions open their own cash-flow activity', async ({ page })
   await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
   await expect(page.locator('#spendingCategoryFilter')).toHaveValue('payroll_retirement');
   await expect(page.locator('.payroll-transaction').first()).toContainText('401(k)');
+  await expect(page.locator('#spendingTransactionsPanel summary')).toBeFocused();
 });
 
 test('net-worth history can be scrubbed and always identifies the selected date', async ({ page }) => {
