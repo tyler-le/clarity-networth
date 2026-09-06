@@ -456,14 +456,22 @@ function renderSpendingTrend(data) {
   const width = compact ? 390 : 720, height = 210, plot = { left: compact ? 39 : 48, right: 10, top: 12, bottom: 174 };
   const values = months.map((row) => Number(row.income || 0) - Number(row.amount || 0));
   const maxAbs = Math.max(...values.map((value) => Math.abs(value)), 1);
+  // Round the symmetric domain to a useful amount. Exact maxima create
+  // awkward labels (for example $3,143 / $1,572) and make the visual feel
+  // falsely precise; a calm $3k / $1.5k / $0 scale is easier to scan.
+  const magnitude = 10 ** Math.floor(Math.log10(maxAbs));
+  const normalized = maxAbs / magnitude;
+  const increment = normalized < 2 ? .25 : normalized < 5 ? .5 : 1;
+  const axisMax = Math.ceil(normalized / increment) * increment * magnitude;
   const zeroY = (plot.top + plot.bottom) / 2;
-  const scale = Math.min(zeroY - plot.top, plot.bottom - zeroY) / maxAbs;
+  const scale = Math.min(zeroY - plot.top, plot.bottom - zeroY) / axisMax;
   const money = (value) => {
     const prefix = value < 0 ? '−' : '';
     const absolute = Math.abs(value);
-    return `${prefix}${absolute >= 1000 ? `$${Math.round(absolute / 1000)}k` : fmt.format(absolute)}`;
+    const compactValue = absolute >= 1000 ? `$${Number((absolute / 1000).toFixed(1))}k` : fmt.format(absolute);
+    return `${prefix}${compactValue}`;
   };
-  const ticks = [maxAbs, maxAbs / 2, 0, -maxAbs / 2, -maxAbs].map((value) => {
+  const ticks = [axisMax, axisMax / 2, 0, -axisMax / 2, -axisMax].map((value) => {
     const y = zeroY - value * scale;
     return `<g><line x1="${plot.left}" y1="${y.toFixed(1)}" x2="${width - plot.right}" y2="${y.toFixed(1)}" class="trend-grid ${value === 0 ? 'zero' : ''}"/><text x="${plot.left - 7}" y="${(y + 4).toFixed(1)}" text-anchor="end" class="trend-axis">${money(value)}</text></g>`;
   }).join('');
@@ -474,9 +482,8 @@ function renderSpendingTrend(data) {
     const y = value >= 0 ? zeroY - value * scale : zeroY;
     const barHeight = Math.max(value ? 3 : 0, Math.abs(value) * scale);
     const label = new Date(`${row.month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'short' });
-    const showLabel = months.length <= 6 || index % 2 === 0 || index === months.length - 1;
     const title = `${row.month}: Income ${fmt.format(row.income || 0)} · Money out ${fmt.format(row.amount || 0)} · ${value >= 0 ? 'Left' : 'Over'} ${fmt.format(Math.abs(value))}`;
-    return `<g class="trend-column ${state.spendingMonth === row.month ? 'active' : ''}" data-spending-month="${row.month}" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} cash flow activity" title="${escapeHtml(title)}"><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="5" fill="${value >= 0 ? 'var(--income)' : 'var(--outflow)'}"/>${showLabel ? `<text x="${(x + barWidth / 2).toFixed(1)}" y="${height - 10}" text-anchor="middle" class="trend-month">${label}</text>` : ''}</g>`;
+    return `<g class="trend-column ${state.spendingMonth === row.month ? 'active' : ''}" data-spending-month="${row.month}" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} cash flow activity" title="${escapeHtml(title)}"><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="5" fill="${value >= 0 ? 'var(--income)' : 'var(--outflow)'}"/><text x="${(x + barWidth / 2).toFixed(1)}" y="${height - 10}" text-anchor="middle" class="trend-month">${label}</text></g>`;
   }).join('');
   chart.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Monthly cash flow. Green bars above zero show money left after cash outflow; coral bars below zero show months where cash outflow exceeded income.">${ticks}${bars}</svg>`;
 }

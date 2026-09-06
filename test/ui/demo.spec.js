@@ -36,6 +36,7 @@ test('a new visitor can explore the complete demo without signing in', async ({ 
   await expect(page.getByRole('heading', { name: 'Cash flow' })).toBeVisible();
   await page.locator('[data-spending-range="1y"]').click();
   await expect(page.locator('.trend-column')).toHaveCount(12);
+  await expect(page.locator('.trend-month')).toHaveCount(12);
   await expect(page.locator('#cashflowSankey svg')).toBeVisible();
   await expect(page.locator('#recurringCharges')).toBeVisible();
 
