@@ -398,6 +398,8 @@ test('retirement presets calculate coast, lean, standard, fat, and a projected r
   };
   const plan = calculateFire(store, 100000);
   assert.equal(plan.annualSpend, 48000);
+  assert.equal(plan.withdrawalRate, 4);
+  assert.equal(plan.realReturn, 5);
   assert.equal(plan.standard, 1200000);
   assert.equal(plan.lean, 840000);
   assert.equal(plan.fat, 1800000);

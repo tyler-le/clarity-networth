@@ -771,8 +771,11 @@ export function calculateFire(store, netWorth) {
   return {
     age,
     retirementAge,
-    withdrawalRate: withdrawalRate * 100,
-    realReturn: realReturn * 100,
+    // Decimal arithmetic can otherwise serialize a clean 7% as
+    // 7.000000000000001%. These are user-facing assumptions, so preserve
+    // sensible precision at the API boundary.
+    withdrawalRate: Number((withdrawalRate * 100).toFixed(2)),
+    realReturn: Number((realReturn * 100).toFixed(2)),
     leanMultiplier: leanMultiplier * 100,
     fatMultiplier: fatMultiplier * 100,
     annualSpend: spend.annualSpend,

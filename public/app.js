@@ -841,12 +841,23 @@ function renderRetirement(data) {
     date.setMonth(date.getMonth() + months);
     return `Est. ${date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`;
   };
-  $('#retirementPath').innerHTML = (data.ladder || []).map((step) => {
+  const ladder = data.ladder || [];
+  const estimatedMonths = ladder.map((step) => Number(step.estimatedMonths)).filter(Number.isFinite);
+  const horizonMonths = Math.max(12, Number(data.yearsToRetirement || 0) * 12, ...estimatedMonths);
+  const horizonDate = new Date();
+  horizonDate.setMonth(horizonDate.getMonth() + horizonMonths);
+  const horizonLabel = horizonDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  const timelineRows = ladder.map((step) => {
     const interactive = ['coast', 'standard'].includes(step.key);
     const tag = interactive ? 'button' : 'div';
     const action = interactive ? ` type="button" data-retirement-milestone="${step.key}" aria-label="Learn about ${escapeHtml(step.name)}"` : '';
-    return `<${tag} class="retirement-milestone ${step.complete ? 'complete' : ''}"${action}><span>${step.complete ? '✓ ' : ''}${escapeHtml(step.name)}</span><strong>${fmt.format(step.target || 0)}</strong><i><b style="width:${Math.min(100, Number(step.progress || 0)).toFixed(1)}%"></b></i><small>${escapeHtml(step.detail)}</small><em>${escapeHtml(estimatedLabel(step.estimatedMonths, step.complete))}</em></${tag}>`;
+    const months = Number(step.estimatedMonths);
+    const estimated = Number.isFinite(months);
+    const position = estimated ? Math.max(2, Math.min(98, months / horizonMonths * 100)) : null;
+    const status = estimatedLabel(months, step.complete);
+    return `<${tag} class="retirement-timeline-row ${step.complete ? 'complete' : ''} ${interactive ? 'interactive' : ''}"${action}><span class="retirement-timeline-label"><b>${step.complete ? '✓ ' : ''}${escapeHtml(step.name)}</b><small>${fmt.format(step.target || 0)} target</small></span><span class="retirement-timeline-track${estimated ? '' : ' no-estimate'}"><i style="width:${position || 0}%"></i>${estimated ? `<b style="left:${position}%"></b>` : ''}</span><span class="retirement-timeline-date">${escapeHtml(status)}</span></${tag}>`;
   }).join('');
+  $('#retirementPath').innerHTML = `<div class="retirement-timeline-axis" aria-hidden="true"><span>Milestone</span><span><i>Today</i><i>${escapeHtml(horizonLabel)}</i></span><span>Timing</span></div>${timelineRows}`;
   $('#retirementLifestylePaths').innerHTML = (data.lifestyles || []).map((path, index) => `<div class="retirement-lifestyle ${index === 1 ? 'featured' : ''}"><span>${escapeHtml(path.name)}</span><strong>${fmt.format(path.target || 0)}</strong><small>${escapeHtml(path.detail)}</small></div>`).join('');
   const form = $('#retirementForm');
   form.age.value = data.age;
