@@ -832,7 +832,9 @@ export function seedDemo(store) {
   }));
   store.transactions.push({
     id: 'demo-401k-contribution', plaid_transaction_id: 'demo-401k-contribution', account_id: 'demo-401k',
-    merchant_name: '401(k) employee contribution', name: '401(k) employee contribution', amount: 300, date: d(15),
+    // Keep the current demo's payroll contribution posted, rather than
+    // accidentally placing it later in the current calendar month.
+    merchant_name: '401(k) employee contribution', name: '401(k) employee contribution', amount: 300, date: d(2),
     bucket: 'investments', excluded: false, pending: false, pfc_primary: 'RETIREMENT_CONTRIBUTION',
     pfc_detailed: '', source: 'investment_transaction', demo: true
   });
