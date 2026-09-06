@@ -142,9 +142,6 @@ function restoreNetWorthHero() {
 }
 
 function renderNetWorthInsights(snaps) {
-  const insight = state.dashboard?.insight;
-  $('#weeklyInsightTitle').textContent = insight?.title || 'Still learning your pattern';
-  $('#weeklyInsightDetail').textContent = insight?.detail || 'A useful signal will appear after more activity arrives.';
   const label = netWorthRangeLabel(state.networthRange).toLowerCase();
   if (snaps.length < 2) {
     $('#netWorthChange').textContent = 'Still tracking';
@@ -1046,7 +1043,6 @@ $('#cashflowSankey').addEventListener('keydown', (event) => {
   openSpendingCategory(target.dataset.cashflowCategory);
 });
 $('#cashflowPreTax').addEventListener('click', () => openSpendingCategory('payroll_retirement'));
-$('#weeklyInsight').addEventListener('click', () => setView(state.dashboard?.insight?.action || 'spending'));
 function donutSelection(event, element, rows) {
   const rect = element.getBoundingClientRect();
   const x = event.clientX - rect.left - rect.width / 2;

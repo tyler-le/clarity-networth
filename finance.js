@@ -274,19 +274,6 @@ export function recurringCharges(store, anchor = new Date()) {
   };
 }
 
-export function financialInsight(store, anchor = new Date()) {
-  const recurring = recurringCharges(store, anchor);
-  const increased = recurring.increases[0];
-  if (increased) return { title: `${increased.name} increased`, detail: `${fmtCurrency(increased.amount)} · ${Math.round(increased.change * 100)}% above its previous recurring charge.`, action: 'spending' };
-  const upcoming = recurring.upcoming[0];
-  if (upcoming) return { title: `${upcoming.name} is likely next`, detail: `Usually ${fmtCurrency(upcoming.amount)} · expected around ${new Date(`${upcoming.nextDate}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.`, action: 'spending' };
-  const runway = cashRunway(store, anchor);
-  if (runway.essentialMonthly && runway.runwayMonths < 3) return { title: 'Cash buffer is under 3 months', detail: `${fmtCurrency(runway.cash)} covers about ${runway.runwayMonths.toFixed(1)} months of essential costs.`, action: 'accounts' };
-  const summary = spendingSummary(store, '3m', anchor);
-  return { title: 'Your cash flow is organized', detail: summary.income ? `${fmtCurrency(summary.actualSpend)} in everyday spending across the last 3 completed months.` : 'Connect a spending account to surface a personalized insight.', action: 'spending' };
-}
-
-function fmtCurrency(value) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value); }
 
 function spendingPeriod(range, anchor = new Date()) {
   // Month-to-date is useful while a month is in progress. Comparisons over

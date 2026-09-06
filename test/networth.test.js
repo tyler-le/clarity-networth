@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { calculateFire, cashRunway, classifyTransaction, financialInsight, hideDuplicateAccounts, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
+import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
 import { normalizeCandles } from '../market-data.js';
 import { filterSnapshots, scrubIndex } from '../public/chart-utils.js';
 
@@ -151,7 +151,6 @@ test('recurring charge awareness identifies cadence and a meaningful increase', 
   assert.deepEqual(recurring.recurring.map((charge) => [charge.name, charge.cadence]), [['Rent', 'monthly'], ['Stream Plus', 'monthly']]);
   assert.equal(recurring.increases[0].name, 'Stream Plus');
   assert.ok(Math.abs(recurring.increases[0].change - (20 / 15 - 1)) < 1e-9);
-  assert.equal(financialInsight(store, new Date('2026-09-05T12:00:00')).title, 'Stream Plus increased');
 });
 
 test('portfolio history keeps one verified investment value for each day', () => {
