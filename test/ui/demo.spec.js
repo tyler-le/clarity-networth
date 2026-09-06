@@ -94,6 +94,8 @@ test('net-worth history can be scrubbed and always identifies the selected date'
   await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.55);
   await expect(page.locator('#netWorthChartDate')).toHaveText(/\d{4}/);
   await expect(page.locator('#netWorthDelta')).toContainText('Assets');
+  const afterScrub = await chart.boundingBox();
+  expect(afterScrub?.y).toBe(box.y);
 });
 
 test('holding details preserve account context without crowding the overview', async ({ page }) => {
