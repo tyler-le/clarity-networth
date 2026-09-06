@@ -157,43 +157,7 @@ function restoreNetWorthHero() {
   renderNetWorthInsights(snaps);
 }
 
-function renderNetWorthInsights(snaps) {
-  const label = netWorthRangeLabel(state.networthRange).toLowerCase();
-  if (snaps.length < 2) {
-    $('#netWorthChange').textContent = 'Still tracking';
-    $('#netWorthChangeDetail').textContent = 'A second balance snapshot will explain how your net worth is moving.';
-  } else {
-    const first = snaps[0];
-    const last = snaps.at(-1);
-    const netChange = Number(last.net_worth || 0) - Number(first.net_worth || 0);
-    $('#netWorthChange').textContent = `${netChange >= 0 ? '+' : '−'}${fmt.format(Math.abs(netChange))} in ${label}`;
-    const hasBreakdown = [first, last].every((snapshot) => Number.isFinite(Number(snapshot.assets)) && Number.isFinite(Number(snapshot.liabilities)));
-    if (!hasBreakdown) {
-      $('#netWorthChangeDetail').textContent = 'Based on verified net worth snapshots in this timeframe.';
-    } else {
-      const assetChange = Number(last.assets) - Number(first.assets);
-      const debtChange = Number(last.liabilities) - Number(first.liabilities);
-      const debtText = `debt ${debtChange <= 0 ? 'down' : 'up'} ${fmt.format(Math.abs(debtChange))}`;
-      const startDate = first.date, endDate = last.date;
-      const contributionRows = state.dashboard?.investmentContributions || [];
-      const contributions = contributionRows.filter((row) => row.date >= startDate && row.date <= endDate).reduce((sum, row) => sum + Number(row.amount || 0), 0);
-      const linkedEvents = (state.dashboard?.investmentLinkBalances || []).filter((row) => row.date >= startDate && row.date <= endDate);
-      const hasUnattributedOpeningBalance = linkedEvents.some((event) => event.historicalCoverage === false && contributionRows.filter((row) => row.accountId === event.accountId && row.date <= event.date).reduce((sum, row) => sum + Number(row.amount || 0), 0) < Number(event.amount || 0) - 1);
-      const allPortfolioSnapshots = state.investments?.snapshots || [];
-      const portfolio = allPortfolioSnapshots.filter((row) => row.date >= startDate && row.date <= endDate);
-      const investmentChange = portfolio.length > 1 ? Number(portfolio.at(-1).value || 0) - Number(portfolio[0].value || 0) : null;
-      // A connection's opening balance is neither a contribution nor market
-      // performance. A reconstructed snapshot before the link date is a valid
-      // historical baseline; otherwise we wait for post-link tracking.
-      const earliestLinkDate = linkedEvents.map((event) => event.date).sort().at(0);
-      const hasReconstructedBaseline = earliestLinkDate && allPortfolioSnapshots.some((snapshot) => snapshot.source === 'reconstructed' && snapshot.date < earliestLinkDate);
-      const investmentGrowth = investmentChange == null || (linkedEvents.length && !hasReconstructedBaseline) || hasUnattributedOpeningBalance ? null : investmentChange - contributions;
-      const contributionText = `Contributed ${fmt.format(contributions)}`;
-      const historyState = state.investments?.historyStatus?.state;
-      const growthText = hasUnattributedOpeningBalance ? 'Investment performance needs contribution history' : linkedEvents.length && !hasReconstructedBaseline && historyState === 'unavailable' ? 'Investment growth needs verified historical pricing' : linkedEvents.length && !hasReconstructedBaseline ? 'Investment growth still tracking' : investmentGrowth == null ? 'Investment growth still tracking' : `Investments ${investmentGrowth >= 0 ? 'grew' : 'fell'} ${fmt.format(Math.abs(investmentGrowth))}`;
-      $('#netWorthChangeDetail').innerHTML = `<span class="positive">${contributionText}</span><span> · </span><span class="${investmentGrowth == null || investmentGrowth >= 0 ? 'positive' : 'negative'}">${growthText}</span><span> · </span><span class="${debtChange <= 0 ? 'positive' : 'negative'}">${debtText}</span>`;
-    }
-  }
+function renderNetWorthInsights() {
   const runway = state.dashboard?.runway;
   if (!runway?.essentialMonthly) {
     $('#cashRunway').textContent = fmt.format(Number(runway?.cash || 0));
