@@ -95,7 +95,11 @@ function applyTheme(theme, persist = true) {
   const toggle = $('#themeToggle');
   if (toggle) toggle.checked = dark;
   if (persist) {
-    try { localStorage.setItem(themeStorageKey, dark ? 'dark' : 'light'); } catch { /* Appearance preference can remain session-only. */ }
+    // Keep a small non-sensitive cookie fallback. Some browsers can make
+    // localStorage temporarily unavailable, but a chosen appearance should
+    // still survive the next launch without delaying the initial paint.
+    try { localStorage.setItem(themeStorageKey, dark ? 'dark' : 'light'); } catch { /* Cookie fallback remains available. */ }
+    document.cookie = `clarity-theme=${dark ? 'dark' : 'light'}; Path=/; Max-Age=31536000; SameSite=Lax${location.protocol === 'https:' ? '; Secure' : ''}`;
   }
 }
 
