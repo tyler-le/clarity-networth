@@ -264,6 +264,8 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
   const monthlyIncome = new Map();
   const monthlyPreTaxRetirement = new Map();
   const transactionRows = [];
+  let actualSpend = 0;
+  let savingsAndInvestments = 0;
   const incomeTransactions = store.transactions.filter((transaction) => {
     if (transaction.pending || transaction.excluded || transaction.bucket !== 'income') return false;
     return transaction.date >= startDate && transaction.date <= endDate;
@@ -297,6 +299,8 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
   });
   for (const transaction of eligibleTransactions) {
     const amount = Number(transaction.amount);
+    if (transaction.bucket === 'savings' || transaction.bucket === 'investments') savingsAndInvestments += amount;
+    else actualSpend += amount;
     const category = spendingCategory(transaction);
     categories.set(category, (categories.get(category) || 0) + amount);
     const merchant = transaction.merchant_name || transaction.name || 'Unrecognized merchant';
@@ -334,7 +338,7 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
     .sort((a, b) => a.month.localeCompare(b.month));
   const income = [...monthlyIncome.values()].reduce((sum, amount) => sum + amount, 0);
   const preTaxRetirement = [...monthlyPreTaxRetirement.values()].reduce((sum, amount) => sum + amount, 0);
-  return { range, startDate, endDate, total, income, preTaxRetirement, monthlyAverage: total / monthCount, categories: categoryRows, topMerchants, monthly: monthlyRows, transactions: transactionRows };
+  return { range, startDate, endDate, total, income, actualSpend, savingsAndInvestments, preTaxRetirement, monthlyAverage: total / monthCount, categories: categoryRows, topMerchants, monthly: monthlyRows, transactions: transactionRows };
 }
 
 function monthId(dateString) {

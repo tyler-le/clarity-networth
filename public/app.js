@@ -398,8 +398,10 @@ function spendingForSelectedMonth(data) {
   const planTransactions = transactions.filter((transaction) => transaction.bucket !== 'income' && transaction.bucket !== 'transfer');
   const total = planTransactions.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const income = transactions.filter((transaction) => transaction.bucket === 'income').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  const actualSpend = planTransactions.filter((transaction) => !['savings', 'investments'].includes(transaction.bucket)).reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  const savingsAndInvestments = planTransactions.filter((transaction) => ['savings', 'investments'].includes(transaction.bucket)).reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const preTaxRetirement = Number((data.monthly || []).find((row) => row.month === state.spendingMonth)?.pre_tax_retirement || 0);
-  return { ...data, total, income, preTaxRetirement, monthlyAverage: total, categories: allocationRows(planTransactions), transactions };
+  return { ...data, total, income, actualSpend, savingsAndInvestments, preTaxRetirement, monthlyAverage: total, categories: allocationRows(planTransactions), transactions };
 }
 
 function renderSpendingTrend(data) {
@@ -417,30 +419,21 @@ function renderSpendingTrend(data) {
 
 function renderCashFlowSankey(data) {
   const el = $('#cashflowSankey');
-  const income = Number(data.income || 0), spending = Number(data.total || 0), remaining = income - spending;
-  const rows = (data.categories || []).slice(0, 4);
-  if (!income && !spending) { el.innerHTML = ''; return; }
+  const income = Number(data.income || 0), actualSpend = Number(data.actualSpend || 0), savingsAndInvestments = Number(data.savingsAndInvestments || 0), remaining = income - actualSpend - savingsAndInvestments;
+  if (!income && !actualSpend && !savingsAndInvestments) { el.innerHTML = ''; return; }
   // Use the rendered width as the SVG coordinate system on phones. This keeps
   // labels at a readable size instead of shrinking a desktop SVG to fit.
   const compact = el.clientWidth < 480;
   const width = compact ? 390 : 720, height = 216;
-  const sourceX = 12, sourceW = compact ? 92 : 144;
-  const middleX = compact ? 119 : 258, middleW = compact ? 116 : 158;
-  const destinationX = compact ? 260 : 500, destinationW = compact ? 118 : 184;
-  const truncate = (label) => compact && label.length > 20 ? `${label.slice(0, 19)}…` : label;
-  const block = (x, y, w, color, label, value, category = '') => `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><rect x="${x}" y="${y}" width="${w}" height="36" rx="8" fill="var(--sankey-surface)" stroke="var(--sankey-border)"/><rect x="${x}" y="${y}" width="6" height="36" rx="3" fill="${color}"/><text x="${x + 13}" y="${y + 14}" class="cashflow-label">${escapeHtml(truncate(label))}</text><text x="${x + 13}" y="${y + 28}" class="cashflow-value">${fmt.format(value)}</text></g>`;
+  const sourceX = 12, sourceW = compact ? 106 : 150;
+  const destinationX = compact ? 202 : 392, destinationW = compact ? 176 : 250;
+  const block = (x, y, w, color, label, value, category = '') => `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><rect x="${x}" y="${y}" width="${w}" height="36" rx="8" fill="var(--sankey-surface)" stroke="var(--sankey-border)"/><rect x="${x}" y="${y}" width="6" height="36" rx="3" fill="${color}"/><text x="${x + 13}" y="${y + 14}" class="cashflow-label">${escapeHtml(label)}</text><text x="${x + 13}" y="${y + 28}" class="cashflow-value">${fmt.format(value)}</text></g>`;
   const flow = (fromX, fromY, toX, toY, ratio, color) => `<path class="cashflow-flow" d="M ${fromX} ${fromY} C ${fromX + (toX - fromX) * .42} ${fromY}, ${toX - (toX - fromX) * .42} ${toY}, ${toX} ${toY}" fill="none" stroke="${color}" stroke-opacity=".38" stroke-width="${Math.max(6, Math.min(30, ratio * 30))}" stroke-linecap="round"/>`;
-  const incomeY = 82, spentY = 35, remainingY = 135;
-  const destinationColors = ['var(--outflow)', 'var(--outflow-muted)', 'var(--outflow-warm)', 'var(--outflow)'];
-  let paths = flow(sourceX + sourceW, incomeY + 18, middleX, spentY + 18, spending / Math.max(income, 1), 'var(--outflow)');
-  if (remaining > 0) paths += flow(sourceX + sourceW, incomeY + 18, middleX, remainingY + 18, remaining / Math.max(income, 1), 'var(--income)');
-  let destinations = '';
-  rows.forEach((row, index) => {
-    const y = 12 + index * 47, color = destinationColors[index % destinationColors.length];
-    paths += flow(middleX + middleW, spentY + 18, destinationX, y + 18, Number(row.amount || 0) / Math.max(spending, 1), color);
-    destinations += block(destinationX, y, destinationW, color, row.name, row.amount, row.name);
-  });
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Income flowing to money out and spending categories">${paths}${block(sourceX, incomeY, sourceW, 'var(--income)', 'Income', income, 'Income')}${block(middleX, spentY, middleW, 'var(--outflow)', 'Money out', spending)}${remaining > 0 ? block(middleX, remainingY, middleW, 'var(--income)', 'Left', remaining) : ''}${destinations}</svg>`;
+  const incomeY = 89, spendY = 28, saveY = 89, remainingY = 150;
+  let paths = flow(sourceX + sourceW, incomeY + 18, destinationX, spendY + 18, actualSpend / Math.max(income, 1), 'var(--outflow)');
+  paths += flow(sourceX + sourceW, incomeY + 18, destinationX, saveY + 18, savingsAndInvestments / Math.max(income, 1), 'var(--save-invest)');
+  if (remaining > 0) paths += flow(sourceX + sourceW, incomeY + 18, destinationX, remainingY + 18, remaining / Math.max(income, 1), 'var(--income)');
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Net income split into spending and saving">${paths}${block(sourceX, incomeY, sourceW, 'var(--income)', 'Net income', income, 'Income')}${block(destinationX, spendY, destinationW, 'var(--outflow)', 'Actual spend', actualSpend)}${block(destinationX, saveY, destinationW, 'var(--save-invest)', 'Save & invest', savingsAndInvestments)}${remaining > 0 ? block(destinationX, remainingY, destinationW, 'var(--income)', 'Left', remaining) : ''}</svg>`;
 }
 
 function renderSpending(data) {
@@ -452,12 +445,14 @@ function renderSpending(data) {
   const selected = spendingForSelectedMonth(data);
   const total = Number(selected.total || 0);
   const income = Number(selected.income || 0);
+  const actualSpend = Number(selected.actualSpend || 0);
+  const savingsAndInvestments = Number(selected.savingsAndInvestments || 0);
   const preTaxRetirement = Number(selected.preTaxRetirement || 0);
   const remaining = income - total;
   $('#spendingTotal').textContent = fmt.format(Math.abs(remaining));
-  $('#cashflowHeadline').textContent = remaining >= 0 ? 'Left after spending' : 'Over income';
+  $('#cashflowHeadline').textContent = remaining >= 0 ? 'Left after spending and saving' : 'More allocated than income';
   $('#cashflowHeadline').className = `cashflow-headline ${remaining >= 0 ? 'positive' : 'negative'}`;
-  $('#spendingSummary').innerHTML = `<span class="income-flow"><i class="income"></i>Income <strong>${fmt.format(income)}</strong></span><span class="spend-flow"><i class="spend"></i>Money out <strong>${fmt.format(total)}</strong></span>${preTaxRetirement ? `<span class="retirement-flow"><i></i>Pre-tax retirement <strong>${fmt.format(preTaxRetirement)}</strong></span>` : ''}`;
+  $('#spendingSummary').innerHTML = `<span class="income-flow"><i class="income"></i>Net income <strong>${fmt.format(income)}</strong></span><span class="spend-flow"><i class="spend"></i>Actual spend <strong>${fmt.format(actualSpend)}</strong></span><span class="save-flow"><i></i>Save & invest <strong>${fmt.format(savingsAndInvestments)}</strong></span>${preTaxRetirement ? `<span class="retirement-flow"><i></i>Pre-tax retirement <strong>${fmt.format(preTaxRetirement)}</strong><small>outside cash flow</small></span>` : ''}`;
   const rangeLabel = ({ '1m': 'this month', '3m': 'over the last 3 months', ytd: 'year to date', '1y': 'over the last year' })[data.range] || 'this month';
   const selectedMonthLabel = state.spendingMonth && new Date(`${state.spendingMonth}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   $('#spendingContext').textContent = total || income ? (selectedMonthLabel || ({ '1m': 'This month', '3m': 'Last 3 months', ytd: 'Year to date', '1y': 'Last year' })[data.range] || rangeLabel) : `No posted cash flow ${selectedMonthLabel || rangeLabel}. It can take a little time to arrive after connecting.`;

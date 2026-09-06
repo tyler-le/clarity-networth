@@ -160,6 +160,8 @@ test('pre-tax retirement contributions remain visible without distorting take-ho
   ] };
   const result = spendingSummary(store, '1m', new Date('2026-09-05T12:00:00'));
   assert.equal(result.total, 7000);
+  assert.equal(result.actualSpend, 0);
+  assert.equal(result.savingsAndInvestments, 7000);
   assert.equal(result.preTaxRetirement, 7000);
   assert.equal(result.transactions.length, 1);
   assert.equal(result.transactions[0].name, 'Fidelity transfer');
