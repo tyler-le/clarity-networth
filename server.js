@@ -153,6 +153,10 @@ app.get('/terms', (_req, res) => {
   res.type('html').send(legalPage('Terms of Service', (contact) => `<p>Clarity is a personal financial-information tool. By using it, you authorize us to retrieve and display information from the financial institutions you choose to connect.</p><h2>Not financial advice</h2><p>Clarity provides educational estimates and organizational tools only. It does not provide investment, tax, legal, accounting, or other professional advice. Retirement estimates are illustrations based on your selected assumptions, not guarantees.</p><h2>Your responsibilities</h2><p>Use accurate information, protect your sign-in account, and review connected-account data before making financial decisions. You may unlink accounts or delete your data at any time.</p><h2>Service availability</h2><p>Financial institutions and data providers can delay, limit, or change available data. We aim to handle those failures safely, but do not guarantee uninterrupted or error-free information.</p><h2>Contact</h2><p>Questions about these terms can be sent to ${contact}.</p>`));
 });
 
+app.get('/support', (_req, res) => {
+  res.type('html').send(legalPage('Help & Feedback', (contact) => `<p>Clarity is in private beta. Your feedback helps make the app clearer, more reliable, and safer before a broader release.</p><h2>Need help?</h2><p>For an account-linking issue, a data question, or a privacy request, contact ${contact}. Please do not include account numbers, passwords, access codes, or screenshots containing sensitive financial information.</p><h2>Share feedback</h2><p>Tell us what you were trying to do, what you expected, and what happened. Device and browser details are helpful; financial details are not required.</p>`));
+});
+
 async function loadStore(user) {
   const key = user?.storageKey;
   if (!key) throw new Error('Authenticated user storage is required.');

@@ -95,21 +95,11 @@ public/app.js         Dashboard interactions + charts
 public/styles.css    Responsive UI
 ```
 
-## Important MVP limitations
+## Beta readiness
 
-This is a single-user local MVP, not a production-ready financial application. Before deploying publicly, add:
+Clarity supports a small, invite-only beta with per-user authorization, Postgres-backed encrypted financial stores, account unlink/export/deletion, secure browser headers, rate limits, daily sync, webhook handling, uptime monitoring, and a staging-gated release pipeline.
 
-- Authentication and per-user authorization
-- A production database such as Postgres
-- Managed secret storage / KMS-backed encryption
-- CSRF protection, stricter headers, request validation, audit logging, and rate limiting
-- A public HTTPS webhook endpoint and robust background webhook processing
-- Plaid Production approval and any required institution/product approvals
-- Account deletion/disconnection controls (`/item/remove`)
-- Institution relink/update-mode flows for broken credentials
-- Better transfer matching between source and destination accounts
-- Recurring-bill logic and merchant-specific categorization rules
-- Tests and monitoring
+See [the private beta launch checklist](docs/BETA_LAUNCH.md) for the production environment settings and external steps that still need an owner: Plaid Production approval, a monitored support inbox, OAuth domain configuration, backup policy, and applicable legal/privacy review before a broader public launch.
 
 ## Plaid notes
 

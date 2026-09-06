@@ -5,6 +5,7 @@ test.skip(Boolean(process.env.CODEX_SANDBOX_NETWORK_DISABLED), 'This workspace b
 async function openDemo(page) {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: /see your money/i })).toBeVisible();
+  await expect(page.getByText(/By continuing, you agree to our/i)).toBeVisible();
   await page.getByRole('button', { name: /explore the demo/i }).click();
   await expect(page.locator('#appShell')).toBeVisible();
 }
@@ -140,6 +141,7 @@ test('the complete app stays navigable and coherent at every supported viewport'
   }
   await page.locator('#profileButton').click();
   await expect(page.getByRole('heading', { name: 'Profile' })).toBeVisible();
+  await expect(page.locator('.beta-help a')).toHaveAttribute('href', '/support');
   await page.locator('#profileBack').click();
   await expect(page.getByRole('heading', { name: 'Accounts' })).toBeVisible();
   const homeBrand = page.locator('#homeBrand');

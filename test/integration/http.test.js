@@ -47,8 +47,8 @@ integrationTest('serves the app shell with defensive browser headers', async () 
   assert.match(response.headers['permissions-policy'], /camera=\(\)/);
 });
 
-integrationTest('serves public privacy, terms, and a dependency-aware health check', async () => {
-  for (const pathname of ['/privacy', '/terms']) {
+integrationTest('serves public legal, support, and dependency-aware health pages', async () => {
+  for (const pathname of ['/privacy', '/terms', '/support']) {
     const response = await request(app).get(pathname);
     assert.equal(response.status, 200);
     assert.match(response.text, /Clarity/);
