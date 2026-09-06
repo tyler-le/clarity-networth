@@ -91,6 +91,10 @@ export function investmentContributions(store) {
     .map((transaction) => ({ date: transaction.date, amount: Number(transaction.amount || 0) }));
 }
 
+export function investmentLinkBalances(store) {
+  return (store.investment_link_events || []).map((event) => ({ date: event.date, amount: Number(event.amount || 0) }));
+}
+
 export function snapshotInvestments(store, snapshotDate = new Date().toISOString().slice(0, 10)) {
   const value = store.accounts.filter((account) => !account.hidden && account.type === 'investment').reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
   store.investment_snapshots ||= [];

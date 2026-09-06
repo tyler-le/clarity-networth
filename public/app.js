@@ -98,7 +98,7 @@ function setView(view) {
   }[view] || [view[0].toUpperCase() + view.slice(1), ''];
   $('#pageTitle').textContent = pageMeta[0];
   $('#monthLabel').textContent = pageMeta[1];
-  $('#connectButton').classList.toggle('hidden', view !== 'accounts');
+  $('#connectButton').classList.toggle('hidden', false);
   $('#profileBack').classList.toggle('hidden', view !== 'profile');
   $('#profileButton').classList.toggle('hidden', view === 'profile');
   if (view === 'overview' && state.dashboard) {
@@ -160,12 +160,14 @@ function renderNetWorthInsights(snaps) {
       const debtText = `debt ${debtChange <= 0 ? 'down' : 'up'} ${fmt.format(Math.abs(debtChange))}`;
       const startDate = first.date, endDate = last.date;
       const contributions = (state.dashboard?.investmentContributions || []).filter((row) => row.date >= startDate && row.date <= endDate).reduce((sum, row) => sum + Number(row.amount || 0), 0);
+      const newlyLinked = (state.dashboard?.investmentLinkBalances || []).filter((row) => row.date >= startDate && row.date <= endDate).reduce((sum, row) => sum + Number(row.amount || 0), 0);
       const portfolio = (state.investments?.snapshots || []).filter((row) => row.date >= startDate && row.date <= endDate);
       const investmentChange = portfolio.length > 1 ? Number(portfolio.at(-1).value || 0) - Number(portfolio[0].value || 0) : null;
-      const investmentGrowth = investmentChange == null ? null : investmentChange - contributions;
+      const investmentGrowth = investmentChange == null ? null : investmentChange - contributions - newlyLinked;
       const contributionText = `Contributed ${fmt.format(contributions)}`;
+      const linkedText = newlyLinked ? `Newly linked ${fmt.format(newlyLinked)}` : '';
       const growthText = investmentGrowth == null ? 'Investment growth still tracking' : `Investments ${investmentGrowth >= 0 ? 'grew' : 'fell'} ${fmt.format(Math.abs(investmentGrowth))}`;
-      $('#netWorthChangeDetail').innerHTML = `<span class="positive">${contributionText}</span><span> · </span><span class="${investmentGrowth == null || investmentGrowth >= 0 ? 'positive' : 'negative'}">${growthText}</span><span> · </span><span class="${debtChange <= 0 ? 'positive' : 'negative'}">${debtText}</span>`;
+      $('#netWorthChangeDetail').innerHTML = `${linkedText ? `<span>${linkedText}</span><span> · </span>` : ''}<span class="positive">${contributionText}</span><span> · </span><span class="${investmentGrowth == null || investmentGrowth >= 0 ? 'positive' : 'negative'}">${growthText}</span><span> · </span><span class="${debtChange <= 0 ? 'positive' : 'negative'}">${debtText}</span>`;
     }
   }
   const runway = state.dashboard?.runway;
@@ -743,7 +745,7 @@ function renderDashboard() {
   renderConnections(d.items || []);
   $('#demoToggle').textContent = d.demoMode ? 'Exit demo' : 'Try demo';
   $('#demoToggle').setAttribute('aria-pressed', String(d.demoMode));
-  $('#connectButton').classList.toggle('hidden', state.view !== 'accounts');
+  $('#connectButton').classList.toggle('hidden', false);
   $('#setupCard').classList.toggle('hidden', d.plaidConfigured || state.demoPreview);
   if (!d.plaidConfigured && !state.demoPreview) showNotice('Connect an account when you’re ready to see your own data.');
 }
@@ -899,7 +901,9 @@ $('#deleteAccountButton').addEventListener('click', async () => {
   } catch (error) { showNotice(error.message); }
   finally { button.disabled = false; }
 });
+$$('[data-connect-account]').forEach((button) => button.addEventListener('click', connectPlaid));
 $('#connectButton').addEventListener('click', connectPlaid);
+$('#viewNetWorthAfterConnection').addEventListener('click', () => setView('overview'));
 $$('[data-sync-accounts]').forEach((button) => button.addEventListener('click', syncAccounts));
 $('#retirementForm').addEventListener('submit', async (event) => {
   event.preventDefault();

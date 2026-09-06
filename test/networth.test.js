@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, investmentContributions, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
+import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, investmentContributions, investmentLinkBalances, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
 import { normalizeCandles } from '../market-data.js';
 import { filterSnapshots, scrubIndex } from '../public/chart-utils.js';
 
@@ -146,6 +146,10 @@ test('investment contribution activity includes bank deposits and payroll retire
     { date: '2026-08-25', amount: 300, bucket: 'investments', excluded: true }
   ] };
   assert.deepEqual(investmentContributions(store), [{ date: '2026-08-01', amount: 500 }, { date: '2026-08-15', amount: 400 }]);
+});
+
+test('newly linked investment balances are kept separate from contributions', () => {
+  assert.deepEqual(investmentLinkBalances({ investment_link_events: [{ account_id: 'hsa', date: '2026-09-06', amount: 2089 }] }), [{ date: '2026-09-06', amount: 2089 }]);
 });
 
 test('recurring charge awareness identifies cadence and a meaningful increase', () => {

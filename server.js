@@ -7,7 +7,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './store.js';
 import { databaseEnabled, deleteDatabaseStore, migrateDatabase, readDatabaseStore, recordAuditEvent, writeDatabaseStore } from './database.js';
-import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, investmentContributions, investmentSummary, reconstructInvestmentHistory, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
+import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, investmentContributions, investmentLinkBalances, investmentSummary, reconstructInvestmentHistory, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
 import { loadHistoricalPrices } from './market-data.js';
 import { plaidConfigured, plaidPost } from './plaid.js';
 
@@ -207,7 +207,13 @@ async function refreshAccountsForItem(store, item) {
       demo: false
     };
     if (existing) Object.assign(existing, normalized);
-    else store.accounts.push(normalized);
+    else {
+      store.accounts.push(normalized);
+      if (account.type === 'investment') {
+        store.investment_link_events ||= [];
+        store.investment_link_events.push({ account_id: account.account_id, date: new Date().toISOString().slice(0, 10), amount: Math.abs(Number(normalized.current_balance || 0)) });
+      }
+    }
   }
 
   const types = new Set((data.accounts || []).map((a) => a.type));
@@ -232,6 +238,21 @@ async function refreshAccountsForItem(store, item) {
   }
   if (types.has('credit') || types.has('loan')) {
     try { await plaidPost('/liabilities/get', { access_token }); } catch (e) { console.warn('Liabilities not available:', e.message); }
+  }
+}
+
+// Deployments can happen immediately after someone connects an account. Cover
+// that short handoff by recording a baseline for recently linked investment
+// accounts that predate this field, without reclassifying older history.
+function backfillRecentInvestmentLinkBalances(store) {
+  const cutoff = Date.now() - 7 * 86400000;
+  store.investment_link_events ||= [];
+  for (const account of store.accounts || []) {
+    if (account.type !== 'investment' || store.investment_link_events.some((event) => event.account_id === account.plaid_account_id)) continue;
+    const item = (store.items || []).find((candidate) => candidate.id === account.item_id);
+    const linkedAt = new Date(item?.created_at || 0);
+    if (!Number.isFinite(linkedAt.getTime()) || linkedAt.getTime() < cutoff) continue;
+    store.investment_link_events.push({ account_id: account.plaid_account_id, date: linkedAt.toISOString().slice(0, 10), amount: Math.abs(Number(account.current_balance || 0)) });
   }
 }
 
@@ -418,6 +439,7 @@ app.get('/api/demo-preview', demoLimiter, (req, res) => {
       runway: cashRunway(store),
       recurring: recurringCharges(store),
       investmentContributions: investmentContributions(store),
+      investmentLinkBalances: investmentLinkBalances(store),
       accounts: store.accounts.filter((account) => !account.hidden).sort((a, b) => Number(b.current_balance || 0) - Number(a.current_balance || 0)),
       snapshots: store.snapshots.slice(-3650),
       items: [],
@@ -451,6 +473,7 @@ app.use('/api', (req, res, next) => {
 
 app.get('/api/dashboard', async (req, res) => {
   const store = await loadStore(req.user);
+  backfillRecentInvestmentLinkBalances(store);
   removeEstimatedNetWorthHistory(store);
   hideDuplicateAccounts(store);
   snapshotNetWorth(store);
@@ -465,6 +488,7 @@ app.get('/api/dashboard', async (req, res) => {
     runway: cashRunway(visibleStore),
     recurring: recurringCharges(visibleStore),
     investmentContributions: investmentContributions(visibleStore),
+    investmentLinkBalances: investmentLinkBalances(visibleStore),
     accounts,
     snapshots,
     items: visibleStore.items.map(publicItem),

@@ -147,6 +147,7 @@
       </section>
 
       <section id="profileView" class="view">
+        <button class="primary profile-connect" data-connect-account>+ Connect account</button>
         <button class="primary profile-sync" data-sync-accounts>↻ Sync accounts</button>
         <details class="connections-panel" open>
           <summary>Connected institutions</summary>
@@ -199,7 +200,7 @@
       <h2 id="connectionOnboardingTitle">Your picture is ready to begin.</h2>
       <p>Current balances appear now. Transactions and account history may take a few minutes to arrive, and your timeline becomes more useful with each verified snapshot.</p>
       <div class="onboarding-steps"><div><i>1</i><span><strong>Today</strong><small>See your current net worth and connected accounts.</small></span></div><div><i>2</i><span><strong>Next few minutes</strong><small>We organize available transactions and holdings.</small></span></div><div><i>3</i><span><strong>Over time</strong><small>Your verified history builds without manual entry.</small></span></div></div>
-      <button class="primary full" value="close">View my net worth</button>
+      <button class="primary full" id="viewNetWorthAfterConnection" value="close">View my net worth</button>
     </form>
   </dialog>
   <div class="update-toast hidden" id="updateToast" role="status" aria-live="polite"><span>A newer version of Clarity is ready.</span><button type="button" id="updateAppButton">Refresh</button></div>
