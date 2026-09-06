@@ -177,13 +177,14 @@ function renderNetWorthInsights(snaps) {
       const startDate = first.date, endDate = last.date;
       const contributions = (state.dashboard?.investmentContributions || []).filter((row) => row.date >= startDate && row.date <= endDate).reduce((sum, row) => sum + Number(row.amount || 0), 0);
       const linkedEvents = (state.dashboard?.investmentLinkBalances || []).filter((row) => row.date >= startDate && row.date <= endDate);
-      const portfolio = (state.investments?.snapshots || []).filter((row) => row.date >= startDate && row.date <= endDate);
+      const allPortfolioSnapshots = state.investments?.snapshots || [];
+      const portfolio = allPortfolioSnapshots.filter((row) => row.date >= startDate && row.date <= endDate);
       const investmentChange = portfolio.length > 1 ? Number(portfolio.at(-1).value || 0) - Number(portfolio[0].value || 0) : null;
       // A connection's opening balance is neither a contribution nor market
       // performance. A reconstructed snapshot before the link date is a valid
       // historical baseline; otherwise we wait for post-link tracking.
       const earliestLinkDate = linkedEvents.map((event) => event.date).sort().at(0);
-      const hasReconstructedBaseline = earliestLinkDate && portfolio.some((snapshot) => snapshot.source === 'reconstructed' && snapshot.date < earliestLinkDate);
+      const hasReconstructedBaseline = earliestLinkDate && allPortfolioSnapshots.some((snapshot) => snapshot.source === 'reconstructed' && snapshot.date < earliestLinkDate);
       const investmentGrowth = investmentChange == null || (linkedEvents.length && !hasReconstructedBaseline) ? null : investmentChange - contributions;
       const contributionText = `Contributed ${fmt.format(contributions)}`;
       const historyState = state.investments?.historyStatus?.state;
