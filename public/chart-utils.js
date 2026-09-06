@@ -7,8 +7,6 @@ export function netWorthRangeBounds(range, anchor = new Date()) {
   else if (range === '6m') start.setMonth(start.getMonth() - 6);
   else if (range === 'ytd') start.setMonth(0, 1);
   else if (range === '1y') start.setFullYear(start.getFullYear() - 1);
-  else if (range === '3y') start.setFullYear(start.getFullYear() - 3);
-  else if (range === '5y') start.setFullYear(start.getFullYear() - 5);
   return { startDate: start.toISOString().slice(0, 10), endDate: end.toISOString().slice(0, 10) };
 }
 

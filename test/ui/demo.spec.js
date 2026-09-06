@@ -81,6 +81,8 @@ test('net-worth history can be scrubbed and always identifies the selected date'
   await openDemo(page);
   await page.locator('[data-networth-range="6m"]').click();
   await expect(page.locator('[data-networth-range="6m"]')).toHaveClass(/active/);
+  await page.locator('[data-networth-range="3m"]').click();
+  await expect(page.locator('[data-networth-range="3m"]')).toHaveClass(/active/);
   const chart = page.locator('#netWorthChart');
   await expect(chart.locator('svg')).toBeVisible();
   const box = await chart.boundingBox();

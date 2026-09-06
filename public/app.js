@@ -173,7 +173,7 @@ function renderNetWorthInsights(snaps) {
 }
 
 function netWorthRangeLabel(range) {
-  return ({ ytd: 'Year to date', '6m': '6 months', '1y': '1 year', '3y': '3 years', '5y': '5 years', all: 'All history' })[range] || 'Year to date';
+  return ({ '1m': '1 month', '3m': '3 months', '6m': '6 months', ytd: 'Year to date', '1y': '1 year', all: 'All history' })[range] || 'Year to date';
 }
 
 function visibleSnapshots(snapshots) {
