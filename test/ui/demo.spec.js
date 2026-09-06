@@ -9,6 +9,15 @@ async function openDemo(page) {
   await expect(page.locator('#appShell')).toBeVisible();
 }
 
+async function goToView(page, view) {
+  const mobile = page.locator(`.mobile-nav [data-view="${view}"]`);
+  if (await mobile.isVisible()) {
+    await mobile.click();
+    return;
+  }
+  await page.locator(`.sidebar [data-view="${view}"]`).click();
+}
+
 test('a slow first load shows calm placeholders before financial data arrives', async ({ page }) => {
   await page.route('**/api/demo-preview?range=1m', async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -32,7 +41,7 @@ test('a new visitor can explore the complete demo without signing in', async ({ 
   await expect(page.locator('#netWorth')).toHaveText(/\$/);
   await expect(page.locator('#netWorthChart svg')).toBeVisible();
 
-  await page.locator('.mobile-nav [data-view="spending"]').click();
+  await goToView(page, 'spending');
   await expect(page.getByRole('heading', { name: 'Cash flow' })).toBeVisible();
   await page.locator('[data-spending-range="1y"]').click();
   await expect(page.locator('.trend-column')).toHaveCount(12);
@@ -47,11 +56,11 @@ test('a new visitor can explore the complete demo without signing in', async ({ 
   await expect(page.locator('#cashflowSankey svg')).toBeVisible();
   await expect(page.locator('#recurringCharges')).toBeVisible();
 
-  await page.locator('.mobile-nav [data-view="investments"]').click();
+  await goToView(page, 'investments');
   await expect(page.getByRole('heading', { name: 'Investments' })).toBeVisible();
   await expect(page.locator('#investmentChart svg')).toBeVisible();
   await expect(page.locator('.holding-row')).toHaveCount(3);
-  await page.locator('.mobile-nav [data-view="retirement"]').click();
+  await goToView(page, 'retirement');
   await expect(page.getByRole('heading', { name: 'Retirement' })).toBeVisible();
   await expect(page.locator('.retirement-milestone')).toHaveCount(4);
   expect(pageErrors).toEqual([]);
@@ -59,7 +68,7 @@ test('a new visitor can explore the complete demo without signing in', async ({ 
 
 test('cash-flow interactions lead from visual category to the relevant activity', async ({ page }) => {
   await openDemo(page);
-  await page.locator('.mobile-nav [data-view="spending"]').click();
+  await goToView(page, 'spending');
   await expect(page.locator('#cashflowSankey [data-cashflow-category]').first()).toBeVisible();
 
   await page.locator('#cashflowSankey [data-cashflow-category]').first().click();
@@ -70,7 +79,7 @@ test('cash-flow interactions lead from visual category to the relevant activity'
 
 test('asset-allocation filters preserve the reader position', async ({ page }) => {
   await openDemo(page);
-  await page.locator('.mobile-nav [data-view="investments"]').click();
+  await goToView(page, 'investments');
   const allocation = page.locator('#investmentAllocationCard');
   await allocation.scrollIntoViewIfNeeded();
   const before = await allocation.evaluate((element) => element.getBoundingClientRect().top);
@@ -81,7 +90,7 @@ test('asset-allocation filters preserve the reader position', async ({ page }) =
 
 test('cash-flow diagram can switch between dollars and take-home-income percentages', async ({ page }) => {
   await openDemo(page);
-  await page.locator('.mobile-nav [data-view="spending"]').click();
+  await goToView(page, 'spending');
   await page.locator('[data-cashflow-display="percentage"]').click();
   await expect(page.locator('[data-cashflow-display="percentage"]')).toHaveClass(/active/);
   await expect(page.locator('#cashflowSankey')).toContainText('100%');
@@ -96,43 +105,54 @@ test('cash-flow diagram can switch between dollars and take-home-income percenta
 
 test('cash-flow diagram stays readable on mobile and expands in-app', async ({ page }) => {
   await openDemo(page);
-  await page.locator('.mobile-nav [data-view="spending"]').click();
+  await goToView(page, 'spending');
   await expect(page.locator('#cashflowSankey')).toContainText('Take-home');
   await page.locator('#cashflowExpand').click();
   await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
   await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
 });
 
-test('cash-flow quality holds across phone, tablet, laptop, and wide desktop', async ({ page }) => {
-  const viewports = [
-    { name: 'phone', width: 390, height: 844 },
-    { name: 'tablet', width: 768, height: 1024 },
-    { name: 'laptop', width: 1280, height: 800 },
-    { name: 'wide desktop', width: 1680, height: 1000 }
-  ];
-  for (const viewport of viewports) {
-    await page.setViewportSize(viewport);
-    await openDemo(page);
-    const navigation = viewport.width < 700 ? '.mobile-nav' : '.sidebar';
-    await page.locator(`${navigation} [data-view="spending"]`).click();
-    const diagram = page.locator('#cashflowSankey');
-    await expect(diagram.locator('svg')).toBeVisible();
-    await expect(diagram).toContainText('Take-home');
-    const edgeWidths = await diagram.locator('.cashflow-flow').evaluateAll((paths) => paths.map((path) => Number(path.getAttribute('stroke-width'))));
-    expect(Math.max(...edgeWidths)).toBeLessThanOrEqual(48);
-    expect(Math.max(...edgeWidths)).toBeGreaterThan(Math.min(...edgeWidths));
-    const nodeBoxes = await diagram.locator('.cashflow-target rect:first-child').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect()));
-    expect(nodeBoxes.every((box) => box.width > 0 && box.height > 0)).toBe(true);
-    await page.locator('#cashflowExpand').click();
-    await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
-    await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
-    await page.locator('#cashflowDialogClose').click();
+test('cash-flow quality holds at every supported viewport', async ({ page }) => {
+  await openDemo(page);
+  await goToView(page, 'spending');
+  const diagram = page.locator('#cashflowSankey');
+  await expect(diagram.locator('svg')).toBeVisible();
+  await expect(diagram).toContainText('Take-home');
+  const edgeWidths = await diagram.locator('.cashflow-flow').evaluateAll((paths) => paths.map((path) => Number(path.getAttribute('stroke-width'))));
+  expect(Math.max(...edgeWidths)).toBeLessThanOrEqual(48);
+  expect(Math.max(...edgeWidths)).toBeGreaterThan(Math.min(...edgeWidths));
+  const nodeBoxes = await diagram.locator('.cashflow-target rect:first-child').evaluateAll((nodes) => nodes.map((node) => {
+    const box = node.getBoundingClientRect();
+    return { width: box.width, height: box.height };
+  }));
+  expect(nodeBoxes.every((box) => box.width > 0 && box.height > 0)).toBe(true);
+  await page.locator('#cashflowExpand').click();
+  await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
+  await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
+  await page.locator('#cashflowDialogClose').click();
+});
+
+test('the complete app stays navigable and coherent at every supported viewport', async ({ page }) => {
+  await openDemo(page);
+  for (const [view, heading] of [['spending', 'Cash flow'], ['investments', 'Investments'], ['retirement', 'Retirement'], ['accounts', 'Accounts']]) {
+    await goToView(page, view);
+    await expect(page.getByRole('heading', { name: heading })).toBeVisible();
   }
+  await page.locator('#profileButton').click();
+  await expect(page.getByRole('heading', { name: 'Profile' })).toBeVisible();
+  await page.locator('#profileBack').click();
+  await expect(page.getByRole('heading', { name: 'Accounts' })).toBeVisible();
+  const homeBrand = page.locator('#homeBrand');
+  if (await homeBrand.isVisible()) {
+    await homeBrand.click();
+    await expect(page.getByRole('heading', { name: 'Net Worth' })).toBeVisible();
+  }
+  await expect(page.locator('#appShell')).toBeVisible();
 });
 
 test('the income source opens income activity from the cash-flow diagram', async ({ page }) => {
   await openDemo(page);
-  await page.locator('.mobile-nav [data-view="spending"]').click();
+  await goToView(page, 'spending');
   await page.locator('#cashflowSankey [data-cashflow-category="income"]').click();
   await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
   await expect(page.locator('#spendingCategoryFilter')).toHaveValue('income');
@@ -141,7 +161,7 @@ test('the income source opens income activity from the cash-flow diagram', async
 
 test('payroll contributions open their own cash-flow activity', async ({ page }) => {
   await openDemo(page);
-  await page.locator('.mobile-nav [data-view="spending"]').click();
+  await goToView(page, 'spending');
   await expect(page.locator('#cashflowPreTax')).toBeVisible();
   await page.locator('#cashflowPreTax').click();
   await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
@@ -169,7 +189,7 @@ test('net-worth history can be scrubbed and always identifies the selected date'
 
 test('holding details preserve account context without crowding the overview', async ({ page }) => {
   await openDemo(page);
-  await page.locator('.mobile-nav [data-view="investments"]').click();
+  await goToView(page, 'investments');
   const holding = page.locator('.holding-row').first();
   await holding.locator('summary').click();
   await expect(holding).toHaveAttribute('open', '');
@@ -179,7 +199,7 @@ test('holding details preserve account context without crowding the overview', a
 
 test('portfolio history can be scrubbed just like net worth', async ({ page }) => {
   await openDemo(page);
-  await page.locator('.mobile-nav [data-view="investments"]').click();
+  await goToView(page, 'investments');
   const chart = page.locator('#investmentChart');
   await expect(chart.locator('svg')).toBeVisible();
   const box = await chart.boundingBox();
@@ -191,7 +211,7 @@ test('portfolio history can be scrubbed just like net worth', async ({ page }) =
 
 test('investment timeframes keep the portfolio context in sync', async ({ page }) => {
   await openDemo(page);
-  await page.locator('.mobile-nav [data-view="investments"]').click();
+  await goToView(page, 'investments');
   await page.locator('[data-investment-range="3m"]').click();
   await expect(page.locator('[data-investment-range="3m"]')).toHaveClass(/active/);
   await expect(page.locator('#investmentContext')).toContainText('last 3 months');
@@ -203,7 +223,7 @@ test('investment timeframes keep the portfolio context in sync', async ({ page }
 
 test('retirement milestones explain the planning terms on demand', async ({ page }) => {
   await openDemo(page);
-  await page.locator('.mobile-nav [data-view="retirement"]').click();
+  await goToView(page, 'retirement');
   await page.locator('[data-retirement-milestone="coast"]').click();
   await expect(page.locator('#retirementInfoDialog')).toHaveAttribute('open', '');
   await expect(page.locator('#retirementInfoTitle')).toHaveText('What is Coast FIRE?');
@@ -221,12 +241,12 @@ test('dark mode is a calm, persistent profile setting', async ({ page }) => {
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.getByRole('button', { name: /explore the demo/i }).click();
   await expect(page.locator('#appShell')).toBeVisible();
-  await page.locator('.mobile-nav [data-view="investments"]').click();
+  await goToView(page, 'investments');
   // Dark surfaces are deliberately neutral rather than green-tinted, so the
   // accent color keeps its visual meaning.
   await expect(page.locator('.investment-card')).toHaveCSS('background-color', 'rgb(28, 31, 29)');
   await expect(page.locator('#investmentTotal')).toHaveCSS('color', 'rgb(240, 244, 240)');
-  await page.locator('.mobile-nav [data-view="accounts"]').click();
+  await goToView(page, 'accounts');
   await expect(page.locator('#connectButton')).toHaveCSS('background-color', 'rgb(45, 116, 74)');
   await expect(page.locator('#profileButton')).toHaveCSS('background-color', 'rgb(32, 39, 32)');
   await page.locator('#profileButton').click();
