@@ -6,6 +6,12 @@
   --line: #e5e8e2;
   --accent: #1f6f4a;
   --accent-soft: #e8f3ec;
+  --income: #357e57;
+  --outflow: #bd6b5d;
+  --outflow-muted: #c78770;
+  --outflow-warm: #b9966a;
+  --sankey-surface: #ffffff;
+  --sankey-border: #e4e9e4;
   --danger: #a84444;
   --shadow: 0 10px 30px rgba(30, 38, 31, 0.05);
 }
@@ -16,8 +22,14 @@ html[data-theme="dark"] {
   --ink: #edf2ee;
   --muted: #9da89f;
   --line: #303a32;
-  --accent: #76bb8d;
-  --accent-soft: #203a2a;
+  --accent: #83af8d;
+  --accent-soft: #243127;
+  --income: #719b7b;
+  --outflow: #c98274;
+  --outflow-muted: #b98d7a;
+  --outflow-warm: #ad9671;
+  --sankey-surface: #202720;
+  --sankey-border: #354238;
   --danger: #eb9691;
   --shadow: 0 10px 30px rgba(0,0,0,.16);
 }
@@ -302,7 +314,7 @@ dialog::backdrop { background: rgba(10,15,10,.28); backdrop-filter: blur(3px); }
 .spending-hero-card { padding: 24px; }.spending-total { margin-top: 8px; font-size: clamp(40px, 5vw, 60px); font-weight: 760; letter-spacing: -.055em; font-variant-numeric: tabular-nums; }.spending-context { margin: 8px 0 0; color: var(--muted); font-size: 13px; }.spending-visual-grid { display: grid; grid-template-columns: 1fr; gap: 16px; margin-top: 16px; }.spending-mix-card, .spending-trend-card { padding: 22px; }.spending-mix-content { display: flex; align-items: center; gap: 28px; min-height: 218px; }.spending-donut { width: 164px; aspect-ratio: 1; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; position: relative; }.spending-donut::before { content: ''; position: absolute; inset: 25px; border-radius: 50%; background: white; }.spending-donut span { position: relative; z-index: 1; display: grid; text-align: center; color: var(--muted); font-size: 11px; }.spending-donut strong { color: var(--ink); font-size: 24px; letter-spacing: -.04em; }.spending-legend { display: grid; width: 100%; gap: 10px; }.legend-row { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: 13px; }.legend-row i { width: 8px; height: 8px; border-radius: 50%; }.legend-row strong { font-variant-numeric: tabular-nums; }.spending-trend-card { margin-top: 16px; }.trend-key { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 11px; font-weight: 650; }.trend-key span { display: inline-flex; align-items: center; gap: 5px; }.trend-key i { width: 8px; height: 8px; border-radius: 3px; }.trend-key .income { background: #5b9a70; }.trend-key .spend { background: #c87862; }.spending-trend { height: 170px; display: flex; align-items: end; gap: 9px; margin-top: 18px; padding-top: 14px; }.trend-column { height: 100%; min-width: 22px; flex: 1; display: flex; flex-direction: column; justify-content: end; align-items: center; gap: 7px; color: var(--muted); font-size: 10px; border: 0; background: transparent; padding: 0; }.trend-bars { position: relative; width: min(32px, 100%); height: 100%; }.trend-bar { position: absolute; bottom: 0; border-radius: 7px 7px 3px 3px; transition: background .15s ease, opacity .15s ease; }.trend-bar.income { z-index: 1; inset-inline: 0; background: #5b9a70; opacity: .68; }.trend-bar.spending { z-index: 2; left: 16%; width: 68%; background: #c87862; }.trend-column.active .trend-bar.income, .trend-column:hover .trend-bar.income { background: #287143; opacity: .9; }.trend-column.active .trend-bar.spending, .trend-column:hover .trend-bar.spending { background: #aa4f42; }.spending-empty { color: var(--muted); font-size: 13px; line-height: 1.5; }
 .spending-summary { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; font-size: 12px; font-weight: 650; }.spending-summary span { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); }.spending-summary .income-flow { color: var(--accent); }.spending-summary .spend-flow { color: #ae5547; }.spending-summary .negative { color: var(--danger); }.spending-summary i { width: 7px; height: 7px; border-radius: 3px; background: #5b9a70; }.spending-summary .spend-flow i { background: #c87862; }.spending-summary strong { color: var(--ink); font-variant-numeric: tabular-nums; }
 .cashflow-headline { margin-top: 1px; color: var(--accent); font-size: 13px; font-weight: 720; }.cashflow-headline.negative { color: var(--danger); }
-.cashflow-sankey { height: 126px; margin-top: 15px; padding-top: 12px; overflow: hidden; border-top: 1px solid rgba(31,111,74,.11); }.cashflow-sankey svg { width: 100%; height: 100%; display: block; overflow: visible; }.cashflow-label { fill: #6e766f; font-size: 10px; font-weight: 650; }.cashflow-value { fill: #202420; font-size: 10px; font-weight: 740; }.cashflow-target { cursor: pointer; }.cashflow-target:hover rect { filter: brightness(.88); }.cashflow-target:hover .cashflow-label { fill: var(--accent); }
+.cashflow-sankey { height: 126px; margin-top: 15px; padding-top: 12px; overflow: hidden; border-top: 1px solid var(--line); }.cashflow-sankey svg { width: 100%; height: 100%; display: block; overflow: visible; }.cashflow-label { fill: #6e766f; font-size: 10px; font-weight: 650; }.cashflow-value { fill: #202420; font-size: 10px; font-weight: 740; }.cashflow-target { cursor: pointer; }.cashflow-target:hover rect { filter: brightness(.94); }.cashflow-target:hover .cashflow-label { fill: var(--accent); }
 @media (max-width: 460px) { .cashflow-sankey { height: 116px; }.cashflow-label, .cashflow-value { font-size: 9px; } }
 .cashflow-target:focus-visible rect:first-child { stroke: var(--accent); stroke-width: 2px; }
 
@@ -369,7 +381,7 @@ html[data-theme="dark"] .mobile-nav button { color: #9da89f; }
 html[data-theme="dark"] .mobile-nav button.active { background: #263128; color: var(--ink); }
 html[data-theme="dark"] .range-control, html[data-theme="dark"] .allocation-toggle { background: #222a24; }
 html[data-theme="dark"] .range-control button.active, html[data-theme="dark"] .allocation-toggle button.active { background: #303b32; color: var(--ink); box-shadow: none; }
-html[data-theme="dark"] .retirement-hero, html[data-theme="dark"] .portfolio-card { border-color: #344637; background: linear-gradient(135deg, #1b2a20 0%, #1a201c 62%); }
+html[data-theme="dark"] .retirement-hero, html[data-theme="dark"] .portfolio-card { border-color: #354238; background: linear-gradient(135deg, #1d251f 0%, #1a201c 62%); }
 html[data-theme="dark"] .retirement-milestone, html[data-theme="dark"] .retirement-milestone.featured { border-color: #354239; background: #202820; box-shadow: none; }
 html[data-theme="dark"] .retirement-age-chip, html[data-theme="dark"] .retirement-assumption, html[data-theme="dark"] .retirement-info-target { background: #203a2a; }
 html[data-theme="dark"] .retirement-total, html[data-theme="dark"] .retirement-info-target strong { color: #8bcaa0; }
@@ -428,7 +440,7 @@ html[data-theme="dark"] .retirement-info-head .dialog-close:hover { background: 
 
 /* In low light, the balance is the visual destination. Chart furniture and
    decorative green stay restrained so they cannot outrank that number. */
-html[data-theme="dark"] .portfolio-card { border-color: #304536; background: linear-gradient(135deg, #18221c 0%, #1a201c 68%); box-shadow: 0 12px 30px rgba(0,0,0,.14); }
+html[data-theme="dark"] .portfolio-card { border-color: #354238; background: linear-gradient(135deg, #1d251f 0%, #1a201c 68%); box-shadow: 0 12px 30px rgba(0,0,0,.14); }
 html[data-theme="dark"] .portfolio-card::after { opacity: .28; }
 html[data-theme="dark"] .portfolio-card .card-label { color: #aeb9b0; }
 html[data-theme="dark"] .portfolio-total { color: #f0f4f0; }
@@ -454,6 +466,7 @@ html[data-theme="dark"] .exclude-button.active { background: #422b2c; color: var
 html[data-theme="dark"] .account-rename:hover { background: #273128; }
 html[data-theme="dark"] .sankey-label, html[data-theme="dark"] .cashflow-label { fill: #a7b1a9; }
 html[data-theme="dark"] .sankey-value, html[data-theme="dark"] .cashflow-value { fill: #e5ebe6; }
+html[data-theme="dark"] .cashflow-flow { stroke-opacity: .25; }
 html[data-theme="dark"] .auth-screen { background: #111513; }
 html[data-theme="dark"] .auth-card { border-color: #344036; background: rgba(26,32,28,.94); box-shadow: 0 28px 72px rgba(0,0,0,.2); }
 html[data-theme="dark"] .auth-halo-one { background: radial-gradient(circle, rgba(46,116,74,.24) 0, rgba(46,116,74,0) 68%); }

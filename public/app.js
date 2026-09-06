@@ -427,19 +427,19 @@ function renderCashFlowSankey(data) {
   const middleX = compact ? 119 : 258, middleW = compact ? 116 : 158;
   const destinationX = compact ? 260 : 500, destinationW = compact ? 118 : 184;
   const truncate = (label) => compact && label.length > 20 ? `${label.slice(0, 19)}…` : label;
-  const block = (x, y, w, color, label, value, category = '') => `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><rect x="${x}" y="${y}" width="${w}" height="36" rx="8" fill="#fff" stroke="#e4e9e4"/><rect x="${x}" y="${y}" width="6" height="36" rx="3" fill="${color}"/><text x="${x + 13}" y="${y + 14}" class="cashflow-label">${escapeHtml(truncate(label))}</text><text x="${x + 13}" y="${y + 28}" class="cashflow-value">${fmt.format(value)}</text></g>`;
-  const flow = (fromX, fromY, toX, toY, ratio, color) => `<path d="M ${fromX} ${fromY} C ${fromX + (toX - fromX) * .42} ${fromY}, ${toX - (toX - fromX) * .42} ${toY}, ${toX} ${toY}" fill="none" stroke="${color}" stroke-opacity=".38" stroke-width="${Math.max(6, Math.min(30, ratio * 30))}" stroke-linecap="round"/>`;
+  const block = (x, y, w, color, label, value, category = '') => `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><rect x="${x}" y="${y}" width="${w}" height="36" rx="8" fill="var(--sankey-surface)" stroke="var(--sankey-border)"/><rect x="${x}" y="${y}" width="6" height="36" rx="3" fill="${color}"/><text x="${x + 13}" y="${y + 14}" class="cashflow-label">${escapeHtml(truncate(label))}</text><text x="${x + 13}" y="${y + 28}" class="cashflow-value">${fmt.format(value)}</text></g>`;
+  const flow = (fromX, fromY, toX, toY, ratio, color) => `<path class="cashflow-flow" d="M ${fromX} ${fromY} C ${fromX + (toX - fromX) * .42} ${fromY}, ${toX - (toX - fromX) * .42} ${toY}, ${toX} ${toY}" fill="none" stroke="${color}" stroke-opacity=".38" stroke-width="${Math.max(6, Math.min(30, ratio * 30))}" stroke-linecap="round"/>`;
   const incomeY = 82, spentY = 35, remainingY = 135;
-  const destinationColors = ['#c87862', '#d78c70', '#d5a75f', '#b9685a'];
-  let paths = flow(sourceX + sourceW, incomeY + 18, middleX, spentY + 18, spending / Math.max(income, 1), '#c87862');
-  if (remaining > 0) paths += flow(sourceX + sourceW, incomeY + 18, middleX, remainingY + 18, remaining / Math.max(income, 1), '#5b9a70');
+  const destinationColors = ['var(--outflow)', 'var(--outflow-muted)', 'var(--outflow-warm)', 'var(--outflow)'];
+  let paths = flow(sourceX + sourceW, incomeY + 18, middleX, spentY + 18, spending / Math.max(income, 1), 'var(--outflow)');
+  if (remaining > 0) paths += flow(sourceX + sourceW, incomeY + 18, middleX, remainingY + 18, remaining / Math.max(income, 1), 'var(--income)');
   let destinations = '';
   rows.forEach((row, index) => {
     const y = 12 + index * 47, color = destinationColors[index % destinationColors.length];
     paths += flow(middleX + middleW, spentY + 18, destinationX, y + 18, Number(row.amount || 0) / Math.max(spending, 1), color);
     destinations += block(destinationX, y, destinationW, color, row.name, row.amount, row.name);
   });
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Income flowing to money out and spending categories">${paths}${block(sourceX, incomeY, sourceW, '#287143', 'Income', income, 'Income')}${block(middleX, spentY, middleW, '#c87862', 'Money out', spending)}${remaining > 0 ? block(middleX, remainingY, middleW, '#5b9a70', 'Left', remaining) : ''}${destinations}</svg>`;
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Income flowing to money out and spending categories">${paths}${block(sourceX, incomeY, sourceW, 'var(--income)', 'Income', income, 'Income')}${block(middleX, spentY, middleW, 'var(--outflow)', 'Money out', spending)}${remaining > 0 ? block(middleX, remainingY, middleW, 'var(--income)', 'Left', remaining) : ''}${destinations}</svg>`;
 }
 
 function renderSpending(data) {
