@@ -1,10 +1,10 @@
 // Static application shell only. Financial API responses are deliberately never
 // persisted by the service worker: sensitive balances remain server-authorized.
-const CACHE = 'clarity-shell-v1';
+const CACHE = 'clarity-shell-v2';
 const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/chart-utils.js', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {
