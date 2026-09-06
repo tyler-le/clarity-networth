@@ -215,6 +215,26 @@ export function summarizeRange(store, month = new Date().toISOString().slice(0, 
   return { assets, liabilities, netWorth: assets - liabilities, income, spend, totalOut, remaining, month, range, startDate, endDate };
 }
 
+export function cashRunway(store, anchorDate = new Date()) {
+  const cash = store.accounts
+    .filter((account) => !account.hidden && account.type === 'depository')
+    .reduce((sum, account) => sum + Math.max(0, Number(account.current_balance || 0)), 0);
+  const anchor = new Date(anchorDate);
+  const monthEnd = new Date(anchor.getFullYear(), anchor.getMonth(), 0);
+  const monthStart = new Date(monthEnd.getFullYear(), monthEnd.getMonth() - 2, 1).toISOString().slice(0, 10);
+  const monthEndDate = monthEnd.toISOString().slice(0, 10);
+  const monthly = new Map();
+  for (const transaction of store.transactions) {
+    if (transaction.pending || transaction.excluded || transaction.bucket !== 'fixed' || Number(transaction.amount || 0) <= 0) continue;
+    if (transaction.date < monthStart || transaction.date > monthEndDate) continue;
+    const month = transaction.date.slice(0, 7);
+    monthly.set(month, (monthly.get(month) || 0) + Number(transaction.amount));
+  }
+  const monthTotals = [...monthly.values()];
+  const essentialMonthly = monthTotals.length ? monthTotals.reduce((sum, value) => sum + value, 0) / monthTotals.length : null;
+  return { cash, essentialMonthly, monthsObserved: monthTotals.length, runwayMonths: essentialMonthly ? cash / essentialMonthly : null };
+}
+
 function spendingStartDate(range, anchor = new Date()) {
   const start = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
   if (range === '3m') start.setMonth(start.getMonth() - 2);

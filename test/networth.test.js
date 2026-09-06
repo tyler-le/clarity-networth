@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { calculateFire, classifyTransaction, hideDuplicateAccounts, reconstructInvestmentHistory, investmentSummary, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
+import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, reconstructInvestmentHistory, investmentSummary, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
 import { normalizeCandles } from '../market-data.js';
 import { filterSnapshots, scrubIndex } from '../public/chart-utils.js';
 
@@ -170,6 +170,27 @@ test('fixed costs stay limited to essential obligations', () => {
   assert.equal(classifyTransaction({ amount: 75, personal_finance_category: { primary: 'TRANSPORTATION', detailed: 'TRANSPORTATION_GAS' } }), 'fixed');
   assert.equal(classifyTransaction({ amount: 400, personal_finance_category: { primary: 'TRAVEL', detailed: 'TRAVEL_FLIGHTS' } }), 'guilt_free');
   assert.equal(classifyTransaction({ amount: 500, name: 'Payment Thank You', personal_finance_category: { primary: 'LOAN_PAYMENTS', detailed: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT' } }), 'transfer');
+});
+
+test('cash runway uses cash and savings against recent complete-month fixed costs', () => {
+  const store = {
+    accounts: [
+      { type: 'depository', current_balance: 9000 },
+      { type: 'investment', current_balance: 50000 },
+      { type: 'credit', current_balance: 800 }
+    ],
+    transactions: [
+      { date: '2026-06-03', amount: 2000, bucket: 'fixed' },
+      { date: '2026-07-03', amount: 2500, bucket: 'fixed' },
+      { date: '2026-08-03', amount: 2500, bucket: 'fixed' },
+      { date: '2026-08-04', amount: 300, bucket: 'guilt_free' }
+    ]
+  };
+  const runway = cashRunway(store, new Date('2026-09-05T12:00:00'));
+  assert.equal(runway.cash, 9000);
+  assert.equal(runway.monthsObserved, 3);
+  assert.equal(runway.essentialMonthly, 7000 / 3);
+  assert.equal(runway.runwayMonths, 9000 / (7000 / 3));
 });
 
 test('retirement presets calculate coast, lean, standard, fat, and a projected retirement value', () => {

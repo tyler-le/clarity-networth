@@ -102,6 +102,7 @@ function restoreNetWorthHero() {
     $('#netWorthDelta').textContent = 'Tracking starts today';
     const start = snaps[0]?.date ? new Date(`${snaps[0].date}T12:00:00`) : new Date();
     $('#netWorthChartDate').textContent = `Tracking since ${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    renderNetWorthInsights(snaps);
     return;
   }
   const old = snaps.length > 1 ? Number(snaps[0].net_worth) : s.netWorth;
@@ -111,6 +112,38 @@ function restoreNetWorthHero() {
   $('#netWorthDelta').textContent = `${delta >= 0 ? '+' : '−'}${fmt.format(Math.abs(delta))} since ${periodStart}`;
   const estimateNote = snaps.some((snapshot) => snapshot.source === 'estimated') ? 'Estimated history · ' : '';
   $('#netWorthChartDate').textContent = `${estimateNote}Drag across the chart to view history`;
+  renderNetWorthInsights(snaps);
+}
+
+function renderNetWorthInsights(snaps) {
+  const label = netWorthRangeLabel(state.networthRange).toLowerCase();
+  if (snaps.length < 2) {
+    $('#netWorthChange').textContent = 'Still tracking';
+    $('#netWorthChangeDetail').textContent = 'A second balance snapshot will explain how your net worth is moving.';
+  } else {
+    const first = snaps[0];
+    const last = snaps.at(-1);
+    const netChange = Number(last.net_worth || 0) - Number(first.net_worth || 0);
+    $('#netWorthChange').textContent = `${netChange >= 0 ? '+' : '−'}${fmt.format(Math.abs(netChange))} in ${label}`;
+    const hasBreakdown = [first, last].every((snapshot) => Number.isFinite(Number(snapshot.assets)) && Number.isFinite(Number(snapshot.liabilities)));
+    if (!hasBreakdown) {
+      $('#netWorthChangeDetail').textContent = 'Based on verified net worth snapshots in this timeframe.';
+    } else {
+      const assetChange = Number(last.assets) - Number(first.assets);
+      const debtChange = Number(last.liabilities) - Number(first.liabilities);
+      const assetText = `Assets ${assetChange >= 0 ? 'up' : 'down'} ${fmt.format(Math.abs(assetChange))}`;
+      const debtText = `debt ${debtChange <= 0 ? 'down' : 'up'} ${fmt.format(Math.abs(debtChange))}`;
+      $('#netWorthChangeDetail').innerHTML = `<span class="${assetChange >= 0 ? 'positive' : 'negative'}">${assetText}</span><span> · </span><span class="${debtChange <= 0 ? 'positive' : 'negative'}">${debtText}</span>`;
+    }
+  }
+  const runway = state.dashboard?.runway;
+  if (!runway?.essentialMonthly) {
+    $('#cashRunway').textContent = fmt.format(Number(runway?.cash || 0));
+    $('#cashRunwayDetail').textContent = 'Add a little fixed-cost history to estimate your runway.';
+    return;
+  }
+  $('#cashRunway').textContent = `${Math.min(99, Number(runway.runwayMonths || 0)).toFixed(1)} months`;
+  $('#cashRunwayDetail').textContent = `${fmt.format(Number(runway.cash || 0))} in cash & savings · ${fmt.format(Number(runway.essentialMonthly))}/mo essentials`;
 }
 
 function netWorthRangeLabel(range) {
