@@ -545,14 +545,18 @@ function renderCashFlowSankey(data) {
   const el = $('#cashflowSankey');
   const income = Number(data.income || 0), actualSpend = Number(data.actualSpend || 0), savings = Number(data.savings || 0), investments = Number(data.investments || 0);
   if (!income && !actualSpend && !savings && !investments) { el.innerHTML = ''; return; }
-  const compact = window.matchMedia('(max-width: 560px)').matches;
-  const width = compact ? 390 : 720, height = 216;
+  // Use the chart's actual container, not a device label. This survives
+  // tablets, split-screen, zoom, sidebars, and window resizing.
+  const availableWidth = el.clientWidth;
+  const compact = availableWidth < 520;
+  const tablet = !compact && availableWidth < 760;
+  const width = compact ? 390 : tablet ? 620 : 720, height = 216;
   // On phones, equal-width nodes create a steadier left-to-right reading
   // path. Longer labels wrap within their own node instead of making the
   // source feel visually less important.
-  const sourceX = compact ? 8 : 12, sourceW = compact ? 116 : 132;
-  const middleX = compact ? 137 : 244, middleW = compact ? 116 : 150;
-  const destinationX = compact ? 266 : 458, destinationW = compact ? 116 : 230;
+  const sourceX = compact ? 8 : 12, sourceW = compact ? 116 : tablet ? 120 : 132;
+  const middleX = compact ? 137 : tablet ? 168 : 244, middleW = compact ? 116 : tablet ? 142 : 150;
+  const destinationX = compact ? 266 : tablet ? 340 : 458, destinationW = compact ? 116 : tablet ? 196 : 230;
   const displayValue = (value, isIncome = false) => {
     if (state.cashflowDisplay === 'amount') return fmt.format(value);
     if (!income) return '—';
@@ -1201,6 +1205,11 @@ $$('[data-cashflow-display]').forEach((button) => button.addEventListener('click
 }));
 $('#cashflowExpand').addEventListener('click', () => { const dialog = $('#cashflowDialog'); $('#cashflowDialogContent').innerHTML = $('#cashflowSankey').innerHTML; dialog.showModal(); });
 $('#cashflowDialogClose').addEventListener('click', () => $('#cashflowDialog').close());
+let cashflowResizeFrame;
+new ResizeObserver(() => {
+  cancelAnimationFrame(cashflowResizeFrame);
+  cashflowResizeFrame = requestAnimationFrame(() => { if (state.spending) renderSpending(state.spending); });
+}).observe($('#cashflowSankey'));
 $$('[data-allocation-display]').forEach((button) => button.addEventListener('click', () => {
   state.allocationDisplay = button.dataset.allocationDisplay;
   $$('[data-allocation-display]').forEach((control) => control.classList.toggle('active', control === button));
