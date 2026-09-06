@@ -263,6 +263,8 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await expect(page.locator('#retirementLifestylePaths')).toContainText('Essentials covered');
   await expect(page.locator('#retirementLifestylePaths')).toContainText('Current lifestyle');
   await page.getByLabel('How the freedom ladder is calculated').click();
+  await expect(page.locator('.retirement-hero')).toHaveCSS('overflow', 'visible');
+  await expect(page.getByText('Based on your plan')).toBeVisible();
   await expect(page.getByText('Cash milestones')).toBeVisible();
   await page.getByText('Your freedom ladder').click();
   await expect(page.locator('.retirement-method').first()).not.toHaveAttribute('open', '');

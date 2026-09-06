@@ -853,6 +853,11 @@ function renderRetirement(data) {
   form.retirement_age.value = data.retirementAge;
   form.withdrawal_rate.value = data.withdrawalRate;
   form.real_return.value = data.realReturn;
+  $('#retirementAgeValue').textContent = data.age;
+  $('#retirementRetireAgeValue').textContent = data.retirementAge;
+  $('#retirementWithdrawalValue').textContent = `${data.withdrawalRate}%`;
+  $('#retirementReturnValue').textContent = `${data.realReturn}%`;
+  form.retirement_age.min = String(Math.min(80, Number(data.age) + 1));
 }
 
 function renderDashboard() {
@@ -1052,6 +1057,36 @@ $('#deleteAccountButton').addEventListener('click', async () => {
 $$('[data-connect-account]').forEach((button) => button.addEventListener('click', connectPlaid));
 $('#connectButton').addEventListener('click', connectPlaid);
 $('#viewNetWorthAfterConnection').addEventListener('click', () => setView('overview'));
+let retirementPreviewTimer;
+let retirementPreviewRequest;
+function resetRetirementPreview() {
+  clearTimeout(retirementPreviewTimer);
+  retirementPreviewRequest?.abort();
+  $('#retirementPreviewStatus').textContent = '';
+}
+function previewRetirementPlan() {
+  if (state.demoPreview || state.dashboard?.demoMode) return;
+  clearTimeout(retirementPreviewTimer);
+  retirementPreviewTimer = setTimeout(async () => {
+    retirementPreviewRequest?.abort();
+    retirementPreviewRequest = new AbortController();
+    const form = new FormData($('#retirementForm'));
+    try {
+      const preview = await api('/api/retirement/preview', { method: 'POST', body: JSON.stringify(Object.fromEntries(form)), signal: retirementPreviewRequest.signal });
+      state.retirement = preview;
+      renderRetirement(preview);
+      $('#retirementPreviewStatus').textContent = 'Preview — save to keep this plan.';
+    } catch (error) {
+      if (error.name !== 'AbortError') $('#retirementPreviewStatus').textContent = error.message;
+    }
+  }, 140);
+}
+$$('#retirementForm input').forEach((input) => input.addEventListener('input', previewRetirementPlan));
+$('#retirementReset').addEventListener('click', async () => {
+  resetRetirementPreview();
+  try { renderRetirement(await api('/api/retirement')); }
+  catch (error) { showNotice(error.message); }
+});
 $('#retirementForm').addEventListener('submit', async (event) => {
   event.preventDefault();
   if (state.demoPreview || state.dashboard?.demoMode) { showNotice('Sign in to save changes to your own plan.'); return; }
@@ -1061,8 +1096,9 @@ $('#retirementForm').addEventListener('submit', async (event) => {
   try {
     state.retirement = await api('/api/settings/retirement', { method: 'PATCH', body: JSON.stringify(Object.fromEntries(form)) });
     renderRetirement(state.retirement);
+    resetRetirementPreview();
     $('#retirementAdjust').open = false;
-    showNotice('Retirement plan updated.', 'success');
+    showNotice('Plan updated — your retirement outlook has been recalculated.', 'success');
   } catch (error) { showNotice(error.message); }
   finally { button.disabled = false; }
 });

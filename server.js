@@ -760,17 +760,32 @@ app.get('/api/retirement', async (req, res) => {
   res.json(calculateFire(store, summarizeRange(store).netWorth));
 });
 
-app.patch('/api/settings/retirement', async (req, res) => {
+function retirementSettingsFrom(body, existing = {}) {
   const fields = ['age', 'retirement_age', 'withdrawal_rate', 'real_return', 'lean_multiplier', 'fat_multiplier'];
-  const store = await loadStore(req.user);
-  store.settings.fire ||= {};
+  const settings = { ...existing };
   for (const field of fields) {
-    if (req.body?.[field] === undefined) continue;
-    const value = Number(req.body[field]);
-    if (!Number.isFinite(value)) return res.status(400).json({ error: `Invalid ${field}.` });
-    store.settings.fire[field] = value;
+    if (body?.[field] === undefined) continue;
+    const value = Number(body[field]);
+    if (!Number.isFinite(value)) throw new Error(`Invalid ${field}.`);
+    settings[field] = value;
   }
-  if (Number(store.settings.fire.retirement_age) < Number(store.settings.fire.age)) return res.status(400).json({ error: 'Retirement age must be after current age.' });
+  if (Number(settings.retirement_age) < Number(settings.age)) throw new Error('Retirement age must be after current age.');
+  return settings;
+}
+
+app.post('/api/retirement/preview', async (req, res) => {
+  try {
+    const store = activeStore(await loadStore(req.user));
+    store.settings ||= {};
+    store.settings.fire = retirementSettingsFrom(req.body, store.settings.fire);
+    res.json(calculateFire(store, summarizeRange(store).netWorth));
+  } catch (error) { res.status(400).json({ error: error.message }); }
+});
+
+app.patch('/api/settings/retirement', async (req, res) => {
+  const store = await loadStore(req.user);
+  try { store.settings.fire = retirementSettingsFrom(req.body, store.settings.fire); }
+  catch (error) { return res.status(400).json({ error: error.message }); }
   await saveStore(req.user, store);
   const visibleStore = activeStore(store);
   res.json(calculateFire(visibleStore, summarizeRange(visibleStore).netWorth));

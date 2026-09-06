@@ -410,6 +410,15 @@ test('retirement presets calculate coast, lean, standard, fat, and a projected r
   assert.ok(plan.coast < plan.standard);
   assert.ok(plan.projectedAtRetirement > 100000);
   assert.equal(plan.progress.standard, 100000 / 1200000 * 100);
+
+  const laterRetirement = calculateFire({ ...store, settings: { fire: { ...store.settings.fire, retirement_age: 70 } } }, 100000);
+  assert.ok(laterRetirement.coast < plan.coast, 'more time for growth lowers the Coast FI balance needed today');
+  assert.ok(laterRetirement.projectedAtRetirement > plan.projectedAtRetirement, 'more time raises the projected portfolio value');
+  assert.equal(laterRetirement.standard, plan.standard, 'the balance needed to support the same lifestyle does not depend on retirement age');
+  assert.deepEqual(laterRetirement.lifestyles.map((path) => path.target), plan.lifestyles.map((path) => path.target));
+
+  const lowerWithdrawalRate = calculateFire({ ...store, settings: { fire: { ...store.settings.fire, withdrawal_rate: 3.5 } } }, 100000);
+  assert.ok(lowerWithdrawalRate.standard > plan.standard, 'a more conservative withdrawal rate raises the lifestyle target');
 });
 
 test('each signed-in identity has an isolated persistent store', async () => {

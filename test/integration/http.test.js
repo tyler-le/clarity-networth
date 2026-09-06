@@ -37,7 +37,7 @@ delete process.env.PLAID_ENV;
 // have been removed.
 process.env.DOTENV_CONFIG_PATH = path.join(dataDir, 'no-provider-credentials.env');
 const { app } = await import(`../../server.js?integration=${Date.now()}`);
-const { deleteStore, writeStore } = await import('../../store.js');
+const { deleteStore, readStore, userStorageKey, writeStore } = await import('../../store.js');
 const integrationTest = process.env.CODEX_SANDBOX_NETWORK_DISABLED ? test.skip : test;
 
 function signedTestCookie(email = 'rate-limit@example.com') {
@@ -131,6 +131,30 @@ integrationTest('does not expose sign-in configuration secrets', async () => {
   assert.deepEqual(Object.keys(response.body).sort(), ['configured', 'googleClientId']);
   assert.equal(response.body.configured, false);
   assert.equal(response.body.googleClientId, null);
+});
+
+integrationTest('previews a retirement plan without changing the saved assumptions', async () => {
+  const email = 'retirement-preview@example.com';
+  const key = userStorageKey(email);
+  writeStore({
+    settings: { fire: { age: 30, retirement_age: 60, withdrawal_rate: 4, real_return: 5 } },
+    accounts: [{ id: 'investment', type: 'investment', current_balance: 100000 }],
+    items: [], snapshots: [],
+    transactions: [
+      { date: '2026-09-01', amount: 3000, bucket: 'fixed' },
+      { date: '2026-09-02', amount: 1000, bucket: 'guilt_free' },
+      { date: '2026-09-03', amount: 500, bucket: 'investments' }
+    ]
+  }, key);
+  const cookie = signedTestCookie(email);
+  const current = await request(app).get('/api/retirement').set('Cookie', cookie);
+  const preview = await request(app).post('/api/retirement/preview').set('Cookie', cookie).send({ age: 30, retirement_age: 65, withdrawal_rate: 3.5, real_return: 5 });
+  assert.equal(preview.status, 200);
+  assert.ok(preview.body.coast < current.body.coast);
+  assert.ok(preview.body.projectedAtRetirement > current.body.projectedAtRetirement);
+  assert.ok(preview.body.standard > current.body.standard);
+  assert.equal(readStore(key).settings.fire.retirement_age, 60);
+  deleteStore(key);
 });
 
 integrationTest('rejects unsigned Plaid webhooks before processing financial data', async () => {
