@@ -336,9 +336,13 @@ test('connection health stays quiet until a refresh is stale or fails', () => {
   const health = connectionHealth({ items: [
     { id: 'fresh', institution_name: 'Fresh', last_synced_at: '2026-09-05T10:00:00Z' },
     { id: 'late', institution_name: 'Late', last_synced_at: '2026-09-04T10:00:00Z' },
-    { id: 'failed', institution_name: 'Failed', last_synced_at: '2026-09-06T10:00:00Z', last_sync_error_at: '2026-09-06T11:00:00Z' }
+    { id: 'failed', institution_name: 'Failed', last_synced_at: '2026-09-06T10:00:00Z', last_sync_error_at: '2026-09-06T11:00:00Z' },
+    { id: 'legacy', institution_name: 'Legacy' }
+  ], accounts: [
+    { item_id: 'legacy', updated_at: '2026-09-06T11:30:00Z' }
   ] }, now);
-  assert.deepEqual(health.map((item) => item.state), ['healthy', 'stale', 'attention']);
+  assert.deepEqual(health.map((item) => item.state), ['healthy', 'stale', 'attention', 'healthy']);
+  assert.equal(health[3].last_synced_at, '2026-09-06T11:30:00.000Z');
 });
 
 test('retirement presets calculate coast, lean, standard, fat, and a projected retirement value', () => {

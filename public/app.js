@@ -189,7 +189,7 @@ function renderClarityLayer(data) {
   $('#connectionAttention').classList.toggle('hidden', !attention.length);
   if (attention.length) {
     const stale = attention[0];
-    $('#connectionAttentionTitle').textContent = `${stale.institution_name} needs attention`;
+    $('#connectionAttentionTitle').textContent = stale.state === 'stale' ? `${stale.institution_name} update is delayed` : `${stale.institution_name} needs attention`;
     $('#connectionAttentionDetail').textContent = stale.state === 'stale' ? 'This connection has not updated recently. We will keep retrying automatically.' : 'This connection could not update. We will retry automatically.';
   }
 }

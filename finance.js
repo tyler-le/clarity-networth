@@ -359,9 +359,25 @@ export function monthlyReview(store, anchorDate = new Date()) {
 export function connectionHealth(store, now = new Date()) {
   const cutoff = new Date(now).getTime() - 36 * 60 * 60 * 1000;
   return (store.items || []).filter((item) => !item.demo).map((item) => {
-    const syncedAt = item.last_synced_at ? new Date(item.last_synced_at).getTime() : 0;
+    // Connections created before automatic syncing did not have a
+    // `last_synced_at` field. Their account records still have a trustworthy
+    // provider-update timestamp, so use that as a one-way legacy fallback.
+    // Do not let it conceal a recorded refresh failure or replace an explicit
+    // sync timestamp once one exists.
+    const accountUpdates = (store.accounts || [])
+      .filter((account) => account.item_id === item.id)
+      .map((account) => new Date(account.updated_at).getTime())
+      .filter(Number.isFinite);
+    const inferredAt = accountUpdates.length ? Math.max(...accountUpdates) : 0;
+    const explicitAt = item.last_synced_at ? new Date(item.last_synced_at).getTime() : 0;
+    const syncedAt = Number.isFinite(explicitAt) && explicitAt > 0 ? explicitAt : inferredAt;
     const state = item.last_sync_error_at ? 'attention' : syncedAt < cutoff ? 'stale' : 'healthy';
-    return { id: item.id, institution_name: item.institution_name, last_synced_at: item.last_synced_at || null, state };
+    return {
+      id: item.id,
+      institution_name: item.institution_name,
+      last_synced_at: item.last_synced_at || (syncedAt ? new Date(syncedAt).toISOString() : null),
+      state
+    };
   });
 }
 
