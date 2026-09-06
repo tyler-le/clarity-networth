@@ -400,8 +400,20 @@ function spendingForSelectedMonth(data) {
   const income = transactions.filter((transaction) => transaction.bucket === 'income').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const actualSpend = planTransactions.filter((transaction) => !['savings', 'investments'].includes(transaction.bucket)).reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const savingsAndInvestments = planTransactions.filter((transaction) => ['savings', 'investments'].includes(transaction.bucket)).reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  const actualSpendCategories = flowCategoryRows(planTransactions.filter((transaction) => transaction.flowGroup === 'actual_spend'));
   const preTaxRetirement = Number((data.monthly || []).find((row) => row.month === state.spendingMonth)?.pre_tax_retirement || 0);
-  return { ...data, total, income, actualSpend, savingsAndInvestments, preTaxRetirement, monthlyAverage: total, categories: allocationRows(planTransactions), transactions };
+  return { ...data, total, income, actualSpend, actualSpendCategories, savingsAndInvestments, preTaxRetirement, monthlyAverage: total, categories: allocationRows(planTransactions), transactions };
+}
+
+function flowCategoryRows(transactions) {
+  const groups = new Map();
+  for (const transaction of transactions) {
+    const key = transaction.flowKey || 'other_spend';
+    const current = groups.get(key) || { key, name: transaction.flowLabel || 'Other spend', amount: 0 };
+    current.amount += Number(transaction.amount || 0);
+    groups.set(key, current);
+  }
+  return [...groups.values()].sort((a, b) => b.amount - a.amount);
 }
 
 function renderSpendingTrend(data) {
@@ -419,21 +431,28 @@ function renderSpendingTrend(data) {
 
 function renderCashFlowSankey(data) {
   const el = $('#cashflowSankey');
-  const income = Number(data.income || 0), actualSpend = Number(data.actualSpend || 0), savingsAndInvestments = Number(data.savingsAndInvestments || 0), remaining = income - actualSpend - savingsAndInvestments;
+  const income = Number(data.income || 0), actualSpend = Number(data.actualSpend || 0), savingsAndInvestments = Number(data.savingsAndInvestments || 0);
   if (!income && !actualSpend && !savingsAndInvestments) { el.innerHTML = ''; return; }
   // Use the rendered width as the SVG coordinate system on phones. This keeps
   // labels at a readable size instead of shrinking a desktop SVG to fit.
   const compact = el.clientWidth < 480;
   const width = compact ? 390 : 720, height = 216;
-  const sourceX = 12, sourceW = compact ? 106 : 150;
-  const destinationX = compact ? 202 : 392, destinationW = compact ? 176 : 250;
+  const sourceX = 12, sourceW = compact ? 88 : 132;
+  const middleX = compact ? 112 : 244, middleW = compact ? 112 : 150;
+  const destinationX = compact ? 242 : 458, destinationW = compact ? 136 : 230;
   const block = (x, y, w, color, label, value, category = '') => `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><rect x="${x}" y="${y}" width="${w}" height="36" rx="8" fill="var(--sankey-surface)" stroke="var(--sankey-border)"/><rect x="${x}" y="${y}" width="6" height="36" rx="3" fill="${color}"/><text x="${x + 13}" y="${y + 14}" class="cashflow-label">${escapeHtml(label)}</text><text x="${x + 13}" y="${y + 28}" class="cashflow-value">${fmt.format(value)}</text></g>`;
   const flow = (fromX, fromY, toX, toY, ratio, color) => `<path class="cashflow-flow" d="M ${fromX} ${fromY} C ${fromX + (toX - fromX) * .42} ${fromY}, ${toX - (toX - fromX) * .42} ${toY}, ${toX} ${toY}" fill="none" stroke="${color}" stroke-opacity=".38" stroke-width="${Math.max(6, Math.min(30, ratio * 30))}" stroke-linecap="round"/>`;
-  const incomeY = 89, spendY = 28, saveY = 89, remainingY = 150;
-  let paths = flow(sourceX + sourceW, incomeY + 18, destinationX, spendY + 18, actualSpend / Math.max(income, 1), 'var(--outflow)');
-  paths += flow(sourceX + sourceW, incomeY + 18, destinationX, saveY + 18, savingsAndInvestments / Math.max(income, 1), 'var(--save-invest)');
-  if (remaining > 0) paths += flow(sourceX + sourceW, incomeY + 18, destinationX, remainingY + 18, remaining / Math.max(income, 1), 'var(--income)');
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Net income split into spending and saving">${paths}${block(sourceX, incomeY, sourceW, 'var(--income)', 'Net income', income, 'Income')}${block(destinationX, spendY, destinationW, 'var(--outflow)', 'Actual spend', actualSpend)}${block(destinationX, saveY, destinationW, 'var(--save-invest)', 'Save & invest', savingsAndInvestments)}${remaining > 0 ? block(destinationX, remainingY, destinationW, 'var(--income)', 'Left', remaining) : ''}</svg>`;
+  const incomeY = 89, spendY = 28, saveY = 137;
+  const actualCategories = (data.actualSpendCategories || []).slice(0, 4);
+  let paths = flow(sourceX + sourceW, incomeY + 18, middleX, spendY + 18, actualSpend / Math.max(income, 1), 'var(--outflow)');
+  paths += flow(sourceX + sourceW, incomeY + 18, middleX, saveY + 18, savingsAndInvestments / Math.max(income, 1), 'var(--save-invest)');
+  let categories = '';
+  actualCategories.forEach((row, index) => {
+    const y = 12 + index * 47;
+    paths += flow(middleX + middleW, spendY + 18, destinationX, y + 18, Number(row.amount || 0) / Math.max(actualSpend, 1), 'var(--outflow-muted)');
+    categories += block(destinationX, y, destinationW, 'var(--outflow-muted)', row.name, row.amount, row.key);
+  });
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Net income split into spending and saving">${paths}${block(sourceX, incomeY, sourceW, 'var(--income)', 'Net income', income, 'income')}${block(middleX, spendY, middleW, 'var(--outflow)', 'Actual spend', actualSpend, 'actual_spend')}${block(middleX, saveY, middleW, 'var(--save-invest)', 'Save & invest', savingsAndInvestments, 'save_invest')}${categories}</svg>`;
 }
 
 function renderSpending(data) {
@@ -452,7 +471,7 @@ function renderSpending(data) {
   $('#spendingTotal').textContent = fmt.format(Math.abs(remaining));
   $('#cashflowHeadline').textContent = remaining >= 0 ? 'Left after spending and saving' : 'More allocated than income';
   $('#cashflowHeadline').className = `cashflow-headline ${remaining >= 0 ? 'positive' : 'negative'}`;
-  $('#spendingSummary').innerHTML = `<span class="income-flow"><i class="income"></i>Net income <strong>${fmt.format(income)}</strong></span><span class="spend-flow"><i class="spend"></i>Actual spend <strong>${fmt.format(actualSpend)}</strong></span><span class="save-flow"><i></i>Save & invest <strong>${fmt.format(savingsAndInvestments)}</strong></span>${preTaxRetirement ? `<span class="retirement-flow"><i></i>Pre-tax retirement <strong>${fmt.format(preTaxRetirement)}</strong><small>outside cash flow</small></span>` : ''}`;
+  $('#spendingSummary').innerHTML = `<span class="income-flow"><i class="income"></i>Net income <strong>${fmt.format(income)}</strong></span><span class="spend-flow"><i class="spend"></i>Actual spend <strong>${fmt.format(actualSpend)}</strong></span><span class="save-flow"><i></i>Save & invest <strong>${fmt.format(savingsAndInvestments)}</strong></span>${preTaxRetirement ? `<span class="retirement-flow"><i></i>Pre-tax retirement <strong>${fmt.format(preTaxRetirement)}</strong><small>not included in cash flow</small></span>` : ''}`;
   const rangeLabel = ({ '1m': 'this month', '3m': 'over the last 3 months', ytd: 'year to date', '1y': 'over the last year' })[data.range] || 'this month';
   const selectedMonthLabel = state.spendingMonth && new Date(`${state.spendingMonth}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   $('#spendingContext').textContent = total || income ? (selectedMonthLabel || ({ '1m': 'This month', '3m': 'Last 3 months', ytd: 'Year to date', '1y': 'Last year' })[data.range] || rangeLabel) : `No posted cash flow ${selectedMonthLabel || rangeLabel}. It can take a little time to arrive after connecting.`;
@@ -479,12 +498,16 @@ function renderSpending(data) {
 
 function renderSpendingTransactions(data) {
   const filter = $('#spendingCategoryFilter');
-  const categories = [...new Set((data.transactions || []).map((transaction) => transaction.category))];
-  if (state.spendingCategory !== 'all' && !categories.includes(state.spendingCategory)) state.spendingCategory = 'all';
-  filter.innerHTML = `<option value="all">All activity</option>${categories.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('')}`;
+  const categories = [...new Map((data.transactions || []).map((transaction) => [transaction.flowKey || transaction.category, transaction.flowLabel || transaction.category])).entries()];
+  const filterKeys = new Set(categories.map(([key]) => key));
+  if (state.spendingCategory !== 'all' && !['actual_spend', 'save_invest'].includes(state.spendingCategory) && !filterKeys.has(state.spendingCategory)) state.spendingCategory = 'all';
+  filter.innerHTML = `<option value="all">All activity</option><option value="actual_spend">Actual spend</option><option value="save_invest">Save & invest</option>${categories.map(([key, name]) => `<option value="${escapeHtml(key)}">${escapeHtml(name)}</option>`).join('')}`;
   filter.value = state.spendingCategory;
   $('#spendingSort').value = state.spendingSort;
-  let rows = (data.transactions || []).filter((transaction) => (state.spendingCategory === 'all' || transaction.category === state.spendingCategory) && (!state.spendingMonth || String(transaction.date).startsWith(state.spendingMonth)));
+  let rows = (data.transactions || []).filter((transaction) => {
+    const matchesFilter = state.spendingCategory === 'all' || transaction.flowKey === state.spendingCategory || transaction.flowGroup === state.spendingCategory;
+    return matchesFilter && (!state.spendingMonth || String(transaction.date).startsWith(state.spendingMonth));
+  });
   rows = [...rows].sort((a, b) => state.spendingSort === 'highest' ? b.amount - a.amount : String(b.date).localeCompare(String(a.date)) || b.amount - a.amount);
   $('#spendingTransactionCount').textContent = `${rows.length} posted`;
   const options = [['fixed', 'Fixed costs'], ['savings', 'Savings'], ['investments', 'Investments'], ['guilt_free', 'Guilt-free']];

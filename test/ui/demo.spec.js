@@ -48,9 +48,9 @@ test('cash-flow interactions lead from visual category to the relevant activity'
 test('the income source opens income activity from the cash-flow diagram', async ({ page }) => {
   await openDemo(page);
   await page.locator('.mobile-nav [data-view="spending"]').click();
-  await page.locator('#cashflowSankey [data-cashflow-category="Income"]').click();
+  await page.locator('#cashflowSankey [data-cashflow-category="income"]').click();
   await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
-  await expect(page.locator('#spendingCategoryFilter')).toHaveValue('Income');
+  await expect(page.locator('#spendingCategoryFilter')).toHaveValue('income');
   await expect(page.locator('.income-transaction').first()).toBeVisible();
 });
 

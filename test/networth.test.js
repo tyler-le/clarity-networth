@@ -95,8 +95,22 @@ test('monthly spending keeps income separate for comparison', () => {
   assert.equal(result.income, 4200);
   assert.deepEqual(result.monthly, [{ month: '2026-09', amount: 900, income: 4200, pre_tax_retirement: 0 }]);
   assert.deepEqual(result.transactions.find((transaction) => transaction.category === 'Income'), {
-    id: undefined, name: 'Payroll', date: '2026-09-01', amount: 4200, category: 'Income', bucket: 'income'
+    id: undefined, name: 'Payroll', date: '2026-09-01', amount: 4200, category: 'Income', bucket: 'income', flowKey: 'income', flowLabel: 'Net income', flowGroup: 'income'
   });
+});
+
+test('cash flow separates actual spending details from saving and investing', () => {
+  const store = { transactions: [
+    { date: '2026-09-01', amount: -5000, bucket: 'income', merchant_name: 'Payroll' },
+    { date: '2026-09-02', amount: 1800, bucket: 'fixed', pfc_detailed: 'RENT_AND_UTILITIES', merchant_name: 'Rent' },
+    { date: '2026-09-03', amount: 240, bucket: 'fixed', pfc_detailed: 'FOOD_AND_DRINK_GROCERIES', merchant_name: 'Grocer' },
+    { date: '2026-09-04', amount: 500, bucket: 'investments', merchant_name: 'Brokerage transfer' },
+    { date: '2026-09-05', amount: 250, bucket: 'savings', merchant_name: 'Savings transfer' }
+  ] };
+  const result = spendingSummary(store, '1m', new Date('2026-09-05T12:00:00'));
+  assert.equal(result.actualSpend, 2040);
+  assert.equal(result.savingsAndInvestments, 750);
+  assert.deepEqual(result.actualSpendCategories.map((row) => [row.key, row.amount]), [['housing_bills', 1800], ['food', 240]]);
 });
 
 test('portfolio history keeps one verified investment value for each day', () => {
