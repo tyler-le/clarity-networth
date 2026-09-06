@@ -12,7 +12,7 @@
     "test:integration": "node --test test/integration/*.test.js",
     "test:ui": "playwright test",
     "test:local": "npm run test:ci",
-    "setup:hooks": "git config core.hooksPath .githooks",
+    "setup:hooks": "git rev-parse --is-inside-work-tree >/dev/null 2>&1 && git config core.hooksPath .githooks || exit 0",
     "prepare": "npm run setup:hooks",
     "db:migrate": "node scripts/migrate-database.js",
     "db:import-legacy": "node scripts/import-json-stores.js",
