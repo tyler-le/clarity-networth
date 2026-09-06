@@ -168,14 +168,15 @@ function renderNetWorthInsights() {
 }
 
 function renderClarityLayer(data) {
-  const review = data.monthlyReview || {};
-  $('#monthlyReview').classList.toggle('hidden', !review.available);
-  if (review.available) {
-    const month = new Date(`${review.month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long' });
-    $('#monthlyReviewTitle').textContent = `${fmt.format(Number(review.spend || 0))} spent in ${month}`;
-    $('#monthlyReviewDetail').textContent = review.outlier
-      ? `${review.outlier.category} was ${fmt.format(Number(review.outlier.difference))} above your usual month.`
-      : review.saveInvest > 0 ? `${fmt.format(Number(review.saveInvest))} also went to saving and investing.` : 'No unusual spending patterns stood out.';
+  const checkin = data.clarityCheckin || {};
+  $('#clarityCheckin').classList.toggle('hidden', !checkin.available);
+  if (checkin.available) {
+    $('#clarityCheckin').dataset.action = checkin.action || 'overview';
+    $('#clarityCheckin').dataset.tone = checkin.tone || 'steady';
+    $('#clarityCheckinTitle').textContent = checkin.title;
+    $('#clarityCheckinDetail').textContent = checkin.detail;
+    $('#clarityCheckinAction').textContent = checkin.actionLabel || 'View details';
+    $('#clarityCheckinMark').textContent = checkin.tone === 'attention' ? '!' : checkin.tone === 'watch' ? '•' : '✦';
   }
   const goals = data.goals || [];
   const goal = goals[0];
@@ -186,7 +187,9 @@ function renderClarityLayer(data) {
     $('#goalProgress').style.width = `${Math.round(goal.progress * 100)}%`;
   } else { $('#goalTitle').textContent = 'Set a goal'; $('#goalDetail').textContent = 'Track a cash, investment, net-worth, or debt goal from your real balances.'; $('#goalProgress').style.width = '0%'; }
   const attention = (data.connectionHealth || []).filter((item) => item.state !== 'healthy');
-  $('#connectionAttention').classList.toggle('hidden', !attention.length);
+  // The check-in already explains a connection issue at the highest priority;
+  // do not repeat it immediately below and dilute the visual hierarchy.
+  $('#connectionAttention').classList.toggle('hidden', !attention.length || checkin.action === 'profile');
   if (attention.length) {
     const stale = attention[0];
     $('#connectionAttentionTitle').textContent = stale.state === 'stale' ? `${stale.institution_name} update is delayed` : `${stale.institution_name} needs attention`;
@@ -1119,6 +1122,7 @@ $('#goalForm').addEventListener('submit', async (event) => {
   try { await api('/api/goals', { method: 'POST', body: JSON.stringify({ name: $('#goalName').value, source: $('#goalSource').value, target: $('#goalTarget').value }) }); $('#goalDialog').close(); await loadAll(); showNotice('Goal added.', 'success'); } catch (error) { showNotice(error.message); }
 });
 $('#connectionAttentionAction').addEventListener('click', () => setView('profile'));
+$('#clarityCheckinAction').addEventListener('click', () => setView($('#clarityCheckin').dataset.action || 'overview'));
 $('#connectionsList').addEventListener('click', async (event) => {
   const button = event.target.closest('[data-unlink]');
   if (!button) return;

@@ -7,7 +7,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './store.js';
 import { consumeRateLimit, databaseEnabled, databaseHealthy, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, writeDatabaseStore } from './database.js';
-import { calculateFire, cashRunway, classifyTransaction, connectionHealth, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentLinkBalances, investmentSummary, monthlyReview, reconstructInvestmentHistory, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
+import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentLinkBalances, investmentSummary, monthlyReview, reconstructInvestmentHistory, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
 import { loadHistoricalPrices } from './market-data.js';
 import { plaidConfigured, plaidPost } from './plaid.js';
 
@@ -668,7 +668,7 @@ app.get('/api/demo-preview', demoLimiter, (req, res) => {
     dashboard: {
       summary: summarizeRange(store),
       runway: cashRunway(store),
-      goals: goalProgress(store), monthlyReview: monthlyReview(store), connectionHealth: connectionHealth(store),
+      goals: goalProgress(store), monthlyReview: monthlyReview(store), clarityCheckin: clarityCheckin(store), connectionHealth: connectionHealth(store),
       recurring: recurringCharges(store),
       investmentContributions: investmentContributions(store),
       investmentLinkBalances: investmentLinkBalances(store),
@@ -722,6 +722,7 @@ app.get('/api/dashboard', async (req, res) => {
     runway: cashRunway(visibleStore),
     goals: goalProgress(visibleStore),
     monthlyReview: monthlyReview(visibleStore),
+    clarityCheckin: clarityCheckin(visibleStore),
     connectionHealth: connectionHealth(visibleStore),
     recurring: recurringCharges(visibleStore),
     investmentContributions: investmentContributions(visibleStore),

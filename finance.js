@@ -332,12 +332,17 @@ export function monthlyReview(store, anchorDate = new Date()) {
     const date = new Date(end.getFullYear(), end.getMonth() - offset, 1);
     return date.toISOString().slice(0, 7);
   });
-  const byMonth = new Map([latestMonth, ...priorMonths].map((month) => [month, { spend: 0, saveInvest: 0, categories: new Map() }]));
+  const byMonth = new Map([latestMonth, ...priorMonths].map((month) => [month, { spend: 0, saveInvest: 0, income: 0, categories: new Map() }]));
   for (const transaction of store.transactions || []) {
-    if (transaction.pending || transaction.excluded || transaction.bucket === 'transfer' || Number(transaction.amount || 0) <= 0) continue;
+    if (transaction.pending || transaction.excluded || transaction.bucket === 'transfer') continue;
     const month = String(transaction.date || '').slice(0, 7);
     const row = byMonth.get(month);
     if (!row) continue;
+    if (transaction.bucket === 'income') {
+      row.income += Math.abs(Number(transaction.amount || 0));
+      continue;
+    }
+    if (Number(transaction.amount || 0) <= 0) continue;
     if (transaction.bucket === 'savings' || transaction.bucket === 'investments') { row.saveInvest += Number(transaction.amount); continue; }
     if (!['fixed', 'guilt_free'].includes(transaction.bucket)) continue;
     row.spend += Number(transaction.amount);
@@ -353,7 +358,62 @@ export function monthlyReview(store, anchorDate = new Date()) {
     const difference = amount - baseline;
     if (amount >= 125 && baseline >= 50 && amount >= baseline * 1.65 && difference >= 125 && (!outlier || difference > outlier.difference)) outlier = { category, amount, baseline, difference };
   }
-  return { available: true, month: latestMonth, spend: latest.spend, saveInvest: latest.saveInvest, outlier };
+  return { available: true, month: latestMonth, income: latest.income, spend: latest.spend, saveInvest: latest.saveInvest, outlier };
+}
+
+// A deliberately small, evidence-based answer to “am I okay?” It never
+// invents a reason for a change and only speaks when connected data supports
+// a concrete next step or reassuring fact.
+export function clarityCheckin(store, anchorDate = new Date()) {
+  const connections = connectionHealth(store, anchorDate);
+  const attention = connections.find((item) => item.state === 'attention' || item.state === 'stale');
+  if (attention) {
+    return {
+      available: true, tone: attention.state === 'attention' ? 'attention' : 'watch', action: 'profile', actionLabel: 'View connections',
+      title: attention.state === 'attention' ? `${attention.institution_name} needs attention` : `${attention.institution_name} is taking longer to update`,
+      detail: 'Your existing data is still here. We will keep retrying automatically.'
+    };
+  }
+  const review = monthlyReview(store, anchorDate);
+  if (review.available && review.outlier) {
+    return {
+      available: true, tone: 'watch', action: 'spending', actionLabel: 'Review cash flow',
+      title: `${review.outlier.category} was higher than usual`,
+      detail: `${formatDollars(review.outlier.difference)} above your typical month in ${monthLabel(review.month)}. Everything else looks within your usual pattern.`
+    };
+  }
+  if (review.available && review.income > 0) {
+    const remaining = review.income - review.spend - review.saveInvest;
+    if (remaining >= 0) {
+      return {
+        available: true, tone: 'steady', action: 'spending', actionLabel: 'View cash flow',
+        title: 'Last month stayed within take-home income',
+        detail: `${formatDollars(remaining)} remained after actual spending, saving, and investing. Pre-tax retirement stays separate.`
+      };
+    }
+    return {
+      available: true, tone: 'watch', action: 'spending', actionLabel: 'Review cash flow',
+      title: 'Last month used more than take-home income',
+      detail: `${formatDollars(Math.abs(remaining))} more went out than came in. One-time purchases or annual investing can cause this, so it is worth a quick review.`
+    };
+  }
+  const runway = cashRunway(store, anchorDate);
+  if (runway.essentialMonthly && runway.runwayMonths >= 1) {
+    return {
+      available: true, tone: 'steady', action: 'accounts', actionLabel: 'View accounts',
+      title: `Cash covers ${Math.min(99, runway.runwayMonths).toFixed(1)} months of essentials`,
+      detail: `${formatDollars(runway.cash)} is available across cash accounts. We will add a monthly check-in as more transaction history arrives.`
+    };
+  }
+  return { available: false };
+}
+
+function formatDollars(value) {
+  return Number(value || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+}
+
+function monthLabel(month) {
+  return new Date(`${month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long' });
 }
 
 export function connectionHealth(store, now = new Date()) {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { calculateFire, cashRunway, classifyTransaction, connectionHealth, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentLinkBalances, monthlyReview, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
+import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentLinkBalances, monthlyReview, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
 import { normalizeCandles } from '../market-data.js';
 import { filterSnapshots, scrubIndex } from '../public/chart-utils.js';
 
@@ -329,6 +329,23 @@ test('monthly review surfaces only a large, repeatable category deviation', () =
   assert.equal(review.available, true); assert.equal(review.outlier.category, 'Travel'); assert.equal(review.outlier.difference, 300);
   const quiet = monthlyReview({ transactions: transactions.map((transaction) => transaction.date === '2026-07-10' ? { ...transaction, amount: 150 } : transaction) }, new Date('2026-08-15T12:00:00'));
   assert.equal(quiet.outlier, null);
+});
+
+test('clarity check-in gives a grounded cash-flow conclusion and prioritizes a material outlier', () => {
+  const transactions = [];
+  for (const month of ['2026-04', '2026-05', '2026-06']) {
+    transactions.push({ date: `${month}-01`, amount: -3000, bucket: 'income' });
+    transactions.push({ date: `${month}-10`, amount: 100, bucket: 'guilt_free', pfc_primary: 'TRAVEL' });
+  }
+  transactions.push({ date: '2026-07-01', amount: -3000, bucket: 'income' });
+  transactions.push({ date: '2026-07-10', amount: 100, bucket: 'guilt_free', pfc_primary: 'TRAVEL' });
+  const steady = clarityCheckin({ transactions, accounts: [], items: [] }, new Date('2026-08-15T12:00:00'));
+  assert.equal(steady.tone, 'steady');
+  assert.match(steady.title, /within take-home income/);
+  transactions.push({ date: '2026-07-20', amount: 400, bucket: 'guilt_free', pfc_primary: 'TRAVEL' });
+  const outlier = clarityCheckin({ transactions, accounts: [], items: [] }, new Date('2026-08-15T12:00:00'));
+  assert.equal(outlier.tone, 'watch');
+  assert.match(outlier.title, /Travel/);
 });
 
 test('connection health stays quiet through transient delays and failures', () => {
