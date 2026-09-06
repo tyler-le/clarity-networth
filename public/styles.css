@@ -59,6 +59,8 @@ button { cursor: pointer; }
 .brand { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 750; padding: 0 8px 28px; }
 .brand-home { width: 100%; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 10px; }.brand-home:hover { color: var(--accent); }.brand-home:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 36%, transparent); outline-offset: 2px; }
 .cashflow-controls { display: flex; align-items: center; gap: 7px; }.diagram-expand { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--muted); cursor: pointer; }.diagram-expand svg { width: 15px; height: 15px; }.diagram-expand:hover { color: var(--ink); border-color: color-mix(in srgb, var(--ink) 24%, var(--line)); }.diagram-expand:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 32%, transparent); outline-offset: 2px; }
+.cashflow-payroll > div { flex: 1; grid-template-columns: minmax(0, 1fr) auto; }.cashflow-payroll p { max-width: 58ch; }
+@media (min-width: 700px) { .cashflow-payroll { max-width: 760px; } }
 .brand-mark { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; background: var(--ink); color: white; font-size: 14px; }
 .nav { display: grid; gap: 5px; }
 .nav-item { border: 0; background: transparent; color: #4d534d; border-radius: 12px; padding: 11px 12px; text-align: left; display: flex; align-items: center; gap: 10px; }
