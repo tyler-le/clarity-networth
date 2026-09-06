@@ -93,6 +93,10 @@
           <article class="card networth-insight change-insight"><div class="card-label">What changed</div><strong id="netWorthChange">—</strong><p id="netWorthChangeDetail">Your balance movement will appear here.</p></article>
           <article class="card networth-insight runway-insight"><div><div class="card-label">Cash runway</div><strong id="cashRunway">—</strong><p id="cashRunwayDetail">Based on cash and essential spending.</p></div><span class="runway-mark" aria-hidden="true">◒</span></article>
         </div>
+        <!-- Temporary compatibility targets: an older no-cache client script
+             may still be active while its service worker updates. They remain
+             invisible and prevent that shell from stopping before data loads. -->
+        <button id="weeklyInsight" type="button" hidden aria-hidden="true" tabindex="-1"><strong id="weeklyInsightTitle"></strong><span id="weeklyInsightDetail"></span></button>
 
       </section>
 
