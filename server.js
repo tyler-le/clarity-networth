@@ -69,10 +69,9 @@ app.use((_req, res, next) => {
 });
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders(res, filePath) {
-    // The installed shell must revalidate every time it opens. The service
-    // worker keeps a separate offline fallback, never financial API responses.
+    // The PWA intentionally serves no cached shell or financial data.
     if (/\/(index\.html|app\.js|styles\.css|chart-utils\.js|sw\.js|manifest\.webmanifest)$/.test(filePath)) {
-      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+      res.setHeader('Cache-Control', 'no-store, max-age=0');
     }
   }
 }));

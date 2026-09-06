@@ -479,3 +479,30 @@ html[data-theme="dark"] .auth-kicker i { box-shadow: 0 0 0 4px #262d28; }
 html[data-theme="dark"] .auth-divider::before, html[data-theme="dark"] .auth-divider::after { background: var(--line); }
 html[data-theme="dark"] .demo-preview-button { border-color: #3a493d; background: #202720; color: var(--ink); }
 html[data-theme="dark"] .demo-preview-button:hover { border-color: #52735b; background: #273128; }
+
+/* Dark mode is intentionally neutral. Green is a signal for an action or a
+   positive financial event—not a wash behind every piece of information. */
+html[data-theme="dark"] .card,
+html[data-theme="dark"] .account-collection,
+html[data-theme="dark"] .accounts-summary,
+html[data-theme="dark"] .connections-panel,
+html[data-theme="dark"] .data-controls,
+html[data-theme="dark"] dialog,
+html[data-theme="dark"] .nickname-dialog,
+html[data-theme="dark"] .retirement-info-dialog,
+html[data-theme="dark"] .auth-card { border-color: #353936; background: #1c1f1d; }
+html[data-theme="dark"] .portfolio-card,
+html[data-theme="dark"] .retirement-hero { background: #1c1f1d; }
+html[data-theme="dark"] .portfolio-card::after { display: none; }
+html[data-theme="dark"] .retirement-milestone,
+html[data-theme="dark"] .retirement-milestone.featured,
+html[data-theme="dark"] .holding-detail,
+html[data-theme="dark"] .holding-account,
+html[data-theme="dark"] .holding-account-list,
+html[data-theme="dark"] .holdings-more,
+html[data-theme="dark"] .spending-transaction-controls,
+html[data-theme="dark"] .retirement-form,
+html[data-theme="dark"] .account-preview-group,
+html[data-theme="dark"] .account-group-head,
+html[data-theme="dark"] .transaction-toolbar { border-color: #353936; background: #222522; }
+html[data-theme="dark"] .auth-halo { display: none; }
