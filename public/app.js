@@ -570,10 +570,15 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     const labelMarkup = mobileLines.map((line, index) => `<tspan x="${x + 11}" dy="${index ? 10 : 0}">${escapeHtml(line)}</tspan>`).join('');
     return `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><rect x="${x}" y="${y}" width="${w}" height="${height}" rx="8" fill="var(--sankey-surface)" stroke="var(--sankey-border)"/><rect x="${x}" y="${y}" width="6" height="${height}" rx="3" fill="${color}"/><text x="${x + 11}" y="${y + 14}" class="cashflow-label">${labelMarkup}</text><text x="${x + 11}" y="${y + (wrapped ? 41 : 28)}" class="cashflow-value">${displayValue(value, isIncome)}</text></g>`;
   };
-  // Sankey edge thickness represents the associated dollar flow. A tiny
-  // floor keeps a very small category tappable without flattening the rest.
-  const flowScale = 72 / Math.max(actualSpend, savings, investments, 1);
-  const flow = (fromX, fromY, toX, toY, amount, color) => `<path class="cashflow-flow" d="M ${fromX} ${fromY} C ${fromX + (toX - fromX) * .42} ${fromY}, ${toX - (toX - fromX) * .42} ${toY}, ${toX} ${toY}" fill="none" stroke="${color}" stroke-opacity=".38" stroke-width="${Math.max(2, Number(amount || 0) * flowScale)}" stroke-linecap="round"/>`;
+  // Use perceptual (square-root) scaling. Exact dollars stay in each node,
+  // while the flow still makes large categories visibly heavier without one
+  // unusually large payment consuming the entire chart.
+  const largestFlow = Math.max(actualSpend, savings, investments, 1);
+  const flow = (fromX, fromY, toX, toY, amount, color) => {
+    const value = Math.max(0, Number(amount || 0));
+    const thickness = value ? 3 + Math.sqrt(value / largestFlow) * 45 : 0;
+    return `<path class="cashflow-flow" d="M ${fromX} ${fromY} C ${fromX + (toX - fromX) * .42} ${fromY}, ${toX - (toX - fromX) * .42} ${toY}, ${toX} ${toY}" fill="none" stroke="${color}" stroke-opacity=".34" stroke-width="${thickness}" stroke-linecap="round"/>`;
+  };
   const incomeY = 89, spendY = 18, saveY = 90, investY = 162;
   let paths = flow(sourceX + sourceW, incomeY + 18, middleX, spendY + 18, actualSpend, 'var(--outflow)');
   paths += flow(sourceX + sourceW, incomeY + 18, middleX, saveY + 18, savings, 'var(--save)');
