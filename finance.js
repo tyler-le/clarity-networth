@@ -77,6 +77,7 @@ export function investmentSummary(store) {
     allocation: allocationRows,
     positions: positions.map((position) => ({ ...position, gain: position.cost_basis == null ? null : Number(position.value || 0) - Number(position.cost_basis), gain_pct: position.cost_basis ? (Number(position.value || 0) - Number(position.cost_basis)) / Number(position.cost_basis) : null })).sort((a, b) => Number(b.value || 0) - Number(a.value || 0)),
     snapshots: (store.investment_snapshots || []).slice(-3650),
+    historyStatus: store.investment_history_status || { state: 'tracking', unavailable: [] },
     positionsAvailable: positions.length > 0
   };
 }
@@ -116,6 +117,12 @@ export function historicalTicker(ticker, securityName = '') {
   };
   const match = text.match(/vanguard\s+target(?:\s+retirement)?\s+(20\d{2})/i);
   return match && targetRetirementTickers[match[1]] ? targetRetirementTickers[match[1]] : rawTicker;
+}
+
+export function historicalSecurity({ ticker, name = '', type = 'other' } = {}) {
+  const resolvedTicker = historicalTicker(ticker, name);
+  const targetDateFund = resolvedTicker !== String(ticker || '').trim() && /vanguard\s+target/i.test(`${ticker || ''} ${name}`);
+  return { ticker: resolvedTicker, type: targetDateFund ? 'mutual fund' : type };
 }
 
 function nearestPrice(prices, date) {

@@ -186,7 +186,8 @@ function renderNetWorthInsights(snaps) {
       const hasReconstructedBaseline = earliestLinkDate && portfolio.some((snapshot) => snapshot.source === 'reconstructed' && snapshot.date < earliestLinkDate);
       const investmentGrowth = investmentChange == null || (linkedEvents.length && !hasReconstructedBaseline) ? null : investmentChange - contributions;
       const contributionText = `Contributed ${fmt.format(contributions)}`;
-      const growthText = linkedEvents.length && !hasReconstructedBaseline ? 'Investment growth is being reconstructed' : investmentGrowth == null ? 'Investment growth still tracking' : `Investments ${investmentGrowth >= 0 ? 'grew' : 'fell'} ${fmt.format(Math.abs(investmentGrowth))}`;
+      const historyState = state.investments?.historyStatus?.state;
+      const growthText = linkedEvents.length && !hasReconstructedBaseline && historyState === 'unavailable' ? 'Investment growth needs verified historical pricing' : linkedEvents.length && !hasReconstructedBaseline ? 'Investment growth still tracking' : investmentGrowth == null ? 'Investment growth still tracking' : `Investments ${investmentGrowth >= 0 ? 'grew' : 'fell'} ${fmt.format(Math.abs(investmentGrowth))}`;
       $('#netWorthChangeDetail').innerHTML = `<span class="positive">${contributionText}</span><span> · </span><span class="${investmentGrowth == null || investmentGrowth >= 0 ? 'positive' : 'negative'}">${growthText}</span><span> · </span><span class="${debtChange <= 0 ? 'positive' : 'negative'}">${debtText}</span>`;
     }
   }
