@@ -14,6 +14,7 @@ const state = {
   retirement: null,
   networthRange: 'ytd',
   spendingRange: '1m',
+  cashflowDisplay: 'amount',
   spendingMonth: null,
   allocationDisplay: 'percentage',
   spendingCategory: 'all',
@@ -440,7 +441,12 @@ function renderCashFlowSankey(data) {
   const sourceX = 12, sourceW = compact ? 88 : 132;
   const middleX = compact ? 112 : 244, middleW = compact ? 112 : 150;
   const destinationX = compact ? 242 : 458, destinationW = compact ? 136 : 230;
-  const block = (x, y, w, color, label, value, category = '') => `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><rect x="${x}" y="${y}" width="${w}" height="36" rx="8" fill="var(--sankey-surface)" stroke="var(--sankey-border)"/><rect x="${x}" y="${y}" width="6" height="36" rx="3" fill="${color}"/><text x="${x + 13}" y="${y + 14}" class="cashflow-label">${escapeHtml(label)}</text><text x="${x + 13}" y="${y + 28}" class="cashflow-value">${fmt.format(value)}</text></g>`;
+  const displayValue = (value, isIncome = false) => {
+    if (state.cashflowDisplay === 'amount') return fmt.format(value);
+    if (!income) return '—';
+    return `${Math.round((isIncome ? 1 : value / income) * 100)}%`;
+  };
+  const block = (x, y, w, color, label, value, category = '', isIncome = false) => `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><rect x="${x}" y="${y}" width="${w}" height="36" rx="8" fill="var(--sankey-surface)" stroke="var(--sankey-border)"/><rect x="${x}" y="${y}" width="6" height="36" rx="3" fill="${color}"/><text x="${x + 13}" y="${y + 14}" class="cashflow-label">${escapeHtml(label)}</text><text x="${x + 13}" y="${y + 28}" class="cashflow-value">${displayValue(value, isIncome)}</text></g>`;
   const flow = (fromX, fromY, toX, toY, ratio, color) => `<path class="cashflow-flow" d="M ${fromX} ${fromY} C ${fromX + (toX - fromX) * .42} ${fromY}, ${toX - (toX - fromX) * .42} ${toY}, ${toX} ${toY}" fill="none" stroke="${color}" stroke-opacity=".38" stroke-width="${Math.max(6, Math.min(30, ratio * 30))}" stroke-linecap="round"/>`;
   const incomeY = 89, spendY = 28, saveY = 137;
   const actualCategories = (data.actualSpendCategories || []).slice(0, 4);
@@ -452,7 +458,7 @@ function renderCashFlowSankey(data) {
     paths += flow(middleX + middleW, spendY + 18, destinationX, y + 18, Number(row.amount || 0) / Math.max(actualSpend, 1), 'var(--outflow-muted)');
     categories += block(destinationX, y, destinationW, 'var(--outflow-muted)', row.name, row.amount, row.key);
   });
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Net income split into spending and saving">${paths}${block(sourceX, incomeY, sourceW, 'var(--income)', 'Net income', income, 'income')}${block(middleX, spendY, middleW, 'var(--outflow)', 'Actual spend', actualSpend, 'actual_spend')}${block(middleX, saveY, middleW, 'var(--save-invest)', 'Save & invest', savingsAndInvestments, 'save_invest')}${categories}</svg>`;
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Take-home income split into spending and saving">${paths}${block(sourceX, incomeY, sourceW, 'var(--income)', 'Take-home income', income, 'income', true)}${block(middleX, spendY, middleW, 'var(--outflow)', 'Actual spend', actualSpend, 'actual_spend')}${block(middleX, saveY, middleW, 'var(--save-invest)', 'Save & invest', savingsAndInvestments, 'save_invest')}${categories}</svg>`;
 }
 
 function renderSpending(data) {
@@ -471,7 +477,9 @@ function renderSpending(data) {
   $('#spendingTotal').textContent = fmt.format(Math.abs(remaining));
   $('#cashflowHeadline').textContent = remaining >= 0 ? 'Left after spending and saving' : 'More allocated than income';
   $('#cashflowHeadline').className = `cashflow-headline ${remaining >= 0 ? 'positive' : 'negative'}`;
-  $('#spendingSummary').innerHTML = `<span class="income-flow"><i class="income"></i>Net income <strong>${fmt.format(income)}</strong></span><span class="spend-flow"><i class="spend"></i>Actual spend <strong>${fmt.format(actualSpend)}</strong></span><span class="save-flow"><i></i>Save & invest <strong>${fmt.format(savingsAndInvestments)}</strong></span>${preTaxRetirement ? `<span class="retirement-flow"><i></i>Pre-tax retirement <strong>${fmt.format(preTaxRetirement)}</strong><small>not included in cash flow</small></span>` : ''}`;
+  const preTaxNote = $('#cashflowPreTax');
+  preTaxNote.textContent = preTaxRetirement ? `Plus ${fmt.format(preTaxRetirement)} saved to retirement through payroll — not included above because it never reached your bank account.` : '';
+  preTaxNote.classList.toggle('hidden', !preTaxRetirement);
   const rangeLabel = ({ '1m': 'this month', '3m': 'over the last 3 months', ytd: 'year to date', '1y': 'over the last year' })[data.range] || 'this month';
   const selectedMonthLabel = state.spendingMonth && new Date(`${state.spendingMonth}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   $('#spendingContext').textContent = total || income ? (selectedMonthLabel || ({ '1m': 'This month', '3m': 'Last 3 months', ytd: 'Year to date', '1y': 'Last year' })[data.range] || rangeLabel) : `No posted cash flow ${selectedMonthLabel || rangeLabel}. It can take a little time to arrive after connecting.`;
@@ -981,6 +989,11 @@ $$('[data-spending-range]').forEach((button) => button.addEventListener('click',
     state.spending = await loadSpending();
     renderSpending(state.spending);
   } catch (error) { showNotice(error.message); }
+}));
+$$('[data-cashflow-display]').forEach((button) => button.addEventListener('click', () => {
+  state.cashflowDisplay = button.dataset.cashflowDisplay;
+  $$('[data-cashflow-display]').forEach((control) => control.classList.toggle('active', control === button));
+  renderSpending(state.spending);
 }));
 $$('[data-allocation-display]').forEach((button) => button.addEventListener('click', () => {
   state.allocationDisplay = button.dataset.allocationDisplay;
