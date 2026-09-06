@@ -8,6 +8,10 @@ async function openDemo(page) {
   await expect(page.getByText(/By continuing, you agree to our/i)).toBeVisible();
   await page.getByRole('button', { name: /explore the demo/i }).click();
   await expect(page.locator('#appShell')).toBeVisible();
+  // The shell is shown before its first data request completes. Wait for a
+  // rendered financial value before interacting with responsive navigation;
+  // otherwise a test can click during the intentional loading transition.
+  await expect(page.locator('#netWorth')).toHaveText(/\$/);
 }
 
 async function goToView(page, view) {
