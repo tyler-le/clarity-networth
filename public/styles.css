@@ -247,18 +247,15 @@ dialog::backdrop { background: rgba(10,15,10,.28); backdrop-filter: blur(3px); }
 .account-group-head span:last-child { font-size: 12px; letter-spacing: 0; }
 .account-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .account-collection { overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: white; box-shadow: var(--shadow); }
-.account-collection-head { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 13px 14px; cursor: pointer; list-style: none; }
-.account-collection-head::-webkit-details-marker { display: none; }
-.account-collection[open] .account-collection-head { border-bottom: 1px solid var(--line); }
+.account-collection-head { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 15px 14px 12px; list-style: none; }
 .account-collection-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 10px; background: var(--accent-soft); color: var(--accent); font-weight: 800; }
 .account-collection-icon svg { width: 19px; height: 19px; }
 .account-collection.debt .account-collection-icon { background: #f8eeee; color: var(--danger); }
 .account-collection-head h2 { margin: 0; font-size: 17px; }
 .account-collection-head p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
 .account-collection-total { display: grid; justify-items: end; gap: 2px; padding-right: 16px; font-variant-numeric: tabular-nums; }.account-collection-total span { color: var(--muted); font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; }.account-collection-total strong { font-size: 14px; }
-.account-collection-head::after { content: '›'; position: absolute; right: 13px; top: 17px; color: var(--muted); font-size: 18px; transition: transform .16s ease; }
-.account-collection[open] .account-collection-head::after { transform: rotate(90deg); }
 .account-collection-items { display: grid; }
+.account-group-more { width: 100%; border: 0; border-top: 1px solid var(--line); padding: 11px 14px; background: #fbfcfa; color: var(--accent); text-align: left; font-size: 12px; font-weight: 700; }.account-group-more:hover { background: var(--accent-soft); }
 .account-item { display: flex; align-items: flex-start; gap: 11px; padding: 15px 16px; }
 .account-item + .account-item { border-top: 1px solid var(--line); }
 .institution-logo, .institution-fallback { display: grid; flex: 0 0 auto; width: 32px; height: 32px; place-items: center; border: 1px solid var(--line); border-radius: 9px; background: white; object-fit: contain; overflow: hidden; }
@@ -379,6 +376,7 @@ html[data-theme="dark"] .holding-detail, html[data-theme="dark"] .holding-accoun
 html[data-theme="dark"] .holding-account, html[data-theme="dark"] .holding-account-list { background: #1c231e; }
 html[data-theme="dark"] .investment-donut::before, html[data-theme="dark"] .spending-donut::before { background: var(--card); }
 html[data-theme="dark"] .account-collection, html[data-theme="dark"] .accounts-summary { background: var(--card); }
+html[data-theme="dark"] .account-group-more { background: #1e261f; }
 html[data-theme="dark"] .institution-logo, html[data-theme="dark"] .institution-fallback, html[data-theme="dark"] .connection-logo, html[data-theme="dark"] .connection-fallback { border-color: var(--line); background: #252d27; }
 html[data-theme="dark"] .connections-panel { border-color: var(--line); background: #1a201c; }
 html[data-theme="dark"] .data-controls { border-color: var(--line); background: #1a201c; }

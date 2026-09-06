@@ -20,6 +20,7 @@ const state = {
   investmentRange: '1y',
   investmentFilter: 'all',
   investmentSort: 'value',
+  expandedAccountGroups: new Set(),
   holdingsExpanded: false,
   view: 'overview',
   returnView: 'overview',
@@ -324,18 +325,22 @@ function renderAccounts(accounts) {
     return;
   }
 
-  const totalAssets = accounts.filter((account) => !isDebt(account)).reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
+  const cashAndSavings = accounts.filter((account) => ['Cash', 'Savings'].includes(accountGroup(account))).reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
+  const invested = accounts.filter((account) => accountGroup(account) === 'Investments').reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
   const totalDebt = accounts.filter(isDebt).reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
-  $('#accountsSummary').innerHTML = `<div><span>Net worth</span><strong>${fmt.format(totalAssets - totalDebt)}</strong></div><div><span>You have</span><strong class="positive">${fmt.format(totalAssets)}</strong></div><div><span>You owe</span><strong class="negative">${fmt.format(totalDebt)}</strong></div>`;
+  $('#accountsSummary').innerHTML = `<div><span>Cash & savings</span><strong>${fmt.format(cashAndSavings)}</strong></div><div><span>Invested</span><strong class="positive">${fmt.format(invested)}</strong></div><div><span>Debt owed</span><strong class="negative">${fmt.format(totalDebt)}</strong></div>`;
   $('#accountGrid').innerHTML = grouped.map(([name, items]) => {
     const debt = items.every(isDebt);
     const total = items.reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
-    return `<details class="account-collection ${debt ? 'debt' : 'asset'}">
-      <summary class="account-collection-head"><span class="account-collection-icon" aria-hidden="true">${accountGroupIcons[name] || '◇'}</span><div><h2>${name}</h2><p>${items.length} account${items.length === 1 ? '' : 's'}</p></div><div class="account-collection-total ${debt ? 'negative' : 'positive'}"><span>${debt ? 'Owed' : 'Held'}</span><strong>${fmt.format(total)}</strong></div></summary>
-      <div class="account-collection-items">${items.map((account) => `<article class="account-item ${debt ? 'debt' : 'asset'}">
+    const sorted = [...items].sort((a, b) => Math.abs(Number(b.current_balance || 0)) - Math.abs(Number(a.current_balance || 0)));
+    const expanded = state.expandedAccountGroups.has(name);
+    const previewCount = 2;
+    return `<section class="account-collection ${debt ? 'debt' : 'asset'}">
+      <div class="account-collection-head"><span class="account-collection-icon" aria-hidden="true">${accountGroupIcons[name] || '◇'}</span><div><h2>${name}</h2><p>${items.length} account${items.length === 1 ? '' : 's'}</p></div><div class="account-collection-total ${debt ? 'negative' : 'positive'}"><span>${debt ? 'Owed' : 'Held'}</span><strong>${fmt.format(total)}</strong></div></div>
+      <div class="account-collection-items">${sorted.map((account, index) => `<article class="account-item ${debt ? 'debt' : 'asset'} ${index >= previewCount && !expanded ? 'hidden' : ''}">
         ${institutionMark(account)}<div class="account-copy"><div class="account-name">${escapeHtml(account.nickname || account.name)}</div><div class="account-inst">${escapeHtml(account.institution_name || '')} · ${escapeHtml(accountDescriptor(account.subtype || account.type))}</div><div class="account-inline-balance ${debt ? 'negative' : 'positive'}">${displayBalance(account)}</div></div><button class="account-rename" data-account-rename="${escapeHtml(account.id)}" data-account-name="${escapeHtml(account.nickname || account.name)}" aria-label="Rename ${escapeHtml(account.nickname || account.name)}">✎</button>
-      </article>`).join('')}</div>
-    </details>`;
+      </article>`).join('')}</div>${items.length > previewCount ? `<button class="account-group-more" data-account-group="${escapeHtml(name)}">${expanded ? 'Show less' : `View ${items.length - previewCount} more`}</button>` : ''}
+    </section>`;
   }).join('');
 }
 
@@ -851,6 +856,13 @@ $('#retirementPath').addEventListener('click', (event) => {
 });
 $('#retirementInfoClose').addEventListener('click', () => $('#retirementInfoDialog').close());
 $('#accountGrid').addEventListener('click', (event) => {
+  const groupButton = event.target.closest('[data-account-group]');
+  if (groupButton) {
+    const group = groupButton.dataset.accountGroup;
+    if (state.expandedAccountGroups.has(group)) state.expandedAccountGroups.delete(group); else state.expandedAccountGroups.add(group);
+    renderAccounts(state.dashboard?.accounts || []);
+    return;
+  }
   const button = event.target.closest('[data-account-rename]');
   if (!button) return;
   event.preventDefault();
