@@ -98,7 +98,7 @@ function setView(view) {
   }[view] || [view[0].toUpperCase() + view.slice(1), ''];
   $('#pageTitle').textContent = pageMeta[0];
   $('#monthLabel').textContent = pageMeta[1];
-  $('#connectButton').classList.toggle('hidden', false);
+  $('#connectButton').classList.toggle('hidden', view === 'profile');
   $('#profileBack').classList.toggle('hidden', view !== 'profile');
   $('#profileButton').classList.toggle('hidden', view === 'profile');
   if (view === 'overview' && state.dashboard) {
@@ -749,7 +749,7 @@ function renderDashboard() {
   renderConnections(d.items || []);
   $('#demoToggle').textContent = d.demoMode ? 'Exit demo' : 'Try demo';
   $('#demoToggle').setAttribute('aria-pressed', String(d.demoMode));
-  $('#connectButton').classList.toggle('hidden', false);
+  $('#connectButton').classList.toggle('hidden', state.view === 'profile');
   $('#setupCard').classList.toggle('hidden', d.plaidConfigured || state.demoPreview);
   if (!d.plaidConfigured && !state.demoPreview) showNotice('Connect an account when you’re ready to see your own data.');
 }
