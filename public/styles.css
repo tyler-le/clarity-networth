@@ -22,8 +22,10 @@ html[data-theme="dark"] {
   --ink: #edf2ee;
   --muted: #9da89f;
   --line: #303a32;
-  --accent: #83af8d;
-  --accent-soft: #243127;
+  /* Green is reserved for actions and genuinely positive financial signals.
+     Supporting surfaces stay neutral so those signals retain their meaning. */
+  --accent: #8fb799;
+  --accent-soft: #262d28;
   --income: #719b7b;
   --outflow: #c98274;
   --outflow-muted: #b98d7a;
@@ -381,9 +383,9 @@ html[data-theme="dark"] .mobile-nav button { color: #9da89f; }
 html[data-theme="dark"] .mobile-nav button.active { background: #263128; color: var(--ink); }
 html[data-theme="dark"] .range-control, html[data-theme="dark"] .allocation-toggle { background: #222a24; }
 html[data-theme="dark"] .range-control button.active, html[data-theme="dark"] .allocation-toggle button.active { background: #303b32; color: var(--ink); box-shadow: none; }
-html[data-theme="dark"] .retirement-hero, html[data-theme="dark"] .portfolio-card { border-color: #354238; background: linear-gradient(135deg, #1d251f 0%, #1a201c 62%); }
+html[data-theme="dark"] .retirement-hero, html[data-theme="dark"] .portfolio-card { border-color: #363f38; background: linear-gradient(135deg, #1d221f 0%, #1a201c 62%); }
 html[data-theme="dark"] .retirement-milestone, html[data-theme="dark"] .retirement-milestone.featured { border-color: #354239; background: #202820; box-shadow: none; }
-html[data-theme="dark"] .retirement-age-chip, html[data-theme="dark"] .retirement-assumption, html[data-theme="dark"] .retirement-info-target { background: #203a2a; }
+html[data-theme="dark"] .retirement-age-chip, html[data-theme="dark"] .retirement-assumption, html[data-theme="dark"] .retirement-info-target { background: #262d28; }
 html[data-theme="dark"] .retirement-total, html[data-theme="dark"] .retirement-info-target strong { color: #8bcaa0; }
 html[data-theme="dark"] .holding-detail, html[data-theme="dark"] .holding-account-list, html[data-theme="dark"] .holdings-more, html[data-theme="dark"] .spending-transaction-controls, html[data-theme="dark"] .retirement-form { border-color: var(--line); background: #202720; }
 html[data-theme="dark"] .holding-account, html[data-theme="dark"] .holding-account-list { background: #1c231e; }
@@ -440,7 +442,7 @@ html[data-theme="dark"] .retirement-info-head .dialog-close:hover { background: 
 
 /* In low light, the balance is the visual destination. Chart furniture and
    decorative green stay restrained so they cannot outrank that number. */
-html[data-theme="dark"] .portfolio-card { border-color: #354238; background: linear-gradient(135deg, #1d251f 0%, #1a201c 68%); box-shadow: 0 12px 30px rgba(0,0,0,.14); }
+html[data-theme="dark"] .portfolio-card { border-color: #363f38; background: linear-gradient(135deg, #1d221f 0%, #1a201c 68%); box-shadow: 0 12px 30px rgba(0,0,0,.14); }
 html[data-theme="dark"] .portfolio-card::after { opacity: .28; }
 html[data-theme="dark"] .portfolio-card .card-label { color: #aeb9b0; }
 html[data-theme="dark"] .portfolio-total { color: #f0f4f0; }
@@ -473,7 +475,7 @@ html[data-theme="dark"] .auth-halo-one { background: radial-gradient(circle, rgb
 html[data-theme="dark"] .auth-halo-two { background: radial-gradient(circle, rgba(67,89,69,.2) 0, rgba(67,89,69,0) 69%); }
 html[data-theme="dark"] .auth-preview { border-color: #344036; background: linear-gradient(140deg, #1c281f 0%, #1a201c 80%); }
 html[data-theme="dark"] .auth-kicker, html[data-theme="dark"] .auth-preview span, html[data-theme="dark"] .auth-divider, html[data-theme="dark"] .auth-note, html[data-theme="dark"] .auth-demo-note { color: var(--muted); }
-html[data-theme="dark"] .auth-kicker i { box-shadow: 0 0 0 4px #203a2a; }
+html[data-theme="dark"] .auth-kicker i { box-shadow: 0 0 0 4px #262d28; }
 html[data-theme="dark"] .auth-divider::before, html[data-theme="dark"] .auth-divider::after { background: var(--line); }
 html[data-theme="dark"] .demo-preview-button { border-color: #3a493d; background: #202720; color: var(--ink); }
 html[data-theme="dark"] .demo-preview-button:hover { border-color: #52735b; background: #273128; }
