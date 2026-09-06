@@ -53,6 +53,9 @@ test('cash-flow diagram can switch between dollars and take-home-income percenta
   await expect(page.locator('#cashflowSankey')).toContainText('100%');
   await page.locator('[data-cashflow-display="amount"]').click();
   await expect(page.locator('#cashflowSankey')).toContainText('$');
+  await page.locator('[data-spending-range="6m"]').click();
+  await expect(page.locator('[data-spending-range="6m"]')).toHaveClass(/active/);
+  await expect(page.locator('#spendingContext')).toContainText('last 6 completed months');
 });
 
 test('the income source opens income activity from the cash-flow diagram', async ({ page }) => {

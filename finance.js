@@ -250,6 +250,7 @@ function spendingPeriod(range, anchor = new Date()) {
   const end = new Date(anchor.getFullYear(), anchor.getMonth(), 0);
   const start = new Date(end.getFullYear(), end.getMonth(), 1);
   if (range === '3m') start.setMonth(start.getMonth() - 2);
+  else if (range === '6m') start.setMonth(start.getMonth() - 5);
   else if (range === 'ytd') start.setMonth(0);
   else if (range === '1y') start.setMonth(start.getMonth() - 11);
   return {

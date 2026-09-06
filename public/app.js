@@ -482,7 +482,7 @@ function renderSpending(data) {
   preTaxNote.setAttribute('aria-label', `View ${fmt.format(preTaxRetirement)} in payroll contributions`);
   preTaxNote.classList.toggle('hidden', !preTaxRetirement);
   const completedThrough = data.completedMonths ? new Date(`${data.endDate}T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '';
-  const rangeLabel = ({ '1m': 'this month to date', '3m': 'last 3 completed months', ytd: `year to date through ${completedThrough}`, '1y': 'last 12 completed months' })[data.range] || 'this month to date';
+  const rangeLabel = ({ '1m': 'this month to date', '3m': 'last 3 completed months', '6m': 'last 6 completed months', ytd: `year to date through ${completedThrough}`, '1y': 'last 12 completed months' })[data.range] || 'this month to date';
   const selectedMonthLabel = state.spendingMonth && new Date(`${state.spendingMonth}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   $('#spendingContext').textContent = total || income ? (selectedMonthLabel || rangeLabel) : `No posted cash flow for ${selectedMonthLabel || rangeLabel}. It can take a little time to arrive after connecting.`;
   renderCashFlowSankey(selected);

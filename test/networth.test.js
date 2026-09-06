@@ -112,6 +112,9 @@ test('multi-month cash flow excludes an incomplete current month', () => {
   assert.equal(result.completedMonths, true);
   assert.equal(result.income, 3000);
   assert.equal(result.total, 0);
+  const sixMonth = spendingSummary(store, '6m', new Date('2026-09-05T12:00:00'));
+  assert.equal(sixMonth.startDate, '2026-03-01');
+  assert.equal(sixMonth.endDate, '2026-08-31');
   const monthToDate = spendingSummary(store, '1m', new Date('2026-09-05T12:00:00'));
   assert.equal(monthToDate.completedMonths, false);
   assert.equal(monthToDate.total, 900);
