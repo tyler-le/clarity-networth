@@ -1,4 +1,4 @@
-import { filterSnapshots, scrubIndex } from './chart-utils.js';
+import { filterSnapshots } from './chart-utils.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -14,7 +14,6 @@ const state = {
   retirement: null,
   networthRange: 'ytd',
   spendingRange: '1m',
-  cashflowDisplay: 'amount',
   spendingMonth: null,
   allocationDisplay: 'percentage',
   spendingCategory: 'all',
@@ -304,7 +303,10 @@ function renderLineChart(snapshots, summary) {
   const showPoint = (event) => {
     const rect = el.getBoundingClientRect();
     const relativeX = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
-    const idx = scrubIndex({ clientX: event.clientX, left: rect.left, width: rect.width, pointCount: snapshots.length });
+    // The SVG plot begins after the Y-axis gutter. Choose the nearest plotted
+    // point in SVG space, rather than treating the full card width as data.
+    const pointerX = relativeX / rect.width * width;
+    const idx = points.reduce((nearest, point, index) => Math.abs(point[0] - pointerX) < Math.abs(points[nearest][0] - pointerX) ? index : nearest, 0);
     const snap = snapshots[idx];
     const [x, y] = points[idx];
     scrubLine.setAttribute('x1', x);
@@ -314,7 +316,7 @@ function renderLineChart(snapshots, summary) {
     scrubLine.classList.add('visible');
     scrubDot.classList.add('visible');
     tooltip.classList.remove('hidden');
-    tooltip.style.left = `${Math.max(8, Math.min(rect.width - 8, relativeX))}px`;
+    tooltip.style.left = `${Math.max(8, Math.min(rect.width - 8, x / width * rect.width))}px`;
     tooltip.textContent = fmt.format(Number(snap.net_worth));
 
     const date = new Date(`${snap.date}T12:00:00`);
@@ -560,17 +562,14 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const sourceX = compact ? 8 : 12, sourceW = compact ? 96 : tablet ? 120 : 176;
   const middleX = compact ? 147 : tablet ? 168 : 300, middleW = compact ? 96 : tablet ? 142 : 178;
   const destinationX = compact ? 286 : tablet ? 340 : 548, destinationW = compact ? 96 : tablet ? 196 : 332;
-  const displayValue = (value, isIncome = false) => {
-    if (state.cashflowDisplay === 'amount') return fmt.format(value);
-    if (!income) return '—';
-    return `${Math.round((isIncome ? 1 : value / income) * 100)}%`;
-  };
+  const displayShare = (value, isIncome = false) => !income ? '—' : `${Math.round((isIncome ? 1 : value / income) * 100)}%`;
   const block = (x, y, w, color, label, value, category = '', isIncome = false) => {
     const mobileLines = compact ? ({ 'Take-home income': ['Take-home', 'income'], 'Actual spend': ['Actual', 'spend'], 'Housing & bills': ['Housing', '& bills'], 'Food & dining': ['Food', '& dining'] }[label] || [label]) : [label];
     const wrapped = mobileLines.length > 1;
     const height = wrapped ? 48 : 36;
     const labelMarkup = mobileLines.map((line, index) => `<tspan x="${x + 11}" dy="${index ? 10 : 0}">${escapeHtml(line)}</tspan>`).join('');
-    return `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><rect x="${x}" y="${y}" width="${w}" height="${height}" rx="8" fill="var(--sankey-surface)" stroke="var(--sankey-border)"/><rect x="${x}" y="${y}" width="6" height="${height}" rx="3" fill="${color}"/><text x="${x + 11}" y="${y + 14}" class="cashflow-label">${labelMarkup}</text><text x="${x + 11}" y="${y + (wrapped ? 41 : 28)}" class="cashflow-value">${displayValue(value, isIncome)}</text></g>`;
+    const valueY = y + (wrapped ? 41 : 28);
+    return `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><rect x="${x}" y="${y}" width="${w}" height="${height}" rx="8" fill="var(--sankey-surface)" stroke="var(--sankey-border)"/><rect x="${x}" y="${y}" width="6" height="${height}" rx="3" fill="${color}"/><text x="${x + 11}" y="${y + 14}" class="cashflow-label">${labelMarkup}</text><text x="${x + 11}" y="${valueY}" class="cashflow-value">${fmt.format(value)}<tspan dx="4" class="cashflow-share">${displayShare(value, isIncome)}</tspan></text></g>`;
   };
   // Use perceptual (square-root) scaling. Exact dollars stay in each node,
   // while the flow still makes large categories visibly heavier without one
@@ -712,14 +711,15 @@ function renderPortfolioChart(data) {
   const showPoint = (event) => {
     const rect = el.getBoundingClientRect();
     const relativeX = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
-    const index = scrubIndex({ clientX: event.clientX, left: rect.left, width: rect.width, pointCount: snapshots.length });
+    const pointerX = relativeX / rect.width * width;
+    const index = points.reduce((nearest, point, candidate) => Math.abs(point[0] - pointerX) < Math.abs(points[nearest][0] - pointerX) ? candidate : nearest, 0);
     const snapshot = snapshots[index];
     const [x, y] = points[index];
     scrubLine.setAttribute('x1', x); scrubLine.setAttribute('x2', x);
     scrubDot.setAttribute('cx', x); scrubDot.setAttribute('cy', y);
     scrubLine.classList.add('visible'); scrubDot.classList.add('visible');
     tooltip.classList.remove('hidden');
-    tooltip.style.left = `${Math.max(8, Math.min(rect.width - 8, relativeX))}px`;
+    tooltip.style.left = `${Math.max(8, Math.min(rect.width - 8, x / width * rect.width))}px`;
     tooltip.textContent = fmt.format(Number(snapshot.value || 0));
     $('#investmentTotal').textContent = fmt.format(Number(snapshot.value || 0));
     $('#investmentChartDate').textContent = `${new Date(`${snapshot.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${snapshot.source === 'reconstructed' ? ' · Estimated' : ''}`;
@@ -1207,11 +1207,6 @@ $$('[data-spending-range]').forEach((button) => button.addEventListener('click',
     state.spending = await loadSpending();
     renderSpending(state.spending);
   } catch (error) { showNotice(error.message); }
-}));
-$$('[data-cashflow-display]').forEach((button) => button.addEventListener('click', () => {
-  state.cashflowDisplay = button.dataset.cashflowDisplay;
-  $$('[data-cashflow-display]').forEach((control) => control.classList.toggle('active', control === button));
-  renderSpending(state.spending);
 }));
 $('#cashflowExpand').addEventListener('click', () => { const dialog = $('#cashflowDialog'); dialog.showModal(); renderCashFlowSankey(spendingForSelectedMonth(state.spending), $('#cashflowDialogContent'), true); });
 $('#cashflowDialogClose').addEventListener('click', () => $('#cashflowDialog').close());

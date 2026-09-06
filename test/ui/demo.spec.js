@@ -89,13 +89,10 @@ test('asset-allocation filters preserve the reader position', async ({ page }) =
   await expect(page.locator('#investmentHoldingsInsight')).toContainText('Funds');
 });
 
-test('cash-flow diagram can switch between dollars and take-home-income percentages', async ({ page }) => {
+test('cash-flow diagram shows dollars and share of take-home income together', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');
-  await page.locator('[data-cashflow-display="percentage"]').click();
-  await expect(page.locator('[data-cashflow-display="percentage"]')).toHaveClass(/active/);
   await expect(page.locator('#cashflowSankey')).toContainText('100%');
-  await page.locator('[data-cashflow-display="amount"]').click();
   await expect(page.locator('#cashflowSankey')).toContainText('$');
   await expect(page.locator('#cashflowSankey [data-cashflow-category="savings"]')).toBeVisible();
   await expect(page.locator('#cashflowSankey [data-cashflow-category="investments"]')).toBeVisible();
@@ -182,7 +179,8 @@ test('net-worth history can be scrubbed and always identifies the selected date'
   await expect(chart.locator('svg')).toBeVisible();
   const box = await chart.boundingBox();
   if (!box) throw new Error('Net worth chart did not have a layout box.');
-  await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.55);
+  const pointerX = box.x + box.width * 0.2;
+  await page.mouse.move(pointerX, box.y + box.height * 0.55);
   await expect(page.locator('#netWorthChartDate')).toHaveText(/\d{4}/);
   await expect(page.locator('#netWorthDelta')).toContainText('Assets');
   const selectedDate = await page.locator('#netWorthChartDate').boundingBox();
@@ -190,6 +188,13 @@ test('net-worth history can be scrubbed and always identifies the selected date'
   expect(selectedDate && chartSvg && selectedDate.y + selectedDate.height <= chartSvg.y).toBe(true);
   const xAxisLabels = await chart.locator('.chart-x-axis-label').allTextContents();
   expect(new Set(xAxisLabels).size).toBe(xAxisLabels.length);
+  const scrubPosition = await chart.locator('.scrub-line').evaluate((line) => {
+    const svg = line.ownerSVGElement;
+    const box = svg.getBoundingClientRect();
+    const viewBox = svg.viewBox.baseVal;
+    return box.left + Number(line.getAttribute('x1')) / viewBox.width * box.width;
+  });
+  expect(Math.abs(scrubPosition - pointerX)).toBeLessThan(10);
   const afterScrub = await chart.boundingBox();
   expect(afterScrub?.y).toBe(box.y);
 });
