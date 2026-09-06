@@ -598,7 +598,7 @@ function renderInvestments(data) {
   const started = snapshots[0]?.date ? new Date(`${snapshots[0].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : null;
   const reconstructed = snapshots.some((snapshot) => snapshot.source === 'reconstructed');
   const changeCopy = periodChange == null ? (started ? `Tracking since ${started}` : 'Sync to begin tracking') : `${periodChange >= 0 ? '+' : '−'}${fmt.format(Math.abs(periodChange))} ${periodLabel}`;
-  $('#investmentContext').textContent = accounts.length ? `${accounts.length} connected account${accounts.length === 1 ? '' : 's'} · ${changeCopy}` : 'Connect an investment account to begin.';
+  $('#investmentContext').textContent = accounts.length ? changeCopy : 'Connect an investment account to begin.';
   $('#investmentChartDate').textContent = '';
   $('#investmentChartContext').classList.add('hidden');
   renderPortfolioChart(data);
