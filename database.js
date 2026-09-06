@@ -11,6 +11,14 @@ export function databaseEnabled() {
   return Boolean(process.env.DATABASE_URL);
 }
 
+// Used only by the unauthenticated infrastructure health check. It never
+// reads customer rows or returns database details to callers.
+export async function databaseHealthy() {
+  if (!databaseEnabled()) return true;
+  await getPool().query('SELECT 1');
+  return true;
+}
+
 function getPool() {
   if (!databaseEnabled()) throw new Error('DATABASE_URL is not configured.');
   pool ||= new Pool({ connectionString: process.env.DATABASE_URL, max: 5, idleTimeoutMillis: 20_000 });

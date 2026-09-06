@@ -20,6 +20,7 @@ process.env.NODE_ENV = 'test';
 process.env.DEMO_MODE = 'false';
 process.env.ENCRYPTION_KEY = 'integration-test-encryption-key';
 const { app } = await import(`../../server.js?integration=${Date.now()}`);
+const { deleteStore, writeStore } = await import('../../store.js');
 const integrationTest = process.env.CODEX_SANDBOX_NETWORK_DISABLED ? test.skip : test;
 
 test.after(() => {
@@ -36,6 +37,28 @@ integrationTest('serves the app shell with defensive browser headers', async () 
   assert.match(response.headers['content-security-policy'], /default-src 'self'/);
   assert.equal(response.headers['x-frame-options'], 'DENY');
   assert.match(response.headers['permissions-policy'], /camera=\(\)/);
+});
+
+integrationTest('serves public privacy, terms, and a dependency-aware health check', async () => {
+  for (const pathname of ['/privacy', '/terms']) {
+    const response = await request(app).get(pathname);
+    assert.equal(response.status, 200);
+    assert.match(response.text, /Clarity/);
+  }
+  const health = await request(app).get('/api/health');
+  assert.equal(health.status, 200);
+  assert.deepEqual(health.body, { ok: true, securityReady: true, databaseReady: true });
+});
+
+integrationTest('keeps a bounded encrypted recovery snapshot and removes it on deletion', () => {
+  const key = 'a'.repeat(64);
+  writeStore({ items: [], accounts: [], transactions: [] }, key);
+  const backup = path.join(dataDir, 'backups', key, `${new Date().toISOString().slice(0, 10)}.json`);
+  assert.equal(fs.existsSync(backup), true);
+  const stored = JSON.parse(fs.readFileSync(backup, 'utf8'));
+  assert.match(stored.payload_enc, /^v1\./);
+  deleteStore(key);
+  assert.equal(fs.existsSync(path.join(dataDir, 'backups', key)), false);
 });
 
 integrationTest('serves a complete public demo without a session', async () => {

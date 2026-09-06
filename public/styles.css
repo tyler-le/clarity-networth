@@ -533,3 +533,15 @@ html[data-theme="dark"] .account-preview-group,
 html[data-theme="dark"] .account-group-head,
 html[data-theme="dark"] .transaction-toolbar { border-color: #353936; background: #222522; }
 html[data-theme="dark"] .auth-halo { display: none; }
+/* Public legal pages deliberately use the same quiet visual system as the app. */
+.legal-page { width: min(680px, calc(100% - 40px)); margin: clamp(44px, 10vh, 96px) auto; color: var(--ink); line-height: 1.65; }
+.legal-page h1 { margin: 16px 0 28px; font-size: clamp(2rem, 6vw, 3.4rem); letter-spacing: -.055em; }
+.legal-page h2 { margin: 32px 0 8px; font-size: 1.05rem; }
+.legal-page p { color: var(--muted); }
+.legal-page a { color: var(--green); font-weight: 700; }
+.legal-kicker, .legal-updated { color: var(--subtle); font-size: .8rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.legal-back { text-decoration: none; }
+.auth-legal { margin: 14px 0 0; color: var(--subtle); font-size: .78rem; }
+.auth-legal a { color: inherit; text-decoration: none; }
+.auth-legal a:hover { color: var(--green); }
+.auth-legal span { margin: 0 7px; }

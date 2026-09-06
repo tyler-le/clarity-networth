@@ -6,6 +6,7 @@ import { decryptPayload, encryptPayload, isEncryptedPayload } from './secure-pay
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+const BACKUP_RETENTION_DAYS = 35;
 
 function demoMode() {
   return String(process.env.DEMO_MODE || 'true').toLowerCase() === 'true';
@@ -15,6 +16,29 @@ function storePath(userKey) {
   if (!userKey) return path.join(DATA_DIR, demoMode() ? 'store.demo.json' : 'store.json');
   if (!/^[a-f0-9]{64}$/.test(userKey)) throw new Error('Invalid user storage key.');
   return path.join(DATA_DIR, 'users', `${userKey}.json`);
+}
+
+function backupDirectory(userKey) {
+  if (!/^[a-f0-9]{64}$/.test(userKey)) throw new Error('Invalid user storage key.');
+  return path.join(DATA_DIR, 'backups', userKey);
+}
+
+function snapshotStoreBackup(userKey, sourcePath) {
+  // The active volume is a recovery mirror for Postgres. Daily immutable
+  // encrypted snapshots add protection from bad writes and deployments while
+  // keeping a bounded retention window for data-deletion compliance.
+  if (!userKey) return;
+  const directory = backupDirectory(userKey);
+  fs.mkdirSync(directory, { recursive: true });
+  const today = new Date().toISOString().slice(0, 10);
+  const destination = path.join(directory, `${today}.json`);
+  if (!fs.existsSync(destination)) fs.copyFileSync(sourcePath, destination);
+  const cutoff = Date.now() - BACKUP_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  for (const name of fs.readdirSync(directory)) {
+    const candidate = path.join(directory, name);
+    if (!/^\d{4}-\d{2}-\d{2}\.json$/.test(name) || fs.statSync(candidate).mtimeMs >= cutoff) continue;
+    fs.rmSync(candidate, { force: true });
+  }
 }
 
 const emptyStore = () => ({
@@ -81,6 +105,7 @@ export function writeStore(store, userKey) {
   const tmp = `${currentStorePath}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify({ version: 1, payload_enc: encryptPayload(JSON.stringify(store)) }));
   fs.renameSync(tmp, currentStorePath);
+  snapshotStoreBackup(userKey, currentStorePath);
 }
 
 export function removeDemoData(store) {
@@ -115,6 +140,10 @@ export function resetStore(userKey) {
 export function deleteStore(userKey) {
   const currentStorePath = storePath(userKey);
   if (fs.existsSync(currentStorePath)) fs.rmSync(currentStorePath);
+  if (userKey) {
+    const backups = backupDirectory(userKey);
+    if (fs.existsSync(backups)) fs.rmSync(backups, { recursive: true, force: true });
+  }
 }
 
 export function userStorageKey(email) {

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { OAuth2Client } from 'google-auth-library';
 import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './store.js';
-import { databaseEnabled, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, writeDatabaseStore } from './database.js';
+import { databaseEnabled, databaseHealthy, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, writeDatabaseStore } from './database.js';
 import { calculateFire, cashRunway, classifyTransaction, connectionHealth, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentLinkBalances, investmentSummary, monthlyReview, reconstructInvestmentHistory, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
 import { loadHistoricalPrices } from './market-data.js';
 import { plaidConfigured, plaidPost } from './plaid.js';
@@ -88,6 +88,25 @@ app.use(express.static(path.join(__dirname, 'public'), {
     }
   }
 }));
+
+function escapeLegalText(value) {
+  return String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
+}
+
+function legalPage(title, content) {
+  const company = escapeLegalText(process.env.PUBLIC_COMPANY_NAME || 'Clarity');
+  const supportEmail = escapeLegalText(process.env.SUPPORT_EMAIL || process.env.OWNER_EMAIL || '');
+  const contact = supportEmail ? `<a href="mailto:${supportEmail}">${supportEmail}</a>` : 'the support contact listed in the app';
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title} · ${company}</title><link rel="stylesheet" href="/styles.css"></head><body><main class="legal-page"><a class="legal-back" href="/">← Back to ${company}</a><p class="legal-kicker">${company.toUpperCase()}</p><h1>${title}</h1>${content(contact)}<p class="legal-updated">Last updated: September 6, 2026</p></main></body></html>`;
+}
+
+app.get('/privacy', (_req, res) => {
+  res.type('html').send(legalPage('Privacy Policy', (contact) => `<p>Clarity helps you view connected financial accounts. We collect your sign-in email and the financial information your chosen institutions make available through Plaid, including account balances, transactions, and investment holdings.</p><h2>How we use data</h2><p>We use this information only to provide the features you request: account aggregation, net-worth tracking, cash-flow views, investment summaries, and retirement estimates. We do not sell personal financial information or use it for advertising.</p><h2>How data is protected</h2><p>Connection credentials are exchanged through Plaid. Access tokens and stored financial data are encrypted at rest; the app serves over HTTPS. Access is limited to the signed-in account owner.</p><h2>Your choices</h2><p>You can unlink an institution at any time. In Profile, you can download an export of your stored data or permanently delete your account and financial data. Deletion also asks Plaid to revoke linked Items.</p><h2>Retention and contact</h2><p>We keep your data while your account is active, except where retention is required by law. For privacy questions or deletion help, contact ${contact}.</p>`));
+});
+
+app.get('/terms', (_req, res) => {
+  res.type('html').send(legalPage('Terms of Service', (contact) => `<p>Clarity is a personal financial-information tool. By using it, you authorize us to retrieve and display information from the financial institutions you choose to connect.</p><h2>Not financial advice</h2><p>Clarity provides educational estimates and organizational tools only. It does not provide investment, tax, legal, accounting, or other professional advice. Retirement estimates are illustrations based on your selected assumptions, not guarantees.</p><h2>Your responsibilities</h2><p>Use accurate information, protect your sign-in account, and review connected-account data before making financial decisions. You may unlink accounts or delete your data at any time.</p><h2>Service availability</h2><p>Financial institutions and data providers can delay, limit, or change available data. We aim to handle those failures safely, but do not guarantee uninterrupted or error-free information.</p><h2>Contact</h2><p>Questions about these terms can be sent to ${contact}.</p>`));
+});
 
 async function loadStore(user) {
   const key = user?.storageKey;
@@ -552,8 +571,11 @@ async function hydrateInstitutionBrand(item) {
   }
 }
 
-app.get('/api/health', (_req, res) => {
-  res.status(securityReady() ? 200 : 503).json({ ok: securityReady(), plaidConfigured: plaidConfigured(), environment: process.env.PLAID_ENV || 'sandbox', securityReady: securityReady() });
+app.get('/api/health', async (_req, res) => {
+  let databaseReady = true;
+  try { await databaseHealthy(); } catch { databaseReady = false; }
+  const ok = securityReady() && databaseReady;
+  res.status(ok ? 200 : 503).json({ ok, securityReady: securityReady(), databaseReady });
 });
 
 app.get('/api/auth/config', (_req, res) => {

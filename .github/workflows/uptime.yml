@@ -1,0 +1,19 @@
+name: Monitor production availability
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  healthcheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check public health endpoint
+        run: |
+          curl --fail --silent --show-error --retry 2 --retry-delay 10 --max-time 20 \
+            https://clarity-networth-production.up.railway.app/api/health
