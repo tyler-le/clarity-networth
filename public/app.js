@@ -545,7 +545,7 @@ function renderCashFlowSankey(data) {
   const el = $('#cashflowSankey');
   const income = Number(data.income || 0), actualSpend = Number(data.actualSpend || 0), savings = Number(data.savings || 0), investments = Number(data.investments || 0);
   if (!income && !actualSpend && !savings && !investments) { el.innerHTML = ''; return; }
-  const compact = el.clientWidth < 480;
+  const compact = window.matchMedia('(max-width: 560px)').matches;
   const width = compact ? 390 : 720, height = 216;
   const sourceX = 12, sourceW = compact ? 88 : 132;
   const middleX = compact ? 112 : 244, middleW = compact ? 112 : 150;
@@ -960,6 +960,7 @@ function showConnectionOnboarding() {
 }
 
 $$('[data-view]').forEach((button) => button.addEventListener('click', () => setView(button.dataset.view)));
+$('#homeBrand').addEventListener('click', () => setView('overview'));
 $('#profileButton').addEventListener('click', () => setView('profile'));
 $('#profileBack').addEventListener('click', () => setView(state.returnView || 'overview'));
 applyTheme(savedTheme(), false);
@@ -1188,6 +1189,9 @@ $$('[data-cashflow-display]').forEach((button) => button.addEventListener('click
   $$('[data-cashflow-display]').forEach((control) => control.classList.toggle('active', control === button));
   renderSpending(state.spending);
 }));
+$('#cashflowExpand').addEventListener('click', async () => {
+  try { await $('#cashflowSankey').requestFullscreen?.(); } catch { showNotice('Could not expand the diagram in this browser.'); }
+});
 $$('[data-allocation-display]').forEach((button) => button.addEventListener('click', () => {
   state.allocationDisplay = button.dataset.allocationDisplay;
   $$('[data-allocation-display]').forEach((control) => control.classList.toggle('active', control === button));
