@@ -19,6 +19,22 @@ This protects against a bad application write or database loss, but it is not an
 - GitHub Actions checks the production health endpoint hourly. A failed run is a signal to investigate immediately.
 - Railway logs must never contain financial payloads, access tokens, cursors, or secrets.
 
+## Provider cost controls
+
+Clarity enforces these server-side limits before it calls Plaid:
+
+- 5 Link-token requests per signed-in user per 15 minutes (20 per IP).
+- 10 completed Item exchanges per signed-in user per day (25 per IP).
+- 15 active linked institutions per user by default; `MAX_LINKED_ITEMS` may lower this, never exceed 30.
+- Automated refreshes run server-side on a daily schedule. Users cannot trigger unbounded manual refreshes.
+- Plaid webhook verification keys are cached for one hour and webhook traffic is IP-throttled before provider verification.
+
+The counters are stored as opaque HMAC-derived identifiers in Postgres, so they survive deploys and do not retain raw IP or email data.
+
+## Edge protection before public signup
+
+Put the production custom domain behind Cloudflare before removing the email allow list. Configure managed bot protection and rate-limit rules for `/api/auth/*` and `/api/plaid/*`, while allowing Plaid's documented webhook traffic to reach `/api/plaid/webhook`. Keep Railway as the origin and do not cache any `/api/*` response.
+
 ## Incident response
 
 1. Stop public access or disable the affected credentials.

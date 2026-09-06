@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { OAuth2Client } from 'google-auth-library';
 import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './store.js';
-import { databaseEnabled, databaseHealthy, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, writeDatabaseStore } from './database.js';
+import { consumeRateLimit, databaseEnabled, databaseHealthy, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, writeDatabaseStore } from './database.js';
 import { calculateFire, cashRunway, classifyTransaction, connectionHealth, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentLinkBalances, investmentSummary, monthlyReview, reconstructInvestmentHistory, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
 import { loadHistoricalPrices } from './market-data.js';
 import { plaidConfigured, plaidPost } from './plaid.js';
@@ -22,7 +22,10 @@ const sessionSecretValue = process.env.SESSION_SECRET || (!isProduction ? dataEn
 const sessionSecret = crypto.createHash('sha256').update(sessionSecretValue || crypto.randomBytes(32)).digest();
 const allowedEmails = new Set(String(process.env.ALLOWED_EMAILS || '').split(',').map((email) => email.trim().toLowerCase()).filter(Boolean));
 const DAILY_SYNC_INTERVAL_MS = Math.max(60 * 60 * 1000, Number(process.env.DAILY_SYNC_INTERVAL_MS) || 24 * 60 * 60 * 1000);
+const MAX_LINKED_ITEMS = Math.min(30, Math.max(1, Number(process.env.MAX_LINKED_ITEMS) || 15));
 const userSyncQueues = new Map();
+const providerLimitFallback = new Map();
+const plaidWebhookKeyCache = new Map();
 
 const productionSecurityErrors = [
   !dataEncryptionSecret || dataEncryptionSecret === 'development-only-key-change-me' ? 'DATA_ENCRYPTION_KEY is required.' : null,
@@ -56,6 +59,47 @@ function createRateLimiter({ limit, windowMs, key = (req) => req.ip || req.socke
 const demoLimiter = createRateLimiter({ limit: 60, windowMs: 60_000 });
 const authLimiter = createRateLimiter({ limit: 20, windowMs: 10 * 60_000 });
 const privateLimiter = createRateLimiter({ limit: 240, windowMs: 60_000, key: (req) => req.user?.storageKey || req.ip || 'unknown' });
+const webhookLimiter = createRateLimiter({ limit: 120, windowMs: 60_000 });
+
+function opaqueRateLimitKey(value) {
+  return crypto.createHmac('sha256', sessionSecret).update(String(value || '')).digest('hex');
+}
+
+function consumeFallbackProviderLimit(scope, subjectKey, windowMs, limit) {
+  const now = Date.now();
+  const windowStart = Math.floor(now / windowMs) * windowMs;
+  const key = `${scope}:${subjectKey}:${windowStart}`;
+  const count = Number(providerLimitFallback.get(key) || 0);
+  if (count >= limit) return false;
+  providerLimitFallback.set(key, count + 1);
+  return true;
+}
+
+async function consumeProviderLimit(scope, subjectKey, windowMs, limit) {
+  if (!databaseEnabled()) return consumeFallbackProviderLimit(scope, subjectKey, windowMs, limit);
+  return consumeRateLimit({ scope, subjectKey, windowMs, limit });
+}
+
+function plaidCostLimiter({ scope, userLimit, ipLimit, windowMs }) {
+  return async (req, res, next) => {
+    try {
+      const [userAllowed, ipAllowed] = await Promise.all([
+        consumeProviderLimit(`${scope}.user`, opaqueRateLimitKey(req.user.storageKey), windowMs, userLimit),
+        consumeProviderLimit(`${scope}.ip`, opaqueRateLimitKey(req.ip || req.socket.remoteAddress), windowMs, ipLimit)
+      ]);
+      if (!userAllowed || !ipAllowed) {
+        res.setHeader('Retry-After', Math.ceil(windowMs / 1000));
+        return res.status(429).json({ error: 'Too many account-connection attempts. Please try again later.' });
+      }
+      next();
+    } catch (error) {
+      // Fail closed: a missing cost-control store must never permit billable
+      // provider calls without a limit.
+      console.error('Provider rate-limit check unavailable:', error.message);
+      res.status(503).json({ error: 'Account connection is temporarily unavailable. Please try again later.' });
+    }
+  };
+}
 
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '1mb', verify: (req, _res, buffer) => { req.rawBody = Buffer.from(buffer); } }));
@@ -910,6 +954,11 @@ app.delete('/api/items/:id', async (req, res) => {
   const store = await loadStore(req.user);
   const item = store.items.find((candidate) => candidate.id === req.params.id);
   if (!item || item.demo) return res.status(404).json({ error: 'Connection not found.' });
+  try { await plaidPost('/item/remove', { access_token: decrypt(item.access_token_enc) }); }
+  catch (error) {
+    console.warn('Plaid connection revocation failed:', error.message);
+    return res.status(503).json({ error: 'We could not unlink this institution yet. Please try again shortly.' });
+  }
   store.items = store.items.filter((candidate) => candidate.id !== item.id);
   store.accounts = store.accounts.filter((account) => account.item_id !== item.id);
   store.positions = (store.positions || []).filter((position) => position.item_id !== item.id);
@@ -922,7 +971,7 @@ app.delete('/api/items/:id', async (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/plaid/create_link_token', async (req, res) => {
+app.post('/api/plaid/create_link_token', plaidCostLimiter({ scope: 'plaid_link_token', userLimit: 5, ipLimit: 20, windowMs: 15 * 60_000 }), async (req, res) => {
   try {
     const body = {
       user: { client_user_id: req.user.storageKey },
@@ -944,12 +993,14 @@ app.post('/api/plaid/create_link_token', async (req, res) => {
   }
 });
 
-app.post('/api/plaid/exchange_public_token', async (req, res) => {
+app.post('/api/plaid/exchange_public_token', plaidCostLimiter({ scope: 'plaid_item_exchange', userLimit: 10, ipLimit: 25, windowMs: 24 * 60 * 60_000 }), async (req, res) => {
   try {
     const { public_token, institution_name } = req.body;
     if (!public_token) return res.status(400).json({ error: 'public_token is required' });
-    const exchanged = await plaidPost('/item/public_token/exchange', { public_token });
     const store = await loadStore(req.user);
+    const linkedItems = store.items.filter((item) => !item.demo).length;
+    if (linkedItems >= MAX_LINKED_ITEMS) return res.status(429).json({ error: `You can connect up to ${MAX_LINKED_ITEMS} institutions. Unlink one before adding another.` });
+    const exchanged = await plaidPost('/item/public_token/exchange', { public_token });
     const item = {
       id: crypto.randomUUID(),
       plaid_item_id: exchanged.item_id,
@@ -979,9 +1030,14 @@ async function verifyPlaidWebhook(req) {
   if (!token || !req.rawBody?.length) return false;
   try {
     const header = decodeProtectedHeader(token);
-    if (header.alg !== 'ES256' || typeof header.kid !== 'string') return false;
-    const verification = await plaidPost('/webhook_verification_key/get', { key_id: header.kid });
-    const key = await importJWK(verification.key, 'ES256');
+    if (header.alg !== 'ES256' || typeof header.kid !== 'string' || !/^[A-Za-z0-9_-]{8,128}$/.test(header.kid)) return false;
+    const cached = plaidWebhookKeyCache.get(header.kid);
+    let key = cached?.expiresAt > Date.now() ? cached.key : null;
+    if (!key) {
+      const verification = await plaidPost('/webhook_verification_key/get', { key_id: header.kid });
+      key = await importJWK(verification.key, 'ES256');
+      plaidWebhookKeyCache.set(header.kid, { key, expiresAt: Date.now() + 60 * 60_000 });
+    }
     const { payload } = await jwtVerify(token, key, { algorithms: ['ES256'], clockTolerance: '30s' });
     const expectedHash = crypto.createHash('sha256').update(req.rawBody).digest('hex');
     return typeof payload.request_body_sha256 === 'string'
@@ -993,7 +1049,7 @@ async function verifyPlaidWebhook(req) {
   }
 }
 
-app.post('/api/plaid/webhook', async (req, res) => {
+app.post('/api/plaid/webhook', webhookLimiter, async (req, res) => {
   if (!await verifyPlaidWebhook(req)) return res.sendStatus(401);
   res.sendStatus(200);
   const itemId = req.body?.item_id;

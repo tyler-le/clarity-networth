@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import request from 'supertest';
@@ -22,6 +23,13 @@ process.env.ENCRYPTION_KEY = 'integration-test-encryption-key';
 const { app } = await import(`../../server.js?integration=${Date.now()}`);
 const { deleteStore, writeStore } = await import('../../store.js');
 const integrationTest = process.env.CODEX_SANDBOX_NETWORK_DISABLED ? test.skip : test;
+
+function signedTestCookie(email = 'rate-limit@example.com') {
+  const payload = Buffer.from(JSON.stringify({ email, name: 'Rate Limit', exp: Date.now() + 60_000 })).toString('base64url');
+  const secret = crypto.createHash('sha256').update(process.env.SESSION_SECRET || process.env.ENCRYPTION_KEY).digest();
+  const signature = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+  return `clarity_session=${payload}.${signature}`;
+}
 
 test.after(() => {
   fs.rmSync(dataDir, { recursive: true, force: true });
@@ -110,4 +118,17 @@ integrationTest('does not expose sign-in configuration secrets', async () => {
 integrationTest('rejects unsigned Plaid webhooks before processing financial data', async () => {
   const response = await request(app).post('/api/plaid/webhook').send({ item_id: 'untrusted-item' });
   assert.equal(response.status, 401);
+});
+
+integrationTest('caps cost-sensitive Plaid link-token attempts before provider calls', async () => {
+  const cookie = signedTestCookie();
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const response = await request(app).post('/api/plaid/create_link_token').set('Cookie', cookie).send({});
+    // Plaid itself is deliberately unconfigured in tests; reaching this point
+    // proves the first attempts pass only the local cost gate.
+    assert.equal(response.status, 500);
+  }
+  const blocked = await request(app).post('/api/plaid/create_link_token').set('Cookie', cookie).send({});
+  assert.equal(blocked.status, 429);
+  assert.match(blocked.body.error, /Too many account-connection attempts/);
 });

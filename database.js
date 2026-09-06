@@ -106,6 +106,25 @@ export async function recordAuditEvent(userKey, eventType) {
   );
 }
 
+// Atomically consume a bounded action inside a fixed window. This is used for
+// provider-cost controls and remains effective across deploys and replicas.
+export async function consumeRateLimit({ scope, subjectKey, windowMs, limit, now = Date.now() }) {
+  if (!/^[a-z0-9_.-]{1,80}$/.test(scope)) throw new Error('Invalid rate-limit scope.');
+  if (!/^[a-f0-9]{64}$/.test(subjectKey)) throw new Error('Invalid rate-limit subject.');
+  if (!Number.isInteger(windowMs) || windowMs < 1_000 || !Number.isInteger(limit) || limit < 1) throw new Error('Invalid rate-limit configuration.');
+  const windowStarted = new Date(Math.floor(now / windowMs) * windowMs);
+  const result = await getPool().query(
+    `INSERT INTO rate_limit_counters (scope, subject_key, window_started, count)
+     VALUES ($1, $2, $3, 1)
+     ON CONFLICT (scope, subject_key, window_started) DO UPDATE
+       SET count = rate_limit_counters.count + 1
+       WHERE rate_limit_counters.count < $4
+     RETURNING count`,
+    [scope, subjectKey, windowStarted, limit]
+  );
+  return result.rowCount > 0;
+}
+
 export async function deleteDatabaseStore(userKey) {
   if (!/^[a-f0-9]{64}$/.test(userKey)) throw new Error('Invalid user storage key.');
   const client = await getPool().connect();
