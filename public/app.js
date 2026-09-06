@@ -167,6 +167,33 @@ function renderNetWorthInsights() {
   $('#cashRunwayDetail').textContent = `${fmt.format(Number(runway.cash || 0))} in cash & savings · ${fmt.format(Number(runway.essentialMonthly))}/mo essentials`;
 }
 
+function renderClarityLayer(data) {
+  const review = data.monthlyReview || {};
+  $('#monthlyReview').classList.toggle('hidden', !review.available);
+  if (review.available) {
+    const month = new Date(`${review.month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long' });
+    $('#monthlyReviewTitle').textContent = `${fmt.format(Number(review.spend || 0))} spent in ${month}`;
+    $('#monthlyReviewDetail').textContent = review.outlier
+      ? `${review.outlier.category} was ${fmt.format(Number(review.outlier.difference))} above your usual month.`
+      : review.saveInvest > 0 ? `${fmt.format(Number(review.saveInvest))} also went to saving and investing.` : 'No unusual spending patterns stood out.';
+  }
+  const goals = data.goals || [];
+  const goal = goals[0];
+  $('#goalAction').textContent = goal ? 'Remove' : 'Add goal';
+  if (goal) {
+    $('#goalTitle').textContent = goal.name;
+    $('#goalDetail').textContent = goal.source === 'debt' ? `${fmt.format(goal.current)} remaining of ${fmt.format(goal.target)} starting debt` : `${fmt.format(goal.current)} of ${fmt.format(goal.target)}`;
+    $('#goalProgress').style.width = `${Math.round(goal.progress * 100)}%`;
+  } else { $('#goalTitle').textContent = 'Set a goal'; $('#goalDetail').textContent = 'Track a cash, investment, net-worth, or debt goal from your real balances.'; $('#goalProgress').style.width = '0%'; }
+  const attention = (data.connectionHealth || []).filter((item) => item.state !== 'healthy');
+  $('#connectionAttention').classList.toggle('hidden', !attention.length);
+  if (attention.length) {
+    const stale = attention[0];
+    $('#connectionAttentionTitle').textContent = `${stale.institution_name} needs attention`;
+    $('#connectionAttentionDetail').textContent = stale.state === 'stale' ? 'This connection has not updated recently. We will keep retrying automatically.' : 'This connection could not update. We will retry automatically.';
+  }
+}
+
 function renderRecurringCharges(recurring = {}) {
   const panel = $('#recurringCharges');
   const rows = recurring.recurring || [];
@@ -392,7 +419,7 @@ function renderAccounts(accounts) {
     return `<section class="account-collection ${debt ? 'debt' : 'asset'}">
       <div class="account-collection-head"><span class="account-collection-icon" aria-hidden="true">${accountGroupIcons[name] || '◇'}</span><div><h2>${name}</h2><p>${items.length} account${items.length === 1 ? '' : 's'}</p></div><div class="account-collection-total ${debt ? 'negative' : 'positive'}"><span>${debt ? 'Owed' : 'Held'}</span><strong>${fmt.format(total)}</strong></div></div>
       <div class="account-collection-items">${sorted.map((account, index) => `<article class="account-item ${debt ? 'debt' : 'asset'} ${index >= previewCount && !expanded ? 'hidden' : ''}">
-        ${institutionMark(account)}<div class="account-copy"><div class="account-name">${escapeHtml(account.nickname || account.name)}</div><div class="account-inst">${escapeHtml(account.institution_name || '')} · ${escapeHtml(accountDescriptor(account.subtype || account.type))}</div><div class="account-inline-balance ${debt ? 'negative' : 'positive'}">${displayBalance(account)}</div></div><button class="account-rename" data-account-rename="${escapeHtml(account.id)}" data-account-name="${escapeHtml(account.nickname || account.name)}" aria-label="Rename ${escapeHtml(account.nickname || account.name)}">✎</button>
+        ${institutionMark(account)}<div class="account-copy"><div class="account-name">${escapeHtml(account.nickname || account.name)}</div><div class="account-inst">${escapeHtml(account.institution_name || '')} · ${escapeHtml(accountDescriptor(account.subtype || account.type))}</div><div class="account-inline-balance ${debt ? 'negative' : 'positive'}">${displayBalance(account)}</div></div>${account.manual ? `<button class="account-rename" data-manual-account="${escapeHtml(account.id)}" data-manual-name="${escapeHtml(account.name)}" data-manual-subtype="${escapeHtml(account.subtype || '')}" data-manual-value="${escapeHtml(account.current_balance)}" data-manual-kind="${debt ? 'liability' : 'asset'}" aria-label="Edit ${escapeHtml(account.name)}">✎</button>` : `<button class="account-rename" data-account-rename="${escapeHtml(account.id)}" data-account-name="${escapeHtml(account.nickname || account.name)}" aria-label="Rename ${escapeHtml(account.nickname || account.name)}">✎</button>`}
       </article>`).join('')}</div>${items.length > previewCount ? `<button class="account-group-more" data-account-group="${escapeHtml(name)}">${expanded ? 'Show less' : `View ${items.length - previewCount} more`}</button>` : ''}
     </section>`;
   }).join('');
@@ -401,7 +428,8 @@ function renderAccounts(accounts) {
 function renderConnections(items) {
   const realItems = items.filter((item) => !item.demo);
   const panel = $('#connectionsList');
-  panel.innerHTML = realItems.length ? realItems.map((item) => `<div class="connection-row"><div>${item.institution_logo ? `<img class="connection-logo" src="${escapeHtml(item.institution_logo)}" alt="" />` : '<span class="connection-fallback" aria-hidden="true">⌂</span>'}<span>${escapeHtml(item.institution_name)}</span></div><button class="unlink-button" data-unlink="${escapeHtml(item.id)}">Unlink</button></div>`).join('') : '<div class="empty">No connected institutions.</div>';
+  const health = new Map((state.dashboard?.connectionHealth || []).map((entry) => [entry.id, entry]));
+  panel.innerHTML = realItems.length ? realItems.map((item) => { const status = health.get(item.id); const detail = status?.state === 'healthy' ? 'Up to date' : status?.state === 'stale' ? 'Update delayed · retrying automatically' : 'Update needs attention · retrying automatically'; return `<div class="connection-row"><div>${item.institution_logo ? `<img class="connection-logo" src="${escapeHtml(item.institution_logo)}" alt="" />` : '<span class="connection-fallback" aria-hidden="true">⌂</span>'}<span>${escapeHtml(item.institution_name)}<small class="connection-status ${status?.state || ''}">${detail}</small></span></div><button class="unlink-button" data-unlink="${escapeHtml(item.id)}">Unlink</button></div>`; }).join('') : '<div class="empty">No connected institutions.</div>';
 }
 
 const spendingColors = ['#1f6f4a', '#7ea98b', '#d5a75f', '#b88692', '#9ca9bd', '#c4c9c1'];
@@ -808,6 +836,7 @@ function renderDashboard() {
   if (state.view === 'overview') renderNetWorthChartWhenVisible();
   renderAccounts(d.accounts || []);
   renderConnections(d.items || []);
+  renderClarityLayer(d);
   $('#demoToggle').textContent = d.demoMode ? 'Exit demo' : 'Try demo';
   $('#demoToggle').setAttribute('aria-pressed', String(d.demoMode));
   $('#connectButton').classList.toggle('hidden', state.view === 'profile');
@@ -1017,6 +1046,20 @@ $('#accountGrid').addEventListener('click', (event) => {
     renderAccounts(state.dashboard?.accounts || []);
     return;
   }
+  const manual = event.target.closest('[data-manual-account]');
+  if (manual) {
+    event.preventDefault(); event.stopPropagation();
+    const dialog = $('#manualAccountDialog');
+    dialog.dataset.accountId = manual.dataset.manualAccount;
+    $('#manualAccountDialogTitle').textContent = 'Edit asset or debt';
+    $('#manualAccountName').value = manual.dataset.manualName || '';
+    $('#manualAccountKind').value = manual.dataset.manualKind || 'asset';
+    $('#manualAccountSubtype').value = manual.dataset.manualSubtype || '';
+    $('#manualAccountValue').value = manual.dataset.manualValue || '';
+    $('#manualAccountDelete').classList.remove('hidden');
+    dialog.showModal();
+    return;
+  }
   const button = event.target.closest('[data-account-rename]');
   if (!button) return;
   event.preventDefault();
@@ -1043,6 +1086,39 @@ $('#nicknameForm').addEventListener('submit', async (event) => {
 });
 $('#nicknameCancel').addEventListener('click', () => $('#nicknameDialog').close());
 $('#nicknameClose').addEventListener('click', () => $('#nicknameDialog').close());
+function openManualAccountDialog() {
+  const dialog = $('#manualAccountDialog');
+  dialog.dataset.accountId = '';
+  $('#manualAccountDialogTitle').textContent = 'Add an asset or debt';
+  $('#manualAccountName').value = ''; $('#manualAccountKind').value = 'asset'; $('#manualAccountSubtype').value = ''; $('#manualAccountValue').value = '';
+  $('#manualAccountDelete').classList.add('hidden');
+  dialog.showModal(); $('#manualAccountName').focus();
+}
+$('#addManualAccount').addEventListener('click', openManualAccountDialog);
+$('#manualAccountClose').addEventListener('click', () => $('#manualAccountDialog').close());
+$('#manualAccountForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const dialog = $('#manualAccountDialog'); const editing = Boolean(dialog.dataset.accountId); const save = $('#manualAccountSave'); save.disabled = true;
+  const body = { name: $('#manualAccountName').value, kind: $('#manualAccountKind').value, subtype: $('#manualAccountSubtype').value, value: $('#manualAccountValue').value };
+  try { await api(editing ? `/api/manual-accounts/${encodeURIComponent(dialog.dataset.accountId)}` : '/api/manual-accounts', { method: editing ? 'PATCH' : 'POST', body: JSON.stringify(body) }); dialog.close(); await loadAll(); showNotice(editing ? 'Manual item updated.' : 'Manual item added.', 'success'); }
+  catch (error) { showNotice(error.message); } finally { save.disabled = false; }
+});
+$('#manualAccountDelete').addEventListener('click', async () => {
+  const dialog = $('#manualAccountDialog'); if (!dialog.dataset.accountId || !window.confirm('Delete this manual item from your net worth?')) return;
+  try { await api(`/api/manual-accounts/${encodeURIComponent(dialog.dataset.accountId)}`, { method: 'DELETE' }); dialog.close(); await loadAll(); showNotice('Manual item removed.', 'success'); } catch (error) { showNotice(error.message); }
+});
+$('#goalAction').addEventListener('click', async () => {
+  const goal = state.dashboard?.goals?.[0];
+  if (goal) { if (!window.confirm(`Remove “${goal.name}”?`)) return; try { await api(`/api/goals/${encodeURIComponent(goal.id)}`, { method: 'DELETE' }); await loadAll(); showNotice('Goal removed.', 'success'); } catch (error) { showNotice(error.message); } return; }
+  $('#goalName').value = ''; $('#goalSource').value = 'cash'; $('#goalTarget').value = ''; $('#goalDialog').showModal(); $('#goalName').focus();
+});
+$('#goalClose').addEventListener('click', () => $('#goalDialog').close());
+$('#goalCancel').addEventListener('click', () => $('#goalDialog').close());
+$('#goalForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  try { await api('/api/goals', { method: 'POST', body: JSON.stringify({ name: $('#goalName').value, source: $('#goalSource').value, target: $('#goalTarget').value }) }); $('#goalDialog').close(); await loadAll(); showNotice('Goal added.', 'success'); } catch (error) { showNotice(error.message); }
+});
+$('#connectionAttentionAction').addEventListener('click', () => setView('profile'));
 $('#connectionsList').addEventListener('click', async (event) => {
   const button = event.target.closest('[data-unlink]');
   if (!button) return;

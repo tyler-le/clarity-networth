@@ -305,6 +305,66 @@ export function cashRunway(store, anchorDate = new Date()) {
   return { cash, essentialMonthly, monthsObserved: monthTotals.length, runwayMonths: essentialMonthly ? cash / essentialMonthly : null };
 }
 
+export function goalProgress(store) {
+  const accounts = (store.accounts || []).filter((account) => !account.hidden);
+  const valueFor = (source) => {
+    if (source === 'cash') return accounts.filter((account) => account.type === 'depository').reduce((sum, account) => sum + Math.max(0, Number(account.current_balance || 0)), 0);
+    if (source === 'investments') return accounts.filter((account) => account.type === 'investment').reduce((sum, account) => sum + Math.max(0, Number(account.current_balance || 0)), 0);
+    if (source === 'debt') return accounts.filter((account) => accountSide(account.type) === 'liability').reduce((sum, account) => sum + Math.max(0, Number(account.current_balance || 0)), 0);
+    return summarizeRange(store).netWorth;
+  };
+  return (store.settings?.goals || []).map((goal) => {
+    const target = Math.max(0, Number(goal.target || 0));
+    const current = valueFor(goal.source);
+    const debt = goal.source === 'debt';
+    const progress = target ? Math.min(1, debt ? Math.max(0, 1 - current / target) : Math.max(0, current / target)) : 0;
+    return { ...goal, target, current, progress, remaining: debt ? current : Math.max(0, target - current) };
+  });
+}
+
+// A review should earn attention. It only names a category when the latest
+// completed month is materially and unusually above a stable three-month norm.
+export function monthlyReview(store, anchorDate = new Date()) {
+  const anchor = new Date(anchorDate);
+  const end = new Date(anchor.getFullYear(), anchor.getMonth(), 0);
+  const latestMonth = end.toISOString().slice(0, 7);
+  const priorMonths = [1, 2, 3].map((offset) => {
+    const date = new Date(end.getFullYear(), end.getMonth() - offset, 1);
+    return date.toISOString().slice(0, 7);
+  });
+  const byMonth = new Map([latestMonth, ...priorMonths].map((month) => [month, { spend: 0, saveInvest: 0, categories: new Map() }]));
+  for (const transaction of store.transactions || []) {
+    if (transaction.pending || transaction.excluded || transaction.bucket === 'transfer' || Number(transaction.amount || 0) <= 0) continue;
+    const month = String(transaction.date || '').slice(0, 7);
+    const row = byMonth.get(month);
+    if (!row) continue;
+    if (transaction.bucket === 'savings' || transaction.bucket === 'investments') { row.saveInvest += Number(transaction.amount); continue; }
+    if (!['fixed', 'guilt_free'].includes(transaction.bucket)) continue;
+    row.spend += Number(transaction.amount);
+    const category = String(transaction.pfc_primary || transaction.pfc_detailed || transaction.bucket).replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+    row.categories.set(category, (row.categories.get(category) || 0) + Number(transaction.amount));
+  }
+  const latest = byMonth.get(latestMonth);
+  const hasHistory = priorMonths.every((month) => byMonth.get(month)?.spend > 0);
+  if (!latest || !hasHistory) return { available: false };
+  let outlier = null;
+  for (const [category, amount] of latest.categories) {
+    const baseline = priorMonths.reduce((sum, month) => sum + Number(byMonth.get(month).categories.get(category) || 0), 0) / priorMonths.length;
+    const difference = amount - baseline;
+    if (amount >= 125 && baseline >= 50 && amount >= baseline * 1.65 && difference >= 125 && (!outlier || difference > outlier.difference)) outlier = { category, amount, baseline, difference };
+  }
+  return { available: true, month: latestMonth, spend: latest.spend, saveInvest: latest.saveInvest, outlier };
+}
+
+export function connectionHealth(store, now = new Date()) {
+  const cutoff = new Date(now).getTime() - 36 * 60 * 60 * 1000;
+  return (store.items || []).filter((item) => !item.demo).map((item) => {
+    const syncedAt = item.last_synced_at ? new Date(item.last_synced_at).getTime() : 0;
+    const state = item.last_sync_error_at ? 'attention' : syncedAt < cutoff ? 'stale' : 'healthy';
+    return { id: item.id, institution_name: item.institution_name, last_synced_at: item.last_synced_at || null, state };
+  });
+}
+
 function recurringMerchantKey(transaction) {
   return String(transaction.merchant_name || transaction.name || '').toLowerCase()
     .replace(/\b\d{3,}\b/g, '').replace(/[^a-z]/g, ' ').replace(/\s+/g, ' ').trim();

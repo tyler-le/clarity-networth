@@ -40,6 +40,7 @@ const emptyStore = () => ({
       fat_multiplier: 150
     },
     demo_mode: false,
+    goals: [],
     appearance: { theme: 'light' }
   }
 });
@@ -54,6 +55,7 @@ export function normalizeStore(parsed) {
       ...(parsed.settings || {}),
       targets: { ...defaults.settings.targets, ...(parsed.settings?.targets || {}) },
       fire: { ...defaults.settings.fire, ...(parsed.settings?.fire || {}) },
+      goals: Array.isArray(parsed.settings?.goals) ? parsed.settings.goals : [],
       appearance: { ...defaults.settings.appearance, ...(parsed.settings?.appearance || {}) }
     }
   };

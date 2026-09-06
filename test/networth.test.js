@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentLinkBalances, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
+import { calculateFire, cashRunway, classifyTransaction, connectionHealth, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentLinkBalances, monthlyReview, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
 import { normalizeCandles } from '../market-data.js';
 import { filterSnapshots, scrubIndex } from '../public/chart-utils.js';
 
@@ -310,6 +310,35 @@ test('cash runway uses cash and savings against recent complete-month fixed cost
   assert.equal(runway.monthsObserved, 3);
   assert.equal(runway.essentialMonthly, 7000 / 3);
   assert.equal(runway.runwayMonths, 9000 / (7000 / 3));
+});
+
+test('goals use tracked balances and debt payoff measures progress downward', () => {
+  const store = { accounts: [
+    { type: 'depository', current_balance: 4000 }, { type: 'investment', current_balance: 9000 }, { type: 'loan', current_balance: 6000 }
+  ], settings: { goals: [{ id: 'cash', name: 'Reserve', source: 'cash', target: 10000 }, { id: 'debt', name: 'Loan payoff', source: 'debt', target: 12000 }] } };
+  const [cash, debt] = goalProgress(store);
+  assert.equal(cash.current, 4000); assert.equal(cash.progress, .4);
+  assert.equal(debt.current, 6000); assert.equal(debt.progress, .5);
+});
+
+test('monthly review surfaces only a large, repeatable category deviation', () => {
+  const transactions = [];
+  for (const month of ['2026-04', '2026-05', '2026-06']) transactions.push({ date: `${month}-10`, amount: 100, bucket: 'guilt_free', pfc_primary: 'TRAVEL' });
+  transactions.push({ date: '2026-07-10', amount: 400, bucket: 'guilt_free', pfc_primary: 'TRAVEL' });
+  const review = monthlyReview({ transactions }, new Date('2026-08-15T12:00:00'));
+  assert.equal(review.available, true); assert.equal(review.outlier.category, 'Travel'); assert.equal(review.outlier.difference, 300);
+  const quiet = monthlyReview({ transactions: transactions.map((transaction) => transaction.date === '2026-07-10' ? { ...transaction, amount: 150 } : transaction) }, new Date('2026-08-15T12:00:00'));
+  assert.equal(quiet.outlier, null);
+});
+
+test('connection health stays quiet until a refresh is stale or fails', () => {
+  const now = new Date('2026-09-06T12:00:00Z');
+  const health = connectionHealth({ items: [
+    { id: 'fresh', institution_name: 'Fresh', last_synced_at: '2026-09-05T10:00:00Z' },
+    { id: 'late', institution_name: 'Late', last_synced_at: '2026-09-04T10:00:00Z' },
+    { id: 'failed', institution_name: 'Failed', last_synced_at: '2026-09-06T10:00:00Z', last_sync_error_at: '2026-09-06T11:00:00Z' }
+  ] }, now);
+  assert.deepEqual(health.map((item) => item.state), ['healthy', 'stale', 'attention']);
 });
 
 test('retirement presets calculate coast, lean, standard, fat, and a projected retirement value', () => {

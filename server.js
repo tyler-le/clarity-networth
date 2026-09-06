@@ -7,7 +7,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './store.js';
 import { databaseEnabled, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, writeDatabaseStore } from './database.js';
-import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentLinkBalances, investmentSummary, reconstructInvestmentHistory, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
+import { calculateFire, cashRunway, classifyTransaction, connectionHealth, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentLinkBalances, investmentSummary, monthlyReview, reconstructInvestmentHistory, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
 import { loadHistoricalPrices } from './market-data.js';
 import { plaidConfigured, plaidPost } from './plaid.js';
 
@@ -275,6 +275,7 @@ async function syncItem(store, item) {
   try { await syncTransactionsForItem(store, item); } catch (error) { console.warn('Transactions sync failed:', error.message); }
   try { await syncRetirementContributionsForItem(store, item); } catch (error) { console.warn('Investment contribution sync unavailable:', error.message); }
   item.last_synced_at = new Date().toISOString();
+  delete item.last_sync_error_at;
 }
 
 async function syncStoreItems(store) {
@@ -285,6 +286,7 @@ async function syncStoreItems(store) {
       results.push({ item: item.institution_name, ok: true });
     } catch (error) {
       console.warn(`Account refresh failed for ${item.institution_name}:`, error.message);
+      item.last_sync_error_at = new Date().toISOString();
       results.push({ item: item.institution_name, ok: false });
     }
   }
@@ -598,6 +600,7 @@ app.get('/api/demo-preview', demoLimiter, (req, res) => {
     dashboard: {
       summary: summarizeRange(store),
       runway: cashRunway(store),
+      goals: goalProgress(store), monthlyReview: monthlyReview(store), connectionHealth: connectionHealth(store),
       recurring: recurringCharges(store),
       investmentContributions: investmentContributions(store),
       investmentLinkBalances: investmentLinkBalances(store),
@@ -649,6 +652,9 @@ app.get('/api/dashboard', async (req, res) => {
   res.json({
     summary,
     runway: cashRunway(visibleStore),
+    goals: goalProgress(visibleStore),
+    monthlyReview: monthlyReview(visibleStore),
+    connectionHealth: connectionHealth(visibleStore),
     recurring: recurringCharges(visibleStore),
     investmentContributions: investmentContributions(visibleStore),
     investmentLinkBalances: investmentLinkBalances(visibleStore),
@@ -748,6 +754,67 @@ app.patch('/api/accounts/:id/nickname', async (req, res) => {
   account.nickname = nickname || null;
   await saveStore(req.user, store);
   res.json({ ok: true, nickname: account.nickname });
+});
+
+app.post('/api/manual-accounts', async (req, res) => {
+  const name = String(req.body?.name || '').trim().replace(/\s+/g, ' ');
+  const kind = String(req.body?.kind || 'asset');
+  const value = Number(req.body?.value);
+  const subtype = String(req.body?.subtype || '').trim().replace(/\s+/g, ' ');
+  if (!name || name.length > 60) return res.status(400).json({ error: 'Enter a name of 60 characters or fewer.' });
+  if (!['asset', 'liability'].includes(kind)) return res.status(400).json({ error: 'Choose an asset or debt.' });
+  if (!Number.isFinite(value) || value < 0) return res.status(400).json({ error: 'Enter a value of $0 or more.' });
+  const store = await loadStore(req.user);
+  const id = crypto.randomUUID();
+  store.accounts.push({ id, plaid_account_id: `manual:${id}`, item_id: null, institution_name: 'Manual', name, nickname: null, type: kind === 'liability' ? 'loan' : 'other', subtype: subtype || (kind === 'liability' ? 'Other debt' : 'Other asset'), current_balance: Math.round(value * 100) / 100, available_balance: null, limit: null, iso_currency_code: 'USD', updated_at: new Date().toISOString(), manual: true, demo: false });
+  snapshotNetWorth(store);
+  await saveStore(req.user, store);
+  res.json({ ok: true });
+});
+
+app.patch('/api/manual-accounts/:id', async (req, res) => {
+  const store = await loadStore(req.user);
+  const account = store.accounts.find((record) => record.id === req.params.id && record.manual && !record.demo);
+  if (!account) return res.status(404).json({ error: 'Manual item not found.' });
+  const name = String(req.body?.name || '').trim().replace(/\s+/g, ' ');
+  const value = Number(req.body?.value);
+  if (!name || name.length > 60 || !Number.isFinite(value) || value < 0) return res.status(400).json({ error: 'Enter a valid name and value.' });
+  account.name = name; account.subtype = String(req.body?.subtype || account.subtype || '').trim().slice(0, 60); account.current_balance = Math.round(value * 100) / 100; account.updated_at = new Date().toISOString();
+  snapshotNetWorth(store);
+  await saveStore(req.user, store);
+  res.json({ ok: true });
+});
+
+app.delete('/api/manual-accounts/:id', async (req, res) => {
+  const store = await loadStore(req.user);
+  const account = store.accounts.find((record) => record.id === req.params.id && record.manual && !record.demo);
+  if (!account) return res.status(404).json({ error: 'Manual item not found.' });
+  store.accounts = store.accounts.filter((record) => record.id !== account.id);
+  snapshotNetWorth(store);
+  await saveStore(req.user, store);
+  res.json({ ok: true });
+});
+
+app.post('/api/goals', async (req, res) => {
+  const name = String(req.body?.name || '').trim().replace(/\s+/g, ' ');
+  const source = String(req.body?.source || 'cash');
+  const target = Number(req.body?.target);
+  if (!name || name.length > 60 || !['cash', 'investments', 'net_worth', 'debt'].includes(source) || !Number.isFinite(target) || target <= 0) return res.status(400).json({ error: 'Enter a name, source, and target greater than $0.' });
+  const store = await loadStore(req.user);
+  store.settings.goals ||= [];
+  if (store.settings.goals.length >= 1) return res.status(400).json({ error: 'Keep one active goal so your plan stays focused.' });
+  store.settings.goals.push({ id: crypto.randomUUID(), name, source, target: Math.round(target * 100) / 100, created_at: new Date().toISOString() });
+  await saveStore(req.user, store);
+  res.json({ ok: true });
+});
+
+app.delete('/api/goals/:id', async (req, res) => {
+  const store = await loadStore(req.user);
+  const before = (store.settings.goals || []).length;
+  store.settings.goals = (store.settings.goals || []).filter((goal) => goal.id !== req.params.id);
+  if (store.settings.goals.length === before) return res.status(404).json({ error: 'Goal not found.' });
+  await saveStore(req.user, store);
+  res.json({ ok: true });
 });
 
 app.patch('/api/positions/:id/asset-class', async (req, res) => {

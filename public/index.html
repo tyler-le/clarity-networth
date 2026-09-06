@@ -92,7 +92,10 @@
           </article>
         </div>
         <div class="networth-insights">
+          <article class="card networth-insight monthly-review hidden" id="monthlyReview"><div><div class="card-label">Last month</div><strong id="monthlyReviewTitle">—</strong><p id="monthlyReviewDetail"></p></div></article>
           <article class="card networth-insight runway-insight"><div><div class="card-label">Cash runway</div><strong id="cashRunway">—</strong><p id="cashRunwayDetail">Based on cash and essential spending.</p></div><span class="runway-mark" aria-hidden="true">◒</span></article>
+          <article class="card networth-insight goal-insight" id="goalInsight"><div><div class="card-label">Your focus</div><strong id="goalTitle">Set a goal</strong><p id="goalDetail">Track a cash, investment, net-worth, or debt goal from your real balances.</p><i class="goal-progress"><b id="goalProgress"></b></i></div><button class="text-button" id="goalAction">Add goal</button></article>
+          <article class="card connection-attention hidden" id="connectionAttention"><div><div class="card-label">Connection update</div><strong id="connectionAttentionTitle"></strong><p id="connectionAttentionDetail"></p></div><button class="text-button" id="connectionAttentionAction">View connections</button></article>
         </div>
         <!-- Temporary compatibility targets: an older no-cache client script
              may still be active while its service worker updates. They remain
@@ -139,6 +142,7 @@
 
       <section id="accountsView" class="view">
         <div class="accounts-summary" id="accountsSummary"></div>
+        <div class="account-actions"><button class="secondary" id="addManualAccount">+ Add asset or debt</button><span>For things your institution can’t connect</span></div>
         <div id="accountGrid" class="account-groups"></div>
         <article class="card setup-card" id="setupCard">
           <h3>Plaid setup</h3>
@@ -191,6 +195,8 @@
       <div class="dialog-actions"><button type="button" class="secondary" id="manualHoldingCancel">Cancel</button><button class="primary" id="manualHoldingSave" type="submit">Add holding</button></div>
     </form>
   </dialog>
+  <dialog class="nickname-dialog" id="manualAccountDialog" aria-labelledby="manualAccountDialogTitle"><form id="manualAccountForm"><button type="button" class="dialog-close" id="manualAccountClose" aria-label="Close">×</button><div class="card-label">MANUAL NET WORTH ITEM</div><h2 id="manualAccountDialogTitle">Add an asset or debt</h2><p>Use this for things your institution cannot connect, like a home, vehicle, private investment, or personal loan.</p><label>What is it?<input id="manualAccountName" name="name" maxlength="60" required placeholder="e.g. Home value" /></label><label>Type<select id="manualAccountKind" name="kind"><option value="asset">Asset</option><option value="liability">Debt</option></select></label><label>Category<input id="manualAccountSubtype" name="subtype" maxlength="60" placeholder="e.g. Property" /></label><label>Current value<input id="manualAccountValue" name="value" type="number" min="0" step="0.01" inputmode="decimal" required /></label><div class="dialog-actions"><button type="button" class="secondary" id="manualAccountDelete">Delete</button><button class="primary" id="manualAccountSave" type="submit">Save item</button></div></form></dialog>
+  <dialog class="nickname-dialog" id="goalDialog" aria-labelledby="goalDialogTitle"><form id="goalForm"><button type="button" class="dialog-close" id="goalClose" aria-label="Close">×</button><div class="card-label">YOUR FOCUS</div><h2 id="goalDialogTitle">Add a goal</h2><p>Clarity updates progress from your connected balances automatically.</p><label>Name<input id="goalName" name="name" maxlength="60" required placeholder="e.g. Emergency fund" /></label><label>Track<select id="goalSource" name="source"><option value="cash">Cash & savings</option><option value="investments">Investments</option><option value="net_worth">Net worth</option><option value="debt">Debt payoff</option></select></label><label>Target<input id="goalTarget" name="target" type="number" min="1" step="1" inputmode="decimal" required /></label><div class="dialog-actions"><button type="button" class="secondary" id="goalCancel">Cancel</button><button class="primary" type="submit">Add goal</button></div></form></dialog>
   <dialog class="retirement-info-dialog" id="retirementInfoDialog" aria-labelledby="retirementInfoTitle">
     <form method="dialog">
       <header class="retirement-info-head">
