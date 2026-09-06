@@ -7,6 +7,12 @@
 
 Before staging sign-in is enabled, add `https://clarity-networth-staging.up.railway.app` to a dedicated Google OAuth client’s Authorized JavaScript origins, then set that client ID only in staging.
 
+## Deployments
+
+`main` is the only release branch. GitHub Actions runs the complete unit, integration, and browser suite for the exact commit, deploys it to staging, checks the live staging health endpoint and public pages, and only then deploys the same commit to production. Production is never deployed when an earlier stage fails.
+
+The Railway service source is intentionally disconnected in both environments. Direct GitHub autodeploys would bypass the staging gate. `RAILWAY_TOKEN` is stored only as a GitHub Actions repository secret; it is never an application environment variable or committed to Git.
+
 ## Backups and recovery
 
 Postgres is the primary encrypted financial-data store. The application also maintains an encrypted per-user mirror and a daily encrypted snapshot on its Railway volume. Snapshots retain 35 days and are removed with a user’s account deletion request.

@@ -1,0 +1,97 @@
+name: Release through staging
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A push to main follows one path: validate the exact commit, deploy it to the
+# isolated staging environment, smoke test the running service, then promote
+# that same commit to production. Railway's direct GitHub autodeploy must stay
+# disconnected so production cannot bypass this workflow.
+permissions:
+  contents: read
+
+concurrency:
+  group: clarity-release
+  cancel-in-progress: false
+
+env:
+  RAILWAY_PROJECT_ID: d8950f3f-2f64-408a-b183-7d5414306da1
+  RAILWAY_SERVICE: clarity-networth
+  STAGING_URL: https://clarity-networth-staging.up.railway.app
+  PRODUCTION_URL: https://clarity-networth-production.up.railway.app
+
+jobs:
+  verify:
+    name: Full test suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:ci
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+
+  staging:
+    name: Deploy and verify staging
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy this verified commit to staging
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: npx --yes @railway/cli@latest up --ci --project "$RAILWAY_PROJECT_ID" --service "$RAILWAY_SERVICE" --environment staging --message "GitHub Actions $GITHUB_SHA"
+      - name: Smoke test staging
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error --max-time 15 "$STAGING_URL/api/health" | grep -q '"ok":true'; then
+              curl --fail --silent --show-error --max-time 15 "$STAGING_URL/" >/dev/null
+              curl --fail --silent --show-error --max-time 15 "$STAGING_URL/privacy" >/dev/null
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Staging did not become healthy. Production was not deployed." >&2
+          exit 1
+
+  production:
+    name: Promote verified commit to production
+    needs: staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy the staged commit to production
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: npx --yes @railway/cli@latest up --ci --project "$RAILWAY_PROJECT_ID" --service "$RAILWAY_SERVICE" --environment production --message "GitHub Actions $GITHUB_SHA"
+      - name: Smoke test production
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error --max-time 15 "$PRODUCTION_URL/api/health" | grep -q '"ok":true'; then
+              curl --fail --silent --show-error --max-time 15 "$PRODUCTION_URL/" >/dev/null
+              curl --fail --silent --show-error --max-time 15 "$PRODUCTION_URL/privacy" >/dev/null
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Production did not become healthy. Inspect Railway and roll back if needed." >&2
+          exit 1
