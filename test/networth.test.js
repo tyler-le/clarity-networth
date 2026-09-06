@@ -132,6 +132,8 @@ test('cash flow separates actual spending details from saving and investing', ()
   ] };
   const result = spendingSummary(store, '1m', new Date('2026-09-05T12:00:00'));
   assert.equal(result.actualSpend, 2130);
+  assert.equal(result.savings, 250);
+  assert.equal(result.investments, 500);
   assert.equal(result.savingsAndInvestments, 750);
   assert.deepEqual(result.actualSpendCategories.map((row) => [row.key, row.amount]), [['housing_bills', 1800], ['food_dining', 240], ['shopping', 90]]);
 });
@@ -201,7 +203,7 @@ test('pre-tax retirement contributions remain visible without distorting take-ho
   assert.equal(result.savingsAndInvestments, 7000);
   assert.equal(result.preTaxRetirement, 7000);
   assert.equal(result.transactions.length, 2);
-  assert.equal(result.transactions.find((transaction) => transaction.name === 'Fidelity transfer').flowGroup, 'save_invest');
+  assert.equal(result.transactions.find((transaction) => transaction.name === 'Fidelity transfer').flowGroup, 'investments');
   assert.deepEqual(result.transactions.find((transaction) => transaction.flowKey === 'payroll_retirement'), {
     id: 'ira', name: 'IRA contribution', date: '2026-09-02', amount: 7000,
     category: 'Payroll retirement', bucket: 'pre_tax_retirement', flowKey: 'payroll_retirement', flowLabel: 'Payroll retirement', flowGroup: 'payroll_retirement'

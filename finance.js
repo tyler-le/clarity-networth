@@ -273,8 +273,8 @@ function spendingCategory(transaction) {
 }
 
 function cashFlowDetail(transaction) {
-  if (transaction.bucket === 'savings') return { key: 'savings', label: 'Savings', group: 'save_invest' };
-  if (transaction.bucket === 'investments') return { key: 'investments', label: 'Investments', group: 'save_invest' };
+  if (transaction.bucket === 'savings') return { key: 'savings', label: 'Save', group: 'savings' };
+  if (transaction.bucket === 'investments') return { key: 'investments', label: 'Invest', group: 'investments' };
   const primary = String(transaction.pfc_primary || '').toUpperCase();
   const detailed = String(transaction.pfc_detailed || '').toUpperCase();
   const labels = {
@@ -305,6 +305,8 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
   const transactionRows = [];
   const actualSpendCategoryMap = new Map();
   let actualSpend = 0;
+  let savings = 0;
+  let investments = 0;
   let savingsAndInvestments = 0;
   const incomeTransactions = store.transactions.filter((transaction) => {
     if (transaction.pending || transaction.excluded || transaction.bucket !== 'income') return false;
@@ -357,7 +359,8 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
   });
   for (const transaction of eligibleTransactions) {
     const amount = Number(transaction.amount);
-    if (transaction.bucket === 'savings' || transaction.bucket === 'investments') savingsAndInvestments += amount;
+    if (transaction.bucket === 'savings') { savings += amount; savingsAndInvestments += amount; }
+    else if (transaction.bucket === 'investments') { investments += amount; savingsAndInvestments += amount; }
     else actualSpend += amount;
     const flow = cashFlowDetail(transaction);
     if (flow.group === 'actual_spend') actualSpendCategoryMap.set(flow.key, { name: flow.label, key: flow.key, amount: (actualSpendCategoryMap.get(flow.key)?.amount || 0) + amount });
@@ -402,7 +405,7 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
   const income = [...monthlyIncome.values()].reduce((sum, amount) => sum + amount, 0);
   const preTaxRetirement = [...monthlyPreTaxRetirement.values()].reduce((sum, amount) => sum + amount, 0);
   const actualSpendCategories = [...actualSpendCategoryMap.values()].sort((a, b) => b.amount - a.amount);
-  return { range, startDate, endDate, completedMonths, total, income, actualSpend, actualSpendCategories, savingsAndInvestments, preTaxRetirement, monthlyAverage: total / monthCount, categories: categoryRows, topMerchants, monthly: monthlyRows, transactions: transactionRows };
+  return { range, startDate, endDate, completedMonths, total, income, actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, preTaxRetirement, monthlyAverage: total / monthCount, categories: categoryRows, topMerchants, monthly: monthlyRows, transactions: transactionRows };
 }
 
 function monthId(dateString) {

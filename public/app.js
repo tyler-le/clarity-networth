@@ -396,14 +396,16 @@ function compactCategoryLabel(name) {
 function spendingForSelectedMonth(data) {
   if (!state.spendingMonth) return data;
   const transactions = (data.transactions || []).filter((transaction) => String(transaction.date).startsWith(state.spendingMonth));
-  const planTransactions = transactions.filter((transaction) => transaction.bucket !== 'income' && transaction.bucket !== 'transfer');
+  const planTransactions = transactions.filter((transaction) => !['income', 'transfer', 'pre_tax_retirement'].includes(transaction.bucket));
   const total = planTransactions.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const income = transactions.filter((transaction) => transaction.bucket === 'income').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const actualSpend = planTransactions.filter((transaction) => !['savings', 'investments'].includes(transaction.bucket)).reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  const savings = planTransactions.filter((transaction) => transaction.bucket === 'savings').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  const investments = planTransactions.filter((transaction) => transaction.bucket === 'investments').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const savingsAndInvestments = planTransactions.filter((transaction) => ['savings', 'investments'].includes(transaction.bucket)).reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const actualSpendCategories = flowCategoryRows(planTransactions.filter((transaction) => transaction.flowGroup === 'actual_spend'));
   const preTaxRetirement = Number((data.monthly || []).find((row) => row.month === state.spendingMonth)?.pre_tax_retirement || 0);
-  return { ...data, total, income, actualSpend, actualSpendCategories, savingsAndInvestments, preTaxRetirement, monthlyAverage: total, categories: allocationRows(planTransactions), transactions };
+  return { ...data, total, income, actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, preTaxRetirement, monthlyAverage: total, categories: allocationRows(planTransactions), transactions };
 }
 
 function flowCategoryRows(transactions) {
@@ -432,8 +434,8 @@ function renderSpendingTrend(data) {
 
 function renderCashFlowSankey(data) {
   const el = $('#cashflowSankey');
-  const income = Number(data.income || 0), actualSpend = Number(data.actualSpend || 0), savingsAndInvestments = Number(data.savingsAndInvestments || 0);
-  if (!income && !actualSpend && !savingsAndInvestments) { el.innerHTML = ''; return; }
+  const income = Number(data.income || 0), actualSpend = Number(data.actualSpend || 0), savings = Number(data.savings || 0), investments = Number(data.investments || 0);
+  if (!income && !actualSpend && !savings && !investments) { el.innerHTML = ''; return; }
   // Use the rendered width as the SVG coordinate system on phones. This keeps
   // labels at a readable size instead of shrinking a desktop SVG to fit.
   const compact = el.clientWidth < 480;
@@ -448,17 +450,18 @@ function renderCashFlowSankey(data) {
   };
   const block = (x, y, w, color, label, value, category = '', isIncome = false) => `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><rect x="${x}" y="${y}" width="${w}" height="36" rx="8" fill="var(--sankey-surface)" stroke="var(--sankey-border)"/><rect x="${x}" y="${y}" width="6" height="36" rx="3" fill="${color}"/><text x="${x + 13}" y="${y + 14}" class="cashflow-label">${escapeHtml(label)}</text><text x="${x + 13}" y="${y + 28}" class="cashflow-value">${displayValue(value, isIncome)}</text></g>`;
   const flow = (fromX, fromY, toX, toY, ratio, color) => `<path class="cashflow-flow" d="M ${fromX} ${fromY} C ${fromX + (toX - fromX) * .42} ${fromY}, ${toX - (toX - fromX) * .42} ${toY}, ${toX} ${toY}" fill="none" stroke="${color}" stroke-opacity=".38" stroke-width="${Math.max(6, Math.min(30, ratio * 30))}" stroke-linecap="round"/>`;
-  const incomeY = 89, spendY = 28, saveY = 137;
+  const incomeY = 89, spendY = 18, saveY = 90, investY = 162;
   const actualCategories = (data.actualSpendCategories || []).slice(0, 4);
   let paths = flow(sourceX + sourceW, incomeY + 18, middleX, spendY + 18, actualSpend / Math.max(income, 1), 'var(--outflow)');
-  paths += flow(sourceX + sourceW, incomeY + 18, middleX, saveY + 18, savingsAndInvestments / Math.max(income, 1), 'var(--save-invest)');
+  paths += flow(sourceX + sourceW, incomeY + 18, middleX, saveY + 18, savings / Math.max(income, 1), 'var(--save)');
+  paths += flow(sourceX + sourceW, incomeY + 18, middleX, investY + 18, investments / Math.max(income, 1), 'var(--invest)');
   let categories = '';
   actualCategories.forEach((row, index) => {
     const y = 12 + index * 47;
     paths += flow(middleX + middleW, spendY + 18, destinationX, y + 18, Number(row.amount || 0) / Math.max(actualSpend, 1), 'var(--outflow-muted)');
     categories += block(destinationX, y, destinationW, 'var(--outflow-muted)', row.name, row.amount, row.key);
   });
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Take-home income split into spending and saving">${paths}${block(sourceX, incomeY, sourceW, 'var(--income)', 'Take-home income', income, 'income', true)}${block(middleX, spendY, middleW, 'var(--outflow)', 'Actual spend', actualSpend, 'actual_spend')}${block(middleX, saveY, middleW, 'var(--save-invest)', 'Save & invest', savingsAndInvestments, 'save_invest')}${categories}</svg>`;
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Take-home income split into spending, saving, and investing">${paths}${block(sourceX, incomeY, sourceW, 'var(--income)', 'Take-home income', income, 'income', true)}${block(middleX, spendY, middleW, 'var(--outflow)', 'Actual spend', actualSpend, 'actual_spend')}${block(middleX, saveY, middleW, 'var(--save)', 'Save', savings, 'savings')}${block(middleX, investY, middleW, 'var(--invest)', 'Invest', investments, 'investments')}${categories}</svg>`;
 }
 
 function renderSpending(data) {
