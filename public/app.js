@@ -163,11 +163,13 @@ function renderNetWorthInsights(snaps) {
       const newlyLinked = (state.dashboard?.investmentLinkBalances || []).filter((row) => row.date >= startDate && row.date <= endDate).reduce((sum, row) => sum + Number(row.amount || 0), 0);
       const portfolio = (state.investments?.snapshots || []).filter((row) => row.date >= startDate && row.date <= endDate);
       const investmentChange = portfolio.length > 1 ? Number(portfolio.at(-1).value || 0) - Number(portfolio[0].value || 0) : null;
-      const investmentGrowth = investmentChange == null ? null : investmentChange - contributions - newlyLinked;
+      // A connection's opening balance is neither a contribution nor market
+      // performance. Until a post-connection snapshot establishes a clean
+      // baseline, do not derive an artificial gain/loss from it.
+      const investmentGrowth = newlyLinked > 0 || investmentChange == null ? null : investmentChange - contributions;
       const contributionText = `Contributed ${fmt.format(contributions)}`;
-      const linkedText = newlyLinked ? `Newly linked ${fmt.format(newlyLinked)}` : '';
-      const growthText = investmentGrowth == null ? 'Investment growth still tracking' : `Investments ${investmentGrowth >= 0 ? 'grew' : 'fell'} ${fmt.format(Math.abs(investmentGrowth))}`;
-      $('#netWorthChangeDetail').innerHTML = `${linkedText ? `<span>${linkedText}</span><span> · </span>` : ''}<span class="positive">${contributionText}</span><span> · </span><span class="${investmentGrowth == null || investmentGrowth >= 0 ? 'positive' : 'negative'}">${growthText}</span><span> · </span><span class="${debtChange <= 0 ? 'positive' : 'negative'}">${debtText}</span>`;
+      const growthText = newlyLinked > 0 ? 'Investment growth starts after connection' : investmentGrowth == null ? 'Investment growth still tracking' : `Investments ${investmentGrowth >= 0 ? 'grew' : 'fell'} ${fmt.format(Math.abs(investmentGrowth))}`;
+      $('#netWorthChangeDetail').innerHTML = `<span class="positive">${contributionText}</span><span> · </span><span class="${investmentGrowth == null || investmentGrowth >= 0 ? 'positive' : 'negative'}">${growthText}</span><span> · </span><span class="${debtChange <= 0 ? 'positive' : 'negative'}">${debtText}</span>`;
     }
   }
   const runway = state.dashboard?.runway;
