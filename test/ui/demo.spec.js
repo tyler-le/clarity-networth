@@ -9,6 +9,19 @@ async function openDemo(page) {
   await expect(page.locator('#appShell')).toBeVisible();
 }
 
+test('a slow first load shows calm placeholders before financial data arrives', async ({ page }) => {
+  await page.route('**/api/demo-preview?range=1m', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await route.continue();
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: /explore the demo/i }).click();
+  await expect(page.locator('#loadingSkeleton')).toBeVisible();
+  await expect(page.locator('#loadingSkeleton .skeleton-hero')).toBeVisible();
+  await expect(page.locator('#netWorth')).toHaveText(/\$/);
+  await expect(page.locator('#loadingSkeleton')).toBeHidden();
+});
+
 test('a new visitor can explore the complete demo without signing in', async ({ page }) => {
   const pageErrors = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
@@ -96,6 +109,17 @@ test('net-worth history can be scrubbed and always identifies the selected date'
   await expect(page.locator('#netWorthDelta')).toContainText('Assets');
   const afterScrub = await chart.boundingBox();
   expect(afterScrub?.y).toBe(box.y);
+});
+
+test('net-worth summaries reveal supporting detail only when requested', async ({ page }) => {
+  await openDemo(page);
+  await page.locator('[data-networth-detail="assets"]').click();
+  await expect(page.locator('#networthDetailDialog')).toHaveAttribute('open', '');
+  await expect(page.locator('#networthDetailTitle')).toContainText('Assets');
+  await expect(page.locator('#networthDetailList .networth-detail-row').first()).toBeVisible();
+  await page.locator('#networthDetailClose').click();
+  await page.locator('[data-networth-detail="runway"]').click();
+  await expect(page.locator('#networthDetailTitle')).toContainText('months covered');
 });
 
 test('holding details preserve account context without crowding the overview', async ({ page }) => {

@@ -42,7 +42,16 @@ async function api(url, options = {}) {
     try {
       const response = await fetch(url, { headers: { 'content-type': 'application/json', ...(options.headers || {}) }, ...options });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+      if (!response.ok) {
+        const message = response.status === 401 ? 'Your session has expired. Please sign in again.'
+          : response.status === 429 ? 'You’ve refreshed recently. Please wait a few minutes and try again.'
+          : response.status >= 500 ? 'We couldn’t reach your financial data right now. Your saved data is still here—please try again shortly.'
+          : data.error && !/request failed|gateway|server error/i.test(data.error) ? data.error
+          : 'Something went wrong. Please try again.';
+        const error = new Error(message);
+        error.status = response.status;
+        throw error;
+      }
       return data;
     } catch (error) {
       lastError = error;
@@ -50,6 +59,7 @@ async function api(url, options = {}) {
       else break;
     }
   }
+  if (lastError instanceof TypeError) throw new Error('We couldn’t connect right now. Check your internet connection and try again.');
   throw lastError;
 }
 
@@ -70,6 +80,12 @@ function setAppStatus(message = '') {
   if (!el) return;
   el.textContent = message;
   el.classList.toggle('hidden', !message);
+}
+
+function setInitialLoading(loading) {
+  $('#loadingSkeleton')?.classList.toggle('hidden', !loading);
+  $('#appShell')?.classList.toggle('initial-loading', loading);
+  $('#appShell')?.setAttribute('aria-busy', String(loading));
 }
 
 function applyTheme(theme, persist = true) {
@@ -754,23 +770,65 @@ function renderDashboard() {
   if (!d.plaidConfigured && !state.demoPreview) showNotice('Connect an account when you’re ready to see your own data.');
 }
 
-async function loadAll() {
-  setAppStatus('Refreshing your financial picture…');
-  if (state.demoPreview) {
-    const preview = await api(`/api/demo-preview?range=${state.spendingRange}`);
-    state.dashboard = preview.dashboard;
-    state.spending = preview.spending;
-    state.investments = preview.investments;
-    state.retirement = preview.retirement;
-    renderDashboard();
-    renderSpending(preview.spending);
-    renderInvestments(preview.investments);
-    renderRetirement(preview.retirement);
-    $('#monthLabel').textContent = 'Demo workspace';
-    setAppStatus('');
+function openNetWorthDetail(kind) {
+  const dashboard = state.dashboard;
+  if (!dashboard) return;
+  const accounts = (dashboard.accounts || []).filter((account) => !account.hidden);
+  const summary = dashboard.summary || {};
+  const dialog = $('#networthDetailDialog');
+  const setDialog = ({ label, title, description, rows }) => {
+    $('#networthDetailLabel').textContent = label;
+    $('#networthDetailTitle').textContent = title;
+    $('#networthDetailDescription').textContent = description;
+    $('#networthDetailList').innerHTML = rows.length ? rows.map((row) => `<div class="networth-detail-row"><div><strong>${escapeHtml(row.name)}</strong><span>${escapeHtml(row.detail || '')}</span></div><b class="${row.negative ? 'negative' : ''}">${fmt.format(Math.abs(Number(row.value || 0)))}</b></div>`).join('') : '<p class="spending-context">There is nothing to show yet.</p>';
+    dialog.showModal();
+  };
+  if (kind === 'assets' || kind === 'liabilities') {
+    const debt = kind === 'liabilities';
+    const rows = accounts.filter((account) => isDebt(account) === debt).sort((a, b) => Math.abs(Number(b.current_balance || 0)) - Math.abs(Number(a.current_balance || 0))).map((account) => ({ name: account.nickname || account.name || 'Account', detail: `${account.institution_name || 'Connected account'} · ${accountDescriptor(account.subtype || account.type)}`, value: account.current_balance, negative: debt }));
+    setDialog({
+      label: debt ? 'WHAT YOU OWE' : 'WHAT YOU OWN', title: debt ? `Liabilities · ${fmt.format(summary.liabilities || 0)}` : `Assets · ${fmt.format(summary.assets || 0)}`,
+      description: debt ? 'These are current balances you owe across connected credit and loan accounts.' : 'These are current balances across your connected cash, savings, investment, and other asset accounts.', rows
+    });
     return;
   }
+  if (kind === 'runway') {
+    const runway = dashboard.runway || {};
+    const rows = accounts.filter((account) => ['Cash', 'Savings'].includes(accountGroup(account))).sort((a, b) => Number(b.current_balance || 0) - Number(a.current_balance || 0)).map((account) => ({ name: account.nickname || account.name || 'Account', detail: `${account.institution_name || 'Connected account'} · ${accountDescriptor(account.subtype || account.type)}`, value: account.current_balance }));
+    rows.push({ name: 'Essential monthly spending', detail: 'Recent fixed costs used for this estimate', value: runway.essentialMonthly || 0 });
+    setDialog({ label: 'CASH RUNWAY', title: runway.essentialMonthly ? `${Math.min(99, Number(runway.runwayMonths || 0)).toFixed(1)} months covered` : 'Cash runway', description: runway.essentialMonthly ? 'This estimate divides your cash and savings by recent essential monthly spending. It is a planning guide, not a prediction.' : 'Add more fixed-cost history to estimate how long your cash and savings could cover essentials.', rows });
+    return;
+  }
+  const snapshots = visibleSnapshots(dashboard.snapshots || []);
+  const first = snapshots[0], last = snapshots.at(-1);
+  const netChange = first && last ? Number(last.net_worth || 0) - Number(first.net_worth || 0) : 0;
+  const assetChange = first && last ? Number(last.assets || 0) - Number(first.assets || 0) : 0;
+  const debtChange = first && last ? Number(last.liabilities || 0) - Number(first.liabilities || 0) : 0;
+  setDialog({ label: 'WHAT CHANGED', title: first && last ? `${netChange >= 0 ? '+' : '−'}${fmt.format(Math.abs(netChange))} over this timeframe` : 'Still tracking changes', description: first && last ? 'This compares the first and most recent balance snapshots in the selected timeframe. Investment contribution and growth details appear as more verified history becomes available.' : 'A second balance snapshot will unlock a change breakdown.', rows: first && last ? [
+    { name: 'Assets', detail: assetChange >= 0 ? 'Increase in what you own' : 'Decrease in what you own', value: assetChange, negative: assetChange < 0 },
+    { name: 'Debt', detail: debtChange <= 0 ? 'Amount you paid down' : 'Increase in what you owe', value: debtChange, negative: debtChange > 0 }
+  ] : [] });
+}
+
+async function loadAll() {
+  const shouldShowSkeleton = !state.dashboard;
+  let skeletonTimer;
+  if (shouldShowSkeleton) skeletonTimer = setTimeout(() => setInitialLoading(true), 180);
+  setAppStatus('Refreshing your financial picture…');
   try {
+    if (state.demoPreview) {
+      const preview = await api(`/api/demo-preview?range=${state.spendingRange}`);
+      state.dashboard = preview.dashboard;
+      state.spending = preview.spending;
+      state.investments = preview.investments;
+      state.retirement = preview.retirement;
+      renderDashboard();
+      renderSpending(preview.spending);
+      renderInvestments(preview.investments);
+      renderRetirement(preview.retirement);
+      $('#monthLabel').textContent = 'Demo workspace';
+      return;
+    }
     const [dashboard, spending, investments, retirement] = await Promise.all([api('/api/dashboard'), api(`/api/spending?range=${state.spendingRange}`), api('/api/investments'), api('/api/retirement')]);
     state.dashboard = dashboard;
     state.spending = spending;
@@ -783,6 +841,8 @@ async function loadAll() {
     renderRetirement(retirement);
     $('#monthLabel').textContent = 'Account overview';
   } finally {
+    clearTimeout(skeletonTimer);
+    setInitialLoading(false);
     setAppStatus('');
   }
 }
@@ -837,10 +897,10 @@ async function syncAccounts() {
     const result = await api('/api/sync', { method: 'POST', body: '{}' });
     await loadAll();
     const failed = result.results?.filter((r) => !r.ok) || [];
-    showNotice(failed.length ? `Synced with ${failed.length} connection error(s).` : 'Accounts synced.', failed.length ? 'warn' : 'success');
+    showNotice(failed.length ? 'Some accounts could not refresh. Your existing data is unchanged; please try again later.' : 'Accounts synced.', failed.length ? 'warn' : 'success');
     $('#syncStatus').textContent = `Last sync ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
   } catch (error) {
-    showNotice(error.message);
+    showNotice('We couldn’t refresh your accounts right now. Your existing data is still available; please try again shortly.');
   } finally { buttons.forEach((button) => { button.disabled = false; button.textContent = '↻ Sync accounts'; }); }
 }
 
@@ -957,6 +1017,8 @@ $('#retirementPath').addEventListener('click', (event) => {
   if (milestone) openRetirementMilestone(milestone.dataset.retirementMilestone);
 });
 $('#retirementInfoClose').addEventListener('click', () => $('#retirementInfoDialog').close());
+$$('[data-networth-detail]').forEach((button) => button.addEventListener('click', () => openNetWorthDetail(button.dataset.networthDetail)));
+$('#networthDetailClose').addEventListener('click', () => $('#networthDetailDialog').close());
 $('#accountGrid').addEventListener('click', (event) => {
   const groupButton = event.target.closest('[data-account-group]');
   if (groupButton) {
