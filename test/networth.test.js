@@ -47,6 +47,7 @@ test('timeframe filtering only returns snapshots within the selected range', () 
   const anchor = new Date('2025-09-05T12:00:00');
   assert.deepEqual(filterSnapshots(snapshots, 'ytd', anchor).map((snapshot) => snapshot.date), ['2025-01-01', '2025-09-05']);
   assert.deepEqual(filterSnapshots(snapshots, '1y', anchor).map((snapshot) => snapshot.date), ['2024-12-31', '2025-01-01', '2025-09-05']);
+  assert.deepEqual(filterSnapshots([{ date: '2025-03-29' }, { date: '2025-03-30' }, { date: '2025-09-05' }], '6m', anchor).map((snapshot) => snapshot.date), ['2025-03-30', '2025-09-05']);
 });
 
 test('scrubbing clamps to endpoints and selects the nearest data point', () => {

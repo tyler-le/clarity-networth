@@ -173,7 +173,7 @@ function renderNetWorthInsights(snaps) {
 }
 
 function netWorthRangeLabel(range) {
-  return ({ ytd: 'Year to date', '1y': '1 year', '3y': '3 years', '5y': '5 years', all: 'All history' })[range] || 'Year to date';
+  return ({ ytd: 'Year to date', '6m': '6 months', '1y': '1 year', '3y': '3 years', '5y': '5 years', all: 'All history' })[range] || 'Year to date';
 }
 
 function visibleSnapshots(snapshots) {
@@ -538,7 +538,7 @@ function portfolioSnapshots(data) {
 }
 
 function investmentRangeLabel(range) {
-  return ({ '1m': 'last month', '3m': 'last 3 months', ytd: 'year to date', '1y': 'last year', all: 'all history' })[range] || 'last year';
+  return ({ '1m': 'last month', '3m': 'last 3 months', '6m': 'last 6 months', ytd: 'year to date', '1y': 'last year', all: 'all history' })[range] || 'last year';
 }
 
 function renderPortfolioChart(data) {

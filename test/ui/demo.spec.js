@@ -79,6 +79,8 @@ test('payroll contributions open their own cash-flow activity', async ({ page })
 
 test('net-worth history can be scrubbed and always identifies the selected date', async ({ page }) => {
   await openDemo(page);
+  await page.locator('[data-networth-range="6m"]').click();
+  await expect(page.locator('[data-networth-range="6m"]')).toHaveClass(/active/);
   const chart = page.locator('#netWorthChart');
   await expect(chart.locator('svg')).toBeVisible();
   const box = await chart.boundingBox();
@@ -117,6 +119,9 @@ test('investment timeframes keep the portfolio context in sync', async ({ page }
   await expect(page.locator('[data-investment-range="3m"]')).toHaveClass(/active/);
   await expect(page.locator('#investmentContext')).toContainText('last 3 months');
   await expect(page.locator('#investmentHoldingsInsight')).toContainText('last 3 months selected');
+  await page.locator('[data-investment-range="6m"]').click();
+  await expect(page.locator('[data-investment-range="6m"]')).toHaveClass(/active/);
+  await expect(page.locator('#investmentContext')).toContainText('last 6 months');
 });
 
 test('retirement milestones explain the planning terms on demand', async ({ page }) => {

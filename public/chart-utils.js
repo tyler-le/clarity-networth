@@ -4,6 +4,7 @@ export function netWorthRangeBounds(range, anchor = new Date()) {
   const start = new Date(end);
   if (range === '1m') start.setMonth(start.getMonth() - 1);
   else if (range === '3m') start.setMonth(start.getMonth() - 3);
+  else if (range === '6m') start.setMonth(start.getMonth() - 6);
   else if (range === 'ytd') start.setMonth(0, 1);
   else if (range === '1y') start.setFullYear(start.getFullYear() - 1);
   else if (range === '3y') start.setFullYear(start.getFullYear() - 3);
