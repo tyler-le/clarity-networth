@@ -97,7 +97,7 @@ test('cash-flow diagram can switch between dollars and take-home-income percenta
 test('cash-flow diagram stays readable on mobile and expands in-app', async ({ page }) => {
   await openDemo(page);
   await page.locator('.mobile-nav [data-view="spending"]').click();
-  await expect(page.locator('#cashflowSankey')).toContainText('Income');
+  await expect(page.locator('#cashflowSankey')).toContainText('Take-home');
   await page.locator('#cashflowExpand').click();
   await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
   await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
