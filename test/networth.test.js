@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, reconstructInvestmentHistory, investmentSummary, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
+import { calculateFire, cashRunway, classifyTransaction, financialInsight, hideDuplicateAccounts, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
 import { normalizeCandles } from '../market-data.js';
 import { filterSnapshots, scrubIndex } from '../public/chart-utils.js';
 
@@ -136,6 +136,22 @@ test('cash flow separates actual spending details from saving and investing', ()
   assert.equal(result.investments, 500);
   assert.equal(result.savingsAndInvestments, 750);
   assert.deepEqual(result.actualSpendCategories.map((row) => [row.key, row.amount]), [['housing_bills', 1800], ['food_dining', 240], ['shopping', 90]]);
+});
+
+test('recurring charge awareness identifies cadence and a meaningful increase', () => {
+  const store = { transactions: [
+    { date: '2026-06-03', amount: 15, bucket: 'guilt_free', merchant_name: 'Stream Plus' },
+    { date: '2026-07-03', amount: 15, bucket: 'guilt_free', merchant_name: 'Stream Plus' },
+    { date: '2026-08-03', amount: 20, bucket: 'guilt_free', merchant_name: 'Stream Plus' },
+    { date: '2026-06-15', amount: 1400, bucket: 'fixed', merchant_name: 'Rent' },
+    { date: '2026-07-15', amount: 1400, bucket: 'fixed', merchant_name: 'Rent' },
+    { date: '2026-08-15', amount: 1400, bucket: 'fixed', merchant_name: 'Rent' }
+  ] };
+  const recurring = recurringCharges(store, new Date('2026-09-05T12:00:00'));
+  assert.deepEqual(recurring.recurring.map((charge) => [charge.name, charge.cadence]), [['Rent', 'monthly'], ['Stream Plus', 'monthly']]);
+  assert.equal(recurring.increases[0].name, 'Stream Plus');
+  assert.ok(Math.abs(recurring.increases[0].change - (20 / 15 - 1)) < 1e-9);
+  assert.equal(financialInsight(store, new Date('2026-09-05T12:00:00')).title, 'Stream Plus increased');
 });
 
 test('portfolio history keeps one verified investment value for each day', () => {

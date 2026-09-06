@@ -90,7 +90,7 @@
           </article>
         </div>
         <div class="networth-insights">
-          <article class="card networth-insight change-insight"><div class="card-label">What changed</div><strong id="netWorthChange">—</strong><p id="netWorthChangeDetail">Your balance movement will appear here.</p></article>
+          <button class="card networth-insight change-insight insight-card" id="weeklyInsight" type="button"><div class="card-label">Worth noticing</div><strong id="weeklyInsightTitle">—</strong><p id="weeklyInsightDetail">Your personalized insight will appear here.</p><span aria-hidden="true">›</span></button>
           <article class="card networth-insight runway-insight"><div><div class="card-label">Cash runway</div><strong id="cashRunway">—</strong><p id="cashRunwayDetail">Based on cash and essential spending.</p></div><span class="runway-mark" aria-hidden="true">◒</span></article>
         </div>
 
@@ -123,6 +123,7 @@
           <div class="cashflow-sankey" id="cashflowSankey" aria-label="Cash flow diagram"></div>
           <button class="cashflow-payroll hidden" id="cashflowPreTax" type="button" aria-live="polite"></button>
         </article>
+        <details class="card recurring-card hidden" id="recurringCharges"><summary><span>Recurring charges</span><small id="recurringHint"></small></summary><div id="recurringList"></div></details>
         <article class="card spending-trend-card"><div class="card-top"><div><div class="card-label">Monthly cash flow</div></div><div class="trend-key" aria-label="Chart legend"><span><i class="income"></i>Income</span><span><i class="spend"></i>Money out</span></div></div><div class="trend-detail" id="trendDetail" aria-live="polite"></div><div class="spending-trend" id="spendingTrend"></div></article>
         <details class="card spending-transactions" id="spendingTransactionsPanel">
           <summary><span>View cash flow activity</span><small id="spendingTransactionCount"></small></summary>

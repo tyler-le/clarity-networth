@@ -142,6 +142,9 @@ function restoreNetWorthHero() {
 }
 
 function renderNetWorthInsights(snaps) {
+  const insight = state.dashboard?.insight;
+  $('#weeklyInsightTitle').textContent = insight?.title || 'Still learning your pattern';
+  $('#weeklyInsightDetail').textContent = insight?.detail || 'A useful signal will appear after more activity arrives.';
   const label = netWorthRangeLabel(state.networthRange).toLowerCase();
   if (snaps.length < 2) {
     $('#netWorthChange').textContent = 'Still tracking';
@@ -170,6 +173,16 @@ function renderNetWorthInsights(snaps) {
   }
   $('#cashRunway').textContent = `${Math.min(99, Number(runway.runwayMonths || 0)).toFixed(1)} months`;
   $('#cashRunwayDetail').textContent = `${fmt.format(Number(runway.cash || 0))} in cash & savings · ${fmt.format(Number(runway.essentialMonthly))}/mo essentials`;
+}
+
+function renderRecurringCharges(recurring = {}) {
+  const panel = $('#recurringCharges');
+  const rows = recurring.recurring || [];
+  panel.classList.toggle('hidden', !rows.length);
+  if (!rows.length) return;
+  const upcoming = recurring.upcoming?.[0];
+  $('#recurringHint').textContent = upcoming ? `Next likely · ${new Date(`${upcoming.nextDate}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : `${rows.length} tracked`;
+  $('#recurringList').innerHTML = rows.map((charge) => `<button type="button" data-recurring-charge="${escapeHtml(charge.key)}"><span>${escapeHtml(charge.name)}<small>${charge.cadence} · ${upcoming?.key === charge.key ? 'likely next' : `last ${new Date(`${charge.lastDate}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}</small></span><strong>${fmt.format(charge.amount)}</strong></button>`).join('');
 }
 
 function netWorthRangeLabel(range) {
@@ -489,6 +502,7 @@ function renderSpending(data) {
   const selectedMonthLabel = state.spendingMonth && new Date(`${state.spendingMonth}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   $('#spendingContext').textContent = total || income ? (selectedMonthLabel || rangeLabel) : `No posted cash flow for ${selectedMonthLabel || rangeLabel}. It can take a little time to arrive after connecting.`;
   renderCashFlowSankey(selected);
+  renderRecurringCharges(state.dashboard?.recurring);
   // The Sankey now owns the category story; the older donut is intentionally
   // absent from the simplified cash-flow experience.
   if (!$('#spendingDonut')) { renderSpendingTransactions(selected); return; }
@@ -1032,6 +1046,7 @@ $('#cashflowSankey').addEventListener('keydown', (event) => {
   openSpendingCategory(target.dataset.cashflowCategory);
 });
 $('#cashflowPreTax').addEventListener('click', () => openSpendingCategory('payroll_retirement'));
+$('#weeklyInsight').addEventListener('click', () => setView(state.dashboard?.insight?.action || 'spending'));
 function donutSelection(event, element, rows) {
   const rect = element.getBoundingClientRect();
   const x = event.clientX - rect.left - rect.width / 2;

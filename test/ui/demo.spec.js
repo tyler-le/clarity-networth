@@ -17,12 +17,14 @@ test('a new visitor can explore the complete demo without signing in', async ({ 
   await expect(page.getByRole('heading', { name: 'Net Worth' })).toBeVisible();
   await expect(page.locator('#netWorth')).toHaveText(/\$/);
   await expect(page.locator('#netWorthChart svg')).toBeVisible();
+  await expect(page.locator('#weeklyInsight')).toBeVisible();
 
   await page.locator('.mobile-nav [data-view="spending"]').click();
   await expect(page.getByRole('heading', { name: 'Cash flow' })).toBeVisible();
   await page.locator('[data-spending-range="1y"]').click();
   await expect(page.locator('.trend-column')).toHaveCount(12);
   await expect(page.locator('#cashflowSankey svg')).toBeVisible();
+  await expect(page.locator('#recurringCharges')).toBeVisible();
 
   await page.locator('.mobile-nav [data-view="investments"]').click();
   await expect(page.getByRole('heading', { name: 'Investments' })).toBeVisible();
