@@ -93,7 +93,7 @@ test('monthly spending keeps income separate for comparison', () => {
   const result = spendingSummary(store, '1m', new Date('2026-09-05T12:00:00'));
   assert.equal(result.total, 900);
   assert.equal(result.income, 4200);
-  assert.deepEqual(result.monthly, [{ month: '2026-09', amount: 900, income: 4200 }]);
+  assert.deepEqual(result.monthly, [{ month: '2026-09', amount: 900, income: 4200, pre_tax_retirement: 0 }]);
   assert.deepEqual(result.transactions.find((transaction) => transaction.category === 'Income'), {
     id: undefined, name: 'Payroll', date: '2026-09-01', amount: 4200, category: 'Income', bucket: 'income'
   });
@@ -153,15 +153,16 @@ test('demo mode provides seven years of usable account and spending history', ()
   assert.ok(store.accounts.some((account) => account.type === 'loan'));
 });
 
-test('a matching bank transfer and verified retirement contribution are not double-counted', () => {
+test('pre-tax retirement contributions remain visible without distorting take-home cash flow', () => {
   const store = { transactions: [
     { id: 'bank', date: '2026-09-01', amount: 7000, bucket: 'investments', name: 'Fidelity transfer' },
     { id: 'ira', date: '2026-09-02', amount: 7000, bucket: 'investments', name: 'IRA contribution', source: 'investment_transaction' }
   ] };
   const result = spendingSummary(store, '1m', new Date('2026-09-05T12:00:00'));
   assert.equal(result.total, 7000);
+  assert.equal(result.preTaxRetirement, 7000);
   assert.equal(result.transactions.length, 1);
-  assert.equal(result.transactions[0].name, 'IRA contribution');
+  assert.equal(result.transactions[0].name, 'Fidelity transfer');
 });
 
 test('fixed costs stay limited to essential obligations', () => {

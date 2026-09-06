@@ -262,6 +262,7 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
   const merchants = new Map();
   const monthly = new Map();
   const monthlyIncome = new Map();
+  const monthlyPreTaxRetirement = new Map();
   const transactionRows = [];
   const incomeTransactions = store.transactions.filter((transaction) => {
     if (transaction.pending || transaction.excluded || transaction.bucket !== 'income') return false;
@@ -279,14 +280,22 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
       bucket: 'income'
     });
   }
-  const eligibleTransactions = store.transactions.filter((transaction) => {
-    if (transaction.pending || transaction.excluded || transaction.bucket === 'transfer' || Number(transaction.amount || 0) <= 0) return false;
+  // Payroll retirement deferrals are pre-tax: they never arrive in a checking
+  // account, so including them in money out would compare gross savings with
+  // net take-home income. Keep them visible, but outside cash flow.
+  const preTaxRetirementTransactions = store.transactions.filter((transaction) => {
+    if (transaction.pending || transaction.excluded || transaction.source !== 'investment_transaction' || transaction.bucket !== 'investments') return false;
     return transaction.date >= startDate && transaction.date <= endDate;
   });
-  const verifiedInvestmentContributions = eligibleTransactions.filter((transaction) => transaction.source === 'investment_transaction' && transaction.bucket === 'investments');
+  for (const transaction of preTaxRetirementTransactions) {
+    const month = String(transaction.date).slice(0, 7);
+    monthlyPreTaxRetirement.set(month, (monthlyPreTaxRetirement.get(month) || 0) + Math.abs(Number(transaction.amount || 0)));
+  }
+  const eligibleTransactions = store.transactions.filter((transaction) => {
+    if (transaction.pending || transaction.excluded || transaction.bucket === 'transfer' || (transaction.source === 'investment_transaction' && transaction.bucket === 'investments') || Number(transaction.amount || 0) <= 0) return false;
+    return transaction.date >= startDate && transaction.date <= endDate;
+  });
   for (const transaction of eligibleTransactions) {
-    const matchingVerifiedContribution = transaction.source !== 'investment_transaction' && transaction.bucket === 'investments' && verifiedInvestmentContributions.some((contribution) => Math.abs(Number(contribution.amount) - Number(transaction.amount)) < .01 && Math.abs(new Date(`${contribution.date}T12:00:00`) - new Date(`${transaction.date}T12:00:00`)) <= 7 * 86400000);
-    if (matchingVerifiedContribution) continue;
     const amount = Number(transaction.amount);
     const category = spendingCategory(transaction);
     categories.set(category, (categories.get(category) || 0) + amount);
@@ -320,11 +329,12 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 3);
   const monthCount = range === '1m' ? 1 : range === '3m' ? 3 : range === 'ytd' ? anchor.getMonth() + 1 : 12;
-  const monthlyRows = [...new Set([...monthly.keys(), ...monthlyIncome.keys()])]
-    .map((month) => ({ month, amount: monthly.get(month) || 0, income: monthlyIncome.get(month) || 0 }))
+  const monthlyRows = [...new Set([...monthly.keys(), ...monthlyIncome.keys(), ...monthlyPreTaxRetirement.keys()])]
+    .map((month) => ({ month, amount: monthly.get(month) || 0, income: monthlyIncome.get(month) || 0, pre_tax_retirement: monthlyPreTaxRetirement.get(month) || 0 }))
     .sort((a, b) => a.month.localeCompare(b.month));
   const income = [...monthlyIncome.values()].reduce((sum, amount) => sum + amount, 0);
-  return { range, startDate, endDate, total, income, monthlyAverage: total / monthCount, categories: categoryRows, topMerchants, monthly: monthlyRows, transactions: transactionRows };
+  const preTaxRetirement = [...monthlyPreTaxRetirement.values()].reduce((sum, amount) => sum + amount, 0);
+  return { range, startDate, endDate, total, income, preTaxRetirement, monthlyAverage: total / monthCount, categories: categoryRows, topMerchants, monthly: monthlyRows, transactions: transactionRows };
 }
 
 function monthId(dateString) {

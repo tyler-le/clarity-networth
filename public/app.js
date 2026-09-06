@@ -398,7 +398,8 @@ function spendingForSelectedMonth(data) {
   const planTransactions = transactions.filter((transaction) => transaction.bucket !== 'income' && transaction.bucket !== 'transfer');
   const total = planTransactions.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const income = transactions.filter((transaction) => transaction.bucket === 'income').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
-  return { ...data, total, income, monthlyAverage: total, categories: allocationRows(planTransactions), transactions };
+  const preTaxRetirement = Number((data.monthly || []).find((row) => row.month === state.spendingMonth)?.pre_tax_retirement || 0);
+  return { ...data, total, income, preTaxRetirement, monthlyAverage: total, categories: allocationRows(planTransactions), transactions };
 }
 
 function renderSpendingTrend(data) {
@@ -451,11 +452,12 @@ function renderSpending(data) {
   const selected = spendingForSelectedMonth(data);
   const total = Number(selected.total || 0);
   const income = Number(selected.income || 0);
+  const preTaxRetirement = Number(selected.preTaxRetirement || 0);
   const remaining = income - total;
   $('#spendingTotal').textContent = fmt.format(Math.abs(remaining));
   $('#cashflowHeadline').textContent = remaining >= 0 ? 'Left after spending' : 'Over income';
   $('#cashflowHeadline').className = `cashflow-headline ${remaining >= 0 ? 'positive' : 'negative'}`;
-  $('#spendingSummary').innerHTML = `<span class="income-flow"><i class="income"></i>Income <strong>${fmt.format(income)}</strong></span><span class="spend-flow"><i class="spend"></i>Money out <strong>${fmt.format(total)}</strong></span>`;
+  $('#spendingSummary').innerHTML = `<span class="income-flow"><i class="income"></i>Income <strong>${fmt.format(income)}</strong></span><span class="spend-flow"><i class="spend"></i>Money out <strong>${fmt.format(total)}</strong></span>${preTaxRetirement ? `<span class="retirement-flow"><i></i>Pre-tax retirement <strong>${fmt.format(preTaxRetirement)}</strong></span>` : ''}`;
   const rangeLabel = ({ '1m': 'this month', '3m': 'over the last 3 months', ytd: 'year to date', '1y': 'over the last year' })[data.range] || 'this month';
   const selectedMonthLabel = state.spendingMonth && new Date(`${state.spendingMonth}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   $('#spendingContext').textContent = total || income ? (selectedMonthLabel || ({ '1m': 'This month', '3m': 'Last 3 months', ytd: 'Year to date', '1y': 'Last year' })[data.range] || rangeLabel) : `No posted cash flow ${selectedMonthLabel || rangeLabel}. It can take a little time to arrive after connecting.`;
