@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, investmentContributions, investmentLinkBalances, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
+import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, historicalTicker, investmentContributions, investmentLinkBalances, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
 import { normalizeCandles } from '../market-data.js';
 import { filterSnapshots, scrubIndex } from '../public/chart-utils.js';
 
@@ -55,6 +55,11 @@ test('scrubbing clamps to endpoints and selects the nearest data point', () => {
   assert.equal(scrubIndex({ ...base, clientX: 50 }), 0);
   assert.equal(scrubIndex({ ...base, clientX: 250 }), 2);
   assert.equal(scrubIndex({ ...base, clientX: 500 }), 4);
+});
+
+test('historical pricing resolves Vanguard target retirement display symbols', () => {
+  assert.equal(historicalTicker('VANGUARD.TARGET.2065', 'Vanguard Target 2065'), 'VLXVX');
+  assert.equal(historicalTicker('VTI', 'Vanguard Total Stock Market ETF'), 'VTI');
 });
 
 test('duplicate linked accounts with the same verified identity are hidden, not deleted', () => {

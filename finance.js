@@ -105,6 +105,19 @@ export function snapshotInvestments(store, snapshotDate = new Date().toISOString
   if (store.investment_snapshots.length > 3650) store.investment_snapshots = store.investment_snapshots.slice(-3650);
 }
 
+// Some institutions send a display label in place of a tradable target-date
+// fund ticker. Historical pricing needs a real ticker to build a timeline.
+export function historicalTicker(ticker, securityName = '') {
+  const rawTicker = String(ticker || '').trim();
+  const text = `${rawTicker} ${securityName}`.toLowerCase();
+  const targetRetirementTickers = {
+    2020: 'VTWNX', 2025: 'VTTVX', 2030: 'VTHRX', 2035: 'VTTHX', 2040: 'VFORX',
+    2045: 'VTIVX', 2050: 'VFIFX', 2055: 'VFFVX', 2060: 'VTTSX', 2065: 'VLXVX', 2070: 'VSVNX'
+  };
+  const match = text.match(/vanguard\s+target(?:\s+retirement)?\s+(20\d{2})/i);
+  return match && targetRetirementTickers[match[1]] ? targetRetirementTickers[match[1]] : rawTicker;
+}
+
 function nearestPrice(prices, date) {
   return Object.keys(prices || {}).filter((day) => day <= date).sort().at(-1) ? Number(prices[Object.keys(prices).filter((day) => day <= date).sort().at(-1)]) : null;
 }

@@ -7,7 +7,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './store.js';
 import { databaseEnabled, deleteDatabaseStore, migrateDatabase, readDatabaseStore, recordAuditEvent, writeDatabaseStore } from './database.js';
-import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, investmentContributions, investmentLinkBalances, investmentSummary, reconstructInvestmentHistory, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
+import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, historicalTicker, investmentContributions, investmentLinkBalances, investmentSummary, reconstructInvestmentHistory, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
 import { loadHistoricalPrices } from './market-data.js';
 import { plaidConfigured, plaidPost } from './plaid.js';
 
@@ -228,7 +228,7 @@ async function refreshAccountsForItem(store, item) {
         store.positions.push({
           id,
           item_id: item.id, account_id: holding.account_id, security_id: holding.security_id,
-          name: security.name || holding.security_id, ticker: security.ticker_symbol || null,
+          name: security.name || holding.security_id, ticker: historicalTicker(security.ticker_symbol, security.name),
           type: security.type || 'other', asset_class_override: store.position_overrides?.[id] || null, quantity: Number(holding.quantity || 0),
           price: Number(holding.institution_price || 0), value: Number(holding.institution_value || 0),
           cost_basis: holding.cost_basis == null ? null : Number(holding.cost_basis), updated_at: new Date().toISOString(), demo: false
@@ -345,6 +345,7 @@ async function backfillInvestmentHistory(store) {
   start.setFullYear(start.getFullYear() - historyYears);
   const startDate = start.toISOString().slice(0, 10);
   const securities = new Map();
+  for (const position of store.positions || []) position.ticker = historicalTicker(position.ticker, position.name);
   for (const position of store.positions || []) if (position.ticker && position.type !== 'cash') securities.set(position.ticker, { ticker: position.ticker, type: position.type });
   for (const transaction of store.investment_transactions || []) if (transaction.ticker && transaction.security_type !== 'cash') securities.set(transaction.ticker, { ticker: transaction.ticker, type: transaction.security_type });
   store.market_prices ||= {};
