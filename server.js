@@ -67,7 +67,15 @@ app.use((_req, res, next) => {
   if (isProduction) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   next();
 });
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders(res, filePath) {
+    // The installed shell must revalidate every time it opens. The service
+    // worker keeps a separate offline fallback, never financial API responses.
+    if (/\/(index\.html|app\.js|styles\.css|chart-utils\.js|sw\.js|manifest\.webmanifest)$/.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    }
+  }
+}));
 
 async function loadStore(user) {
   const key = user?.storageKey;
