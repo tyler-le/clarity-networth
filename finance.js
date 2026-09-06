@@ -357,7 +357,9 @@ export function monthlyReview(store, anchorDate = new Date()) {
 }
 
 export function connectionHealth(store, now = new Date()) {
-  const cutoff = new Date(now).getTime() - 36 * 60 * 60 * 1000;
+  // A daily connection can be temporarily delayed by an institution. Avoid
+  // turning ordinary provider latency into an alarming user-facing alert.
+  const staleCutoff = new Date(now).getTime() - 96 * 60 * 60 * 1000;
   return (store.items || []).filter((item) => !item.demo).map((item) => {
     // Connections created before automatic syncing did not have a
     // `last_synced_at` field. Their account records still have a trustworthy
@@ -371,11 +373,15 @@ export function connectionHealth(store, now = new Date()) {
     const inferredAt = accountUpdates.length ? Math.max(...accountUpdates) : 0;
     const explicitAt = item.last_synced_at ? new Date(item.last_synced_at).getTime() : 0;
     const syncedAt = Number.isFinite(explicitAt) && explicitAt > 0 ? explicitAt : inferredAt;
-    const state = item.last_sync_error_at ? 'attention' : syncedAt < cutoff ? 'stale' : 'healthy';
+    const failureCount = Number(item.sync_failure_count || (item.last_sync_error_at ? 1 : 0));
+    // Escalate only after three consecutive full-refresh failures. A single
+    // failed daily attempt is retried automatically and should stay quiet.
+    const state = failureCount >= 3 ? 'attention' : syncedAt < staleCutoff ? 'stale' : 'healthy';
     return {
       id: item.id,
       institution_name: item.institution_name,
       last_synced_at: item.last_synced_at || (syncedAt ? new Date(syncedAt).toISOString() : null),
+      failure_count: failureCount,
       state
     };
   });

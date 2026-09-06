@@ -331,18 +331,20 @@ test('monthly review surfaces only a large, repeatable category deviation', () =
   assert.equal(quiet.outlier, null);
 });
 
-test('connection health stays quiet until a refresh is stale or fails', () => {
+test('connection health stays quiet through transient delays and failures', () => {
   const now = new Date('2026-09-06T12:00:00Z');
   const health = connectionHealth({ items: [
     { id: 'fresh', institution_name: 'Fresh', last_synced_at: '2026-09-05T10:00:00Z' },
-    { id: 'late', institution_name: 'Late', last_synced_at: '2026-09-04T10:00:00Z' },
-    { id: 'failed', institution_name: 'Failed', last_synced_at: '2026-09-06T10:00:00Z', last_sync_error_at: '2026-09-06T11:00:00Z' },
+    { id: 'briefly-late', institution_name: 'Briefly late', last_synced_at: '2026-09-04T10:00:00Z' },
+    { id: 'late', institution_name: 'Late', last_synced_at: '2026-09-01T10:00:00Z' },
+    { id: 'failed-once', institution_name: 'Failed once', last_synced_at: '2026-09-06T10:00:00Z', last_sync_error_at: '2026-09-06T11:00:00Z' },
+    { id: 'failed', institution_name: 'Failed', last_synced_at: '2026-09-02T10:00:00Z', last_sync_error_at: '2026-09-06T11:00:00Z', sync_failure_count: 3 },
     { id: 'legacy', institution_name: 'Legacy' }
   ], accounts: [
     { item_id: 'legacy', updated_at: '2026-09-06T11:30:00Z' }
   ] }, now);
-  assert.deepEqual(health.map((item) => item.state), ['healthy', 'stale', 'attention', 'healthy']);
-  assert.equal(health[3].last_synced_at, '2026-09-06T11:30:00.000Z');
+  assert.deepEqual(health.map((item) => item.state), ['healthy', 'healthy', 'stale', 'healthy', 'attention', 'healthy']);
+  assert.equal(health[5].last_synced_at, '2026-09-06T11:30:00.000Z');
 });
 
 test('retirement presets calculate coast, lean, standard, fat, and a projected retirement value', () => {

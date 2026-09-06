@@ -276,6 +276,7 @@ async function syncItem(store, item) {
   try { await syncRetirementContributionsForItem(store, item); } catch (error) { console.warn('Investment contribution sync unavailable:', error.message); }
   item.last_synced_at = new Date().toISOString();
   delete item.last_sync_error_at;
+  delete item.sync_failure_count;
 }
 
 async function syncStoreItems(store) {
@@ -287,6 +288,7 @@ async function syncStoreItems(store) {
     } catch (error) {
       console.warn(`Account refresh failed for ${item.institution_name}:`, error.message);
       item.last_sync_error_at = new Date().toISOString();
+      item.sync_failure_count = Number(item.sync_failure_count || 0) + 1;
       results.push({ item: item.institution_name, ok: false });
     }
   }
