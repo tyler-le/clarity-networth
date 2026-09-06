@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentLinkBalances, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
+import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentLinkBalances, reconstructInvestmentHistory, reconstructNetWorthHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
 import { normalizeCandles } from '../market-data.js';
 import { filterSnapshots, scrubIndex } from '../public/chart-utils.js';
 
@@ -201,6 +201,25 @@ test('investment reconstruction reverses later purchases and uses historical clo
   assert.equal(history.find((snapshot) => snapshot.date === '2026-09-01').value, 800);
   assert.equal(history.at(-1).value, 1100);
   assert.ok(history.every((snapshot) => snapshot.source === 'reconstructed'));
+});
+
+test('net-worth reconstruction works backward from supported account ledgers', () => {
+  const history = reconstructNetWorthHistory({
+    accounts: [
+      { plaid_account_id: 'checking', type: 'depository', current_balance: 1000 },
+      { plaid_account_id: 'card', type: 'credit', current_balance: 300 }
+    ],
+    transactions: [
+      { account_id: 'checking', date: '2025-09-10', amount: -500 },
+      { account_id: 'checking', date: '2026-04-10', amount: 200 },
+      { account_id: 'card', date: '2025-09-10', amount: 100 },
+      { account_id: 'card', date: '2026-04-10', amount: -50 }
+    ],
+    investment_snapshots: []
+  }, '2026-09-06', 1);
+  const april = history.find((snapshot) => snapshot.date === '2026-04-01');
+  assert.deepEqual(april, { date: '2026-04-01', assets: 1200, liabilities: 350, net_worth: 850, source: 'reconstructed' });
+  assert.deepEqual(reconstructNetWorthHistory({ accounts: [{ plaid_account_id: 'loan', type: 'loan', current_balance: 1000 }], transactions: [] }, '2026-09-06', 1), []);
 });
 
 test('market candle parsing retains usable closes by session date', () => {
