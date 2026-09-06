@@ -547,9 +547,12 @@ function renderCashFlowSankey(data) {
   if (!income && !actualSpend && !savings && !investments) { el.innerHTML = ''; return; }
   const compact = window.matchMedia('(max-width: 560px)').matches;
   const width = compact ? 390 : 720, height = 216;
-  const sourceX = 12, sourceW = compact ? 88 : 132;
-  const middleX = compact ? 112 : 244, middleW = compact ? 112 : 150;
-  const destinationX = compact ? 242 : 458, destinationW = compact ? 136 : 230;
+  // On phones, equal-width nodes create a steadier left-to-right reading
+  // path. Longer labels wrap within their own node instead of making the
+  // source feel visually less important.
+  const sourceX = compact ? 8 : 12, sourceW = compact ? 116 : 132;
+  const middleX = compact ? 137 : 244, middleW = compact ? 116 : 150;
+  const destinationX = compact ? 266 : 458, destinationW = compact ? 116 : 230;
   const displayValue = (value, isIncome = false) => {
     if (state.cashflowDisplay === 'amount') return fmt.format(value);
     if (!income) return '—';
