@@ -372,9 +372,10 @@ async function syncRetirementContributionsForItem(store, item) {
     const securities = new Map((data.securities || []).map((security) => [security.security_id, security]));
     for (const transaction of data.investment_transactions || []) {
       const security = securities.get(transaction.security_id) || {};
+      const historical = historicalSecurity({ ticker: security.ticker_symbol, name: security.name, type: security.type || null });
       const investmentId = transaction.investment_transaction_id;
       const existingInvestment = store.investment_transactions.find((record) => record.id === investmentId);
-      const recorded = { id: investmentId, item_id: item.id, account_id: transaction.account_id, security_id: transaction.security_id || null, ticker: security.ticker_symbol || null, security_type: security.type || null, date: transaction.date, quantity: Number(transaction.quantity || 0), price: Number(transaction.price || 0), amount: Number(transaction.amount || 0), type: transaction.type || null, subtype: transaction.subtype || null };
+      const recorded = { id: investmentId, item_id: item.id, account_id: transaction.account_id, security_id: transaction.security_id || null, ticker: historical.ticker || null, security_name: security.name || null, security_type: historical.type || null, date: transaction.date, quantity: Number(transaction.quantity || 0), price: Number(transaction.price || 0), amount: Number(transaction.amount || 0), type: transaction.type || null, subtype: transaction.subtype || null };
       if (existingInvestment) Object.assign(existingInvestment, recorded); else store.investment_transactions.push(recorded);
       const account = accounts.get(transaction.account_id);
       const name = String(transaction.name || '');

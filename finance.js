@@ -142,9 +142,10 @@ export function reconstructInvestmentHistory(store, endDate = new Date().toISOSt
   }
   for (const transaction of transactions) {
     if (!transaction.security_id) continue;
-    const entry = current.get(transaction.security_id) || { quantity: 0, ticker: transaction.ticker, type: transaction.security_type };
-    entry.ticker ||= transaction.ticker;
-    entry.type ||= transaction.security_type;
+    const historical = historicalSecurity({ ticker: transaction.ticker, name: transaction.security_name, type: transaction.security_type });
+    const entry = current.get(transaction.security_id) || { quantity: 0, ticker: historical.ticker, type: historical.type };
+    entry.ticker ||= historical.ticker;
+    entry.type ||= historical.type;
     current.set(transaction.security_id, entry);
   }
   if (!current.size) return [];

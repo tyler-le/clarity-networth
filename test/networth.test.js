@@ -203,6 +203,15 @@ test('investment reconstruction reverses later purchases and uses historical clo
   assert.ok(history.every((snapshot) => snapshot.source === 'reconstructed'));
 });
 
+test('investment reconstruction retains ticker metadata for sold securities', () => {
+  const history = reconstructInvestmentHistory({
+    positions: [],
+    investment_transactions: [{ security_id: 'sold-fund', ticker: 'VANGUARD.TARGET.2065', security_name: 'Vanguard Target 2065', security_type: 'equity', date: '2026-09-01', quantity: -10 }],
+    market_prices: { VLXVX: { '2026-04-01': 100, '2026-09-06': 110 } }
+  }, '2026-09-06', 1);
+  assert.ok(history.some((snapshot) => snapshot.date === '2026-04-01' && snapshot.value === 1000));
+});
+
 test('net-worth reconstruction works backward from supported account ledgers', () => {
   const history = reconstructNetWorthHistory({
     accounts: [
