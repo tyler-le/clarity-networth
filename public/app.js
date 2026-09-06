@@ -160,15 +160,17 @@ function renderNetWorthInsights(snaps) {
       const debtText = `debt ${debtChange <= 0 ? 'down' : 'up'} ${fmt.format(Math.abs(debtChange))}`;
       const startDate = first.date, endDate = last.date;
       const contributions = (state.dashboard?.investmentContributions || []).filter((row) => row.date >= startDate && row.date <= endDate).reduce((sum, row) => sum + Number(row.amount || 0), 0);
-      const newlyLinked = (state.dashboard?.investmentLinkBalances || []).filter((row) => row.date >= startDate && row.date <= endDate).reduce((sum, row) => sum + Number(row.amount || 0), 0);
+      const linkedEvents = (state.dashboard?.investmentLinkBalances || []).filter((row) => row.date >= startDate && row.date <= endDate);
       const portfolio = (state.investments?.snapshots || []).filter((row) => row.date >= startDate && row.date <= endDate);
       const investmentChange = portfolio.length > 1 ? Number(portfolio.at(-1).value || 0) - Number(portfolio[0].value || 0) : null;
       // A connection's opening balance is neither a contribution nor market
-      // performance. Until a post-connection snapshot establishes a clean
-      // baseline, do not derive an artificial gain/loss from it.
-      const investmentGrowth = newlyLinked > 0 || investmentChange == null ? null : investmentChange - contributions;
+      // performance. A reconstructed snapshot before the link date is a valid
+      // historical baseline; otherwise we wait for post-link tracking.
+      const earliestLinkDate = linkedEvents.map((event) => event.date).sort().at(0);
+      const hasReconstructedBaseline = earliestLinkDate && portfolio.some((snapshot) => snapshot.source === 'reconstructed' && snapshot.date < earliestLinkDate);
+      const investmentGrowth = investmentChange == null || (linkedEvents.length && !hasReconstructedBaseline) ? null : investmentChange - contributions;
       const contributionText = `Contributed ${fmt.format(contributions)}`;
-      const growthText = newlyLinked > 0 ? 'Investment growth starts after connection' : investmentGrowth == null ? 'Investment growth still tracking' : `Investments ${investmentGrowth >= 0 ? 'grew' : 'fell'} ${fmt.format(Math.abs(investmentGrowth))}`;
+      const growthText = linkedEvents.length && !hasReconstructedBaseline ? 'Investment growth is being reconstructed' : investmentGrowth == null ? 'Investment growth still tracking' : `Investments ${investmentGrowth >= 0 ? 'grew' : 'fell'} ${fmt.format(Math.abs(investmentGrowth))}`;
       $('#netWorthChangeDetail').innerHTML = `<span class="positive">${contributionText}</span><span> · </span><span class="${investmentGrowth == null || investmentGrowth >= 0 ? 'positive' : 'negative'}">${growthText}</span><span> · </span><span class="${debtChange <= 0 ? 'positive' : 'negative'}">${debtText}</span>`;
     }
   }
