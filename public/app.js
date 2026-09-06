@@ -88,6 +88,13 @@ function setInitialLoading(loading) {
   $('#appShell')?.setAttribute('aria-busy', String(loading));
 }
 
+function savedTheme() {
+  try {
+    if (localStorage.getItem(themeStorageKey) === 'dark') return 'dark';
+  } catch { /* Cookie fallback below. */ }
+  return /(?:^|; )clarity-theme=dark(?:;|$)/.test(document.cookie) ? 'dark' : 'light';
+}
+
 function applyTheme(theme, persist = true) {
   const dark = theme === 'dark';
   document.documentElement.dataset.theme = dark ? 'dark' : '';
@@ -955,7 +962,7 @@ function showConnectionOnboarding() {
 $$('[data-view]').forEach((button) => button.addEventListener('click', () => setView(button.dataset.view)));
 $('#profileButton').addEventListener('click', () => setView('profile'));
 $('#profileBack').addEventListener('click', () => setView(state.returnView || 'overview'));
-applyTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light', false);
+applyTheme(savedTheme(), false);
 $('#themeToggle').addEventListener('change', async (event) => {
   const theme = event.target.checked ? 'dark' : 'light';
   applyTheme(theme);
