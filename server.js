@@ -269,6 +269,45 @@ function backfillRecentInvestmentLinkBalances(store) {
   }
 }
 
+// A connection-day balance is not performance. Mark it as historically covered
+// only when every holding in that individual account has a real pre-link price
+// record. Cash or unpriced positions deliberately remain uncovered: assuming
+// today's balance existed in the past would make growth look better than it was.
+function markInvestmentLinkCoverage(store) {
+  const positionsByAccount = new Map();
+  for (const position of store.positions || []) {
+    if (!positionsByAccount.has(position.account_id)) positionsByAccount.set(position.account_id, []);
+    positionsByAccount.get(position.account_id).push(position);
+  }
+  for (const event of store.investment_link_events || []) {
+    const positions = positionsByAccount.get(event.account_id) || [];
+    event.historical_coverage = positions.length > 0 && positions.every((position) => {
+      if (position.type === 'cash' || !position.ticker) return false;
+      return Object.keys(store.market_prices?.[position.ticker] || {}).some((date) => date < event.date);
+    });
+  }
+}
+
+// Upgrade previously synced transactions as the attribution model evolves.
+// This makes historical contribution data useful immediately, without asking
+// people to unlink/relink accounts or wait for a new transaction cursor.
+function backfillInvestmentContributionMetadata(store) {
+  for (const transaction of store.transactions || []) {
+    if (Number(transaction.investment_contribution_amount || 0) > 0) continue;
+    const sourceAccount = store.accounts.find((account) => account.plaid_account_id === transaction.account_id);
+    if (sourceAccount?.type === 'investment' && Number(transaction.amount || 0) < 0) {
+      transaction.investment_contribution_amount = Math.abs(Number(transaction.amount || 0));
+      transaction.investment_contribution_account_id = sourceAccount.plaid_account_id;
+      continue;
+    }
+    const target = plannedTransferTarget(store, transaction, 'transfer');
+    if (target?.bucket === 'investments' && Number(transaction.amount || 0) > 0) {
+      transaction.investment_contribution_amount = Number(transaction.amount || 0);
+      transaction.investment_contribution_account_id = target.accountId;
+    }
+  }
+}
+
 async function syncTransactionsForItem(store, item) {
   const access_token = decrypt(item.access_token_enc);
   let cursor = item.cursor || undefined;
@@ -279,11 +318,18 @@ async function syncTransactionsForItem(store, item) {
     for (const transaction of changes) {
       const existing = store.transactions.find((record) => record.plaid_transaction_id === transaction.transaction_id);
       const baseBucket = classifyTransaction(transaction);
-      const transferTarget = plannedTransferBucket(store, transaction, baseBucket);
+      const transferTarget = plannedTransferTarget(store, transaction, baseBucket);
+      const sourceAccount = store.accounts.find((account) => account.plaid_account_id === transaction.account_id);
+      // Plaid records a deposit into an investment account as a negative
+      // transaction. Preserve its original signed amount, but retain a
+      // dedicated contribution value so it can be separated from performance.
+      const contributionAmount = sourceAccount?.type === 'investment' && Number(transaction.amount || 0) < 0
+        ? Math.abs(Number(transaction.amount || 0))
+        : transferTarget?.bucket === 'investments' && Number(transaction.amount || 0) > 0 ? Number(transaction.amount || 0) : null;
       const normalized = {
         id: existing?.id || crypto.randomUUID(), item_id: item.id, plaid_transaction_id: transaction.transaction_id,
         account_id: transaction.account_id, merchant_name: transaction.merchant_name, name: transaction.name,
-        amount: transaction.amount, date: transaction.date, bucket: existing?.category_overridden ? existing.bucket : (transferTarget || baseBucket), excluded: existing?.excluded || false,
+        amount: transaction.amount, date: transaction.date, bucket: existing?.category_overridden ? existing.bucket : (transferTarget?.bucket || baseBucket), investment_contribution_amount: contributionAmount, investment_contribution_account_id: sourceAccount?.type === 'investment' ? sourceAccount.plaid_account_id : transferTarget?.accountId || null, excluded: existing?.excluded || false,
         pending: transaction.pending, pfc_primary: transaction.personal_finance_category?.primary || '',
         pfc_detailed: transaction.personal_finance_category?.detailed || '', demo: false
       };
@@ -297,7 +343,7 @@ async function syncTransactionsForItem(store, item) {
   item.cursor = cursor || item.cursor || null;
 }
 
-function plannedTransferBucket(store, transaction, bucket) {
+function plannedTransferTarget(store, transaction, bucket) {
   if (bucket !== 'transfer' || Number(transaction.amount || 0) <= 0) return null;
   const description = `${transaction.merchant_name || ''} ${transaction.name || ''}`.toLowerCase();
   const targets = store.accounts.filter((account) => !account.hidden && (account.type === 'investment' || (account.type === 'depository' && /savings/i.test(account.subtype || account.name || ''))));
@@ -305,7 +351,7 @@ function plannedTransferBucket(store, transaction, bucket) {
     const institutionWords = String(target.institution_name || '').toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length >= 4);
     const nameWords = String(target.name || '').toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length >= 5);
     if (![...institutionWords, ...nameWords].some((word) => description.includes(word))) continue;
-    return target.type === 'investment' ? 'investments' : 'savings';
+    return { bucket: target.type === 'investment' ? 'investments' : 'savings', accountId: target.plaid_account_id };
   }
   return null;
 }
@@ -386,6 +432,7 @@ async function backfillInvestmentHistory(store) {
     }
   }
   const reconstructed = reconstructInvestmentHistory(store, endDate, historyYears);
+  markInvestmentLinkCoverage(store);
   store.investment_history_status = {
     state: reconstructed.length ? 'ready' : unavailable.size ? 'unavailable' : 'tracking',
     unavailable: [...unavailable.values()].slice(0, 3),
@@ -503,6 +550,8 @@ app.use('/api', (req, res, next) => {
 app.get('/api/dashboard', async (req, res) => {
   const store = await loadStore(req.user);
   backfillRecentInvestmentLinkBalances(store);
+  backfillInvestmentContributionMetadata(store);
+  markInvestmentLinkCoverage(store);
   removeEstimatedNetWorthHistory(store);
   hideDuplicateAccounts(store);
   snapshotNetWorth(store);

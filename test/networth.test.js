@@ -146,16 +146,18 @@ test('cash flow separates actual spending details from saving and investing', ()
 
 test('investment contribution activity includes bank deposits and payroll retirement contributions', () => {
   const store = { transactions: [
-    { date: '2026-08-01', amount: 500, bucket: 'investments' },
-    { date: '2026-08-15', amount: 400, bucket: 'investments', source: 'investment_transaction' },
+    { date: '2026-08-01', account_id: 'brokerage', amount: 500, bucket: 'investments' },
+    { date: '2026-08-15', account_id: '401k', amount: 400, bucket: 'investments', source: 'investment_transaction' },
+    { date: '2026-08-18', account_id: 'checking', amount: 125, bucket: 'transfer', investment_contribution_amount: 125, investment_contribution_account_id: 'hsa' },
     { date: '2026-08-20', amount: 100, bucket: 'savings' },
     { date: '2026-08-25', amount: 300, bucket: 'investments', excluded: true }
   ] };
-  assert.deepEqual(investmentContributions(store), [{ date: '2026-08-01', amount: 500 }, { date: '2026-08-15', amount: 400 }]);
+  assert.deepEqual(investmentContributions(store), [{ date: '2026-08-01', accountId: 'brokerage', amount: 500 }, { date: '2026-08-15', accountId: '401k', amount: 400 }, { date: '2026-08-18', accountId: 'hsa', amount: 125 }]);
 });
 
 test('newly linked investment balances are kept separate from contributions', () => {
-  assert.deepEqual(investmentLinkBalances({ investment_link_events: [{ account_id: 'hsa', date: '2026-09-06', amount: 2089 }] }), [{ date: '2026-09-06', amount: 2089 }]);
+  assert.deepEqual(investmentLinkBalances({ investment_link_events: [{ account_id: 'hsa', date: '2026-09-06', amount: 2089, historical_coverage: false }] }), [{ accountId: 'hsa', date: '2026-09-06', amount: 2089, historicalCoverage: false }]);
+  assert.deepEqual(investmentLinkBalances({ investment_link_events: [{ account_id: 'fund', date: '2026-09-06', amount: 500, historical_coverage: true }] }), [{ accountId: 'fund', date: '2026-09-06', amount: 500, historicalCoverage: true }]);
 });
 
 test('recurring charge awareness identifies cadence and a meaningful increase', () => {

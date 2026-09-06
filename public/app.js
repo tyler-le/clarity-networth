@@ -175,8 +175,10 @@ function renderNetWorthInsights(snaps) {
       const debtChange = Number(last.liabilities) - Number(first.liabilities);
       const debtText = `debt ${debtChange <= 0 ? 'down' : 'up'} ${fmt.format(Math.abs(debtChange))}`;
       const startDate = first.date, endDate = last.date;
-      const contributions = (state.dashboard?.investmentContributions || []).filter((row) => row.date >= startDate && row.date <= endDate).reduce((sum, row) => sum + Number(row.amount || 0), 0);
+      const contributionRows = state.dashboard?.investmentContributions || [];
+      const contributions = contributionRows.filter((row) => row.date >= startDate && row.date <= endDate).reduce((sum, row) => sum + Number(row.amount || 0), 0);
       const linkedEvents = (state.dashboard?.investmentLinkBalances || []).filter((row) => row.date >= startDate && row.date <= endDate);
+      const hasUnattributedOpeningBalance = linkedEvents.some((event) => event.historicalCoverage === false && contributionRows.filter((row) => row.accountId === event.accountId && row.date <= event.date).reduce((sum, row) => sum + Number(row.amount || 0), 0) < Number(event.amount || 0) - 1);
       const allPortfolioSnapshots = state.investments?.snapshots || [];
       const portfolio = allPortfolioSnapshots.filter((row) => row.date >= startDate && row.date <= endDate);
       const investmentChange = portfolio.length > 1 ? Number(portfolio.at(-1).value || 0) - Number(portfolio[0].value || 0) : null;
@@ -185,10 +187,10 @@ function renderNetWorthInsights(snaps) {
       // historical baseline; otherwise we wait for post-link tracking.
       const earliestLinkDate = linkedEvents.map((event) => event.date).sort().at(0);
       const hasReconstructedBaseline = earliestLinkDate && allPortfolioSnapshots.some((snapshot) => snapshot.source === 'reconstructed' && snapshot.date < earliestLinkDate);
-      const investmentGrowth = investmentChange == null || (linkedEvents.length && !hasReconstructedBaseline) ? null : investmentChange - contributions;
+      const investmentGrowth = investmentChange == null || (linkedEvents.length && !hasReconstructedBaseline) || hasUnattributedOpeningBalance ? null : investmentChange - contributions;
       const contributionText = `Contributed ${fmt.format(contributions)}`;
       const historyState = state.investments?.historyStatus?.state;
-      const growthText = linkedEvents.length && !hasReconstructedBaseline && historyState === 'unavailable' ? 'Investment growth needs verified historical pricing' : linkedEvents.length && !hasReconstructedBaseline ? 'Investment growth still tracking' : investmentGrowth == null ? 'Investment growth still tracking' : `Investments ${investmentGrowth >= 0 ? 'grew' : 'fell'} ${fmt.format(Math.abs(investmentGrowth))}`;
+      const growthText = hasUnattributedOpeningBalance ? 'Investment performance needs contribution history' : linkedEvents.length && !hasReconstructedBaseline && historyState === 'unavailable' ? 'Investment growth needs verified historical pricing' : linkedEvents.length && !hasReconstructedBaseline ? 'Investment growth still tracking' : investmentGrowth == null ? 'Investment growth still tracking' : `Investments ${investmentGrowth >= 0 ? 'grew' : 'fell'} ${fmt.format(Math.abs(investmentGrowth))}`;
       $('#netWorthChangeDetail').innerHTML = `<span class="positive">${contributionText}</span><span> · </span><span class="${investmentGrowth == null || investmentGrowth >= 0 ? 'positive' : 'negative'}">${growthText}</span><span> · </span><span class="${debtChange <= 0 ? 'positive' : 'negative'}">${debtText}</span>`;
     }
   }

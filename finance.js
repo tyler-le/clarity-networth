@@ -88,12 +88,13 @@ export function investmentSummary(store) {
 // market movement without exposing a full transaction ledger on the dashboard.
 export function investmentContributions(store) {
   return (store.transactions || [])
-    .filter((transaction) => !transaction.pending && !transaction.excluded && transaction.bucket === 'investments' && Number(transaction.amount || 0) > 0)
-    .map((transaction) => ({ date: transaction.date, amount: Number(transaction.amount || 0) }));
+    .filter((transaction) => !transaction.pending && !transaction.excluded && (transaction.bucket === 'investments' || Number(transaction.investment_contribution_amount || 0) > 0))
+    .map((transaction) => ({ date: transaction.date, accountId: transaction.investment_contribution_account_id || transaction.account_id, amount: Number(transaction.investment_contribution_amount || transaction.amount || 0) }))
+    .filter((transaction) => transaction.amount > 0);
 }
 
 export function investmentLinkBalances(store) {
-  return (store.investment_link_events || []).map((event) => ({ date: event.date, amount: Number(event.amount || 0) }));
+  return (store.investment_link_events || []).map((event) => ({ accountId: event.account_id, date: event.date, amount: Number(event.amount || 0), historicalCoverage: event.historical_coverage === true }));
 }
 
 export function snapshotInvestments(store, snapshotDate = new Date().toISOString().slice(0, 10)) {
