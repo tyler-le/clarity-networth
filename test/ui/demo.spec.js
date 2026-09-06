@@ -20,14 +20,20 @@ async function goToView(page, view) {
 }
 
 test('a slow first load shows calm placeholders before financial data arrives', async ({ page }) => {
+  let releasePreview;
+  const previewHeld = new Promise((resolve) => { releasePreview = resolve; });
   await page.route('**/api/demo-preview?range=1m', async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    // Hold the actual response until the assertion has observed the loading
+    // state. A fixed delay races the browser scheduler in CI and can allow the
+    // response to finish before Playwright checks the skeleton.
+    await previewHeld;
     await route.continue();
   });
   await page.goto('/');
   await page.getByRole('button', { name: /explore the demo/i }).click();
   await expect(page.locator('#loadingSkeleton')).toBeVisible();
   await expect(page.locator('#loadingSkeleton .skeleton-hero')).toBeVisible();
+  releasePreview();
   await expect(page.locator('#netWorth')).toHaveText(/\$/);
   await expect(page.locator('#loadingSkeleton')).toBeHidden();
   await expect(page.locator('#netWorthChart svg')).toBeVisible();
