@@ -7,6 +7,9 @@
   <title>Clarity — Net Worth</title>
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <link rel="preconnect" href="https://cdn.plaid.com" />
   <script>try { if (localStorage.getItem('clarity-theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch {}</script>
   <link rel="stylesheet" href="/styles.css" />
@@ -63,6 +66,7 @@
       </header>
 
       <div id="notice" class="notice hidden"></div>
+      <div id="appStatus" class="app-status hidden" role="status" aria-live="polite"></div>
 
       <section id="overviewView" class="view active">
         <div class="hero-grid">
@@ -70,6 +74,7 @@
             <div class="card-top"><div class="card-label">Net worth</div><div class="range-control" aria-label="Net worth timeframe"><button class="active" data-networth-range="ytd">YTD</button><button data-networth-range="1y">1Y</button><button data-networth-range="3y">3Y</button><button data-networth-range="5y">5Y</button><button data-networth-range="all">All</button></div></div>
             <div class="hero-number" id="netWorth">—</div>
             <div class="delta" id="netWorthDelta">—</div>
+            <p class="today-summary" id="todaySummary">Loading your current picture…</p>
             <div class="chart-context"><span id="netWorthChartDate">Drag across the chart to view history</span></div>
             <div class="line-chart" id="netWorthChart" aria-label="Scrubbable net worth history"></div>
           </article>
@@ -181,6 +186,17 @@
       <footer class="retirement-info-footer"><button class="primary" value="close">Got it</button></footer>
     </form>
   </dialog>
+  <dialog class="connection-onboarding-dialog" id="connectionOnboardingDialog" aria-labelledby="connectionOnboardingTitle">
+    <form method="dialog">
+      <div class="connection-onboarding-mark" aria-hidden="true">✓</div>
+      <div class="card-label">CONNECTION COMPLETE</div>
+      <h2 id="connectionOnboardingTitle">Your picture is ready to begin.</h2>
+      <p>Current balances appear now. Transactions and account history may take a few minutes to arrive, and your timeline becomes more useful with each verified snapshot.</p>
+      <div class="onboarding-steps"><div><i>1</i><span><strong>Today</strong><small>See your current net worth and connected accounts.</small></span></div><div><i>2</i><span><strong>Next few minutes</strong><small>We organize available transactions and holdings.</small></span></div><div><i>3</i><span><strong>Over time</strong><small>Your verified history builds without manual entry.</small></span></div></div>
+      <button class="primary full" value="close">View my net worth</button>
+    </form>
+  </dialog>
+  <div class="update-toast hidden" id="updateToast" role="status" aria-live="polite"><span>A newer version of Clarity is ready.</span><button type="button" id="updateAppButton">Refresh</button></div>
 
   <script type="module" src="/app.js"></script>
 </body>

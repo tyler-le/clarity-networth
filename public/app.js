@@ -5,6 +5,7 @@ const $$ = (sel) => [...document.querySelectorAll(sel)];
 const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const fmt2 = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const themeStorageKey = 'clarity-theme';
+const onboardingStorageKey = 'clarity-connection-onboarding-seen';
 
 const state = {
   dashboard: null,
@@ -35,10 +36,20 @@ function escapeHtml(value = '') {
 }
 
 async function api(url, options = {}) {
-  const response = await fetch(url, { headers: { 'content-type': 'application/json', ...(options.headers || {}) }, ...options });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
-  return data;
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(url, { headers: { 'content-type': 'application/json', ...(options.headers || {}) }, ...options });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+      return data;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 0 && (!navigator.onLine || error instanceof TypeError)) await new Promise((resolve) => setTimeout(resolve, 550));
+      else break;
+    }
+  }
+  throw lastError;
 }
 
 function institutionMark(account) {
@@ -51,6 +62,24 @@ function showNotice(message, tone = 'warn') {
   el.textContent = message;
   el.classList.remove('hidden');
   if (tone === 'success') setTimeout(() => el.classList.add('hidden'), 3200);
+}
+
+function setAppStatus(message = '') {
+  const el = $('#appStatus');
+  if (!el) return;
+  el.textContent = message;
+  el.classList.toggle('hidden', !message);
+}
+
+function latestSyncLabel(items = []) {
+  const dates = items.map((item) => item.last_synced_at).filter(Boolean).map((value) => new Date(value)).filter((date) => !Number.isNaN(date.getTime()));
+  if (!dates.length) return 'Waiting for your first account update';
+  const latest = new Date(Math.max(...dates));
+  const minutes = Math.max(0, Math.round((Date.now() - latest.getTime()) / 60_000));
+  if (minutes < 2) return 'Updated just now';
+  if (minutes < 60) return `Updated ${minutes} min ago`;
+  if (minutes < 24 * 60) return `Updated ${Math.round(minutes / 60)} hr ago`;
+  return `Updated ${latest.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
 }
 
 function applyTheme(theme, persist = true) {
@@ -97,7 +126,21 @@ function restoreNetWorthHero() {
   const d = state.dashboard;
   if (!d) return;
   const s = d.summary;
+  const accounts = d.accounts || [];
+  const connected = (d.items || []).filter((item) => !item.demo).length;
+  if (!accounts.length) {
+    $('#netWorth').textContent = '—';
+    $('#netWorthDelta').textContent = 'Connect your first account';
+    $('#todaySummary').textContent = 'Your current balances and timeline will appear here—nothing to enter manually.';
+    $('#netWorthChartDate').textContent = 'Your timeline starts with your first verified balance.';
+    $('#netWorthChart').innerHTML = '<div class="chart-empty"><span aria-hidden="true">⌁</span><b>Your financial picture starts here</b><small>Connect an account whenever you’re ready.</small></div>';
+    renderNetWorthInsights([]);
+    return;
+  }
   $('#netWorth').textContent = fmt.format(s.netWorth);
+  $('#todaySummary').textContent = accounts.length
+    ? `${latestSyncLabel(d.items)} · ${connected || accounts.length} connected ${connected === 1 ? 'institution' : 'institutions'}`
+    : 'Connect an account to see your current financial picture.';
   const snaps = visibleSnapshots(d.snapshots || []);
   if (snaps.length < 2) {
     $('#netWorthDelta').textContent = 'Tracking starts today';
@@ -671,6 +714,7 @@ function renderDashboard() {
 }
 
 async function loadAll() {
+  setAppStatus('Refreshing your financial picture…');
   if (state.demoPreview) {
     const preview = await api(`/api/demo-preview?range=${state.spendingRange}`);
     state.dashboard = preview.dashboard;
@@ -682,19 +726,24 @@ async function loadAll() {
     renderInvestments(preview.investments);
     renderRetirement(preview.retirement);
     $('#monthLabel').textContent = 'Demo workspace';
+    setAppStatus('');
     return;
   }
-  const [dashboard, spending, investments, retirement] = await Promise.all([api('/api/dashboard'), api(`/api/spending?range=${state.spendingRange}`), api('/api/investments'), api('/api/retirement')]);
-  state.dashboard = dashboard;
-  state.spending = spending;
-  state.investments = investments;
-  state.retirement = retirement;
-  applyTheme(dashboard.appearance?.theme || 'light', false);
-  renderDashboard();
-  renderSpending(spending);
-  renderInvestments(investments);
-  renderRetirement(retirement);
-  $('#monthLabel').textContent = 'Account overview';
+  try {
+    const [dashboard, spending, investments, retirement] = await Promise.all([api('/api/dashboard'), api(`/api/spending?range=${state.spendingRange}`), api('/api/investments'), api('/api/retirement')]);
+    state.dashboard = dashboard;
+    state.spending = spending;
+    state.investments = investments;
+    state.retirement = retirement;
+    applyTheme(dashboard.appearance?.theme || 'light', false);
+    renderDashboard();
+    renderSpending(spending);
+    renderInvestments(investments);
+    renderRetirement(retirement);
+    $('#monthLabel').textContent = 'Account overview';
+  } finally {
+    setAppStatus('');
+  }
 }
 
 async function loadSpending() {
@@ -720,6 +769,7 @@ async function connectPlaid() {
         });
         await loadAll();
         showNotice('Account connected.', 'success');
+        showConnectionOnboarding();
       },
       onExit: (err) => { if (err) showNotice(err.display_message || err.error_message || 'Plaid Link closed with an error.'); }
     });
@@ -727,6 +777,15 @@ async function connectPlaid() {
   } catch (error) {
     showNotice(error.message);
   }
+}
+
+function showConnectionOnboarding() {
+  try {
+    if (localStorage.getItem(onboardingStorageKey)) return;
+    localStorage.setItem(onboardingStorageKey, '1');
+  } catch { /* It is okay to show this again when storage is unavailable. */ }
+  const dialog = $('#connectionOnboardingDialog');
+  if (dialog?.showModal) dialog.showModal();
 }
 
 async function syncAccounts() {
@@ -1080,12 +1139,48 @@ async function startGoogleSignIn() {
 async function initializeApp() {
   try {
     await api('/api/auth/me');
-    showAuthenticatedApp();
-    await loadAll();
   } catch {
     await startGoogleSignIn();
+    return;
+  }
+  showAuthenticatedApp();
+  try {
+    await loadAll();
+  } catch (error) {
+    showNotice(navigator.onLine ? 'We could not refresh your data. Your next sync will try again.' : 'You’re offline. Reconnect to refresh your financial picture.');
+    setAppStatus('');
   }
 }
+
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register('/sw.js').then((registration) => {
+    const showUpdate = () => $('#updateToast').classList.remove('hidden');
+    if (registration.waiting) showUpdate();
+    registration.addEventListener('updatefound', () => {
+      const worker = registration.installing;
+      worker?.addEventListener('statechange', () => {
+        if (worker.state === 'installed' && navigator.serviceWorker.controller) showUpdate();
+      });
+    });
+  }).catch(() => { /* The app works normally when service workers are unavailable. */ });
+}
+
+$('#updateAppButton').addEventListener('click', () => {
+  navigator.serviceWorker?.getRegistration().then((registration) => {
+    if (registration?.waiting) registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+    else window.location.reload();
+  });
+});
+
+navigator.serviceWorker?.addEventListener('controllerchange', () => window.location.reload());
+window.addEventListener('offline', () => showNotice('You’re offline. Reconnect when you’re ready to refresh your data.'));
+window.addEventListener('online', async () => {
+  if (!state.dashboard || state.demoPreview) return;
+  setAppStatus('Back online — refreshing…');
+  try { await loadAll(); showNotice('Your financial picture is current again.', 'success'); }
+  catch { showNotice('Back online, but refresh is still unavailable. We’ll try again next time.'); }
+});
 
 $('#demoPreviewButton').addEventListener('click', startDemoPreview);
 
@@ -1114,4 +1209,5 @@ window.addEventListener('resize', () => {
   });
 });
 
+registerServiceWorker();
 initializeApp().catch((error) => { $('#authMessage').textContent = error.message; });
