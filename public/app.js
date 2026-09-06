@@ -1,4 +1,4 @@
-import { filterSnapshots, hasUsableNetWorthTrend, scrubIndex } from './chart-utils.js';
+import { filterSnapshots, scrubIndex } from './chart-utils.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -208,7 +208,7 @@ function renderLineChart(snapshots, summary) {
   // A hidden view reports a zero width. Leave the existing chart intact until
   // the view is visible, when setView/resize will render it at real size.
   if (el.clientWidth < 80 || el.clientHeight < 60) return;
-  if (!hasUsableNetWorthTrend(snapshots)) {
+  if (snapshots.length < 2) {
     renderTimelineStart(el, snapshots.at(-1), summary);
     return;
   }
@@ -302,19 +302,19 @@ function renderLineChart(snapshots, summary) {
 }
 
 function renderTimelineStart(el, snapshot, summary) {
+  const value = Number(snapshot?.net_worth ?? summary?.netWorth ?? 0);
   const date = snapshot?.date ? new Date(`${snapshot.date}T12:00:00`) : new Date();
   const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const width = Math.max(1, Math.round(el.clientWidth || 700));
   const height = Math.max(1, Math.round(el.clientHeight || 150));
-  const baseline = Math.round(height * .62);
-  const lineStart = Math.round(width * .3), pointX = Math.round(width * .7), statusX = width / 2;
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Net worth tracking began ${label}; additional verified history is needed before a trend is shown">
-    <text x="${statusX}" y="27" text-anchor="middle" class="chart-unavailable-label">Tracking began ${label}</text>
-    <text x="${statusX}" y="44" text-anchor="middle" class="chart-start-detail">A trend will appear after a few more verified days</text>
-    <line x1="${lineStart}" y1="${baseline}" x2="${pointX}" y2="${baseline}" class="chart-start-line"/>
-    <circle cx="${pointX}" cy="${baseline}" r="7" class="chart-start-point"/>
-    <text x="${pointX - 11}" y="${baseline - 13}" text-anchor="end" class="chart-start-value">Current</text>
-    <text x="${pointX}" y="${height - 9}" text-anchor="middle" class="sankey-label">${label}</text>
+  const baseline = Math.round(height * .75);
+  const pointX = Math.round(width * .78);
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Net worth tracking starts today">
+    <line x1="12" y1="${baseline}" x2="${width - 12}" y2="${baseline}" stroke="#e4e9e4" stroke-width="2"/>
+    <line x1="${pointX}" y1="24" x2="${pointX}" y2="${baseline}" stroke="#b6c8bd" stroke-width="1.5" stroke-dasharray="4 5"/>
+    <circle cx="${pointX}" cy="${Math.round(height * .48)}" r="9" fill="#fff" stroke="#16704b" stroke-width="4"/>
+    <text x="${pointX}" y="38" text-anchor="middle" class="sankey-value">${fmt.format(value)}</text>
+    <text x="${pointX}" y="${height - 10}" text-anchor="middle" class="sankey-label">${label} · Start</text>
   </svg>`;
 }
 

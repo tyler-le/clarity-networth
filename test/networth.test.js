@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentLinkBalances, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
 import { normalizeCandles } from '../market-data.js';
-import { filterSnapshots, hasUsableNetWorthTrend, scrubIndex } from '../public/chart-utils.js';
+import { filterSnapshots, scrubIndex } from '../public/chart-utils.js';
 
 test('estimated history is removed before the chart is served', () => {
   const store = {
@@ -55,11 +55,6 @@ test('scrubbing clamps to endpoints and selects the nearest data point', () => {
   assert.equal(scrubIndex({ ...base, clientX: 50 }), 0);
   assert.equal(scrubIndex({ ...base, clientX: 250 }), 2);
   assert.equal(scrubIndex({ ...base, clientX: 500 }), 4);
-});
-
-test('net-worth waits for enough verified coverage before drawing a trend', () => {
-  assert.equal(hasUsableNetWorthTrend([{ date: '2026-09-05' }, { date: '2026-09-06' }]), false);
-  assert.equal(hasUsableNetWorthTrend([{ date: '2026-09-01' }, { date: '2026-09-04' }, { date: '2026-09-07' }, { date: '2026-09-08' }]), true);
 });
 
 test('historical pricing resolves Vanguard target retirement display symbols', () => {
