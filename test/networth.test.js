@@ -356,12 +356,14 @@ test('connection health stays quiet through transient delays and failures', () =
     { id: 'late', institution_name: 'Late', last_synced_at: '2026-09-01T10:00:00Z' },
     { id: 'failed-once', institution_name: 'Failed once', last_synced_at: '2026-09-06T10:00:00Z', last_sync_error_at: '2026-09-06T11:00:00Z' },
     { id: 'failed', institution_name: 'Failed', last_synced_at: '2026-09-02T10:00:00Z', last_sync_error_at: '2026-09-06T11:00:00Z', sync_failure_count: 3 },
+    { id: 'reauth', institution_name: 'Reauth', last_synced_at: '2026-09-06T10:00:00Z', requires_reconnect: true },
     { id: 'legacy', institution_name: 'Legacy' }
   ], accounts: [
     { item_id: 'legacy', updated_at: '2026-09-06T11:30:00Z' }
   ] }, now);
-  assert.deepEqual(health.map((item) => item.state), ['healthy', 'healthy', 'stale', 'healthy', 'attention', 'healthy']);
-  assert.equal(health[5].last_synced_at, '2026-09-06T11:30:00.000Z');
+  assert.deepEqual(health.map((item) => item.state), ['healthy', 'healthy', 'stale', 'healthy', 'attention', 'attention', 'healthy']);
+  assert.equal(health[5].requires_reconnect, true);
+  assert.equal(health[6].last_synced_at, '2026-09-06T11:30:00.000Z');
 });
 
 test('retirement presets calculate coast, lean, standard, fat, and a projected retirement value', () => {
