@@ -1365,6 +1365,7 @@ async function startDemoPreview() {
 async function startGoogleSignIn() {
   const config = await api('/api/auth/config');
   if (!config.configured) {
+    $('#googleSignIn').classList.add('hidden');
     $('#authMessage').textContent = 'Google sign-in is not configured. Add GOOGLE_CLIENT_ID and a strong ENCRYPTION_KEY to the server environment.';
     return;
   }
@@ -1381,7 +1382,7 @@ async function startGoogleSignIn() {
       } catch (error) { $('#authMessage').textContent = error.message; }
     }
   });
-  window.google.accounts.id.renderButton($('#googleSignIn'), { theme: 'outline', size: 'large', width: Math.min(360, Math.floor($('#googleSignIn').clientWidth || 360)), text: 'signin_with' });
+  window.google.accounts.id.renderButton($('#googleSignIn'), { theme: 'outline', size: 'large', width: Math.min(360, Math.floor($('#googleSignIn').clientWidth || 360)), text: 'continue_with' });
 }
 
 async function initializeApp() {
