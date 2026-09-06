@@ -834,11 +834,18 @@ function renderRetirement(data) {
   $('#retirementAgeChip').textContent = `${data.yearsToRetirement} years to go`;
   $('#retirementSpendContext').textContent = data.monthsObserved ? `Based on ${data.monthsObserved} month${data.monthsObserved === 1 ? '' : 's'} of everyday spending.` : 'Connect spending accounts to personalize these paths.';
   $('#retirementAssumption').textContent = `${data.withdrawalRate}% withdrawal · ${data.realReturn}% real growth`;
+  const estimatedLabel = (months, complete) => {
+    if (complete) return 'Reached';
+    if (!Number.isFinite(months)) return 'Needs a savings pace';
+    const date = new Date();
+    date.setMonth(date.getMonth() + months);
+    return `Est. ${date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`;
+  };
   $('#retirementPath').innerHTML = (data.ladder || []).map((step) => {
     const interactive = ['coast', 'standard'].includes(step.key);
     const tag = interactive ? 'button' : 'div';
     const action = interactive ? ` type="button" data-retirement-milestone="${step.key}" aria-label="Learn about ${escapeHtml(step.name)}"` : '';
-    return `<${tag} class="retirement-milestone ${step.complete ? 'complete' : ''}"${action}><span>${step.complete ? '✓ ' : ''}${escapeHtml(step.name)}</span><strong>${fmt.format(step.target || 0)}</strong><i><b style="width:${Math.min(100, Number(step.progress || 0)).toFixed(1)}%"></b></i><small>${escapeHtml(step.detail)}</small></${tag}>`;
+    return `<${tag} class="retirement-milestone ${step.complete ? 'complete' : ''}"${action}><span>${step.complete ? '✓ ' : ''}${escapeHtml(step.name)}</span><strong>${fmt.format(step.target || 0)}</strong><i><b style="width:${Math.min(100, Number(step.progress || 0)).toFixed(1)}%"></b></i><small>${escapeHtml(step.detail)}</small><em>${escapeHtml(estimatedLabel(step.estimatedMonths, step.complete))}</em></${tag}>`;
   }).join('');
   $('#retirementLifestylePaths').innerHTML = (data.lifestyles || []).map((path, index) => `<div class="retirement-lifestyle ${index === 1 ? 'featured' : ''}"><span>${escapeHtml(path.name)}</span><strong>${fmt.format(path.target || 0)}</strong><small>${escapeHtml(path.detail)}</small></div>`).join('');
   const form = $('#retirementForm');

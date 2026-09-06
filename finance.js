@@ -712,9 +712,9 @@ export function annualizedLivingSpend(store) {
   return { annualSpend: monthlyAverage * 12, monthlyAverage, essentialAnnualSpend: essentialTotal / monthsObserved * 12, essentialMonthlySpend: essentialTotal / monthsObserved, monthsObserved };
 }
 
-function annualizedContributions(store) {
+function annualizedContributions(store, buckets = ['savings', 'investments']) {
   const eligible = store.transactions
-    .filter((t) => !t.pending && !t.excluded && Number(t.amount || 0) > 0 && (t.bucket === 'savings' || t.bucket === 'investments'))
+    .filter((t) => !t.pending && !t.excluded && Number(t.amount || 0) > 0 && buckets.includes(t.bucket))
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
   if (!eligible.length) return { annualContributions: 0, monthsObserved: 0 };
 
@@ -728,6 +728,19 @@ function annualizedContributions(store) {
   return { annualContributions: total / monthsObserved * 12, monthsObserved };
 }
 
+function monthsToTarget({ balance, target, annualContribution = 0, annualReturn = 0 }) {
+  if (!Number.isFinite(target) || target <= 0 || balance >= target) return 0;
+  const monthlyContribution = Math.max(0, Number(annualContribution || 0)) / 12;
+  const monthlyReturn = Number(annualReturn || 0) / 12;
+  if (monthlyContribution <= 0 && monthlyReturn <= 0) return null;
+  let projected = Math.max(0, Number(balance || 0));
+  for (let months = 1; months <= 1200; months += 1) {
+    projected = projected * (1 + monthlyReturn) + monthlyContribution;
+    if (projected >= target) return months;
+  }
+  return null;
+}
+
 export function calculateFire(store, netWorth) {
   const settings = store.settings?.fire || {};
   const age = Math.max(18, Number(settings.age || 27));
@@ -738,6 +751,7 @@ export function calculateFire(store, netWorth) {
   const fatMultiplier = Math.max(1, Number(settings.fat_multiplier || 150)) / 100;
   const spend = annualizedLivingSpend(store);
   const contributions = annualizedContributions(store);
+  const cashSavings = annualizedContributions(store, ['savings']);
   const investedAssets = (store.accounts || []).filter((account) => !account.hidden && account.type === 'investment').reduce((sum, account) => sum + Math.max(0, Number(account.current_balance || 0)), 0);
   const freedomBalance = investedAssets || Math.max(0, Number(netWorth || 0));
   const cashBalance = (store.accounts || []).filter((account) => !account.hidden && account.type === 'depository').reduce((sum, account) => sum + Math.max(0, Number(account.current_balance || 0)), 0);
@@ -782,10 +796,10 @@ export function calculateFire(store, netWorth) {
       { key: 'more', name: 'More room', target: fat, detail: 'Extra flexibility and discretionary spending' }
     ],
     ladder: [
-      { key: 'emergency', name: 'Emergency fund', detail: '3 months of essentials', target: emergencyFund, progress: progress(emergencyFund, cashBalance), complete: cashBalance >= emergencyFund && emergencyFund > 0 },
-      { key: 'runway', name: 'Work-break runway', detail: '6 months of essentials', target: runway, progress: progress(runway, cashBalance), complete: cashBalance >= runway && runway > 0 },
-      { key: 'coast', name: 'Coast FI', detail: 'Growth could carry you to retirement', target: coast, progress: progress(coast), complete: freedomBalance >= coast && coast > 0 },
-      { key: 'standard', name: 'Financial independence', detail: 'Your current lifestyle', target: standard, progress: progress(standard), complete: freedomBalance >= standard && standard > 0 }
+      { key: 'emergency', name: 'Emergency fund', detail: '3 months of essentials', target: emergencyFund, progress: progress(emergencyFund, cashBalance), complete: cashBalance >= emergencyFund && emergencyFund > 0, estimatedMonths: monthsToTarget({ balance: cashBalance, target: emergencyFund, annualContribution: cashSavings.annualContributions }) },
+      { key: 'runway', name: 'Work-break runway', detail: '6 months of essentials', target: runway, progress: progress(runway, cashBalance), complete: cashBalance >= runway && runway > 0, estimatedMonths: monthsToTarget({ balance: cashBalance, target: runway, annualContribution: cashSavings.annualContributions }) },
+      { key: 'coast', name: 'Coast FI', detail: 'Growth could carry you to retirement', target: coast, progress: progress(coast), complete: freedomBalance >= coast && coast > 0, estimatedMonths: monthsToTarget({ balance: freedomBalance, target: coast, annualContribution: contributions.annualContributions, annualReturn: realReturn }) },
+      { key: 'standard', name: 'Financial independence', detail: 'Your current lifestyle', target: standard, progress: progress(standard), complete: freedomBalance >= standard && standard > 0, estimatedMonths: monthsToTarget({ balance: freedomBalance, target: standard, annualContribution: contributions.annualContributions, annualReturn: realReturn }) }
     ],
     progress: {
       lean: progress(lean),
