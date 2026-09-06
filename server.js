@@ -26,6 +26,7 @@ const MAX_LINKED_ITEMS = Math.min(30, Math.max(1, Number(process.env.MAX_LINKED_
 const userSyncQueues = new Map();
 const providerLimitFallback = new Map();
 const plaidWebhookKeyCache = new Map();
+const reconnectSessions = new Map();
 
 const productionSecurityErrors = [
   !dataEncryptionSecret || dataEncryptionSecret === 'development-only-key-change-me' ? 'DATA_ENCRYPTION_KEY is required.' : null,
@@ -970,6 +971,43 @@ app.delete('/api/items/:id', async (req, res) => {
   snapshotNetWorth(store);
   await saveStore(req.user, store);
   res.json({ ok: true });
+});
+
+app.post('/api/items/:id/create_reconnect_token', plaidCostLimiter({ scope: 'plaid_reconnect_token', userLimit: 5, ipLimit: 20, windowMs: 15 * 60_000 }), async (req, res) => {
+  try {
+    const store = await loadStore(req.user);
+    const item = store.items.find((candidate) => candidate.id === req.params.id && !candidate.demo);
+    if (!item?.access_token_enc) return res.status(404).json({ error: 'Connection not found.' });
+    const body = { user: { client_user_id: req.user.storageKey }, client_name: 'Clarity', access_token: decrypt(item.access_token_enc), country_codes: ['US'], language: 'en' };
+    if (process.env.PLAID_WEBHOOK_URL) body.webhook = process.env.PLAID_WEBHOOK_URL;
+    const data = await plaidPost('/link/token/create', body);
+    const reconnectSession = crypto.randomBytes(32).toString('base64url');
+    reconnectSessions.set(reconnectSession, { userKey: req.user.storageKey, itemId: item.id, expiresAt: Date.now() + 30 * 60_000 });
+    res.json({ link_token: data.link_token, reconnect_session: reconnectSession });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+app.post('/api/items/:id/reconnected', plaidCostLimiter({ scope: 'plaid_reconnect_sync', userLimit: 5, ipLimit: 20, windowMs: 15 * 60_000 }), async (req, res) => {
+  const reconnectSession = String(req.body?.reconnect_session || '');
+  const session = reconnectSessions.get(reconnectSession);
+  reconnectSessions.delete(reconnectSession);
+  if (!session || session.expiresAt < Date.now() || session.userKey !== req.user.storageKey || session.itemId !== req.params.id) return res.status(400).json({ error: 'This reconnect session expired. Please try again.' });
+  try {
+    const store = await loadStore(req.user);
+    const item = store.items.find((candidate) => candidate.id === req.params.id && !candidate.demo);
+    if (!item) return res.status(404).json({ error: 'Connection not found.' });
+    await syncItem(store, item);
+    hideDuplicateAccounts(store);
+    snapshotNetWorth(store);
+    snapshotInvestments(store);
+    await saveStore(req.user, store);
+    res.json({ ok: true });
+  } catch (error) {
+    console.warn('Reconnect sync failed:', error.message);
+    res.status(503).json({ error: 'Your institution was reconnected, but its latest data is still catching up. We will retry automatically.' });
+  }
 });
 
 app.post('/api/plaid/create_link_token', plaidCostLimiter({ scope: 'plaid_link_token', userLimit: 5, ipLimit: 20, windowMs: 15 * 60_000 }), async (req, res) => {

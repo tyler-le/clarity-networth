@@ -432,7 +432,7 @@ function renderConnections(items) {
   const realItems = items.filter((item) => !item.demo);
   const panel = $('#connectionsList');
   const health = new Map((state.dashboard?.connectionHealth || []).map((entry) => [entry.id, entry]));
-  panel.innerHTML = realItems.length ? realItems.map((item) => { const status = health.get(item.id); const detail = status?.state === 'healthy' ? 'Up to date' : status?.state === 'stale' ? 'Update delayed · retrying automatically' : 'Update needs attention · retrying automatically'; return `<div class="connection-row"><div>${item.institution_logo ? `<img class="connection-logo" src="${escapeHtml(item.institution_logo)}" alt="" />` : '<span class="connection-fallback" aria-hidden="true">⌂</span>'}<span>${escapeHtml(item.institution_name)}<small class="connection-status ${status?.state || ''}">${detail}</small></span></div><button class="unlink-button" data-unlink="${escapeHtml(item.id)}">Unlink</button></div>`; }).join('') : '<div class="empty">No connected institutions.</div>';
+  panel.innerHTML = realItems.length ? realItems.map((item) => { const status = health.get(item.id); const needsReconnect = status?.state === 'attention'; const detail = status?.state === 'healthy' ? 'Up to date' : status?.state === 'stale' ? 'Update delayed · retrying automatically' : 'Reconnect to resume updates'; return `<div class="connection-row"><div>${item.institution_logo ? `<img class="connection-logo" src="${escapeHtml(item.institution_logo)}" alt="" />` : '<span class="connection-fallback" aria-hidden="true">⌂</span>'}<span>${escapeHtml(item.institution_name)}<small class="connection-status ${status?.state || ''}">${detail}</small></span></div><span class="connection-actions">${needsReconnect ? `<button class="reconnect-button" data-reconnect="${escapeHtml(item.id)}">Reconnect</button>` : ''}<button class="unlink-button" data-unlink="${escapeHtml(item.id)}">Unlink</button></span></div>`; }).join('') : '<div class="empty">No connected institutions.</div>';
 }
 
 const spendingColors = ['#1f6f4a', '#7ea98b', '#d5a75f', '#b88692', '#9ca9bd', '#c4c9c1'];
@@ -920,6 +920,25 @@ async function connectPlaid() {
   }
 }
 
+async function reconnectPlaid(itemId) {
+  if (state.demoPreview) return;
+  try {
+    const { link_token, reconnect_session } = await api(`/api/items/${itemId}/create_reconnect_token`, { method: 'POST', body: '{}' });
+    if (!window.Plaid) throw new Error('Plaid Link failed to load. Check your internet connection.');
+    const handler = window.Plaid.create({
+      token: link_token,
+      onSuccess: async () => {
+        showNotice('Refreshing your connection…');
+        await api(`/api/items/${itemId}/reconnected`, { method: 'POST', body: JSON.stringify({ reconnect_session }) });
+        await loadAll();
+        showNotice('Institution reconnected.', 'success');
+      },
+      onExit: (err) => { if (err) showNotice(err.display_message || err.error_message || 'Reconnect closed before it was completed.'); }
+    });
+    handler.open();
+  } catch (error) { showNotice(error.message); }
+}
+
 function showConnectionOnboarding() {
   try {
     if (localStorage.getItem(onboardingStorageKey)) return;
@@ -1124,6 +1143,8 @@ $('#goalForm').addEventListener('submit', async (event) => {
 $('#connectionAttentionAction').addEventListener('click', () => setView('profile'));
 $('#clarityCheckinAction').addEventListener('click', () => setView($('#clarityCheckin').dataset.action || 'overview'));
 $('#connectionsList').addEventListener('click', async (event) => {
+  const reconnect = event.target.closest('[data-reconnect]');
+  if (reconnect) { await reconnectPlaid(reconnect.dataset.reconnect); return; }
   const button = event.target.closest('[data-unlink]');
   if (!button) return;
   if (!window.confirm('Unlink this institution? Its accounts will be removed from Clarity.')) return;

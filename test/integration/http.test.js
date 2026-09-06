@@ -132,3 +132,12 @@ integrationTest('caps cost-sensitive Plaid link-token attempts before provider c
   assert.equal(blocked.status, 429);
   assert.match(blocked.body.error, /Too many account-connection attempts/);
 });
+
+integrationTest('does not create a Plaid reconnect session for another or missing connection', async () => {
+  const response = await request(app)
+    .post('/api/items/not-a-real-item/create_reconnect_token')
+    .set('Cookie', signedTestCookie('reconnect@example.com'))
+    .send({});
+  assert.equal(response.status, 404);
+  assert.equal(response.body.error, 'Connection not found.');
+});

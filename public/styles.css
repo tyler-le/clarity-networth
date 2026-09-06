@@ -303,6 +303,7 @@ dialog::backdrop { background: rgba(10,15,10,.28); backdrop-filter: blur(3px); }
 .connections-panel[open] summary { border-bottom: 1px solid var(--line); }
 .connection-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 15px; }
 .connection-row + .connection-row { border-top: 1px solid var(--line); }
+.connection-actions { display: inline-flex; align-items: center; gap: 10px; flex: 0 0 auto; }.reconnect-button { border: 0; background: var(--accent-soft); color: var(--accent); border-radius: 9px; padding: 7px 9px; font: inherit; font-size: 11px; font-weight: 750; }
 .connection-row > div { display: flex; align-items: center; gap: 9px; min-width: 0; font-size: 13px; font-weight: 650; }
 .connection-logo, .connection-fallback { display: grid; width: 25px; height: 25px; flex: 0 0 auto; place-items: center; border: 1px solid var(--line); border-radius: 7px; background: white; object-fit: contain; padding: 2px; }
 .connection-fallback { padding: 0; color: var(--muted); background: #f5f7f4; font-size: 12px; }
