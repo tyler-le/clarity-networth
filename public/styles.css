@@ -250,6 +250,9 @@ dialog::backdrop { background: rgba(10,15,10,.28); backdrop-filter: blur(3px); }
 .negative { color: var(--danger) !important; }
 
 .chart-context { min-height: 17px; margin-top: 8px; color: var(--muted); font-size: 11px; }
+/* Scrub metadata must reserve its line even before a point is selected;
+   otherwise toggling it moves the chart under a stationary pointer. */
+#netWorthChartContext.hidden, #investmentChartContext.hidden { display: block !important; visibility: hidden; }
 .line-chart { position: relative; touch-action: pan-y; user-select: none; }
 .scrub-line { stroke: #aab0aa; stroke-width: 1; stroke-dasharray: 3 4; opacity: 0; transition: opacity .12s ease; }
 .scrub-dot { fill: #fff; stroke: var(--accent); stroke-width: 3; opacity: 0; transition: opacity .12s ease; vector-effect: non-scaling-stroke; }
