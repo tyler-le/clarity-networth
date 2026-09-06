@@ -99,6 +99,24 @@ test('monthly spending keeps income separate for comparison', () => {
   });
 });
 
+test('multi-month cash flow excludes an incomplete current month', () => {
+  const store = { transactions: [
+    { date: '2026-06-15', amount: -1000, bucket: 'income', merchant_name: 'Payroll' },
+    { date: '2026-07-15', amount: -1000, bucket: 'income', merchant_name: 'Payroll' },
+    { date: '2026-08-15', amount: -1000, bucket: 'income', merchant_name: 'Payroll' },
+    { date: '2026-09-02', amount: 900, bucket: 'fixed', merchant_name: 'Early rent' }
+  ] };
+  const result = spendingSummary(store, '3m', new Date('2026-09-05T12:00:00'));
+  assert.equal(result.startDate, '2026-06-01');
+  assert.equal(result.endDate, '2026-08-31');
+  assert.equal(result.completedMonths, true);
+  assert.equal(result.income, 3000);
+  assert.equal(result.total, 0);
+  const monthToDate = spendingSummary(store, '1m', new Date('2026-09-05T12:00:00'));
+  assert.equal(monthToDate.completedMonths, false);
+  assert.equal(monthToDate.total, 900);
+});
+
 test('cash flow separates actual spending details from saving and investing', () => {
   const store = { transactions: [
     { date: '2026-09-01', amount: -5000, bucket: 'income', merchant_name: 'Payroll' },

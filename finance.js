@@ -235,12 +235,28 @@ export function cashRunway(store, anchorDate = new Date()) {
   return { cash, essentialMonthly, monthsObserved: monthTotals.length, runwayMonths: essentialMonthly ? cash / essentialMonthly : null };
 }
 
-function spendingStartDate(range, anchor = new Date()) {
-  const start = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+function spendingPeriod(range, anchor = new Date()) {
+  // Month-to-date is useful while a month is in progress. Comparisons over
+  // several months are not: early-month bills frequently arrive before a
+  // paycheck, producing a false-looking deficit. Those ranges therefore end
+  // with the last fully completed calendar month.
+  if (range === '1m') {
+    return {
+      startDate: new Date(anchor.getFullYear(), anchor.getMonth(), 1).toISOString().slice(0, 10),
+      endDate: anchor.toISOString().slice(0, 10),
+      completedMonths: false
+    };
+  }
+  const end = new Date(anchor.getFullYear(), anchor.getMonth(), 0);
+  const start = new Date(end.getFullYear(), end.getMonth(), 1);
   if (range === '3m') start.setMonth(start.getMonth() - 2);
   else if (range === 'ytd') start.setMonth(0);
   else if (range === '1y') start.setMonth(start.getMonth() - 11);
-  return start.toISOString().slice(0, 10);
+  return {
+    startDate: start.toISOString().slice(0, 10),
+    endDate: end.toISOString().slice(0, 10),
+    completedMonths: true
+  };
 }
 
 function spendingCategory(transaction) {
@@ -279,8 +295,7 @@ function cashFlowDetail(transaction) {
 }
 
 export function spendingSummary(store, range = '1m', anchor = new Date()) {
-  const startDate = spendingStartDate(range, anchor);
-  const endDate = anchor.toISOString().slice(0, 10);
+  const { startDate, endDate, completedMonths } = spendingPeriod(range, anchor);
   const categories = new Map();
   const merchants = new Map();
   const monthly = new Map();
@@ -379,14 +394,14 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
     .map(([name, amount]) => ({ name, amount }))
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 3);
-  const monthCount = range === '1m' ? 1 : range === '3m' ? 3 : range === 'ytd' ? anchor.getMonth() + 1 : 12;
+  const monthCount = Math.max(1, (new Date(`${endDate}T12:00:00`).getFullYear() - new Date(`${startDate}T12:00:00`).getFullYear()) * 12 + new Date(`${endDate}T12:00:00`).getMonth() - new Date(`${startDate}T12:00:00`).getMonth() + 1);
   const monthlyRows = [...new Set([...monthly.keys(), ...monthlyIncome.keys(), ...monthlyPreTaxRetirement.keys()])]
     .map((month) => ({ month, amount: monthly.get(month) || 0, income: monthlyIncome.get(month) || 0, pre_tax_retirement: monthlyPreTaxRetirement.get(month) || 0 }))
     .sort((a, b) => a.month.localeCompare(b.month));
   const income = [...monthlyIncome.values()].reduce((sum, amount) => sum + amount, 0);
   const preTaxRetirement = [...monthlyPreTaxRetirement.values()].reduce((sum, amount) => sum + amount, 0);
   const actualSpendCategories = [...actualSpendCategoryMap.values()].sort((a, b) => b.amount - a.amount);
-  return { range, startDate, endDate, total, income, actualSpend, actualSpendCategories, savingsAndInvestments, preTaxRetirement, monthlyAverage: total / monthCount, categories: categoryRows, topMerchants, monthly: monthlyRows, transactions: transactionRows };
+  return { range, startDate, endDate, completedMonths, total, income, actualSpend, actualSpendCategories, savingsAndInvestments, preTaxRetirement, monthlyAverage: total / monthCount, categories: categoryRows, topMerchants, monthly: monthlyRows, transactions: transactionRows };
 }
 
 function monthId(dateString) {
