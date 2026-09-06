@@ -105,9 +105,17 @@ test('cash-flow diagram stays readable on mobile and expands in-app', async ({ p
   await openDemo(page);
   await goToView(page, 'spending');
   await expect(page.locator('#cashflowSankey')).toContainText('Take-home');
+  const moreLabel = page.locator('#cashflowSankey .cashflow-more');
+  if (await moreLabel.count()) {
+    const [labelBox, svgBox] = await Promise.all([moreLabel.boundingBox(), page.locator('#cashflowSankey svg').boundingBox()]);
+    expect(labelBox && svgBox && labelBox.x >= svgBox.x && labelBox.x + labelBox.width <= svgBox.x + svgBox.width).toBe(true);
+  }
   await page.locator('#cashflowExpand').click();
   await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
   await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
+  await page.locator('#cashflowDialogContent [data-cashflow-category]').first().click();
+  await expect(page.locator('#cashflowDialog')).not.toHaveAttribute('open', '');
+  await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
 });
 
 test('cash-flow quality holds at every supported viewport', async ({ page }) => {

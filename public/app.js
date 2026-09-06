@@ -590,7 +590,9 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     paths += flow(middleX + middleW, spendY + 18, destinationX, y + 18, Number(row.amount || 0), 'var(--outflow-muted)');
     categories += block(destinationX, y, destinationW, 'var(--outflow-muted)', row.name, row.amount, row.key);
   });
-  const more = !expanded && allSpendCategories.length > actualCategories.length ? `<text x="${destinationX}" y="${height - 5}" class="cashflow-label">${allSpendCategories.length - actualCategories.length} more in expanded view</text>` : '';
+  const hiddenCategoryCount = allSpendCategories.length - actualCategories.length;
+  const moreLabel = compact ? `+${hiddenCategoryCount} more` : `${hiddenCategoryCount} more in expanded view`;
+  const more = !expanded && hiddenCategoryCount > 0 ? `<text x="${destinationX + 4}" y="${height - 5}" class="cashflow-label cashflow-more">${moreLabel}</text>` : '';
   el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Take-home income split into spending, saving, and investing">${paths}${block(sourceX, incomeY, sourceW, 'var(--income)', 'Take-home income', income, 'income', true)}${block(middleX, spendY, middleW, 'var(--outflow)', 'Actual spend', actualSpend, 'actual_spend')}${block(middleX, saveY, middleW, 'var(--save)', 'Save', savings, 'savings')}${block(middleX, investY, middleW, 'var(--invest)', 'Invest', investments, 'investments')}${categories}${more}</svg>`;
 }
 
@@ -1244,6 +1246,23 @@ $('#cashflowSankey').addEventListener('keydown', (event) => {
   const target = event.target.closest('[data-cashflow-category]');
   if (!target) return;
   event.preventDefault();
+  openSpendingCategory(target.dataset.cashflowCategory);
+});
+// The expanded dialog renders into a separate DOM node, so it needs the same
+// category interaction as the inline Sankey. Close it before revealing the
+// filtered activity to make the result immediately visible on every device.
+$('#cashflowDialogContent').addEventListener('click', (event) => {
+  const category = event.target.closest('[data-cashflow-category]')?.dataset.cashflowCategory;
+  if (!category) return;
+  $('#cashflowDialog').close();
+  openSpendingCategory(category);
+});
+$('#cashflowDialogContent').addEventListener('keydown', (event) => {
+  if (!['Enter', ' '].includes(event.key)) return;
+  const target = event.target.closest('[data-cashflow-category]');
+  if (!target) return;
+  event.preventDefault();
+  $('#cashflowDialog').close();
   openSpendingCategory(target.dataset.cashflowCategory);
 });
 $('#cashflowPreTax').addEventListener('click', () => openSpendingCategory('payroll_retirement'));
