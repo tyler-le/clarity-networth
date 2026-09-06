@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentLinkBalances, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
 import { normalizeCandles } from '../market-data.js';
-import { filterSnapshots, hasUsableNetWorthTrend, netWorthTimelineWindow, scrubIndex } from '../public/chart-utils.js';
+import { filterSnapshots, hasUsableNetWorthTrend, scrubIndex } from '../public/chart-utils.js';
 
 test('estimated history is removed before the chart is served', () => {
   const store = {
@@ -55,12 +55,6 @@ test('scrubbing clamps to endpoints and selects the nearest data point', () => {
   assert.equal(scrubIndex({ ...base, clientX: 50 }), 0);
   assert.equal(scrubIndex({ ...base, clientX: 250 }), 2);
   assert.equal(scrubIndex({ ...base, clientX: 500 }), 4);
-});
-
-test('net-worth timeline retains a selected range before verified tracking began', () => {
-  const anchor = new Date('2026-09-06T12:00:00');
-  assert.deepEqual(netWorthTimelineWindow('1y', [{ date: '2026-09-05' }, { date: '2026-09-06' }], anchor), { startDate: '2025-09-30', endDate: '2026-09-06' });
-  assert.deepEqual(netWorthTimelineWindow('all', [{ date: '2026-09-05' }], anchor), { startDate: '2026-09-05', endDate: '2026-09-06' });
 });
 
 test('net-worth waits for enough verified coverage before drawing a trend', () => {
@@ -211,6 +205,7 @@ test('investment reconstruction reverses later purchases and uses historical clo
   const history = reconstructInvestmentHistory(store, '2026-09-05');
   assert.equal(history.find((snapshot) => snapshot.date === '2026-09-01').value, 800);
   assert.equal(history.at(-1).value, 1100);
+  assert.deepEqual(history.map((snapshot) => snapshot.date), ['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04', '2026-09-05']);
   assert.ok(history.every((snapshot) => snapshot.source === 'reconstructed'));
 });
 

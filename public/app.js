@@ -1,4 +1,4 @@
-import { filterSnapshots, hasUsableNetWorthTrend, netWorthTimelineWindow, scrubIndex } from './chart-utils.js';
+import { filterSnapshots, hasUsableNetWorthTrend, scrubIndex } from './chart-utils.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -196,20 +196,20 @@ function renderNetWorthChartWhenVisible(attempt = 0) {
     return;
   }
   restoreNetWorthHero();
-  renderLineChart(visibleSnapshots(state.dashboard.snapshots || []), state.dashboard.summary, netWorthTimelineWindow(state.networthRange, state.dashboard.snapshots || []));
+  renderLineChart(visibleSnapshots(state.dashboard.snapshots || []), state.dashboard.summary);
 }
 
 function axisCurrency(value) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 0 }).format(value);
 }
 
-function renderLineChart(snapshots, summary, timeline = netWorthTimelineWindow(state.networthRange, snapshots)) {
+function renderLineChart(snapshots, summary) {
   const el = $('#netWorthChart');
   // A hidden view reports a zero width. Leave the existing chart intact until
   // the view is visible, when setView/resize will render it at real size.
   if (el.clientWidth < 80 || el.clientHeight < 60) return;
   if (!hasUsableNetWorthTrend(snapshots)) {
-    renderTimelineStart(el, snapshots.at(-1), summary, timeline);
+    renderTimelineStart(el, snapshots.at(-1), summary);
     return;
   }
 
@@ -217,8 +217,8 @@ function renderLineChart(snapshots, summary, timeline = netWorthTimelineWindow(s
   const height = Math.max(1, Math.round(el.clientHeight || 150));
   const plotLeft = 48, plotRight = 8, plotTop = 8, plotBottom = height - 22;
   const dateValue = (date) => new Date(`${date}T12:00:00`).getTime();
-  const domainStart = dateValue(timeline.startDate);
-  const domainEnd = Math.max(domainStart + 86_400_000, dateValue(timeline.endDate));
+  const domainStart = dateValue(snapshots[0].date);
+  const domainEnd = Math.max(domainStart + 86_400_000, dateValue(snapshots.at(-1).date));
   const xForDate = (date) => plotLeft + ((dateValue(date) - domainStart) / (domainEnd - domainStart)) * (width - plotLeft - plotRight);
   const vals = snapshots.map((s) => Number(s.net_worth));
   let min = Math.min(...vals), max = Math.max(...vals);
@@ -240,15 +240,9 @@ function renderLineChart(snapshots, summary, timeline = netWorthTimelineWindow(s
   const dateLabel = (time) => new Date(time).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   const tickTimes = width > 420 ? [domainStart, (domainStart + domainEnd) / 2, domainEnd] : [domainStart, domainEnd];
   const xAxis = tickTimes.map((time, index) => `<text x="${(plotLeft + ((time - domainStart) / (domainEnd - domainStart)) * (width - plotLeft - plotRight)).toFixed(1)}" y="${height - 5}" text-anchor="${index === 0 ? 'start' : index === tickTimes.length - 1 ? 'end' : 'middle'}" class="chart-axis-label">${dateLabel(time)}</text>`).join('');
-  const firstX = Math.max(plotLeft, points[0][0]);
-  const lastX = Math.min(width - plotRight, points.at(-1)[0]);
-  const unavailable = (x, unavailableWidth) => unavailableWidth > 1
-    ? `<rect x="${x.toFixed(1)}" y="${plotTop}" width="${unavailableWidth.toFixed(1)}" height="${plotBottom - plotTop}" class="chart-unavailable"/>${unavailableWidth > 92 ? `<text x="${(x + unavailableWidth / 2).toFixed(1)}" y="${plotTop + 18}" text-anchor="middle" class="chart-unavailable-label">No verified history</text>` : ''}`
-    : '';
-  const unavailableHistory = unavailable(plotLeft, firstX - plotLeft) + unavailable(lastX, width - plotRight - lastX);
   el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img">
     <defs><linearGradient id="areaFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f6f4a" stop-opacity=".16"/><stop offset="1" stop-color="#1f6f4a" stop-opacity="0"/></linearGradient></defs>
-    ${unavailableHistory}${yAxis}${xAxis}<path d="${area}" fill="url(#areaFade)"/><path d="${d}" fill="none" stroke="#1f6f4a" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>
+    ${yAxis}${xAxis}<path d="${area}" fill="url(#areaFade)"/><path d="${d}" fill="none" stroke="#1f6f4a" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>
     <line class="scrub-line" x1="0" y1="${plotTop}" x2="0" y2="${plotBottom}"/>
     <circle class="scrub-dot" cx="0" cy="0" r="5"/>
   </svg>
@@ -306,31 +300,20 @@ function renderLineChart(snapshots, summary, timeline = netWorthTimelineWindow(s
   svg.addEventListener('dragstart', (event) => event.preventDefault());
 }
 
-function renderTimelineStart(el, snapshot, summary, timeline) {
+function renderTimelineStart(el, snapshot, summary) {
   const date = snapshot?.date ? new Date(`${snapshot.date}T12:00:00`) : new Date();
   const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const width = Math.max(1, Math.round(el.clientWidth || 700));
   const height = Math.max(1, Math.round(el.clientHeight || 150));
-  const baseline = Math.round(height * .64);
-  const plotLeft = 14, plotRight = 18;
-  const start = new Date(`${timeline.startDate}T12:00:00`).getTime();
-  const end = Math.max(start + 86_400_000, new Date(`${timeline.endDate}T12:00:00`).getTime());
-  const snapshotTime = new Date(`${snapshot?.date || timeline.endDate}T12:00:00`).getTime();
-  // Keep the initial state intentionally quiet. A two-day difference is real,
-  // but a full-height line makes it look like a meaningful market trend.
-  const pointX = Math.max(plotLeft + 70, Math.min(width - plotRight, Math.round(plotLeft + ((snapshotTime - start) / (end - start)) * (width - plotLeft - plotRight))));
-  const statusX = Math.max(plotLeft + 100, Math.min(width - plotRight - 100, width * .5));
-  const startLabel = new Date(`${timeline.startDate}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-  const endLabel = new Date(`${timeline.endDate}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  const baseline = Math.round(height * .62);
+  const lineStart = Math.round(width * .3), pointX = Math.round(width * .7), statusX = width / 2;
   el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Net worth tracking began ${label}; additional verified history is needed before a trend is shown">
     <text x="${statusX}" y="27" text-anchor="middle" class="chart-unavailable-label">Tracking began ${label}</text>
     <text x="${statusX}" y="44" text-anchor="middle" class="chart-start-detail">A trend will appear after a few more verified days</text>
-    <line x1="${plotLeft}" y1="${baseline}" x2="${Math.max(plotLeft, pointX - 18)}" y2="${baseline}" class="chart-unavailable-line"/>
-    <line x1="${Math.max(plotLeft, pointX - 52)}" y1="${baseline}" x2="${pointX}" y2="${baseline}" class="chart-start-line"/>
+    <line x1="${lineStart}" y1="${baseline}" x2="${pointX}" y2="${baseline}" class="chart-start-line"/>
     <circle cx="${pointX}" cy="${baseline}" r="7" class="chart-start-point"/>
     <text x="${pointX - 11}" y="${baseline - 13}" text-anchor="end" class="chart-start-value">Current</text>
-    <text x="${plotLeft}" y="${height - 9}" text-anchor="start" class="sankey-label">${startLabel}</text>
-    <text x="${width - plotRight}" y="${height - 9}" text-anchor="end" class="sankey-label">${endLabel}</text>
+    <text x="${pointX}" y="${height - 9}" text-anchor="middle" class="sankey-label">${label}</text>
   </svg>`;
 }
 
@@ -668,7 +651,7 @@ function renderPortfolioChart(data) {
     tooltip.style.left = `${Math.max(8, Math.min(rect.width - 8, relativeX))}px`;
     tooltip.textContent = fmt.format(Number(snapshot.value || 0));
     $('#investmentTotal').textContent = fmt.format(Number(snapshot.value || 0));
-    $('#investmentChartDate').textContent = new Date(`${snapshot.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    $('#investmentChartDate').textContent = `${new Date(`${snapshot.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${snapshot.source === 'reconstructed' ? ' · Estimated' : ''}`;
     $('#investmentChartContext').classList.remove('hidden');
   };
   el.addEventListener('pointerdown', (event) => { active = true; el.setPointerCapture?.(event.pointerId); showPoint(event); });

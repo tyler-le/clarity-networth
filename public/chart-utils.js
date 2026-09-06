@@ -15,19 +15,6 @@ export function filterSnapshots(snapshots, range, anchor = new Date()) {
   return snapshots.filter((snapshot) => (!startDate || snapshot.date >= startDate) && snapshot.date <= endDate);
 }
 
-// Keep the selected time window visible even before Clarity has collected
-// enough verified snapshots to fill it. The UI can then mark unsupported time
-// instead of implying that the first recorded point belongs at the start.
-export function netWorthTimelineWindow(range, snapshots, anchor = new Date()) {
-  const today = anchor.toISOString().slice(0, 10);
-  const sorted = [...snapshots].sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  if (range === 'all') {
-    return { startDate: sorted[0]?.date || today, endDate: today };
-  }
-  const bounds = netWorthRangeBounds(range, anchor);
-  return { startDate: bounds.startDate || today, endDate: bounds.endDate < today ? bounds.endDate : today };
-}
-
 export function hasUsableNetWorthTrend(snapshots) {
   if (snapshots.length < 4) return false;
   const ordered = [...snapshots].sort((a, b) => String(a.date).localeCompare(String(b.date)));

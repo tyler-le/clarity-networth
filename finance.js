@@ -170,9 +170,11 @@ export function reconstructInvestmentHistory(store, endDate = new Date().toISOSt
   const start = new Date(`${endDate}T12:00:00`);
   start.setFullYear(start.getFullYear() - years);
   start.setDate(1);
+  // Market prices are daily, so the reconstruction should be daily too. This
+  // gives the portfolio chart honest day-by-day scrubbing without inventing
+  // values for full net worth, where cash and debt histories are incomplete.
   const dates = [];
-  for (const date = new Date(start); date <= new Date(`${endDate}T12:00:00`); date.setMonth(date.getMonth() + 1)) dates.push(new Date(date).toISOString().slice(0, 10));
-  if (dates.at(-1) !== endDate) dates.push(endDate);
+  for (const date = new Date(start); date <= new Date(`${endDate}T12:00:00`); date.setDate(date.getDate() + 1)) dates.push(new Date(date).toISOString().slice(0, 10));
   const snapshots = [];
   for (const date of dates) {
     let value = 0;
