@@ -382,6 +382,19 @@ export function clarityCheckin(store, anchorDate = new Date()) {
       detail: `${formatDollars(review.outlier.difference)} above your typical month in ${monthLabel(review.month)}. Everything else looks within your usual pattern.`
     };
   }
+  // A person does not need another routine cash-flow verdict when things are
+  // calm. Surface one clear freedom milestone instead, while reserving the
+  // check-in for connection problems and genuinely material spending changes.
+  const freedom = calculateFire(store, summarizeRange(store).netWorth);
+  const nextStep = freedom.ladder?.find((step) => step.target > 0 && !step.complete);
+  if (nextStep) {
+    const progress = Math.min(99, Math.floor(Number(nextStep.progress || 0)));
+    return {
+      available: true, tone: 'steady', action: 'retirement', actionLabel: 'View your path',
+      title: `Next: ${nextStep.name}`,
+      detail: `${progress}% of ${formatDollars(nextStep.target)} · ${nextStep.detail}.`
+    };
+  }
   if (review.available && review.income > 0) {
     const remaining = review.income - review.spend - review.saveInvest;
     if (remaining >= 0) {

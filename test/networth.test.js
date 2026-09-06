@@ -331,7 +331,7 @@ test('monthly review surfaces only a large, repeatable category deviation', () =
   assert.equal(quiet.outlier, null);
 });
 
-test('clarity check-in gives a grounded cash-flow conclusion and prioritizes a material outlier', () => {
+test('clarity check-in uses a freedom step when calm and prioritizes a material outlier', () => {
   const transactions = [];
   for (const month of ['2026-04', '2026-05', '2026-06']) {
     transactions.push({ date: `${month}-01`, amount: -3000, bucket: 'income' });
@@ -341,11 +341,31 @@ test('clarity check-in gives a grounded cash-flow conclusion and prioritizes a m
   transactions.push({ date: '2026-07-10', amount: 100, bucket: 'guilt_free', pfc_primary: 'TRAVEL' });
   const steady = clarityCheckin({ transactions, accounts: [], items: [] }, new Date('2026-08-15T12:00:00'));
   assert.equal(steady.tone, 'steady');
-  assert.match(steady.title, /within take-home income/);
+  assert.match(steady.title, /Next: Coast FI/);
   transactions.push({ date: '2026-07-20', amount: 400, bucket: 'guilt_free', pfc_primary: 'TRAVEL' });
   const outlier = clarityCheckin({ transactions, accounts: [], items: [] }, new Date('2026-08-15T12:00:00'));
   assert.equal(outlier.tone, 'watch');
   assert.match(outlier.title, /Travel/);
+});
+
+test('clarity check-in uses one next freedom step when cash flow has no material issue', () => {
+  const store = {
+    accounts: [
+      { type: 'depository', current_balance: 4500 },
+      { type: 'investment', current_balance: 20000 }
+    ],
+    items: [],
+    transactions: [
+      { date: '2026-07-01', amount: 1000, bucket: 'fixed' },
+      { date: '2026-07-15', amount: 250, bucket: 'guilt_free' },
+      { date: '2026-08-01', amount: 1000, bucket: 'fixed' },
+      { date: '2026-08-15', amount: 250, bucket: 'guilt_free' }
+    ]
+  };
+  const checkin = clarityCheckin(store, new Date('2026-09-06T12:00:00Z'));
+  assert.equal(checkin.action, 'retirement');
+  assert.match(checkin.title, /Next: Work-break runway/);
+  assert.match(checkin.detail, /6 months of essentials/);
 });
 
 test('connection health stays quiet through transient delays and failures', () => {

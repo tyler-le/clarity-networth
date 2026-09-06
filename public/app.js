@@ -147,7 +147,6 @@ function restoreNetWorthHero() {
     $('#netWorthDelta').textContent = 'Connect your first account';
     $('#netWorthChartContext').classList.add('hidden');
     $('#netWorthChart').innerHTML = '<div class="chart-empty"><span aria-hidden="true">⌁</span><b>Your financial picture starts here</b><small>Connect an account whenever you’re ready.</small></div>';
-    renderNetWorthInsights([]);
     return;
   }
   $('#netWorth').textContent = fmt.format(s.netWorth);
@@ -155,7 +154,6 @@ function restoreNetWorthHero() {
   const snaps = visibleSnapshots(d.snapshots || []);
   if (snaps.length < 2) {
     $('#netWorthDelta').textContent = 'Tracking starts today';
-    renderNetWorthInsights(snaps);
     return;
   }
   const old = snaps.length > 1 ? Number(snaps[0].net_worth) : s.netWorth;
@@ -163,18 +161,6 @@ function restoreNetWorthHero() {
   const startDate = snaps[0]?.date ? new Date(`${snaps[0].date}T12:00:00`) : null;
   const periodStart = startDate?.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) || 'start';
   $('#netWorthDelta').textContent = `${delta >= 0 ? '+' : '−'}${fmt.format(Math.abs(delta))} since ${periodStart}`;
-  renderNetWorthInsights(snaps);
-}
-
-function renderNetWorthInsights() {
-  const runway = state.dashboard?.runway;
-  if (!runway?.essentialMonthly) {
-    $('#cashRunway').textContent = fmt.format(Number(runway?.cash || 0));
-    $('#cashRunwayDetail').textContent = 'Add a little fixed-cost history to estimate your runway.';
-    return;
-  }
-  $('#cashRunway').textContent = `${Math.min(99, Number(runway.runwayMonths || 0)).toFixed(1)} months`;
-  $('#cashRunwayDetail').textContent = `${fmt.format(Number(runway.cash || 0))} in cash & savings · ${fmt.format(Number(runway.essentialMonthly))}/mo essentials`;
 }
 
 function renderClarityLayer(data) {
