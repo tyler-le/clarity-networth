@@ -83,20 +83,20 @@
             <div class="line-chart" id="netWorthChart" aria-label="Scrubbable net worth history"></div>
           </article>
           <article class="card split-card">
-            <button class="networth-detail-trigger" type="button" data-networth-detail="assets" aria-label="View asset details">
+            <div>
               <div class="card-label">Assets</div>
               <div class="metric" id="assets">—</div>
-            </button>
+            </div>
             <div class="divider"></div>
-            <button class="networth-detail-trigger" type="button" data-networth-detail="liabilities" aria-label="View liability details">
+            <div>
               <div class="card-label">Liabilities</div>
               <div class="metric" id="liabilities">—</div>
-            </button>
+            </div>
           </article>
         </div>
         <div class="networth-insights">
-          <button class="card networth-insight change-insight networth-detail-trigger" type="button" data-networth-detail="change"><div class="card-label">What changed</div><strong id="netWorthChange">—</strong><p id="netWorthChangeDetail">Your balance movement will appear here.</p></button>
-          <button class="card networth-insight runway-insight networth-detail-trigger" type="button" data-networth-detail="runway"><div><div class="card-label">Cash runway</div><strong id="cashRunway">—</strong><p id="cashRunwayDetail">Based on cash and essential spending.</p></div><span class="runway-mark" aria-hidden="true">◒</span></button>
+          <article class="card networth-insight change-insight"><div class="card-label">What changed</div><strong id="netWorthChange">—</strong><p id="netWorthChangeDetail">Your balance movement will appear here.</p></article>
+          <article class="card networth-insight runway-insight"><div><div class="card-label">Cash runway</div><strong id="cashRunway">—</strong><p id="cashRunwayDetail">Based on cash and essential spending.</p></div><span class="runway-mark" aria-hidden="true">◒</span></article>
         </div>
         <!-- Temporary compatibility targets: an older no-cache client script
              may still be active while its service worker updates. They remain
@@ -196,13 +196,6 @@
         <p class="retirement-info-note">A planning estimate based on your tracked spending and plan assumptions—not a guarantee.</p>
       </div>
       <footer class="retirement-info-footer"><button class="primary" value="close">Got it</button></footer>
-    </form>
-  </dialog>
-  <dialog class="retirement-info-dialog networth-detail-dialog" id="networthDetailDialog" aria-labelledby="networthDetailTitle">
-    <form method="dialog">
-      <header class="retirement-info-head"><div class="card-label" id="networthDetailLabel">NET WORTH</div><button type="button" class="dialog-close" id="networthDetailClose" aria-label="Close">×</button></header>
-      <div class="retirement-info-body"><h2 id="networthDetailTitle">—</h2><p id="networthDetailDescription"></p><div class="networth-detail-list" id="networthDetailList"></div></div>
-      <footer class="retirement-info-footer"><button class="primary" value="close">Done</button></footer>
     </form>
   </dialog>
   <dialog class="connection-onboarding-dialog" id="connectionOnboardingDialog" aria-labelledby="connectionOnboardingTitle">

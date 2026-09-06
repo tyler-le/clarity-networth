@@ -111,17 +111,6 @@ test('net-worth history can be scrubbed and always identifies the selected date'
   expect(afterScrub?.y).toBe(box.y);
 });
 
-test('net-worth summaries reveal supporting detail only when requested', async ({ page }) => {
-  await openDemo(page);
-  await page.locator('[data-networth-detail="assets"]').click();
-  await expect(page.locator('#networthDetailDialog')).toHaveAttribute('open', '');
-  await expect(page.locator('#networthDetailTitle')).toContainText('Assets');
-  await expect(page.locator('#networthDetailList .networth-detail-row').first()).toBeVisible();
-  await page.locator('#networthDetailClose').click();
-  await page.locator('[data-networth-detail="runway"]').click();
-  await expect(page.locator('#networthDetailTitle')).toContainText('months covered');
-});
-
 test('holding details preserve account context without crowding the overview', async ({ page }) => {
   await openDemo(page);
   await page.locator('.mobile-nav [data-view="investments"]').click();
