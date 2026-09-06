@@ -71,17 +71,6 @@ function setAppStatus(message = '') {
   el.classList.toggle('hidden', !message);
 }
 
-function latestSyncLabel(items = []) {
-  const dates = items.map((item) => item.last_synced_at).filter(Boolean).map((value) => new Date(value)).filter((date) => !Number.isNaN(date.getTime()));
-  if (!dates.length) return 'Waiting for your first account update';
-  const latest = new Date(Math.max(...dates));
-  const minutes = Math.max(0, Math.round((Date.now() - latest.getTime()) / 60_000));
-  if (minutes < 2) return 'Updated just now';
-  if (minutes < 60) return `Updated ${minutes} min ago`;
-  if (minutes < 24 * 60) return `Updated ${Math.round(minutes / 60)} hr ago`;
-  return `Updated ${latest.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-}
-
 function applyTheme(theme, persist = true) {
   const dark = theme === 'dark';
   document.documentElement.dataset.theme = dark ? 'dark' : '';
@@ -127,25 +116,19 @@ function restoreNetWorthHero() {
   if (!d) return;
   const s = d.summary;
   const accounts = d.accounts || [];
-  const connected = (d.items || []).filter((item) => !item.demo).length;
   if (!accounts.length) {
     $('#netWorth').textContent = '—';
     $('#netWorthDelta').textContent = 'Connect your first account';
-    $('#todaySummary').textContent = 'Your current balances and timeline will appear here—nothing to enter manually.';
-    $('#netWorthChartDate').textContent = 'Your timeline starts with your first verified balance.';
+    $('#netWorthChartContext').classList.add('hidden');
     $('#netWorthChart').innerHTML = '<div class="chart-empty"><span aria-hidden="true">⌁</span><b>Your financial picture starts here</b><small>Connect an account whenever you’re ready.</small></div>';
     renderNetWorthInsights([]);
     return;
   }
   $('#netWorth').textContent = fmt.format(s.netWorth);
-  $('#todaySummary').textContent = accounts.length
-    ? `${latestSyncLabel(d.items)} · ${connected || accounts.length} connected ${connected === 1 ? 'institution' : 'institutions'}`
-    : 'Connect an account to see your current financial picture.';
+  $('#netWorthChartContext').classList.add('hidden');
   const snaps = visibleSnapshots(d.snapshots || []);
   if (snaps.length < 2) {
     $('#netWorthDelta').textContent = 'Tracking starts today';
-    const start = snaps[0]?.date ? new Date(`${snaps[0].date}T12:00:00`) : new Date();
-    $('#netWorthChartDate').textContent = `Tracking since ${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
     renderNetWorthInsights(snaps);
     return;
   }
@@ -154,8 +137,6 @@ function restoreNetWorthHero() {
   const startDate = snaps[0]?.date ? new Date(`${snaps[0].date}T12:00:00`) : null;
   const periodStart = startDate?.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) || 'start';
   $('#netWorthDelta').textContent = `${delta >= 0 ? '+' : '−'}${fmt.format(Math.abs(delta))} since ${periodStart}`;
-  const estimateNote = snaps.some((snapshot) => snapshot.source === 'estimated') ? 'Estimated history · ' : '';
-  $('#netWorthChartDate').textContent = `${estimateNote}Drag across the chart to view history`;
   renderNetWorthInsights(snaps);
 }
 
@@ -269,6 +250,7 @@ function renderLineChart(snapshots, summary) {
     $('#netWorth').textContent = fmt.format(Number(snap.net_worth));
     $('#netWorthDelta').innerHTML = `<span class="positive">Assets ${fmt.format(Number(snap.assets || 0))}</span><span class="networth-separator"> · </span><span class="negative">Debt ${fmt.format(Number(snap.liabilities || 0))}</span>`;
     $('#netWorthChartDate').textContent = `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${snap.source === 'estimated' ? ' · Estimated from activity' : ''}`;
+    $('#netWorthChartContext').classList.remove('hidden');
   };
 
   el.addEventListener('pointerdown', (event) => {
@@ -559,7 +541,8 @@ function renderPortfolioChart(data) {
   let active = false;
   const restore = () => {
     $('#investmentTotal').textContent = fmt.format(Number(snapshots.at(-1)?.value ?? data.total ?? 0));
-    $('#investmentChartDate').textContent = 'Drag across the chart to view history';
+    $('#investmentChartDate').textContent = '';
+    $('#investmentChartContext').classList.add('hidden');
   };
   const showPoint = (event) => {
     const rect = el.getBoundingClientRect();
@@ -575,6 +558,7 @@ function renderPortfolioChart(data) {
     tooltip.textContent = fmt.format(Number(snapshot.value || 0));
     $('#investmentTotal').textContent = fmt.format(Number(snapshot.value || 0));
     $('#investmentChartDate').textContent = new Date(`${snapshot.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    $('#investmentChartContext').classList.remove('hidden');
   };
   el.addEventListener('pointerdown', (event) => { active = true; el.setPointerCapture?.(event.pointerId); showPoint(event); });
   el.addEventListener('pointermove', (event) => { if (event.pointerType === 'mouse' || active) showPoint(event); });
@@ -615,7 +599,8 @@ function renderInvestments(data) {
   const reconstructed = snapshots.some((snapshot) => snapshot.source === 'reconstructed');
   const changeCopy = periodChange == null ? (started ? `Tracking since ${started}` : 'Sync to begin tracking') : `${periodChange >= 0 ? '+' : '−'}${fmt.format(Math.abs(periodChange))} ${periodLabel}`;
   $('#investmentContext').textContent = accounts.length ? `${accounts.length} connected account${accounts.length === 1 ? '' : 's'} · ${changeCopy}` : 'Connect an investment account to begin.';
-  $('#investmentChartDate').textContent = snapshots.length > 1 ? 'Drag across the chart to view history' : started ? `Tracking since ${started}` : 'Historical value appears after sync.';
+  $('#investmentChartDate').textContent = '';
+  $('#investmentChartContext').classList.add('hidden');
   renderPortfolioChart(data);
   const allocation = data.allocation || [];
   $('#investmentAllocationCard').classList.toggle('hidden', !data.positionsAvailable);
