@@ -190,7 +190,7 @@
       <p id="manualHoldingHelp">Your institution did not return holdings for this balance. Add the missing position so your allocation is accurate. This does not change anything at your institution.</p>
       <label>Security or ticker<input id="manualHoldingTicker" name="ticker" maxlength="24" autocomplete="off" placeholder="e.g. VTI" required /></label>
       <label>Display name <input id="manualHoldingName" name="name" maxlength="80" autocomplete="off" placeholder="Optional" /></label>
-      <label>Asset type<select id="manualHoldingClass" name="asset_class"><option value="Other">Other</option><option value="Equities">Equities</option><option value="Funds">Funds</option><option value="Fixed income">Fixed income</option><option value="Cash">Cash</option><option value="Crypto">Crypto</option></select></label>
+      <label>Asset type<select id="manualHoldingClass" name="asset_class" required><option value="" selected disabled>Choose asset type</option><option value="Equities">Equities</option><option value="Funds">Funds</option><option value="Fixed income">Fixed income</option><option value="Cash">Cash</option><option value="Crypto">Crypto</option><option value="Other">Other</option></select></label>
       <label>Current value<input id="manualHoldingValue" name="value" type="number" min="0.01" step="0.01" inputmode="decimal" required /></label>
       <div class="dialog-actions"><button type="button" class="secondary" id="manualHoldingCancel">Cancel</button><button class="primary" id="manualHoldingSave" type="submit">Add holding</button></div>
     </form>

@@ -64,6 +64,7 @@ integrationTest('protects personal financial endpoints without a session', async
     ['get', '/api/spending?range=1y'],
     ['get', '/api/investments'],
     ['post', '/api/investment-accounts/example/manual-holdings'],
+    ['patch', '/api/manual-holdings/example/asset-class'],
     ['delete', '/api/manual-holdings/example'],
     ['get', '/api/retirement'],
     ['get', '/api/data-export'],

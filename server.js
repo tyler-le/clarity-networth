@@ -713,6 +713,17 @@ app.delete('/api/manual-holdings/:id', async (req, res) => {
   res.json(investmentSummary(activeStore(store)));
 });
 
+app.patch('/api/manual-holdings/:id/asset-class', async (req, res) => {
+  const assetClass = String(req.body?.asset_class || '').trim();
+  if (!holdingAssetClasses.has(assetClass)) return res.status(400).json({ error: 'Choose an asset type.' });
+  const store = await loadStore(req.user);
+  const position = (store.manual_holdings || []).find((record) => record.id === req.params.id);
+  if (!position) return res.status(404).json({ error: 'Manual holding not found.' });
+  position.asset_class = assetClass;
+  await saveStore(req.user, store);
+  res.json(investmentSummary(activeStore(store)));
+});
+
 app.post('/api/demo-mode', async (req, res) => {
   const store = await loadStore(req.user);
   store.settings.demo_mode = Boolean(req.body?.enabled);

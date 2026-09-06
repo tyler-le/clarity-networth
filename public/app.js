@@ -751,7 +751,7 @@ function renderInvestments(data) {
     const share = data.total ? Math.max(0, Number(position.value || 0) / Number(data.total) * 100) : 0;
     const accountBreakdown = position.positions.map((part) => {
       const categoryControl = canEdit ? `<select data-position-class="${escapeHtml(part.id)}" aria-label="Asset class for ${escapeHtml(part.name)} in ${escapeHtml(names.get(part.account_id) || 'investment account')}"><option value="" ${part.asset_class_override ? '' : 'selected'}>Automatic · ${escapeHtml(assetClassLabel(part.type))}</option>${['Equities', 'Funds', 'Fixed income', 'Cash', 'Crypto', 'Other'].map((option) => `<option value="${option}" ${part.asset_class_override === option ? 'selected' : ''}>${option}</option>`).join('')}</select>` : '';
-      const manualControl = canEdit && part.manual ? `<button type="button" class="manual-holding-remove" data-remove-manual-holding="${escapeHtml(part.id)}">Remove</button>` : categoryControl;
+      const manualControl = canEdit && part.manual ? `<div class="manual-holding-controls"><select data-manual-holding-class="${escapeHtml(part.id)}" aria-label="Asset class for manually added ${escapeHtml(part.name)}">${['Equities', 'Funds', 'Fixed income', 'Cash', 'Crypto', 'Other'].map((option) => `<option value="${option}" ${part.asset_class_override === option ? 'selected' : ''}>${option}</option>`).join('')}</select><button type="button" class="manual-holding-remove" data-remove-manual-holding="${escapeHtml(part.id)}">Remove</button></div>` : categoryControl;
       return `<div class="holding-account"><div><span>${escapeHtml(names.get(part.account_id) || 'Investment account')}</span><small>${part.manual ? 'Manual · ' : ''}${escapeHtml(assetClassLabel(part.type, part.asset_class_override))}</small></div><b>${fmt.format(part.value)}</b>${manualControl}</div>`;
     }).join('');
     const location = position.positions.length === 1 ? 'Held in 1 account' : `Held in ${position.positions.length} accounts`;
@@ -1215,14 +1215,19 @@ $('#investmentHoldingsMore').addEventListener('click', () => {
 });
 $('#investmentPositions').addEventListener('change', async (event) => {
   const select = event.target.closest('[data-position-class]');
-  if (!select) return;
-  select.disabled = true;
+  const manualSelect = event.target.closest('[data-manual-holding-class]');
+  if (!select && !manualSelect) return;
+  const control = select || manualSelect;
+  const path = select
+    ? `/api/positions/${encodeURIComponent(select.dataset.positionClass)}/asset-class`
+    : `/api/manual-holdings/${encodeURIComponent(manualSelect.dataset.manualHoldingClass)}/asset-class`;
+  control.disabled = true;
   try {
-    await api(`/api/positions/${encodeURIComponent(select.dataset.positionClass)}/asset-class`, { method: 'PATCH', body: JSON.stringify({ asset_class: select.value }) });
-    state.investments = await api('/api/investments');
+    const response = await api(path, { method: 'PATCH', body: JSON.stringify({ asset_class: control.value }) });
+    state.investments = select ? await api('/api/investments') : response;
     renderInvestments(state.investments);
-    showNotice(select.value ? 'Holding classification updated.' : 'Using the institution classification.', 'success');
-  } catch (error) { showNotice(error.message); select.disabled = false; }
+    showNotice(select ? (select.value ? 'Holding classification updated.' : 'Using the institution classification.') : 'Manual holding classification updated.', 'success');
+  } catch (error) { showNotice(error.message); control.disabled = false; }
 });
 $('#investmentPositions').addEventListener('click', async (event) => {
   const add = event.target.closest('[data-add-manual-holding]');
@@ -1232,7 +1237,7 @@ $('#investmentPositions').addEventListener('click', async (event) => {
     $('#manualHoldingHelp').textContent = `Your institution did not return holdings for ${add.dataset.manualAccountName}. Add up to ${fmt.format(Number(add.dataset.manualRemaining || 0))} so your allocation is accurate. This does not change anything at your institution.`;
     $('#manualHoldingTicker').value = '';
     $('#manualHoldingName').value = '';
-    $('#manualHoldingClass').value = 'Other';
+    $('#manualHoldingClass').value = '';
     $('#manualHoldingValue').value = Number(add.dataset.manualRemaining || 0).toFixed(2);
     dialog.showModal();
     $('#manualHoldingTicker').focus();
