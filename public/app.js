@@ -290,6 +290,7 @@ function renderLineChart(snapshots, summary) {
     el.releasePointerCapture?.(event.pointerId);
   });
   el.addEventListener('pointercancel', () => { active = false; });
+  el.addEventListener('selectstart', (event) => event.preventDefault());
   el.addEventListener('pointerleave', (event) => {
     if (event.pointerType !== 'mouse' || active) return;
     scrubLine.classList.remove('visible');
@@ -658,6 +659,7 @@ function renderPortfolioChart(data) {
   el.addEventListener('pointermove', (event) => { if (event.pointerType === 'mouse' || active) showPoint(event); });
   el.addEventListener('pointerup', (event) => { active = false; el.releasePointerCapture?.(event.pointerId); });
   el.addEventListener('pointercancel', () => { active = false; });
+  el.addEventListener('selectstart', (event) => event.preventDefault());
   el.addEventListener('pointerleave', (event) => { if (event.pointerType === 'mouse' && !active) { scrubLine.classList.remove('visible'); scrubDot.classList.remove('visible'); tooltip.classList.add('hidden'); restore(); } });
 }
 
