@@ -307,30 +307,30 @@ function renderLineChart(snapshots, summary, timeline = netWorthTimelineWindow(s
 }
 
 function renderTimelineStart(el, snapshot, summary, timeline) {
-  const value = Number(snapshot?.net_worth ?? summary?.netWorth ?? 0);
   const date = snapshot?.date ? new Date(`${snapshot.date}T12:00:00`) : new Date();
   const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const width = Math.max(1, Math.round(el.clientWidth || 700));
   const height = Math.max(1, Math.round(el.clientHeight || 150));
-  const baseline = Math.round(height * .75);
-  const plotLeft = 12, plotRight = 12;
+  const baseline = Math.round(height * .64);
+  const plotLeft = 14, plotRight = 18;
   const start = new Date(`${timeline.startDate}T12:00:00`).getTime();
   const end = Math.max(start + 86_400_000, new Date(`${timeline.endDate}T12:00:00`).getTime());
   const snapshotTime = new Date(`${snapshot?.date || timeline.endDate}T12:00:00`).getTime();
-  const pointX = Math.max(plotLeft, Math.min(width - plotRight, Math.round(plotLeft + ((snapshotTime - start) / (end - start)) * (width - plotLeft - plotRight))));
-  const unavailableWidth = Math.max(0, pointX - plotLeft);
-  const markerY = Math.round(height * .56);
-  const lineStart = Math.max(plotLeft, pointX - 62);
-  const statusX = unavailableWidth > 126 ? plotLeft + unavailableWidth / 2 : Math.max(plotLeft + 74, pointX - 100);
+  // Keep the initial state intentionally quiet. A two-day difference is real,
+  // but a full-height line makes it look like a meaningful market trend.
+  const pointX = Math.max(plotLeft + 70, Math.min(width - plotRight, Math.round(plotLeft + ((snapshotTime - start) / (end - start)) * (width - plotLeft - plotRight))));
+  const statusX = Math.max(plotLeft + 100, Math.min(width - plotRight - 100, width * .5));
+  const startLabel = new Date(`${timeline.startDate}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  const endLabel = new Date(`${timeline.endDate}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Net worth tracking began ${label}; additional verified history is needed before a trend is shown">
-    ${unavailableWidth > 1 ? `<rect x="${plotLeft}" y="8" width="${unavailableWidth}" height="${baseline - 8}" class="chart-unavailable"/>` : ''}
-    <line x1="${plotLeft}" y1="${baseline}" x2="${width - plotRight}" y2="${baseline}" class="chart-start-baseline"/>
-    <text x="${statusX}" y="28" text-anchor="middle" class="chart-unavailable-label">Tracking began ${label}</text>
-    <text x="${statusX}" y="45" text-anchor="middle" class="chart-start-detail">A trend will appear with more verified days</text>
-    <line x1="${lineStart}" y1="${markerY}" x2="${pointX}" y2="${markerY}" class="chart-start-line"/>
-    <circle cx="${pointX}" cy="${markerY}" r="7" class="chart-start-point"/>
-    <text x="${Math.min(width - plotRight, pointX + 8)}" y="${markerY - 13}" text-anchor="end" class="chart-start-value">${fmt.format(value)}</text>
-    <text x="${pointX}" y="${height - 10}" text-anchor="middle" class="sankey-label">${label}</text>
+    <text x="${statusX}" y="27" text-anchor="middle" class="chart-unavailable-label">Tracking began ${label}</text>
+    <text x="${statusX}" y="44" text-anchor="middle" class="chart-start-detail">A trend will appear after a few more verified days</text>
+    <line x1="${plotLeft}" y1="${baseline}" x2="${Math.max(plotLeft, pointX - 18)}" y2="${baseline}" class="chart-unavailable-line"/>
+    <line x1="${Math.max(plotLeft, pointX - 52)}" y1="${baseline}" x2="${pointX}" y2="${baseline}" class="chart-start-line"/>
+    <circle cx="${pointX}" cy="${baseline}" r="7" class="chart-start-point"/>
+    <text x="${pointX - 11}" y="${baseline - 13}" text-anchor="end" class="chart-start-value">Current</text>
+    <text x="${plotLeft}" y="${height - 9}" text-anchor="start" class="sankey-label">${startLabel}</text>
+    <text x="${width - plotRight}" y="${height - 9}" text-anchor="end" class="sankey-label">${endLabel}</text>
   </svg>`;
 }
 
