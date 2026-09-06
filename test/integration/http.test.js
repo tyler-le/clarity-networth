@@ -73,6 +73,8 @@ integrationTest('serves a complete public demo without a session', async () => {
   const response = await request(app).get('/api/demo-preview?range=1y');
   assert.equal(response.status, 200);
   assert.equal(response.body.dashboard.demoMode, true);
+  assert.deepEqual(response.body.dashboard.items.map((item) => item.institution_name), ['Chase', 'Ally', 'Fidelity', 'Capital One']);
+  assert.ok(response.body.dashboard.items.every((item) => item.demo));
   assert.ok(response.body.dashboard.snapshots.length >= 84);
   assert.equal(response.body.spending.range, '1y');
   assert.equal(response.body.spending.monthly.length, 12);

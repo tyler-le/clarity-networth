@@ -152,6 +152,9 @@ test('the complete app stays navigable and coherent at every supported viewport'
   }
   await page.locator('#profileButton').click();
   await expect(page.getByRole('heading', { name: 'Profile' })).toBeVisible();
+  await expect(page.locator('#connectionsList')).toContainText('Fidelity');
+  await expect(page.locator('#connectionsList')).toContainText('Sample connection');
+  await expect(page.locator('#connectionsList .unlink-button')).toHaveCount(0);
   await expect(page.locator('.beta-help a')).toHaveAttribute('href', '/support');
   await page.locator('#profileBack').click();
   await expect(page.getByRole('heading', { name: 'Accounts' })).toBeVisible();

@@ -683,7 +683,7 @@ app.get('/api/demo-preview', demoLimiter, (req, res) => {
       investmentLinkBalances: investmentLinkBalances(store),
       accounts: store.accounts.filter((account) => !account.hidden).sort((a, b) => Number(b.current_balance || 0) - Number(a.current_balance || 0)),
       snapshots: store.snapshots.slice(-3650),
-      items: [],
+      items: store.items.map(publicItem),
       plaidConfigured: false,
       demoMode: true
     },

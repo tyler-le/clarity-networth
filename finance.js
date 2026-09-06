@@ -787,14 +787,23 @@ export function seedDemo(store) {
   const now = new Date();
   const month = now.toISOString().slice(0, 7);
   const d = (day) => `${month}-${String(day).padStart(2, '0')}`;
+  // These are deliberately local demo records—not Plaid Items. They make the
+  // sample Profile view agree with the accounts shown throughout the demo
+  // without suggesting that a visitor has linked any real institution.
+  store.items = [
+    { id: 'demo-chase', institution_name: 'Chase', demo: true },
+    { id: 'demo-ally', institution_name: 'Ally', demo: true },
+    { id: 'demo-fidelity', institution_name: 'Fidelity', demo: true },
+    { id: 'demo-capital-one', institution_name: 'Capital One', demo: true }
+  ];
   store.accounts = [
-    { id: 'demo-checking', item_id: 'demo-bank', plaid_account_id: 'demo-checking', institution_name: 'Chase', name: 'Checking', type: 'depository', subtype: 'checking', current_balance: 5200, available_balance: 5000, updated_at: new Date().toISOString(), demo: true },
-    { id: 'demo-hysa', item_id: 'demo-bank', plaid_account_id: 'demo-hysa', institution_name: 'Ally', name: 'High Yield Savings', type: 'depository', subtype: 'savings', current_balance: 12500, available_balance: 12500, updated_at: new Date().toISOString(), demo: true },
+    { id: 'demo-checking', item_id: 'demo-chase', plaid_account_id: 'demo-checking', institution_name: 'Chase', name: 'Checking', type: 'depository', subtype: 'checking', current_balance: 5200, available_balance: 5000, updated_at: new Date().toISOString(), demo: true },
+    { id: 'demo-hysa', item_id: 'demo-ally', plaid_account_id: 'demo-hysa', institution_name: 'Ally', name: 'High Yield Savings', type: 'depository', subtype: 'savings', current_balance: 12500, available_balance: 12500, updated_at: new Date().toISOString(), demo: true },
     { id: 'demo-brokerage', item_id: 'demo-fidelity', plaid_account_id: 'demo-brokerage', institution_name: 'Fidelity', name: 'Brokerage', type: 'investment', subtype: 'brokerage', current_balance: 18200, updated_at: new Date().toISOString(), demo: true },
     { id: 'demo-roth', item_id: 'demo-fidelity', plaid_account_id: 'demo-roth', institution_name: 'Fidelity', name: 'Roth IRA', type: 'investment', subtype: 'ira', current_balance: 26400, updated_at: new Date().toISOString(), demo: true },
     { id: 'demo-401k', item_id: 'demo-fidelity', plaid_account_id: 'demo-401k', institution_name: 'Fidelity', name: '401(k)', type: 'investment', subtype: '401k', current_balance: 43800, updated_at: new Date().toISOString(), demo: true },
-    { id: 'demo-credit', item_id: 'demo-bank', plaid_account_id: 'demo-credit', institution_name: 'Chase', name: 'Credit Card', type: 'credit', subtype: 'credit card', current_balance: 1160, updated_at: new Date().toISOString(), demo: true },
-    { id: 'demo-auto', item_id: 'demo-bank', plaid_account_id: 'demo-auto', institution_name: 'Capital One', name: 'Auto loan', type: 'loan', subtype: 'auto', current_balance: 9350, updated_at: new Date().toISOString(), demo: true }
+    { id: 'demo-credit', item_id: 'demo-chase', plaid_account_id: 'demo-credit', institution_name: 'Chase', name: 'Credit Card', type: 'credit', subtype: 'credit card', current_balance: 1160, updated_at: new Date().toISOString(), demo: true },
+    { id: 'demo-auto', item_id: 'demo-capital-one', plaid_account_id: 'demo-auto', institution_name: 'Capital One', name: 'Auto loan', type: 'loan', subtype: 'auto', current_balance: 9350, updated_at: new Date().toISOString(), demo: true }
   ];
   store.positions = [
     ['demo-brokerage', 'VTI', 'Vanguard Total Stock Market ETF', 'etf', 92, 274, 25208],

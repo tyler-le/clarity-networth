@@ -326,6 +326,7 @@ dialog::backdrop { background: rgba(10,15,10,.28); backdrop-filter: blur(3px); }
 .connection-logo, .connection-fallback { display: grid; width: 25px; height: 25px; flex: 0 0 auto; place-items: center; border: 1px solid var(--line); border-radius: 7px; background: white; object-fit: contain; padding: 2px; }
 .connection-fallback { padding: 0; color: var(--muted); background: #f5f7f4; font-size: 12px; }
 .connection-status { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; font-weight: 500; }.connection-status.stale, .connection-status.attention { color: #9a6b22; }
+.connection-demo-label { color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
 .unlink-button { border: 0; border-radius: 8px; padding: 6px 8px; color: var(--red); background: var(--red-soft); font-size: 11px; font-weight: 700; }
 .unlink-button:disabled { opacity: .55; }
 .profile-button { height: 38px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 19px; padding: 0 11px; background: white; color: var(--muted); font-size: 15px; }.profile-button b { font-size: 12px; }
