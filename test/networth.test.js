@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentLinkBalances, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
 import { normalizeCandles } from '../market-data.js';
-import { filterSnapshots, netWorthTimelineWindow, scrubIndex } from '../public/chart-utils.js';
+import { filterSnapshots, hasUsableNetWorthTrend, netWorthTimelineWindow, scrubIndex } from '../public/chart-utils.js';
 
 test('estimated history is removed before the chart is served', () => {
   const store = {
@@ -61,6 +61,11 @@ test('net-worth timeline retains a selected range before verified tracking began
   const anchor = new Date('2026-09-06T12:00:00');
   assert.deepEqual(netWorthTimelineWindow('1y', [{ date: '2026-09-05' }, { date: '2026-09-06' }], anchor), { startDate: '2025-09-30', endDate: '2026-09-06' });
   assert.deepEqual(netWorthTimelineWindow('all', [{ date: '2026-09-05' }], anchor), { startDate: '2026-09-05', endDate: '2026-09-06' });
+});
+
+test('net-worth waits for enough verified coverage before drawing a trend', () => {
+  assert.equal(hasUsableNetWorthTrend([{ date: '2026-09-05' }, { date: '2026-09-06' }]), false);
+  assert.equal(hasUsableNetWorthTrend([{ date: '2026-09-01' }, { date: '2026-09-04' }, { date: '2026-09-07' }, { date: '2026-09-08' }]), true);
 });
 
 test('historical pricing resolves Vanguard target retirement display symbols', () => {
@@ -238,6 +243,7 @@ test('investment summary separates portfolio total, allocation, and positions', 
   assert.equal(result.positions[0].gain, 700);
   assert.equal(result.positions[0].gain_pct, 700 / 6300);
   assert.deepEqual(result.allocation.map((row) => [row.name, row.value]), [['Equities', 7000], ['Cash', 2500], ['Cash & unclassified', 500]]);
+  assert.deepEqual(result.unclassifiedAccounts, [{ account_id: 'plaid-ira', name: 'Roth IRA', institution_name: 'Fidelity', balance: 10000, holdings_value: 9500, difference: 500 }]);
 });
 
 test('demo mode provides seven years of usable account and spending history', () => {

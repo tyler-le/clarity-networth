@@ -63,6 +63,23 @@ export function investmentSummary(store) {
   const positions = (store.positions || []).filter((position) => !position.hidden && accountIds.has(position.account_id));
   const total = accounts.reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
   const holdingsValue = positions.reduce((sum, position) => sum + Math.abs(Number(position.value || 0)), 0);
+  const holdingsByAccount = new Map();
+  for (const position of positions) holdingsByAccount.set(position.account_id, (holdingsByAccount.get(position.account_id) || 0) + Math.abs(Number(position.value || 0)));
+  // This is a reconciliation state, not an asset class. Preserve the account
+  // evidence so the UI can explain a residual instead of showing an empty
+  // holdings list when a person taps it.
+  const unclassifiedAccounts = accounts.map((account) => {
+    const value = Math.abs(Number(account.current_balance || 0));
+    const holdingsValue = holdingsByAccount.get(account.plaid_account_id) || 0;
+    return {
+      account_id: account.plaid_account_id,
+      name: account.nickname || account.name,
+      institution_name: account.institution_name,
+      balance: value,
+      holdings_value: holdingsValue,
+      difference: value - holdingsValue
+    };
+  }).filter((account) => Math.abs(account.difference) > 1).sort((a, b) => Math.abs(b.difference) - Math.abs(a.difference));
   const allocation = new Map();
   for (const position of positions) {
     const name = assetClass(position.type, position.asset_class_override);
@@ -75,6 +92,7 @@ export function investmentSummary(store) {
     total,
     accounts: accounts.map((account) => ({ id: account.id, account_id: account.plaid_account_id, name: account.nickname || account.name, institution_name: account.institution_name, subtype: account.subtype, value: Math.abs(Number(account.current_balance || 0)) })),
     allocation: allocationRows,
+    unclassifiedAccounts,
     positions: positions.map((position) => ({ ...position, gain: position.cost_basis == null ? null : Number(position.value || 0) - Number(position.cost_basis), gain_pct: position.cost_basis ? (Number(position.value || 0) - Number(position.cost_basis)) / Number(position.cost_basis) : null })).sort((a, b) => Number(b.value || 0) - Number(a.value || 0)),
     snapshots: (store.investment_snapshots || []).slice(-3650),
     historyStatus: store.investment_history_status || { state: 'tracking', unavailable: [] },

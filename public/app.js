@@ -1,4 +1,4 @@
-import { filterSnapshots, netWorthTimelineWindow, scrubIndex } from './chart-utils.js';
+import { filterSnapshots, hasUsableNetWorthTrend, netWorthTimelineWindow, scrubIndex } from './chart-utils.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -208,8 +208,8 @@ function renderLineChart(snapshots, summary, timeline = netWorthTimelineWindow(s
   // A hidden view reports a zero width. Leave the existing chart intact until
   // the view is visible, when setView/resize will render it at real size.
   if (el.clientWidth < 80 || el.clientHeight < 60) return;
-  if (snapshots.length < 2) {
-    renderTimelineStart(el, snapshots[0], summary, timeline);
+  if (!hasUsableNetWorthTrend(snapshots)) {
+    renderTimelineStart(el, snapshots.at(-1), summary, timeline);
     return;
   }
 
@@ -319,13 +319,18 @@ function renderTimelineStart(el, snapshot, summary, timeline) {
   const snapshotTime = new Date(`${snapshot?.date || timeline.endDate}T12:00:00`).getTime();
   const pointX = Math.max(plotLeft, Math.min(width - plotRight, Math.round(plotLeft + ((snapshotTime - start) / (end - start)) * (width - plotLeft - plotRight))));
   const unavailableWidth = Math.max(0, pointX - plotLeft);
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Net worth tracking starts today">
-    ${unavailableWidth > 1 ? `<rect x="${plotLeft}" y="8" width="${unavailableWidth}" height="${baseline - 8}" class="chart-unavailable"/>${unavailableWidth > 92 ? `<text x="${plotLeft + unavailableWidth / 2}" y="26" text-anchor="middle" class="chart-unavailable-label">No verified history</text>` : ''}` : ''}
-    <line x1="${plotLeft}" y1="${baseline}" x2="${width - plotRight}" y2="${baseline}" stroke="#e4e9e4" stroke-width="2"/>
-    <line x1="${pointX}" y1="24" x2="${pointX}" y2="${baseline}" stroke="#b6c8bd" stroke-width="1.5" stroke-dasharray="4 5"/>
-    <circle cx="${pointX}" cy="${Math.round(height * .48)}" r="9" fill="#fff" stroke="#16704b" stroke-width="4"/>
-    <text x="${pointX}" y="38" text-anchor="middle" class="sankey-value">${fmt.format(value)}</text>
-    <text x="${pointX}" y="${height - 10}" text-anchor="middle" class="sankey-label">${label} · Start</text>
+  const markerY = Math.round(height * .56);
+  const lineStart = Math.max(plotLeft, pointX - 62);
+  const statusX = unavailableWidth > 126 ? plotLeft + unavailableWidth / 2 : Math.max(plotLeft + 74, pointX - 100);
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Net worth tracking began ${label}; additional verified history is needed before a trend is shown">
+    ${unavailableWidth > 1 ? `<rect x="${plotLeft}" y="8" width="${unavailableWidth}" height="${baseline - 8}" class="chart-unavailable"/>` : ''}
+    <line x1="${plotLeft}" y1="${baseline}" x2="${width - plotRight}" y2="${baseline}" class="chart-start-baseline"/>
+    <text x="${statusX}" y="28" text-anchor="middle" class="chart-unavailable-label">Tracking began ${label}</text>
+    <text x="${statusX}" y="45" text-anchor="middle" class="chart-start-detail">A trend will appear with more verified days</text>
+    <line x1="${lineStart}" y1="${markerY}" x2="${pointX}" y2="${markerY}" class="chart-start-line"/>
+    <circle cx="${pointX}" cy="${markerY}" r="7" class="chart-start-point"/>
+    <text x="${Math.min(width - plotRight, pointX + 8)}" y="${markerY - 13}" text-anchor="end" class="chart-start-value">${fmt.format(value)}</text>
+    <text x="${pointX}" y="${height - 10}" text-anchor="middle" class="sankey-label">${label}</text>
   </svg>`;
 }
 
@@ -729,9 +734,22 @@ function renderInvestments(data) {
   }
   $('#investmentAccounts').innerHTML = accounts.length ? accounts.map((account) => `<div class="investment-account-row"><div><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || '')} · Current value</span></div><b>${fmt.format(account.value)}</b></div>`).join('') : '<p class="spending-empty">No investment accounts connected.</p>';
   const names = new Map(accounts.map((account) => [account.account_id, account.name]));
-  let positions = aggregateHoldings((data.positions || []).filter((position) => state.investmentFilter === 'all' || assetClassLabel(position.type, position.asset_class_override) === state.investmentFilter));
+  const isUnclassified = state.investmentFilter === 'Cash & unclassified';
+  const unclassifiedAccounts = data.unclassifiedAccounts || [];
+  let positions = aggregateHoldings((data.positions || []).filter((position) => state.investmentFilter === 'all' || (!isUnclassified && assetClassLabel(position.type, position.asset_class_override) === state.investmentFilter)));
   positions = [...positions].sort((a, b) => state.investmentSort === 'performance' ? Number(b.gain_pct ?? -Infinity) - Number(a.gain_pct ?? -Infinity) : state.investmentSort === 'equity' ? a.classification.localeCompare(b.classification) || Number(b.value) - Number(a.value) : Number(b.value) - Number(a.value));
   $('#investmentSort').value = state.investmentSort;
+  if (isUnclassified) {
+    const affected = unclassifiedAccounts.filter((account) => Math.abs(Number(account.difference || 0)) > 1);
+    $('#investmentHoldingsInsight').textContent = affected.length ? `${affected.length} account${affected.length === 1 ? '' : 's'} needs holdings reconciliation · ${periodLabel} selected` : 'Account balances and holdings are currently reconciled.';
+    $('#investmentPositions').innerHTML = affected.length ? affected.map((account) => {
+      const missing = Number(account.difference) > 0;
+      const amount = Math.abs(Number(account.difference || 0));
+      return `<div class="unclassified-account-row"><div class="unclassified-mark" aria-hidden="true">?</div><div><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || 'Institution')} · ${missing ? 'No matching holdings returned' : 'Holdings currently exceed the account balance'}</span></div><b class="${missing ? '' : 'negative'}">${missing ? '' : '−'}${fmt.format(amount)}</b></div>`;
+    }).join('') : '<p class="positions-empty">All investment account balances match their returned holdings.</p>';
+    $('#investmentHoldingsMore').classList.add('hidden');
+    return;
+  }
   const visiblePositions = state.holdingsExpanded ? positions : positions.slice(0, 3);
   const previewCopy = visiblePositions.length < positions.length ? `Showing ${visiblePositions.length} of ${positions.length}` : `${positions.length} current holding${positions.length === 1 ? '' : 's'}`;
   $('#investmentHoldingsInsight').textContent = data.positionsAvailable ? `${previewCopy}${state.investmentFilter === 'all' ? '' : ` · ${state.investmentFilter}`} · ${periodLabel} selected` : 'Holdings appear when your institution provides them.';

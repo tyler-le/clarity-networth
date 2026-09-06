@@ -28,6 +28,14 @@ export function netWorthTimelineWindow(range, snapshots, anchor = new Date()) {
   return { startDate: bounds.startDate || today, endDate: bounds.endDate < today ? bounds.endDate : today };
 }
 
+export function hasUsableNetWorthTrend(snapshots) {
+  if (snapshots.length < 4) return false;
+  const ordered = [...snapshots].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const first = new Date(`${ordered[0].date}T12:00:00`).getTime();
+  const last = new Date(`${ordered.at(-1).date}T12:00:00`).getTime();
+  return last - first >= 7 * 86_400_000;
+}
+
 export function scrubIndex({ clientX, left, width, pointCount }) {
   if (pointCount < 2 || width <= 0) return 0;
   const ratio = Math.max(0, Math.min(1, (clientX - left) / width));
