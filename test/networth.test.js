@@ -102,15 +102,16 @@ test('monthly spending keeps income separate for comparison', () => {
 test('cash flow separates actual spending details from saving and investing', () => {
   const store = { transactions: [
     { date: '2026-09-01', amount: -5000, bucket: 'income', merchant_name: 'Payroll' },
-    { date: '2026-09-02', amount: 1800, bucket: 'fixed', pfc_detailed: 'RENT_AND_UTILITIES', merchant_name: 'Rent' },
-    { date: '2026-09-03', amount: 240, bucket: 'fixed', pfc_detailed: 'FOOD_AND_DRINK_GROCERIES', merchant_name: 'Grocer' },
+    { date: '2026-09-02', amount: 1800, bucket: 'fixed', pfc_primary: 'RENT_AND_UTILITIES', pfc_detailed: 'RENT_AND_UTILITIES_RENT', merchant_name: 'Rent' },
+    { date: '2026-09-03', amount: 240, bucket: 'fixed', pfc_primary: 'FOOD_AND_DRINK', pfc_detailed: 'FOOD_AND_DRINK_GROCERIES', merchant_name: 'Grocer' },
+    { date: '2026-09-03', amount: 90, bucket: 'guilt_free', pfc_primary: 'GENERAL_MERCHANDISE', pfc_detailed: 'GENERAL_MERCHANDISE_ONLINE_MARKETPLACES', merchant_name: 'Shop' },
     { date: '2026-09-04', amount: 500, bucket: 'investments', merchant_name: 'Brokerage transfer' },
     { date: '2026-09-05', amount: 250, bucket: 'savings', merchant_name: 'Savings transfer' }
   ] };
   const result = spendingSummary(store, '1m', new Date('2026-09-05T12:00:00'));
-  assert.equal(result.actualSpend, 2040);
+  assert.equal(result.actualSpend, 2130);
   assert.equal(result.savingsAndInvestments, 750);
-  assert.deepEqual(result.actualSpendCategories.map((row) => [row.key, row.amount]), [['housing_bills', 1800], ['food', 240]]);
+  assert.deepEqual(result.actualSpendCategories.map((row) => [row.key, row.amount]), [['housing_bills', 1800], ['food_dining', 240], ['shopping', 90]]);
 });
 
 test('portfolio history keeps one verified investment value for each day', () => {

@@ -258,12 +258,24 @@ function spendingCategory(transaction) {
 function cashFlowDetail(transaction) {
   if (transaction.bucket === 'savings') return { key: 'savings', label: 'Savings', group: 'save_invest' };
   if (transaction.bucket === 'investments') return { key: 'investments', label: 'Investments', group: 'save_invest' };
-  const text = `${transaction.pfc_primary || ''} ${transaction.pfc_detailed || ''} ${transaction.merchant_name || ''} ${transaction.name || ''}`.toUpperCase();
-  if (/RENT|MORTGAGE|UTILIT|INSURANCE|PHONE|INTERNET|CABLE|LOAN|DEBT|CHILDCARE|DAYCARE/.test(text)) return { key: 'housing_bills', label: 'Housing & bills', group: 'actual_spend' };
-  if (/GROCER|RESTAURANT|FOOD|DINING/.test(text)) return { key: 'food', label: 'Food', group: 'actual_spend' };
-  if (/GAS|TRANSPORT|PARKING|TOLL/.test(text)) return { key: 'transport', label: 'Transport', group: 'actual_spend' };
-  if (/TRAVEL|ENTERTAINMENT|RECREATION|SHOPPING/.test(text)) return { key: 'fun_travel', label: 'Fun & travel', group: 'actual_spend' };
-  return { key: 'other_spend', label: 'Other spend', group: 'actual_spend' };
+  const primary = String(transaction.pfc_primary || '').toUpperCase();
+  const detailed = String(transaction.pfc_detailed || '').toUpperCase();
+  const labels = {
+    RENT_AND_UTILITIES: ['housing_bills', 'Housing & bills'],
+    FOOD_AND_DRINK: ['food_dining', 'Food & dining'],
+    GENERAL_MERCHANDISE: ['shopping', 'Shopping'],
+    GENERAL_SERVICES: detailed.includes('INSURANCE') ? ['insurance', 'Insurance'] : detailed.includes('EDUCATION') ? ['education', 'Education'] : ['services', 'Services'],
+    GOVERNMENT_AND_NON_PROFIT: detailed.includes('TAX') ? ['taxes', 'Taxes'] : ['civic', 'Civic & giving'],
+    HOME_IMPROVEMENT: ['home', 'Home'],
+    TRANSPORTATION: ['transport', 'Transport'],
+    TRAVEL: ['travel', 'Travel'],
+    ENTERTAINMENT: ['entertainment', 'Entertainment'],
+    PERSONAL_CARE: ['personal_care', 'Personal care'],
+    MEDICAL: ['health', 'Health'],
+    BANK_FEES: ['fees', 'Fees']
+  };
+  const [key, label] = labels[primary] || ['uncategorized', 'Uncategorized'];
+  return { key, label, group: 'actual_spend' };
 }
 
 export function spendingSummary(store, range = '1m', anchor = new Date()) {
