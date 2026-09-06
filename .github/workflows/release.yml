@@ -58,7 +58,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Deploy this verified commit to staging
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_STAGING_TOKEN }}
         run: npx --yes @railway/cli@latest up --ci --project "$RAILWAY_PROJECT_ID" --service "$RAILWAY_SERVICE" --environment "$RAILWAY_STAGING_ENVIRONMENT" --message "GitHub Actions $GITHUB_SHA"
       - name: Smoke test staging
         run: |
