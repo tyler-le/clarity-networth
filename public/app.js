@@ -554,21 +554,20 @@ function renderCashFlowSankey(data) {
   // On phones, equal-width nodes create a steadier left-to-right reading
   // path. Longer labels wrap within their own node instead of making the
   // source feel visually less important.
-  const sourceX = compact ? 8 : 12, sourceW = compact ? 116 : tablet ? 120 : 176;
-  const middleX = compact ? 137 : tablet ? 168 : 300, middleW = compact ? 116 : tablet ? 142 : 178;
-  const destinationX = compact ? 266 : tablet ? 340 : 548, destinationW = compact ? 116 : tablet ? 196 : 332;
+  const sourceX = compact ? 8 : 12, sourceW = compact ? 96 : tablet ? 120 : 176;
+  const middleX = compact ? 147 : tablet ? 168 : 300, middleW = compact ? 96 : tablet ? 142 : 178;
+  const destinationX = compact ? 286 : tablet ? 340 : 548, destinationW = compact ? 96 : tablet ? 196 : 332;
   const displayValue = (value, isIncome = false) => {
     if (state.cashflowDisplay === 'amount') return fmt.format(value);
     if (!income) return '—';
     return `${Math.round((isIncome ? 1 : value / income) * 100)}%`;
   };
   const block = (x, y, w, color, label, value, category = '', isIncome = false) => {
-    const wrappedIncome = compact && label === 'Take-home income';
-    const height = wrappedIncome ? 48 : 36;
-    const labelMarkup = wrappedIncome
-      ? `<tspan x="${x + 13}" dy="0">Take-home</tspan><tspan x="${x + 13}" dy="10">income</tspan>`
-      : escapeHtml(label);
-    return `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><rect x="${x}" y="${y}" width="${w}" height="${height}" rx="8" fill="var(--sankey-surface)" stroke="var(--sankey-border)"/><rect x="${x}" y="${y}" width="6" height="${height}" rx="3" fill="${color}"/><text x="${x + 13}" y="${y + 14}" class="cashflow-label">${labelMarkup}</text><text x="${x + 13}" y="${y + (wrappedIncome ? 41 : 28)}" class="cashflow-value">${displayValue(value, isIncome)}</text></g>`;
+    const mobileLines = compact ? ({ 'Take-home income': ['Take-home', 'income'], 'Actual spend': ['Actual', 'spend'], 'Housing & bills': ['Housing', '& bills'], 'Food & dining': ['Food', '& dining'] }[label] || [label]) : [label];
+    const wrapped = mobileLines.length > 1;
+    const height = wrapped ? 48 : 36;
+    const labelMarkup = mobileLines.map((line, index) => `<tspan x="${x + 11}" dy="${index ? 10 : 0}">${escapeHtml(line)}</tspan>`).join('');
+    return `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><rect x="${x}" y="${y}" width="${w}" height="${height}" rx="8" fill="var(--sankey-surface)" stroke="var(--sankey-border)"/><rect x="${x}" y="${y}" width="6" height="${height}" rx="3" fill="${color}"/><text x="${x + 11}" y="${y + 14}" class="cashflow-label">${labelMarkup}</text><text x="${x + 11}" y="${y + (wrapped ? 41 : 28)}" class="cashflow-value">${displayValue(value, isIncome)}</text></g>`;
   };
   const flow = (fromX, fromY, toX, toY, ratio, color) => `<path class="cashflow-flow" d="M ${fromX} ${fromY} C ${fromX + (toX - fromX) * .42} ${fromY}, ${toX - (toX - fromX) * .42} ${toY}, ${toX} ${toY}" fill="none" stroke="${color}" stroke-opacity=".38" stroke-width="${Math.max(6, Math.min(30, ratio * 30))}" stroke-linecap="round"/>`;
   const incomeY = 89, spendY = 18, saveY = 90, investY = 162;
@@ -578,7 +577,7 @@ function renderCashFlowSankey(data) {
   paths += flow(sourceX + sourceW, incomeY + 18, middleX, investY + 18, investments / Math.max(income, 1), 'var(--invest)');
   let categories = '';
   actualCategories.forEach((row, index) => {
-    const y = 12 + index * 47;
+    const y = 12 + index * (compact ? 50 : 47);
     paths += flow(middleX + middleW, spendY + 18, destinationX, y + 18, Number(row.amount || 0) / Math.max(actualSpend, 1), 'var(--outflow-muted)');
     categories += block(destinationX, y, destinationW, 'var(--outflow-muted)', row.name, row.amount, row.key);
   });
