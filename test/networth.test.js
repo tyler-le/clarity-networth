@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentLinkBalances, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
 import { normalizeCandles } from '../market-data.js';
-import { filterSnapshots, scrubIndex } from '../public/chart-utils.js';
+import { filterSnapshots, netWorthTimelineWindow, scrubIndex } from '../public/chart-utils.js';
 
 test('estimated history is removed before the chart is served', () => {
   const store = {
@@ -55,6 +55,12 @@ test('scrubbing clamps to endpoints and selects the nearest data point', () => {
   assert.equal(scrubIndex({ ...base, clientX: 50 }), 0);
   assert.equal(scrubIndex({ ...base, clientX: 250 }), 2);
   assert.equal(scrubIndex({ ...base, clientX: 500 }), 4);
+});
+
+test('net-worth timeline retains a selected range before verified tracking began', () => {
+  const anchor = new Date('2026-09-06T12:00:00');
+  assert.deepEqual(netWorthTimelineWindow('1y', [{ date: '2026-09-05' }, { date: '2026-09-06' }], anchor), { startDate: '2025-09-30', endDate: '2026-09-06' });
+  assert.deepEqual(netWorthTimelineWindow('all', [{ date: '2026-09-05' }], anchor), { startDate: '2026-09-05', endDate: '2026-09-06' });
 });
 
 test('historical pricing resolves Vanguard target retirement display symbols', () => {

@@ -68,6 +68,17 @@ test('cash-flow interactions lead from visual category to the relevant activity'
   await expect(page.locator('.spending-transaction-row').first()).toBeVisible();
 });
 
+test('asset-allocation filters preserve the reader position', async ({ page }) => {
+  await openDemo(page);
+  await page.locator('.mobile-nav [data-view="investments"]').click();
+  const allocation = page.locator('#investmentAllocationCard');
+  await allocation.scrollIntoViewIfNeeded();
+  const before = await allocation.evaluate((element) => element.getBoundingClientRect().top);
+  await page.locator('[data-investment-filter="Funds"]').click();
+  await expect.poll(async () => allocation.evaluate((element) => element.getBoundingClientRect().top)).toBeCloseTo(before, 0);
+  await expect(page.locator('#investmentHoldingsInsight')).toContainText('Funds');
+});
+
 test('cash-flow diagram can switch between dollars and take-home-income percentages', async ({ page }) => {
   await openDemo(page);
   await page.locator('.mobile-nav [data-view="spending"]').click();

@@ -1,4 +1,4 @@
-import { filterSnapshots, scrubIndex } from './chart-utils.js';
+import { filterSnapshots, netWorthTimelineWindow, scrubIndex } from './chart-utils.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -196,33 +196,37 @@ function renderNetWorthChartWhenVisible(attempt = 0) {
     return;
   }
   restoreNetWorthHero();
-  renderLineChart(visibleSnapshots(state.dashboard.snapshots || []), state.dashboard.summary);
+  renderLineChart(visibleSnapshots(state.dashboard.snapshots || []), state.dashboard.summary, netWorthTimelineWindow(state.networthRange, state.dashboard.snapshots || []));
 }
 
 function axisCurrency(value) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 0 }).format(value);
 }
 
-function renderLineChart(snapshots, summary) {
+function renderLineChart(snapshots, summary, timeline = netWorthTimelineWindow(state.networthRange, snapshots)) {
   const el = $('#netWorthChart');
   // A hidden view reports a zero width. Leave the existing chart intact until
   // the view is visible, when setView/resize will render it at real size.
   if (el.clientWidth < 80 || el.clientHeight < 60) return;
   if (snapshots.length < 2) {
-    renderTimelineStart(el, snapshots[0], summary);
+    renderTimelineStart(el, snapshots[0], summary, timeline);
     return;
   }
 
   const width = Math.max(1, Math.round(el.clientWidth || 700));
   const height = Math.max(1, Math.round(el.clientHeight || 150));
   const plotLeft = 48, plotRight = 8, plotTop = 8, plotBottom = height - 22;
+  const dateValue = (date) => new Date(`${date}T12:00:00`).getTime();
+  const domainStart = dateValue(timeline.startDate);
+  const domainEnd = Math.max(domainStart + 86_400_000, dateValue(timeline.endDate));
+  const xForDate = (date) => plotLeft + ((dateValue(date) - domainStart) / (domainEnd - domainStart)) * (width - plotLeft - plotRight);
   const vals = snapshots.map((s) => Number(s.net_worth));
   let min = Math.min(...vals), max = Math.max(...vals);
   const range = max - min || Math.max(Math.abs(max) * .1, 1);
   min -= range * .08;
   max += range * .08;
   const points = vals.map((v, i) => {
-    const x = plotLeft + (i / Math.max(vals.length - 1, 1)) * (width - plotLeft - plotRight);
+    const x = xForDate(snapshots[i].date);
     const y = plotBottom - ((v - min) / (max - min)) * (plotBottom - plotTop);
     return [x, y];
   });
@@ -233,12 +237,18 @@ function renderLineChart(snapshots, summary) {
     const y = plotBottom - ((value - min) / (max - min)) * (plotBottom - plotTop);
     return `<line x1="${plotLeft}" y1="${y}" x2="${width - plotRight}" y2="${y}" class="chart-grid"/><text x="${plotLeft - 6}" y="${y + 3}" text-anchor="end" class="chart-axis-label">${axisCurrency(value)}</text>`;
   }).join('');
-  const dateLabel = (index) => new Date(`${snapshots[index].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  const xTicks = width > 420 ? [0, Math.floor((snapshots.length - 1) / 2), snapshots.length - 1] : [0, snapshots.length - 1];
-  const xAxis = [...new Set(xTicks)].map((index) => `<text x="${points[index][0]}" y="${height - 5}" text-anchor="${index === 0 ? 'start' : index === snapshots.length - 1 ? 'end' : 'middle'}" class="chart-axis-label">${dateLabel(index)}</text>`).join('');
+  const dateLabel = (time) => new Date(time).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  const tickTimes = width > 420 ? [domainStart, (domainStart + domainEnd) / 2, domainEnd] : [domainStart, domainEnd];
+  const xAxis = tickTimes.map((time, index) => `<text x="${(plotLeft + ((time - domainStart) / (domainEnd - domainStart)) * (width - plotLeft - plotRight)).toFixed(1)}" y="${height - 5}" text-anchor="${index === 0 ? 'start' : index === tickTimes.length - 1 ? 'end' : 'middle'}" class="chart-axis-label">${dateLabel(time)}</text>`).join('');
+  const firstX = Math.max(plotLeft, points[0][0]);
+  const lastX = Math.min(width - plotRight, points.at(-1)[0]);
+  const unavailable = (x, unavailableWidth) => unavailableWidth > 1
+    ? `<rect x="${x.toFixed(1)}" y="${plotTop}" width="${unavailableWidth.toFixed(1)}" height="${plotBottom - plotTop}" class="chart-unavailable"/>${unavailableWidth > 92 ? `<text x="${(x + unavailableWidth / 2).toFixed(1)}" y="${plotTop + 18}" text-anchor="middle" class="chart-unavailable-label">No verified history</text>` : ''}`
+    : '';
+  const unavailableHistory = unavailable(plotLeft, firstX - plotLeft) + unavailable(lastX, width - plotRight - lastX);
   el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img">
     <defs><linearGradient id="areaFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f6f4a" stop-opacity=".16"/><stop offset="1" stop-color="#1f6f4a" stop-opacity="0"/></linearGradient></defs>
-    ${yAxis}${xAxis}<path d="${area}" fill="url(#areaFade)"/><path d="${d}" fill="none" stroke="#1f6f4a" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>
+    ${unavailableHistory}${yAxis}${xAxis}<path d="${area}" fill="url(#areaFade)"/><path d="${d}" fill="none" stroke="#1f6f4a" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>
     <line class="scrub-line" x1="0" y1="${plotTop}" x2="0" y2="${plotBottom}"/>
     <circle class="scrub-dot" cx="0" cy="0" r="5"/>
   </svg>
@@ -296,16 +306,22 @@ function renderLineChart(snapshots, summary) {
   svg.addEventListener('dragstart', (event) => event.preventDefault());
 }
 
-function renderTimelineStart(el, snapshot, summary) {
+function renderTimelineStart(el, snapshot, summary, timeline) {
   const value = Number(snapshot?.net_worth ?? summary?.netWorth ?? 0);
   const date = snapshot?.date ? new Date(`${snapshot.date}T12:00:00`) : new Date();
   const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const width = Math.max(1, Math.round(el.clientWidth || 700));
   const height = Math.max(1, Math.round(el.clientHeight || 150));
   const baseline = Math.round(height * .75);
-  const pointX = Math.round(width * .78);
+  const plotLeft = 12, plotRight = 12;
+  const start = new Date(`${timeline.startDate}T12:00:00`).getTime();
+  const end = Math.max(start + 86_400_000, new Date(`${timeline.endDate}T12:00:00`).getTime());
+  const snapshotTime = new Date(`${snapshot?.date || timeline.endDate}T12:00:00`).getTime();
+  const pointX = Math.max(plotLeft, Math.min(width - plotRight, Math.round(plotLeft + ((snapshotTime - start) / (end - start)) * (width - plotLeft - plotRight))));
+  const unavailableWidth = Math.max(0, pointX - plotLeft);
   el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Net worth tracking starts today">
-    <line x1="12" y1="${baseline}" x2="${width - 12}" y2="${baseline}" stroke="#e4e9e4" stroke-width="2"/>
+    ${unavailableWidth > 1 ? `<rect x="${plotLeft}" y="8" width="${unavailableWidth}" height="${baseline - 8}" class="chart-unavailable"/>${unavailableWidth > 92 ? `<text x="${plotLeft + unavailableWidth / 2}" y="26" text-anchor="middle" class="chart-unavailable-label">No verified history</text>` : ''}` : ''}
+    <line x1="${plotLeft}" y1="${baseline}" x2="${width - plotRight}" y2="${baseline}" stroke="#e4e9e4" stroke-width="2"/>
     <line x1="${pointX}" y1="24" x2="${pointX}" y2="${baseline}" stroke="#b6c8bd" stroke-width="1.5" stroke-dasharray="4 5"/>
     <circle cx="${pointX}" cy="${Math.round(height * .48)}" r="9" fill="#fff" stroke="#16704b" stroke-width="4"/>
     <text x="${pointX}" y="38" text-anchor="middle" class="sankey-value">${fmt.format(value)}</text>
@@ -716,8 +732,9 @@ function renderInvestments(data) {
   let positions = aggregateHoldings((data.positions || []).filter((position) => state.investmentFilter === 'all' || assetClassLabel(position.type, position.asset_class_override) === state.investmentFilter));
   positions = [...positions].sort((a, b) => state.investmentSort === 'performance' ? Number(b.gain_pct ?? -Infinity) - Number(a.gain_pct ?? -Infinity) : state.investmentSort === 'equity' ? a.classification.localeCompare(b.classification) || Number(b.value) - Number(a.value) : Number(b.value) - Number(a.value));
   $('#investmentSort').value = state.investmentSort;
-  $('#investmentHoldingsInsight').textContent = data.positionsAvailable ? `${positions.length} current holding${positions.length === 1 ? '' : 's'}${state.investmentFilter === 'all' ? '' : ` · ${state.investmentFilter}`} · ${periodLabel} selected` : 'Holdings appear when your institution provides them.';
   const visiblePositions = state.holdingsExpanded ? positions : positions.slice(0, 3);
+  const previewCopy = visiblePositions.length < positions.length ? `Showing ${visiblePositions.length} of ${positions.length}` : `${positions.length} current holding${positions.length === 1 ? '' : 's'}`;
+  $('#investmentHoldingsInsight').textContent = data.positionsAvailable ? `${previewCopy}${state.investmentFilter === 'all' ? '' : ` · ${state.investmentFilter}`} · ${periodLabel} selected` : 'Holdings appear when your institution provides them.';
   $('#investmentPositions').innerHTML = data.positionsAvailable ? visiblePositions.map((position) => {
     const gain = position.gain_pct;
     const performance = gain == null ? 'Performance unavailable' : `${gain >= 0 ? '+' : '−'}${Math.abs(gain * 100).toFixed(1)}%`;
@@ -1167,9 +1184,16 @@ $$('[data-investment-range]').forEach((button) => button.addEventListener('click
 $('#investmentAllocation').addEventListener('click', (event) => {
   const filter = event.target.closest('[data-investment-filter]')?.dataset.investmentFilter;
   if (!filter) return;
+  // Holdings sit above allocation on small screens. Preserve the selected
+  // allocation row's screen position when the matching list changes height.
+  const allocationTop = $('#investmentAllocationCard').getBoundingClientRect().top;
   state.investmentFilter = filter;
-  state.holdingsExpanded = true;
+  state.holdingsExpanded = false;
   renderInvestments(state.investments);
+  requestAnimationFrame(() => {
+    const shift = $('#investmentAllocationCard').getBoundingClientRect().top - allocationTop;
+    if (Math.abs(shift) > .5) window.scrollBy(0, shift);
+  });
 });
 $('#investmentSort').addEventListener('change', (event) => {
   state.investmentSort = event.target.value;
