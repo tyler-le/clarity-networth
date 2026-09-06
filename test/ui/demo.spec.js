@@ -74,7 +74,7 @@ test('a new visitor can explore the complete demo without signing in', async ({ 
   await expect(page.locator('.holding-row')).toHaveCount(3);
   await goToView(page, 'retirement');
   await expect(page.getByRole('heading', { name: 'Retirement' })).toBeVisible();
-  await expect(page.locator('.retirement-milestone')).toHaveCount(4);
+  await expect(page.locator('.retirement-timeline-row')).toHaveCount(4);
   expect(pageErrors).toEqual([]);
 });
 
@@ -262,6 +262,13 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await expect(page.locator('#retirementPath')).toContainText('Work-break runway');
   await expect(page.locator('#retirementPath')).toContainText('Today');
   await expect(page.locator('#retirementPath .retirement-timeline-track')).toHaveCount(4);
+  await expect(page.getByText('Retirement spending targets')).toBeVisible();
+  await expect(page.locator('#retirementSpendContext')).toContainText('At retirement, in today’s dollars');
+  await page.locator('#retirementAdjust summary').click();
+  const retirementAgeInput = page.locator('#retirementRetireAgeValue');
+  await retirementAgeInput.fill('66');
+  await retirementAgeInput.press('Enter');
+  await expect(page.locator('#retirementForm [name="retirement_age"]')).toHaveValue('66');
   await expect(page.locator('#retirementLifestylePaths')).toContainText('Essentials covered');
   await expect(page.locator('#retirementLifestylePaths')).toContainText('Current lifestyle');
   await page.getByLabel('How the freedom ladder is calculated').click();

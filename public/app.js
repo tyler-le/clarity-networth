@@ -832,8 +832,8 @@ function renderRetirement(data) {
   $('#retirementProjection').textContent = fmt.format(data.projectedAtRetirement || 0);
   $('#retirementProjectionContext').textContent = `Projected at age ${data.retirementAge} if you keep saving ${fmt.format(data.annualContributions || 0)}/yr`;
   $('#retirementAgeChip').textContent = `${data.yearsToRetirement} years to go`;
-  $('#retirementSpendContext').textContent = data.monthsObserved ? `Based on ${data.monthsObserved} month${data.monthsObserved === 1 ? '' : 's'} of everyday spending.` : 'Connect spending accounts to personalize these paths.';
-  $('#retirementAssumption').textContent = `${data.withdrawalRate}% withdrawal · ${data.realReturn}% real growth`;
+  $('#retirementSpendContext').textContent = data.monthsObserved ? `At retirement, in today’s dollars · Based on ${data.monthsObserved} month${data.monthsObserved === 1 ? '' : 's'} of spending.` : 'Connect spending accounts to personalize these targets.';
+  $('#retirementAssumption').textContent = `At retirement · ${data.withdrawalRate}% withdrawal`;
   const estimatedLabel = (months, complete) => {
     if (complete) return 'Reached';
     if (!Number.isFinite(months)) return 'Needs a savings pace';
@@ -864,11 +864,12 @@ function renderRetirement(data) {
   form.retirement_age.value = data.retirementAge;
   form.withdrawal_rate.value = data.withdrawalRate;
   form.real_return.value = data.realReturn;
-  $('#retirementAgeValue').textContent = data.age;
-  $('#retirementRetireAgeValue').textContent = data.retirementAge;
-  $('#retirementWithdrawalValue').textContent = `${data.withdrawalRate}%`;
-  $('#retirementReturnValue').textContent = `${data.realReturn}%`;
+  $('#retirementAgeValue').value = data.age;
+  $('#retirementRetireAgeValue').value = data.retirementAge;
+  $('#retirementWithdrawalValue').value = data.withdrawalRate;
+  $('#retirementReturnValue').value = data.realReturn;
   form.retirement_age.min = String(Math.min(80, Number(data.age) + 1));
+  $('#retirementRetireAgeValue').min = form.retirement_age.min;
 }
 
 function renderDashboard() {
@@ -1092,7 +1093,38 @@ function previewRetirementPlan() {
     }
   }, 140);
 }
-$$('#retirementForm input').forEach((input) => input.addEventListener('input', previewRetirementPlan));
+function syncRetirementAgeBounds() {
+  const form = $('#retirementForm');
+  const age = Number(form.age.value);
+  const retirementAge = form.retirement_age;
+  const minimumRetirementAge = Math.min(80, age + 1);
+  retirementAge.min = String(minimumRetirementAge);
+  $('#retirementRetireAgeValue').min = retirementAge.min;
+  if (Number(retirementAge.value) < minimumRetirementAge) {
+    retirementAge.value = String(minimumRetirementAge);
+    $('#retirementRetireAgeValue').value = retirementAge.value;
+  }
+}
+
+function previewRetirementRange(input) {
+  const value = $(`[data-retirement-value="${input.name}"]`);
+  if (value) value.value = input.value;
+  if (input.name === 'age') syncRetirementAgeBounds();
+  previewRetirementPlan();
+}
+
+$$('#retirementForm input[type="range"]').forEach((input) => input.addEventListener('input', () => previewRetirementRange(input)));
+$$('[data-retirement-value]').forEach((input) => {
+  const applyTypedValue = () => {
+    const range = $(`#retirementForm [name="${input.dataset.retirementValue}"]`);
+    if (!range || !Number.isFinite(input.valueAsNumber)) return;
+    range.value = String(input.valueAsNumber);
+    input.value = range.value;
+    previewRetirementRange(range);
+  };
+  input.addEventListener('change', applyTypedValue);
+  input.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); input.blur(); } });
+});
 $('#retirementReset').addEventListener('click', async () => {
   resetRetirementPreview();
   try { renderRetirement(await api('/api/retirement')); }
