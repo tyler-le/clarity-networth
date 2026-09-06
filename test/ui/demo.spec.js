@@ -20,6 +20,7 @@ test('a slow first load shows calm placeholders before financial data arrives', 
   await expect(page.locator('#loadingSkeleton .skeleton-hero')).toBeVisible();
   await expect(page.locator('#netWorth')).toHaveText(/\$/);
   await expect(page.locator('#loadingSkeleton')).toBeHidden();
+  await expect(page.locator('#netWorthChart svg')).toBeVisible();
 });
 
 test('a new visitor can explore the complete demo without signing in', async ({ page }) => {

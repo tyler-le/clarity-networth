@@ -119,8 +119,7 @@ function setView(view) {
   $('#profileButton').classList.toggle('hidden', view === 'profile');
   if (view === 'overview' && state.dashboard) {
     requestAnimationFrame(() => {
-      restoreNetWorthHero();
-      renderLineChart(visibleSnapshots(state.dashboard.snapshots || []), state.dashboard.summary);
+      renderNetWorthChartWhenVisible();
     });
   }
   if (view === 'investments' && state.investments) requestAnimationFrame(() => renderInvestments(state.investments));
@@ -184,6 +183,20 @@ function netWorthRangeLabel(range) {
 
 function visibleSnapshots(snapshots) {
   return filterSnapshots(snapshots, state.networthRange);
+}
+
+// The first response can arrive while the calm loading shell is still hiding
+// the view. Rendering an SVG at that point produces a zero-width chart. Keep
+// the existing contents until the card has real layout, then draw normally.
+function renderNetWorthChartWhenVisible(attempt = 0) {
+  if (state.view !== 'overview' || !state.dashboard) return;
+  const chart = $('#netWorthChart');
+  if (chart.clientWidth < 80 || chart.clientHeight < 60) {
+    if (attempt < 8) requestAnimationFrame(() => renderNetWorthChartWhenVisible(attempt + 1));
+    return;
+  }
+  restoreNetWorthHero();
+  renderLineChart(visibleSnapshots(state.dashboard.snapshots || []), state.dashboard.summary);
 }
 
 function axisCurrency(value) {
@@ -756,7 +769,7 @@ function renderDashboard() {
   $('#liabilities').textContent = `−${fmt.format(s.liabilities)}`;
   $('#assets').classList.add('positive');
   $('#liabilities').classList.add('negative');
-  if (state.view === 'overview') renderLineChart(visibleSnapshots(d.snapshots || []), s);
+  if (state.view === 'overview') renderNetWorthChartWhenVisible();
   renderAccounts(d.accounts || []);
   renderConnections(d.items || []);
   $('#demoToggle').textContent = d.demoMode ? 'Exit demo' : 'Try demo';
@@ -799,6 +812,9 @@ async function loadAll() {
   } finally {
     clearTimeout(skeletonTimer);
     setInitialLoading(false);
+    // This runs after the skeleton has restored the view, covering a slow
+    // first request without relying on a browser resize event.
+    renderNetWorthChartWhenVisible();
     setAppStatus('');
   }
 }
@@ -1024,8 +1040,7 @@ $('#connectionsList').addEventListener('click', async (event) => {
 $$('[data-networth-range]').forEach((button) => button.addEventListener('click', () => {
   state.networthRange = button.dataset.networthRange;
   $$('[data-networth-range]').forEach((control) => control.classList.toggle('active', control === button));
-  restoreNetWorthHero();
-  renderLineChart(visibleSnapshots(state.dashboard?.snapshots || []), state.dashboard?.summary);
+  renderNetWorthChartWhenVisible();
 }));
 $$('[data-spending-range]').forEach((button) => button.addEventListener('click', async () => {
   state.spendingRange = button.dataset.spendingRange;
@@ -1283,8 +1298,7 @@ window.addEventListener('resize', () => {
   cancelAnimationFrame(chartResizeFrame);
   chartResizeFrame = requestAnimationFrame(() => {
     if (state.view === 'overview' && state.dashboard) {
-      restoreNetWorthHero();
-      renderLineChart(visibleSnapshots(state.dashboard.snapshots || []), state.dashboard.summary);
+      renderNetWorthChartWhenVisible();
     }
     if (state.view === 'investments' && state.investments) renderInvestments(state.investments);
   });
