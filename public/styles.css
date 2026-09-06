@@ -207,6 +207,18 @@ dialog::backdrop { background: rgba(10,15,10,.28); backdrop-filter: blur(3px); }
   .account-grid { grid-template-columns: repeat(2, 1fr); }
   .tx-row { grid-template-columns: 40px minmax(150px, 1fr) auto 36px; }
 }
+/* A 768px device has only 538px of usable content with the desktop sidebar.
+   Give tablets the full canvas and the touch navigation instead of allowing
+   adjacent dashboard cards to overlap their controls. */
+@media (min-width: 761px) and (max-width: 1000px) {
+  .sidebar { display: none; }
+  .main { margin-left: 0; padding: 30px 28px 118px; max-width: none; }
+  .hero-grid, .loading-skeleton, .investment-focus-grid { grid-template-columns: 1fr; }
+  .mobile-nav { position: fixed; z-index: 20; left: 18px; right: 18px; bottom: 14px; height: 66px; border: 1px solid var(--line); border-radius: 20px; padding: 7px; background: rgba(255,255,255,.92); box-shadow: 0 10px 35px rgba(0,0,0,.1); backdrop-filter: blur(18px); display: grid; grid-template-columns: repeat(5, 1fr); }
+  .mobile-nav button { display: grid; place-items: center; gap: 3px; border: 0; border-radius: 14px; color: var(--muted); background: transparent; font-weight: 600; }
+  .mobile-nav button span { font-size: 10px; }
+  .mobile-nav button.active { color: var(--ink); background: #f3f5f1; }
+}
 @media (max-width: 760px) {
   .sidebar { display: none; }
   .main { margin-left: 0; padding: 24px 16px 132px; }
