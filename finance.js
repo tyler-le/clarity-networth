@@ -81,6 +81,16 @@ export function investmentSummary(store) {
   };
 }
 
+// Investment transaction records added by the sync path are normalized
+// contributions, while bank-side investment transfers are also deposits. This
+// compact activity feed lets the net-worth view distinguish deposits from
+// market movement without exposing a full transaction ledger on the dashboard.
+export function investmentContributions(store) {
+  return (store.transactions || [])
+    .filter((transaction) => !transaction.pending && !transaction.excluded && transaction.bucket === 'investments' && Number(transaction.amount || 0) > 0)
+    .map((transaction) => ({ date: transaction.date, amount: Number(transaction.amount || 0) }));
+}
+
 export function snapshotInvestments(store, snapshotDate = new Date().toISOString().slice(0, 10)) {
   const value = store.accounts.filter((account) => !account.hidden && account.type === 'investment').reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
   store.investment_snapshots ||= [];

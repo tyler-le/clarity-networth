@@ -7,7 +7,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './store.js';
 import { databaseEnabled, deleteDatabaseStore, migrateDatabase, readDatabaseStore, recordAuditEvent, writeDatabaseStore } from './database.js';
-import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, investmentSummary, reconstructInvestmentHistory, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
+import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, investmentContributions, investmentSummary, reconstructInvestmentHistory, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
 import { loadHistoricalPrices } from './market-data.js';
 import { plaidConfigured, plaidPost } from './plaid.js';
 
@@ -417,6 +417,7 @@ app.get('/api/demo-preview', demoLimiter, (req, res) => {
       summary: summarizeRange(store),
       runway: cashRunway(store),
       recurring: recurringCharges(store),
+      investmentContributions: investmentContributions(store),
       accounts: store.accounts.filter((account) => !account.hidden).sort((a, b) => Number(b.current_balance || 0) - Number(a.current_balance || 0)),
       snapshots: store.snapshots.slice(-3650),
       items: [],
@@ -463,6 +464,7 @@ app.get('/api/dashboard', async (req, res) => {
     summary,
     runway: cashRunway(visibleStore),
     recurring: recurringCharges(visibleStore),
+    investmentContributions: investmentContributions(visibleStore),
     accounts,
     snapshots,
     items: visibleStore.items.map(publicItem),

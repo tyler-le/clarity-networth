@@ -157,9 +157,15 @@ function renderNetWorthInsights(snaps) {
     } else {
       const assetChange = Number(last.assets) - Number(first.assets);
       const debtChange = Number(last.liabilities) - Number(first.liabilities);
-      const assetText = `Assets ${assetChange >= 0 ? 'up' : 'down'} ${fmt.format(Math.abs(assetChange))}`;
       const debtText = `debt ${debtChange <= 0 ? 'down' : 'up'} ${fmt.format(Math.abs(debtChange))}`;
-      $('#netWorthChangeDetail').innerHTML = `<span class="${assetChange >= 0 ? 'positive' : 'negative'}">${assetText}</span><span> · </span><span class="${debtChange <= 0 ? 'positive' : 'negative'}">${debtText}</span>`;
+      const startDate = first.date, endDate = last.date;
+      const contributions = (state.dashboard?.investmentContributions || []).filter((row) => row.date >= startDate && row.date <= endDate).reduce((sum, row) => sum + Number(row.amount || 0), 0);
+      const portfolio = (state.investments?.snapshots || []).filter((row) => row.date >= startDate && row.date <= endDate);
+      const investmentChange = portfolio.length > 1 ? Number(portfolio.at(-1).value || 0) - Number(portfolio[0].value || 0) : null;
+      const investmentGrowth = investmentChange == null ? null : investmentChange - contributions;
+      const contributionText = `Contributed ${fmt.format(contributions)}`;
+      const growthText = investmentGrowth == null ? 'Investment growth still tracking' : `Investments ${investmentGrowth >= 0 ? 'grew' : 'fell'} ${fmt.format(Math.abs(investmentGrowth))}`;
+      $('#netWorthChangeDetail').innerHTML = `<span class="positive">${contributionText}</span><span> · </span><span class="${investmentGrowth == null || investmentGrowth >= 0 ? 'positive' : 'negative'}">${growthText}</span><span> · </span><span class="${debtChange <= 0 ? 'positive' : 'negative'}">${debtText}</span>`;
     }
   }
   const runway = state.dashboard?.runway;

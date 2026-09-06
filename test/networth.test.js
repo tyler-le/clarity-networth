@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
+import { calculateFire, cashRunway, classifyTransaction, hideDuplicateAccounts, investmentContributions, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
 import { normalizeCandles } from '../market-data.js';
 import { filterSnapshots, scrubIndex } from '../public/chart-utils.js';
 
@@ -136,6 +136,16 @@ test('cash flow separates actual spending details from saving and investing', ()
   assert.equal(result.investments, 500);
   assert.equal(result.savingsAndInvestments, 750);
   assert.deepEqual(result.actualSpendCategories.map((row) => [row.key, row.amount]), [['housing_bills', 1800], ['food_dining', 240], ['shopping', 90]]);
+});
+
+test('investment contribution activity includes bank deposits and payroll retirement contributions', () => {
+  const store = { transactions: [
+    { date: '2026-08-01', amount: 500, bucket: 'investments' },
+    { date: '2026-08-15', amount: 400, bucket: 'investments', source: 'investment_transaction' },
+    { date: '2026-08-20', amount: 100, bucket: 'savings' },
+    { date: '2026-08-25', amount: 300, bucket: 'investments', excluded: true }
+  ] };
+  assert.deepEqual(investmentContributions(store), [{ date: '2026-08-01', amount: 500 }, { date: '2026-08-15', amount: 400 }]);
 });
 
 test('recurring charge awareness identifies cadence and a meaningful increase', () => {
