@@ -242,14 +242,13 @@ function recurringMerchantKey(transaction) {
 
 // Plaid's recurring-streams product is not required for this lightweight
 // signal. We only surface a conservative monthly-bill pattern the person's
-// own posted activity supports—never ordinary food, shopping, or weekly use.
+// own posted activity supports, regardless of merchant category.
 export function recurringCharges(store, anchor = new Date()) {
   const today = anchor.toISOString().slice(0, 10);
   const windowStart = new Date(anchor); windowStart.setDate(windowStart.getDate() - 190);
   const groups = new Map();
   for (const transaction of store.transactions || []) {
-    const category = `${transaction.pfc_primary || ''} ${transaction.pfc_detailed || ''}`.toUpperCase();
-    if (transaction.pending || transaction.excluded || transaction.bucket === 'transfer' || Number(transaction.amount || 0) <= 0 || transaction.date < windowStart.toISOString().slice(0, 10) || /FOOD_AND_DRINK|GROCER/.test(category)) continue;
+    if (transaction.pending || transaction.excluded || transaction.bucket === 'transfer' || Number(transaction.amount || 0) <= 0 || transaction.date < windowStart.toISOString().slice(0, 10)) continue;
     const key = recurringMerchantKey(transaction);
     if (key.length < 3) continue;
     const row = groups.get(key) || { key, name: transaction.merchant_name || transaction.name || 'Recurring charge', transactions: [] };
