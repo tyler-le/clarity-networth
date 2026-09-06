@@ -629,7 +629,7 @@ export function seedDemo(store) {
   }));
   store.transactions.push({
     id: 'demo-401k-contribution', plaid_transaction_id: 'demo-401k-contribution', account_id: 'demo-401k',
-    merchant_name: '401(k) employee contribution', name: '401(k) employee contribution', amount: 750, date: d(15),
+    merchant_name: '401(k) employee contribution', name: '401(k) employee contribution', amount: 300, date: d(15),
     bucket: 'investments', excluded: false, pending: false, pfc_primary: 'RETIREMENT_CONTRIBUTION',
     pfc_detailed: '', source: 'investment_transaction', demo: true
   });
@@ -681,7 +681,7 @@ function addDemoHistory(store) {
     if (!existingTransactionIds.has(contributionId)) {
       store.transactions.push({
         id: contributionId, plaid_transaction_id: contributionId, account_id: 'demo-401k',
-        merchant_name: '401(k) employee contribution', name: '401(k) employee contribution', amount: 750,
+        merchant_name: '401(k) employee contribution', name: '401(k) employee contribution', amount: 300,
         date: `${month}-15`, bucket: 'investments', excluded: false, pending: false,
         pfc_primary: 'RETIREMENT_CONTRIBUTION', pfc_detailed: '', source: 'investment_transaction', demo: true
       });

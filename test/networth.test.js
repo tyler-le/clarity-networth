@@ -219,6 +219,10 @@ test('demo mode provides seven years of usable account and spending history', ()
   assert.ok(store.snapshots.length >= 84);
   assert.ok(new Set(store.transactions.map((transaction) => transaction.date.slice(0, 7))).size >= 84);
   assert.ok(store.accounts.some((account) => account.type === 'loan'));
+  const snapshots = store.investment_snapshots;
+  const portfolioChange = snapshots.at(-1).value - snapshots[0].value;
+  const contributions = investmentContributions(store).reduce((sum, row) => sum + row.amount, 0);
+  assert.ok(portfolioChange - contributions > 0, 'demo all-time investment growth should be positive');
 });
 
 test('pre-tax retirement contributions remain visible without distorting take-home cash flow', () => {
