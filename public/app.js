@@ -550,13 +550,13 @@ function renderCashFlowSankey(data) {
   const availableWidth = el.clientWidth;
   const compact = availableWidth < 520;
   const tablet = !compact && availableWidth < 760;
-  const width = compact ? 390 : tablet ? 620 : 720, height = 216;
+  const width = compact ? 390 : tablet ? 620 : 920, height = 216;
   // On phones, equal-width nodes create a steadier left-to-right reading
   // path. Longer labels wrap within their own node instead of making the
   // source feel visually less important.
-  const sourceX = compact ? 8 : 12, sourceW = compact ? 116 : tablet ? 120 : 132;
-  const middleX = compact ? 137 : tablet ? 168 : 244, middleW = compact ? 116 : tablet ? 142 : 150;
-  const destinationX = compact ? 266 : tablet ? 340 : 458, destinationW = compact ? 116 : tablet ? 196 : 230;
+  const sourceX = compact ? 8 : 12, sourceW = compact ? 116 : tablet ? 120 : 176;
+  const middleX = compact ? 137 : tablet ? 168 : 300, middleW = compact ? 116 : tablet ? 142 : 178;
+  const destinationX = compact ? 266 : tablet ? 340 : 548, destinationW = compact ? 116 : tablet ? 196 : 332;
   const displayValue = (value, isIncome = false) => {
     if (state.cashflowDisplay === 'amount') return fmt.format(value);
     if (!income) return '—';
