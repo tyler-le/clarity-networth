@@ -984,6 +984,13 @@ $$('[data-view]').forEach((button) => button.addEventListener('click', () => set
 $('#homeBrand').addEventListener('click', () => setView('overview'));
 $('#profileButton').addEventListener('click', () => setView('profile'));
 $('#profileBack').addEventListener('click', () => setView(state.returnView || 'overview'));
+// Help tips should disappear as soon as the reader returns to the page. This
+// keeps optional explanation from obscuring the next action on compact views.
+document.addEventListener('click', (event) => {
+  $$('.retirement-method[open]').forEach((tip) => {
+    if (!tip.contains(event.target)) tip.removeAttribute('open');
+  });
+});
 applyTheme(savedTheme(), false);
 $('#themeToggle').addEventListener('change', async (event) => {
   const theme = event.target.checked ? 'dark' : 'light';

@@ -263,7 +263,10 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await expect(page.locator('#retirementLifestylePaths')).toContainText('Essentials covered');
   await expect(page.locator('#retirementLifestylePaths')).toContainText('Current lifestyle');
   await page.getByLabel('How the freedom ladder is calculated').click();
-  await expect(page.getByText('Emergency and work-break steps compare your cash')).toBeVisible();
+  await expect(page.getByText('Cash milestones')).toBeVisible();
+  await page.getByText('Your freedom ladder').click();
+  await expect(page.locator('.retirement-method').first()).not.toHaveAttribute('open', '');
+  await page.getByLabel('How the freedom ladder is calculated').click();
   await page.locator('[data-retirement-milestone="coast"]').click();
   await expect(page.locator('#retirementInfoDialog')).toHaveAttribute('open', '');
   await expect(page.locator('#retirementInfoTitle')).toHaveText('What is Coast FIRE?');
