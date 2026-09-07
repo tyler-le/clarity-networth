@@ -417,7 +417,7 @@ test('retirement presets calculate coast, lean, standard, fat, and a projected r
   assert.equal(plan.ladder[0].target, 9000);
   assert.equal(plan.ladder[1].target, 18000);
   assert.equal(plan.ladder[0].estimatedMonths, 36);
-  assert.ok(plan.ladder[2].estimatedMonths > 0);
+  assert.equal(plan.ladder[2].estimatedMonths, null, 'a Coast FI date is not shown when this saving pace cannot catch the moving target before retirement');
   assert.ok(plan.coast < plan.standard);
   assert.ok(plan.projectedAtRetirement > 100000);
   assert.equal(plan.progress.standard, 100000 / 1200000 * 100);
@@ -430,6 +430,17 @@ test('retirement presets calculate coast, lean, standard, fat, and a projected r
 
   const lowerWithdrawalRate = calculateFire({ ...store, settings: { fire: { ...store.settings.fire, withdrawal_rate: 3.5 } } }, 100000);
   assert.ok(lowerWithdrawalRate.standard > plan.standard, 'a more conservative withdrawal rate raises the lifestyle target');
+
+  const fasterSaver = calculateFire({
+    ...store,
+    transactions: store.transactions.map((transaction) => transaction.bucket === 'investments' ? { ...transaction, amount: 1000 } : transaction)
+  }, 100000);
+  const coastMonths = fasterSaver.ladder.find((step) => step.key === 'coast').estimatedMonths;
+  assert.ok(coastMonths > 0 && coastMonths <= fasterSaver.yearsToRetirement * 12, 'Coast FI is estimated only within the retirement horizon');
+  let projected = 100000;
+  for (let month = 0; month < coastMonths; month += 1) projected = projected * (1 + 0.05 / 12) + fasterSaver.annualContributions / 12;
+  const movingTarget = fasterSaver.standard / Math.pow(1.05, (fasterSaver.yearsToRetirement * 12 - coastMonths) / 12);
+  assert.ok(projected >= movingTarget, 'the estimated date crosses the Coast target at that future date, not today’s frozen target');
 });
 
 test('each signed-in identity has an isolated persistent store', async () => {

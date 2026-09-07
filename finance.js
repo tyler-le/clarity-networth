@@ -741,6 +741,25 @@ function monthsToTarget({ balance, target, annualContribution = 0, annualReturn 
   return null;
 }
 
+// Coast FI is a moving finish line: every month closer to retirement leaves
+// one less month for a portfolio to compound. Project the balance and the
+// threshold together so an estimated date is not based on today's frozen
+// Coast target.
+function monthsToMovingCoastTarget({ balance, retirementTarget, yearsToRetirement, annualContribution = 0, annualReturn = 0 }) {
+  if (!Number.isFinite(retirementTarget) || retirementTarget <= 0) return null;
+  const contribution = Math.max(0, Number(annualContribution || 0)) / 12;
+  const monthlyReturn = Number(annualReturn || 0) / 12;
+  const horizonMonths = Math.max(0, Math.floor(Number(yearsToRetirement || 0) * 12));
+  const coastTargetAt = (month) => retirementTarget / Math.pow(1 + Number(annualReturn || 0), Math.max(0, (horizonMonths - month) / 12));
+  let projected = Math.max(0, Number(balance || 0));
+
+  for (let month = 0; month <= horizonMonths; month += 1) {
+    if (projected >= coastTargetAt(month)) return month;
+    if (month < horizonMonths) projected = projected * (1 + monthlyReturn) + contribution;
+  }
+  return null;
+}
+
 export function calculateFire(store, netWorth) {
   const settings = store.settings?.fire || {};
   const age = Math.max(18, Number(settings.age || 27));
@@ -801,7 +820,7 @@ export function calculateFire(store, netWorth) {
     ladder: [
       { key: 'emergency', name: 'Emergency fund', detail: '3 months of essentials', target: emergencyFund, progress: progress(emergencyFund, cashBalance), complete: cashBalance >= emergencyFund && emergencyFund > 0, estimatedMonths: monthsToTarget({ balance: cashBalance, target: emergencyFund, annualContribution: cashSavings.annualContributions }) },
       { key: 'runway', name: 'Work-break runway', detail: '6 months of essentials', target: runway, progress: progress(runway, cashBalance), complete: cashBalance >= runway && runway > 0, estimatedMonths: monthsToTarget({ balance: cashBalance, target: runway, annualContribution: cashSavings.annualContributions }) },
-      { key: 'coast', name: 'Coast FI', detail: 'Growth could carry you to retirement', target: coast, progress: progress(coast), complete: freedomBalance >= coast && coast > 0, estimatedMonths: monthsToTarget({ balance: freedomBalance, target: coast, annualContribution: contributions.annualContributions, annualReturn: realReturn }) },
+      { key: 'coast', name: 'Coast FI', detail: 'Growth could carry you to retirement', target: coast, progress: progress(coast), complete: freedomBalance >= coast && coast > 0, estimatedMonths: monthsToMovingCoastTarget({ balance: freedomBalance, retirementTarget: standard, yearsToRetirement, annualContribution: contributions.annualContributions, annualReturn: realReturn }) },
       { key: 'standard', name: 'Financial independence', detail: 'Your current lifestyle', target: standard, progress: progress(standard), complete: freedomBalance >= standard && standard > 0, estimatedMonths: monthsToTarget({ balance: freedomBalance, target: standard, annualContribution: contributions.annualContributions, annualReturn: realReturn }) }
     ],
     progress: {

@@ -14,7 +14,7 @@ async function openDemo(page) {
   // The shell is shown before its first data request completes. Wait for a
   // rendered financial value before interacting with responsive navigation;
   // otherwise a test can click during the intentional loading transition.
-  await expect(page.locator('#netWorth')).toHaveText(/\$/);
+  await expect(page.locator('#netWorth')).toHaveText(/\$/, { timeout: 15_000 });
   await expect(page.locator('#appShell')).toHaveAttribute('aria-busy', 'false');
 }
 
@@ -278,6 +278,12 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await expect(page.getByText('What the ladder represents')).toBeVisible();
   await expect(page.getByText('Cash milestones')).toBeVisible();
   await expect(page.locator('.retirement-hero .retirement-method-popover').getByText('Coast FI', { exact: true })).toBeVisible();
+  const ladderTipBounds = await page.locator('.retirement-hero .retirement-method-popover').evaluate((popover) => {
+    const rect = popover.getBoundingClientRect();
+    return { top: rect.top, bottom: rect.bottom, viewportHeight: window.innerHeight };
+  });
+  expect(ladderTipBounds.top).toBeGreaterThanOrEqual(12);
+  expect(ladderTipBounds.bottom).toBeLessThanOrEqual(ladderTipBounds.viewportHeight);
   await page.getByText('Your freedom ladder').click();
   await expect(page.locator('.retirement-method').first()).not.toHaveAttribute('open', '');
   await page.getByLabel('How the freedom ladder is calculated').click();

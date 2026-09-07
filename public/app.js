@@ -845,7 +845,7 @@ function renderRetirement(data) {
     const interactive = ['coast', 'standard'].includes(step.key);
     const tag = interactive ? 'button' : 'div';
     const action = interactive ? ` type="button" data-retirement-milestone="${step.key}" aria-label="Learn about ${escapeHtml(step.name)}"` : '';
-    const detail = step.key === 'coast' ? `Invested today, could grow to FI by age ${data.retirementAge}`
+    const detail = step.key === 'coast' ? 'Needed today; the Coast FI line moves as retirement gets closer'
       : step.key === 'standard' ? `Portfolio needed by age ${data.retirementAge} for your current lifestyle`
         : step.detail;
     return `<${tag} class="retirement-milestone ${step.complete ? 'complete' : ''}"${action}><span class="retirement-milestone-name">${step.complete ? '✓ ' : ''}${escapeHtml(step.name)}</span><strong>${fmt.format(step.target || 0)}</strong><small class="retirement-milestone-detail">${escapeHtml(detail)}</small><i aria-label="${Math.round(Math.min(100, Number(step.progress || 0)))}% of target"><b style="width:${Math.min(100, Number(step.progress || 0)).toFixed(1)}%"></b></i><em>${escapeHtml(estimatedLabel(step.estimatedMonths, step.complete))}</em></${tag}>`;
