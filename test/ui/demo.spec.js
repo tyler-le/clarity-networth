@@ -302,7 +302,9 @@ test('cash-flow quality holds at every supported viewport', async ({ page }) => 
     return { width: box.width, height: box.height };
   }));
   expect(nodeBoxes.every((box) => box.width > 0 && box.height > 0)).toBe(true);
-  const categoryColors = await diagram.locator('[data-cashflow-category] rect:nth-child(2)').evaluateAll((stripes) => new Set(stripes.map((stripe) => stripe.getAttribute('fill'))).size);
+  // SVG <title> is intentionally present for accessible hover labels, so
+  // select the accent stripe by SVG element type rather than child position.
+  const categoryColors = await diagram.locator('[data-cashflow-category] rect:nth-of-type(2)').evaluateAll((stripes) => new Set(stripes.map((stripe) => stripe.getAttribute('fill'))).size);
   expect(categoryColors).toBeGreaterThan(2);
   await page.locator('#cashflowExpand').click();
   await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
