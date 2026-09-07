@@ -350,7 +350,7 @@ test('clarity check-in uses a freedom step when calm and prioritizes a material 
   transactions.push({ date: '2026-07-10', amount: 100, bucket: 'guilt_free', pfc_primary: 'TRAVEL' });
   const steady = clarityCheckin({ transactions, accounts: [], items: [] }, new Date('2026-08-15T12:00:00'));
   assert.equal(steady.tone, 'steady');
-  assert.match(steady.title, /Next: Coast FI/);
+  assert.match(steady.title, /Next: Coast independence/);
   transactions.push({ date: '2026-07-20', amount: 400, bucket: 'guilt_free', pfc_primary: 'TRAVEL' });
   const outlier = clarityCheckin({ transactions, accounts: [], items: [] }, new Date('2026-08-15T12:00:00'));
   assert.equal(outlier.tone, 'watch');
@@ -373,7 +373,7 @@ test('clarity check-in uses one next freedom step when cash flow has no material
   };
   const checkin = clarityCheckin(store, new Date('2026-09-06T12:00:00Z'));
   assert.equal(checkin.action, 'retirement');
-  assert.match(checkin.title, /Next: Work-break runway/);
+  assert.match(checkin.title, /Next: Six-month buffer/);
   assert.match(checkin.detail, /6 months of essentials/);
 });
 

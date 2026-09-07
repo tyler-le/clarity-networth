@@ -274,7 +274,7 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await openDemo(page);
   await goToView(page, 'retirement');
   await expect(page.locator('#retirementPath')).toContainText('Emergency fund');
-  await expect(page.locator('#retirementPath')).toContainText('Work-break runway');
+  await expect(page.locator('#retirementPath')).toContainText('Six-month buffer');
   await expect(page.locator('#retirementPath .retirement-milestone')).toHaveCount(4);
   await expect(page.getByText('Retirement spending targets')).toBeVisible();
   await expect(page.locator('#retirementSpendContext')).toContainText('Needed by age 65, in today’s dollars');
@@ -289,7 +289,7 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await expect(page.locator('.retirement-hero')).toHaveCSS('overflow', 'visible');
   await expect(page.getByText('What the ladder represents')).toBeVisible();
   await expect(page.getByText('Cash milestones')).toBeVisible();
-  await expect(page.locator('.retirement-hero .retirement-method-popover').getByText('Coast FI', { exact: true })).toBeVisible();
+  await expect(page.locator('.retirement-hero .retirement-method-popover').getByText('Coast independence', { exact: true })).toBeVisible();
   const ladderTipBounds = await page.locator('.retirement-hero .retirement-method-popover').evaluate((popover) => {
     const rect = popover.getBoundingClientRect();
     return { top: rect.top, bottom: rect.bottom, viewportHeight: window.innerHeight };
@@ -301,9 +301,9 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await page.getByLabel('How the freedom ladder is calculated').click();
   await page.locator('[data-retirement-milestone="coast"]').click();
   await expect(page.locator('#retirementInfoDialog')).toHaveAttribute('open', '');
-  await expect(page.locator('#retirementInfoTitle')).toHaveText('What is Coast FIRE?');
+  await expect(page.locator('#retirementInfoTitle')).toHaveText('What is Coast independence?');
   await expect(page.locator('#retirementInfoDescription')).toContainText('without more retirement contributions');
-  await expect(page.locator('#retirementInfoTargetLabel')).toHaveText('Needed today · Coast FI by age 65');
+  await expect(page.locator('#retirementInfoTargetLabel')).toHaveText('Needed today · Can grow to age 65');
   await expect(page.locator('#retirementInfoTiming')).toHaveText(/Already reached|Est\. [A-Z][a-z]{2} \d{4}|Set a saving pace/);
 });
 

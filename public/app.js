@@ -845,8 +845,8 @@ function renderRetirement(data) {
     const interactive = ['coast', 'standard'].includes(step.key);
     const tag = interactive ? 'button' : 'div';
     const action = interactive ? ` type="button" data-retirement-milestone="${step.key}" aria-label="Learn about ${escapeHtml(step.name)}"` : '';
-    const detail = step.key === 'coast' ? 'Needed today; the Coast FI line moves as retirement gets closer'
-      : step.key === 'standard' ? `Portfolio needed by age ${data.retirementAge} for your current lifestyle`
+    const detail = step.key === 'coast' ? 'Can grow to your retirement goal'
+      : step.key === 'standard' ? `Needed by age ${data.retirementAge}`
         : step.detail;
     return `<${tag} class="retirement-milestone ${step.complete ? 'complete' : ''}"${action}><span class="retirement-milestone-name">${step.complete ? '✓ ' : ''}${escapeHtml(step.name)}</span><strong>${fmt.format(step.target || 0)}</strong><small class="retirement-milestone-detail">${escapeHtml(detail)}</small><i aria-label="${Math.round(Math.min(100, Number(step.progress || 0)))}% of target"><b style="width:${Math.min(100, Number(step.progress || 0)).toFixed(1)}%"></b></i><em>${escapeHtml(estimatedLabel(step.estimatedMonths, step.complete))}</em></${tag}>`;
   }).join('');
@@ -1143,11 +1143,11 @@ function openRetirementMilestone(name) {
   if (!plan) return;
   const details = {
     coast: {
-      label: 'COAST RETIREMENT', title: 'What is Coast FIRE?', value: plan.coast,
+      label: 'COAST RETIREMENT', title: 'What is Coast independence?', value: plan.coast,
       description: 'You have enough invested today that, if it grows until retirement, it could reach your Standard goal without more retirement contributions. You would still need income for today’s living costs.'
     },
     lean: {
-      label: 'LEAN RETIREMENT', title: 'What is Lean FIRE?', value: plan.lean,
+      label: 'LEAN RETIREMENT', title: 'What is Lean retirement?', value: plan.lean,
       description: `A smaller retirement target designed for a simpler lifestyle—about ${Math.round(Number(plan.leanMultiplier || .7) * 100)}% of your current annual spending.`
     },
     standard: {
@@ -1155,7 +1155,7 @@ function openRetirementMilestone(name) {
       description: 'The portfolio target intended to support your recent everyday lifestyle in retirement, using the withdrawal rate in your plan.'
     },
     fat: {
-      label: 'FAT RETIREMENT', title: 'What is Fat FIRE?', value: plan.fat,
+      label: 'MORE-ROOM RETIREMENT', title: 'What is a more-flexible retirement?', value: plan.fat,
       description: `A larger retirement target for more flexibility and discretionary spending—about ${Math.round(Number(plan.fatMultiplier || 1.5) * 100)}% of your current annual spending.`
     }
   }[name];
@@ -1173,7 +1173,7 @@ function openRetirementMilestone(name) {
   $('#retirementInfoTitle').textContent = details.title;
   $('#retirementInfoDescription').textContent = details.description;
   $('#retirementInfoValue').textContent = fmt.format(details.value || 0);
-  $('#retirementInfoTargetLabel').textContent = name === 'coast' ? `Needed today · Coast FI by age ${plan.retirementAge}` : `Needed by age ${plan.retirementAge}`;
+  $('#retirementInfoTargetLabel').textContent = name === 'coast' ? `Needed today · Can grow to age ${plan.retirementAge}` : `Needed by age ${plan.retirementAge}`;
   $('#retirementInfoTiming').textContent = timing;
   $('#retirementInfoDialog').showModal();
 }
