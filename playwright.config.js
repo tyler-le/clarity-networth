@@ -57,7 +57,10 @@ export default defineConfig({
   webServer: networkDisabled ? undefined : {
     command: 'node src/server.js',
     url: 'http://127.0.0.1:4173/api/health',
-    reuseExistingServer: !process.env.CI,
+    // Test runs must own their server. Reusing an unrelated local dev server
+    // makes long multi-viewport suites flaky when that process restarts or
+    // exits underneath Playwright. Opt in only for deliberate debugging.
+    reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === 'true',
     env: {
       ...process.env,
       PORT: '4173',
