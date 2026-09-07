@@ -62,13 +62,17 @@ jobs:
         run: npx --yes @railway/cli@latest up --ci --project "$RAILWAY_PROJECT_ID" --service "$RAILWAY_SERVICE" --environment "$RAILWAY_STAGING_ENVIRONMENT" --message "GitHub Actions $GITHUB_SHA"
       - name: Smoke test staging
         run: |
-          for attempt in {1..30}; do
-            if curl --fail --silent --show-error --max-time 15 "$STAGING_URL/api/health" | grep -q '"ok":true'; then
+          # Railway may cold-start a sleeping service. Capture curl failures so
+          # `bash -e -o pipefail` cannot abort the retry loop while it wakes.
+          for attempt in {1..12}; do
+            health="$(curl --silent --show-error --max-time 60 "$STAGING_URL/api/health" 2>&1 || true)"
+            if printf '%s' "$health" | grep -q '"ok":true'; then
               curl --fail --silent --show-error --max-time 15 "$STAGING_URL/" >/dev/null
               curl --fail --silent --show-error --max-time 15 "$STAGING_URL/privacy" >/dev/null
               exit 0
             fi
-            sleep 10
+            echo "Staging is not healthy yet (attempt $attempt/12): $health" >&2
+            sleep 5
           done
           echo "Staging did not become healthy. Production was not deployed." >&2
           exit 1
@@ -87,13 +91,17 @@ jobs:
         run: npx --yes @railway/cli@latest up --ci --project "$RAILWAY_PROJECT_ID" --service "$RAILWAY_SERVICE" --environment "$RAILWAY_PRODUCTION_ENVIRONMENT" --message "GitHub Actions $GITHUB_SHA"
       - name: Smoke test production
         run: |
-          for attempt in {1..30}; do
-            if curl --fail --silent --show-error --max-time 15 "$PRODUCTION_URL/api/health" | grep -q '"ok":true'; then
+          # Same cold-start handling as staging. Production is only promoted
+          # once the exact staged commit has passed its health check.
+          for attempt in {1..12}; do
+            health="$(curl --silent --show-error --max-time 60 "$PRODUCTION_URL/api/health" 2>&1 || true)"
+            if printf '%s' "$health" | grep -q '"ok":true'; then
               curl --fail --silent --show-error --max-time 15 "$PRODUCTION_URL/" >/dev/null
               curl --fail --silent --show-error --max-time 15 "$PRODUCTION_URL/privacy" >/dev/null
               exit 0
             fi
-            sleep 10
+            echo "Production is not healthy yet (attempt $attempt/12): $health" >&2
+            sleep 5
           done
           echo "Production did not become healthy. Inspect Railway and roll back if needed." >&2
           exit 1
