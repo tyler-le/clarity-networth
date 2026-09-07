@@ -12,12 +12,10 @@ async function openDemo(page) {
   await expect(page.locator('#inviteCode')).toBeVisible();
   await expect(page.locator('#inviteCode')).toHaveAttribute('type', 'password');
   await expect(page.locator('#inviteCode')).toHaveValue('');
-  await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Continue with Google' })).toHaveCount(0);
   await expect(page.locator('#googleSignIn')).toBeHidden();
+  await expect(page.locator('#accessCodeStatus')).toHaveText('Enter your access code to unlock Google sign-in.');
   await expect(page.locator('.auth-intro')).toHaveText('A calm, clear view of your net worth, accounts, and path ahead.');
-  await page.getByRole('button', { name: 'Continue with Google' }).click();
-  await expect(page.locator('#authMessage')).toHaveText('Enter your access code to continue.');
-  await expect(page.locator('#googleSignIn')).toBeHidden();
   await expect(page.getByText(/By continuing, you agree to our/i)).toBeVisible();
   await expect(page.getByRole('link', { name: 'Terms' })).toHaveAttribute('href', '/terms');
   await expect(page.getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute('href', '/privacy');
@@ -29,6 +27,20 @@ async function openDemo(page) {
   await expect(page.locator('#netWorth')).toHaveText(/\$/, { timeout: 15_000 });
   await expect(page.locator('#appShell')).toHaveAttribute('aria-busy', 'false');
 }
+
+test('a verified access code unlocks the single Google sign-in action', async ({ page }) => {
+  await page.route('**/api/auth/config', (route) => route.fulfill({ json: { configured: true, googleClientId: 'test-client-id.apps.googleusercontent.com' } }));
+  await page.route('**/api/auth/access-code', (route) => route.fulfill({ json: { ok: true } }));
+  await page.route('https://accounts.google.com/gsi/client', (route) => route.fulfill({
+    contentType: 'application/javascript',
+    body: "window.google={accounts:{id:{initialize:function(){},renderButton:function(el){el.innerHTML='<button type=\"button\">Continue with Google</button>';}}}};"
+  }));
+  await page.goto('/');
+  await page.locator('#inviteCode').fill('VALID-CODE');
+  await expect(page.locator('#accessCodeStatus')).toHaveText('Access confirmed. Continue with Google.');
+  await expect(page.locator('#googleSignIn').getByRole('button', { name: 'Continue with Google' })).toBeVisible();
+  await expect(page.locator('#beginGoogleSignIn')).toHaveCount(0);
+});
 
 async function goToView(page, view) {
   const mobile = page.locator(`.mobile-nav [data-view="${view}"]`);
@@ -285,6 +297,7 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await expect(page.locator('#retirementForm [name="retirement_age"]')).toHaveValue('66');
   await expect(page.locator('#retirementLifestylePaths')).toContainText('Essentials covered');
   await expect(page.locator('#retirementLifestylePaths')).toContainText('Current lifestyle');
+  await expect(page.locator('#retirementLifestylePaths')).toContainText('Housing, food, insurance, and other basics');
   await page.getByLabel('How the freedom ladder is calculated').click();
   await expect(page.locator('.retirement-hero')).toHaveCSS('overflow', 'visible');
   await expect(page.getByText('What the ladder represents')).toBeVisible();
@@ -302,7 +315,7 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await page.locator('[data-retirement-milestone="coast"]').click();
   await expect(page.locator('#retirementInfoDialog')).toHaveAttribute('open', '');
   await expect(page.locator('#retirementInfoTitle')).toHaveText('What is Coast independence?');
-  await expect(page.locator('#retirementInfoDescription')).toContainText('without more retirement contributions');
+  await expect(page.locator('#retirementInfoDescription')).toContainText('stopped adding to retirement savings');
   await expect(page.locator('#retirementInfoTargetLabel')).toHaveText('Needed today · Can grow to age 65');
   await expect(page.locator('#retirementInfoTiming')).toHaveText(/Already reached|Est\. [A-Z][a-z]{2} \d{4}|Set a saving pace/);
 });

@@ -845,8 +845,8 @@ function renderRetirement(data) {
     const interactive = ['coast', 'standard'].includes(step.key);
     const tag = interactive ? 'button' : 'div';
     const action = interactive ? ` type="button" data-retirement-milestone="${step.key}" aria-label="Learn about ${escapeHtml(step.name)}"` : '';
-    const detail = step.key === 'coast' ? 'Can grow to your retirement goal'
-      : step.key === 'standard' ? `Needed by age ${data.retirementAge}`
+    const detail = step.key === 'coast' ? 'Your investments can grow to cover retirement'
+      : step.key === 'standard' ? 'Enough invested to cover retirement spending'
         : step.detail;
     return `<${tag} class="retirement-milestone ${step.complete ? 'complete' : ''}"${action}><span class="retirement-milestone-name">${step.complete ? '✓ ' : ''}${escapeHtml(step.name)}</span><strong>${fmt.format(step.target || 0)}</strong><small class="retirement-milestone-detail">${escapeHtml(detail)}</small><i aria-label="${Math.round(Math.min(100, Number(step.progress || 0)))}% of target"><b style="width:${Math.min(100, Number(step.progress || 0)).toFixed(1)}%"></b></i><em>${escapeHtml(estimatedLabel(step.estimatedMonths, step.complete))}</em></${tag}>`;
   }).join('');
@@ -1144,7 +1144,7 @@ function openRetirementMilestone(name) {
   const details = {
     coast: {
       label: 'COAST RETIREMENT', title: 'What is Coast independence?', value: plan.coast,
-      description: 'You have enough invested today that, if it grows until retirement, it could reach your Standard goal without more retirement contributions. You would still need income for today’s living costs.'
+      description: `If you reached this amount today and stopped adding to retirement savings, your investments could grow to cover retirement by age ${plan.retirementAge}. You would still need income for living costs before then.`
     },
     lean: {
       label: 'LEAN RETIREMENT', title: 'What is Lean retirement?', value: plan.lean,
@@ -1152,7 +1152,7 @@ function openRetirementMilestone(name) {
     },
     standard: {
       label: 'STANDARD RETIREMENT', title: 'What is Standard retirement?', value: plan.standard,
-      description: 'The portfolio target intended to support your recent everyday lifestyle in retirement, using the withdrawal rate in your plan.'
+      description: `The amount invested by age ${plan.retirementAge} that could cover your current retirement lifestyle under this plan.`
     },
     fat: {
       label: 'MORE-ROOM RETIREMENT', title: 'What is a more-flexible retirement?', value: plan.fat,
@@ -1530,11 +1530,12 @@ async function startDemoPreview() {
 }
 
 let googleSignInConfig = null;
+let accessCodeCheckTimer;
+let accessCodeCheckVersion = 0;
 
 async function renderGoogleSignIn(config) {
   $('#googleSignIn').innerHTML = '';
   if (!config.configured) {
-    $('#beginGoogleSignIn').classList.add('hidden');
     $('#googleSignIn').classList.add('hidden');
     $('#authMessage').textContent = 'Google sign-in is not configured. Add GOOGLE_CLIENT_ID and a strong ENCRYPTION_KEY to the server environment.';
     return;
@@ -1554,7 +1555,6 @@ async function renderGoogleSignIn(config) {
       } catch (error) { $('#authMessage').textContent = error.message; }
     }
   });
-  $('#beginGoogleSignIn').classList.add('hidden');
   $('#googleSignIn').classList.remove('hidden');
   window.google.accounts.id.renderButton($('#googleSignIn'), { theme: 'outline', size: 'large', width: Math.min(360, Math.floor($('#googleSignIn').clientWidth || 360)), text: 'continue_with' });
 }
@@ -1565,29 +1565,30 @@ async function startGoogleSignIn() {
   $('#googleSignIn').innerHTML = '';
   $('#googleSignIn').classList.add('hidden');
   if (!config.configured) return renderGoogleSignIn(config);
-  $('#beginGoogleSignIn').classList.remove('hidden');
-  $('#beginGoogleSignIn').disabled = false;
+  $('#accessCodeStatus').textContent = 'Enter your access code to unlock Google sign-in.';
 }
 
-async function beginGoogleSignIn() {
+async function validateAccessCode() {
   const inviteCode = $('#inviteCode').value.trim();
   if (!inviteCode) {
-    $('#authMessage').textContent = 'Enter your access code to continue.';
-    $('#inviteCode').focus();
+    $('#googleSignIn').innerHTML = '';
+    $('#googleSignIn').classList.add('hidden');
+    $('#accessCodeStatus').textContent = 'Enter your access code to unlock Google sign-in.';
     return;
   }
-  const button = $('#beginGoogleSignIn');
-  button.disabled = true;
-  button.textContent = 'Checking access code…';
+  if (!googleSignInConfig?.configured) {
+    $('#accessCodeStatus').textContent = 'Sign-in is still loading. Please try again.';
+    return;
+  }
+  const version = ++accessCodeCheckVersion;
+  $('#accessCodeStatus').textContent = 'Checking access code…';
   try {
     await api('/api/auth/access-code', { method: 'POST', body: JSON.stringify({ inviteCode }) });
-    $('#authMessage').textContent = 'Access confirmed. Continue with Google.';
+    if (version !== accessCodeCheckVersion || $('#inviteCode').value.trim() !== inviteCode) return;
+    $('#accessCodeStatus').textContent = 'Access confirmed. Continue with Google.';
     await renderGoogleSignIn(googleSignInConfig);
   } catch (error) {
-    $('#authMessage').textContent = error.message;
-  } finally {
-    button.disabled = false;
-    button.textContent = 'Continue with Google';
+    if (version === accessCodeCheckVersion) $('#accessCodeStatus').textContent = error.message;
   }
 }
 
@@ -1638,7 +1639,22 @@ window.addEventListener('online', async () => {
 });
 
 $('#demoPreviewButton').addEventListener('click', startDemoPreview);
-$('#beginGoogleSignIn').addEventListener('click', beginGoogleSignIn);
+$('#inviteCode').addEventListener('input', () => {
+  clearTimeout(accessCodeCheckTimer);
+  accessCodeCheckVersion += 1;
+  $('#googleSignIn').innerHTML = '';
+  $('#googleSignIn').classList.add('hidden');
+  const code = $('#inviteCode').value.trim();
+  $('#accessCodeStatus').textContent = code ? 'Checking access code…' : 'Enter your access code to unlock Google sign-in.';
+  if (code.length >= 4) accessCodeCheckTimer = setTimeout(validateAccessCode, 650);
+});
+$('#inviteCode').addEventListener('blur', () => {
+  clearTimeout(accessCodeCheckTimer);
+  if ($('#inviteCode').value.trim()) validateAccessCode();
+});
+$('#inviteCode').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') { event.preventDefault(); clearTimeout(accessCodeCheckTimer); validateAccessCode(); }
+});
 
 $('#signOutButton').addEventListener('click', async () => {
   if (!state.demoPreview) await api('/api/auth/logout', { method: 'POST', body: '{}' });

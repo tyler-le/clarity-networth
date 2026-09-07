@@ -813,9 +813,9 @@ export function calculateFire(store, netWorth) {
     coast,
     fat,
     lifestyles: [
-      { key: 'essential', name: 'Essentials covered', target: essential, detail: 'Your fixed, everyday costs' },
-      { key: 'current', name: 'Current lifestyle', target: standard, detail: 'Your recent everyday spending' },
-      { key: 'more', name: 'More room', target: fat, detail: 'Extra flexibility and discretionary spending' }
+      { key: 'essential', name: 'Essentials covered', target: essential, detail: 'Housing, food, insurance, and other basics' },
+      { key: 'current', name: 'Current lifestyle', target: standard, detail: 'The lifestyle you live today' },
+      { key: 'more', name: 'More room', target: fat, detail: 'Extra room for travel, extras, and flexibility' }
     ],
     ladder: [
       { key: 'emergency', name: 'Emergency fund', detail: '3 months of essentials', target: emergencyFund, progress: progress(emergencyFund, cashBalance), complete: cashBalance >= emergencyFund && emergencyFund > 0, estimatedMonths: monthsToTarget({ balance: cashBalance, target: emergencyFund, annualContribution: cashSavings.annualContributions }) },
