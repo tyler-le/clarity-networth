@@ -51,6 +51,7 @@ const emptyStore = () => ({
   investment_link_events: [],
   market_prices: {},
   investment_snapshots: [],
+  investment_position_snapshots: [],
   transactions: [],
   snapshots: [],
   settings: {
@@ -118,6 +119,7 @@ export function removeDemoData(store) {
   store.investment_transactions = [];
   store.market_prices = {};
   store.investment_snapshots = [];
+  store.investment_position_snapshots = [];
   store.transactions = store.transactions.filter((transaction) => !transaction.demo);
   // Existing snapshots do not carry a mode marker, so a mixed store cannot
   // distinguish real history from the demo baseline.

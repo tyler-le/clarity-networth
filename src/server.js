@@ -8,7 +8,6 @@ import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './lib/store.js';
 import { consumeRateLimit, databaseEnabled, databaseHealthy, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, recordDependencyEvent, recordLaunchEvent, writeDatabaseStore } from './lib/database.js';
 import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentSummary, monthlyReview, refreshReconstructedInvestmentSnapshots, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './lib/finance.js';
-import { loadHistoricalPrices } from './lib/market-data.js';
 import { plaidConfigured, plaidPost } from './lib/plaid.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -266,7 +265,7 @@ function activeStore(store) {
 function demoPreviewStore() {
   const store = {
     items: [], accounts: [], positions: [], manual_holdings: [], position_overrides: {}, investment_transactions: [],
-    market_prices: {}, investment_snapshots: [], transactions: [], snapshots: [],
+    market_prices: {}, investment_snapshots: [], investment_position_snapshots: [], transactions: [], snapshots: [],
     settings: { targets: { fixed: 50, savings: 10, investments: 10, guilt_free: 30 }, demo_mode: true }
   };
   seedDemo(store);
@@ -469,7 +468,6 @@ async function syncStoreItems(store) {
     }
   }
   hideDuplicateAccounts(store);
-  try { await backfillInvestmentHistory(store); } catch (error) { console.warn('Investment history reconstruction unavailable:', error.message); }
   snapshotNetWorth(store);
   snapshotInvestments(store);
   return results;
@@ -717,52 +715,6 @@ async function syncRetirementContributionsForItem(store, item, { asyncUpdate = f
   item.investment_history_state = 'ready';
   item.investment_history_received_at = new Date().toISOString();
   return { state: 'ready', imported };
-}
-
-async function backfillInvestmentHistory(store) {
-  if (!process.env.MARKETDATA_API_TOKEN) return false;
-  const endDate = new Date().toISOString().slice(0, 10);
-  const historyYears = Math.max(1, Math.min(2, Number(process.env.MARKETDATA_HISTORY_YEARS || 1)));
-  const start = new Date();
-  start.setFullYear(start.getFullYear() - historyYears);
-  const startDate = start.toISOString().slice(0, 10);
-  const securities = new Map();
-  const unavailable = new Map();
-  for (const position of store.positions || []) {
-    const historical = historicalSecurity(position);
-    position.ticker = historical.ticker;
-    position.type = historical.type;
-  }
-  for (const position of store.positions || []) {
-    if (position.type === 'cash') continue;
-    if (!position.ticker) unavailable.set(position.security_id || position.name, position.name || 'an investment');
-    else securities.set(position.ticker, { ticker: position.ticker, type: position.type, name: position.name || position.ticker });
-  }
-  for (const transaction of store.investment_transactions || []) if (transaction.ticker && transaction.security_type !== 'cash') securities.set(transaction.ticker, { ticker: transaction.ticker, type: transaction.security_type });
-  store.market_prices ||= {};
-  for (const security of securities.values()) {
-    const cached = store.market_prices[security.ticker] || {};
-    const latestCached = Object.keys(cached).sort().at(-1);
-    const recentEnough = latestCached && (new Date(`${endDate}T12:00:00`) - new Date(`${latestCached}T12:00:00`)) < 8 * 86400000;
-    if (Object.keys(cached).some((date) => date <= startDate) && recentEnough) continue;
-    try {
-      const prices = await loadHistoricalPrices({ symbol: security.ticker, securityType: security.type, from: startDate, to: endDate });
-      store.market_prices[security.ticker] = { ...cached, ...prices };
-    } catch (error) {
-      // A price provider outage must never remove an already-built chart.
-      console.warn(`Historical price refresh skipped for ${security.ticker}:`, error.message);
-      unavailable.set(security.ticker, security.name);
-    }
-  }
-  const reconstructed = refreshReconstructedInvestmentSnapshots(store, endDate, historyYears);
-  markInvestmentLinkCoverage(store);
-  store.investment_history_status = {
-    state: reconstructed.length ? 'ready' : unavailable.size ? 'unavailable' : 'tracking',
-    unavailable: [...unavailable.values()].slice(0, 3),
-    checked_at: new Date().toISOString()
-  };
-  if (!reconstructed.length) return false;
-  return true;
 }
 
 async function hydrateInstitutionBrand(item) {
@@ -1313,7 +1265,6 @@ app.post('/api/plaid/exchange_public_token', plaidCostLimiter({ scope: 'plaid_it
     };
     store.items.push(item);
     await syncItem(store, item);
-    try { await backfillInvestmentHistory(store); } catch (error) { console.warn('Investment history reconstruction unavailable:', error.message); }
     hideDuplicateAccounts(store);
     snapshotNetWorth(store);
     snapshotInvestments(store);
@@ -1366,7 +1317,6 @@ app.post('/api/plaid/webhook', webhookLimiter, async (req, res) => {
         if (!item) return false;
         await syncItem(store, item);
         hideDuplicateAccounts(store);
-        try { await backfillInvestmentHistory(store); } catch (error) { console.warn('Investment history reconstruction unavailable:', error.message); }
         snapshotNetWorth(store);
         snapshotInvestments(store);
         await saveStoreByKey(storageKey, store);
@@ -1386,6 +1336,7 @@ app.post('/api/reset-demo', async (_req, res) => {
   store.investment_transactions = [];
   store.market_prices = {};
   store.investment_snapshots = [];
+  store.investment_position_snapshots = [];
   store.transactions = [];
   store.snapshots = [];
   seedDemo(store);

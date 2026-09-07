@@ -162,13 +162,42 @@ export function investmentLinkBalances(store) {
 }
 
 export function snapshotInvestments(store, snapshotDate = new Date().toISOString().slice(0, 10)) {
-  const value = store.accounts.filter((account) => !account.hidden && account.type === 'investment').reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
-  store.investment_snapshots ||= [];
+  const accounts = store.accounts.filter((account) => !account.hidden && account.type === 'investment');
+  const value = accounts.reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
+  store.investment_snapshots = (store.investment_snapshots || []).filter((snapshot) => snapshot.source === 'verified');
   const existing = store.investment_snapshots.find((snapshot) => snapshot.date === snapshotDate);
   const snapshot = { date: snapshotDate, value, source: 'verified' };
   if (existing) Object.assign(existing, snapshot); else store.investment_snapshots.push(snapshot);
   store.investment_snapshots.sort((a, b) => a.date.localeCompare(b.date));
   if (store.investment_snapshots.length > 3650) store.investment_snapshots = store.investment_snapshots.slice(-3650);
+
+  // These are provider-observed values at the time of a Clarity sync. They
+  // deliberately do not fill missing dates or derive values from trades and
+  // market prices: a personal chart must never imply a past balance Plaid did
+  // not report.
+  store.investment_position_snapshots ||= [];
+  const upsert = (snapshot) => {
+    const existingRecord = store.investment_position_snapshots.find((record) => record.date === snapshot.date && record.kind === snapshot.kind && record.key === snapshot.key);
+    if (existingRecord) Object.assign(existingRecord, snapshot); else store.investment_position_snapshots.push(snapshot);
+  };
+  for (const account of accounts) upsert({ date: snapshotDate, kind: 'account', key: account.plaid_account_id, account_id: account.plaid_account_id, value: Math.abs(Number(account.current_balance || 0)), source: 'verified' });
+  for (const position of (store.positions || []).filter((position) => !position.hidden && accounts.some((account) => account.plaid_account_id === position.account_id))) {
+    upsert({ date: snapshotDate, kind: 'holding', key: position.id || `${position.account_id}:${position.security_id || position.ticker || position.name}`, account_id: position.account_id, ticker: String(position.ticker || '').toUpperCase() || null, value: Math.abs(Number(position.value || 0)), source: 'verified' });
+  }
+  store.investment_position_snapshots.sort((a, b) => a.date.localeCompare(b.date));
+  if (store.investment_position_snapshots.length > 20_000) store.investment_position_snapshots = store.investment_position_snapshots.slice(-20_000);
+}
+
+function providerPositionHistory(store, { accountId = null, ticker = null } = {}) {
+  const normalizedTicker = String(ticker || '').trim().toUpperCase();
+  const records = (store.investment_position_snapshots || []).filter((record) => {
+    if (record.source !== 'verified') return false;
+    if (accountId) return record.kind === 'account' && record.account_id === accountId;
+    return record.kind === 'holding' && record.ticker === normalizedTicker;
+  });
+  const totals = new Map();
+  for (const record of records) totals.set(record.date, (totals.get(record.date) || 0) + Number(record.value || 0));
+  return [...totals.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, value]) => ({ date, value }));
 }
 
 // Some institutions send a display label in place of a tradable target-date
@@ -272,12 +301,11 @@ export function reconstructInvestmentHistory(store, endDate = new Date().toISOSt
 // observed daily balances, and removes a prior reconstruction when its
 // coverage is no longer supportable.
 export function refreshReconstructedInvestmentSnapshots(store, endDate = new Date().toISOString().slice(0, 10), years = 1) {
-  const reconstructed = reconstructInvestmentHistory(store, endDate, years);
-  const verified = (store.investment_snapshots || []).filter((snapshot) => snapshot.source === 'verified');
-  const verifiedDates = new Set(verified.map((snapshot) => snapshot.date));
-  store.investment_snapshots = [...reconstructed.filter((snapshot) => !verifiedDates.has(snapshot.date)), ...verified]
-    .sort((a, b) => a.date.localeCompare(b.date));
-  return reconstructed;
+  store.investment_snapshots = (store.investment_snapshots || []).filter((snapshot) => snapshot.source === 'verified');
+  // Kept as a migration-compatible export for callers on older deployments.
+  // Reconstruction is intentionally disabled: provider data is the only
+  // acceptable source for a person’s balance history.
+  return [];
 }
 
 // A detail chart is intentionally more conservative than a ticker chart. It
@@ -299,6 +327,25 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
   const label = accountId
     ? (store.accounts.find((account) => account.plaid_account_id === accountId)?.nickname || store.accounts.find((account) => account.plaid_account_id === accountId)?.name || 'Investment account')
     : (positions[0].name || normalizedTicker);
+  const providerHistory = providerPositionHistory(store, { accountId, ticker: normalizedTicker });
+  if (providerHistory.length < 2) {
+    return {
+      state: 'unavailable', label, ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null, value,
+      costBasis, gain: costBasis == null ? null : value - costBasis, history: [], market: [],
+      reason: 'Personal history begins with your next verified account updates. We do not estimate past balances from today’s holdings or market prices.'
+    };
+  }
+  return {
+    state: 'ready', label, ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null, value,
+    costBasis, gain: costBasis == null ? null : value - costBasis,
+    gainPct: costBasis ? (value - costBasis) / costBasis : null,
+    history: providerHistory, market: [],
+    detail: `Based on ${providerHistory.length} verified updates from your connected institution.`
+  };
+
+  /* Legacy reconstruction intentionally retained below temporarily for a
+     migration-safe source diff. It is unreachable and will be removed once
+     stored reconstructed snapshots have been purged on deployment. */
   if (!resolvedTickers.length || positions.some((position) => !Number.isFinite(Number(position.quantity)))) {
     return { state: 'unavailable', label, ticker: normalizedTicker || null, value, costBasis, gain: costBasis == null ? null : value - costBasis, reason: 'Your institution did not provide enough position detail to build a trustworthy history.', history: [], market: [] };
   }
@@ -1131,6 +1178,7 @@ export function seedDemo(store) {
 
 function ensureDemoMarketHistory(store) {
   store.market_prices ||= {};
+  store.investment_position_snapshots ||= [];
   store.investment_transactions ||= [];
   const today = new Date();
   const byTicker = new Map();
@@ -1162,6 +1210,16 @@ function ensureDemoMarketHistory(store) {
     const date = new Date(today);
     date.setFullYear(date.getFullYear() - 1);
     store.investment_transactions.push({ id, account_id: position.account_id, security_id: position.security_id || null, ticker: position.ticker, security_type: position.type, date: date.toISOString().slice(0, 10), quantity: Number(position.quantity || 0), price: Number(position.price || 0), amount: Number(position.value || 0), type: 'buy', subtype: 'buy', demo: true });
+  }
+  // The public preview is explicitly synthetic. Give it a consistent personal
+  // chart without ever sharing this data with an authenticated person.
+  for (const position of store.positions || []) {
+    if (!position.ticker || position.type === 'cash') continue;
+    for (const [date, price] of Object.entries(store.market_prices[position.ticker] || {})) {
+      const key = position.id || `${position.account_id}:${position.ticker}`;
+      if (store.investment_position_snapshots.some((record) => record.date === date && record.kind === 'holding' && record.key === key)) continue;
+      store.investment_position_snapshots.push({ date, kind: 'holding', key, account_id: position.account_id, ticker: position.ticker, value: Math.round(Number(position.quantity || 0) * Number(price || 0) * 100) / 100, source: 'verified', demo: true });
+    }
   }
 }
 
