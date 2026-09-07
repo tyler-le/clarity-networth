@@ -38,8 +38,8 @@ delete process.env.INVITE_CODE;
 // cannot load the repository's developer .env after the credentials above
 // have been removed.
 process.env.DOTENV_CONFIG_PATH = path.join(dataDir, 'no-provider-credentials.env');
-const { app } = await import(`../../server.js?integration=${Date.now()}`);
-const { deleteStore, readStore, userStorageKey, writeStore } = await import('../../store.js');
+const { app } = await import(`../../src/server.js?integration=${Date.now()}`);
+const { deleteStore, readStore, userStorageKey, writeStore } = await import('../../src/lib/store.js');
 const integrationTest = process.env.CODEX_SANDBOX_NETWORK_DISABLED ? test.skip : test;
 
 function signedTestCookie(email = 'rate-limit@example.com') {
@@ -126,12 +126,22 @@ integrationTest('protects personal financial endpoints without a session', async
     ['delete', '/api/manual-holdings/example'],
     ['get', '/api/retirement'],
     ['get', '/api/data-export'],
+    ['post', '/api/launch-event'],
     ['delete', '/api/account'],
   ]) {
     const response = await request(app)[method](pathname).send({});
     assert.equal(response.status, 401, pathname);
     assert.equal(response.body.error, 'Sign in required.');
   }
+});
+
+integrationTest('accepts only minimal allowlisted launch telemetry', async () => {
+  const cookie = signedTestCookie('launch-event@example.com');
+  const valid = await request(app).post('/api/launch-event').set('Cookie', cookie).send({ event: 'cash_flow_viewed' });
+  assert.equal(valid.status, 204);
+  const invalid = await request(app).post('/api/launch-event').set('Cookie', cookie).send({ event: 'screen_recording_or_balance' });
+  assert.equal(invalid.status, 400);
+  assert.equal(invalid.body.error, 'Invalid launch event.');
 });
 
 integrationTest('does not expose sign-in configuration secrets', async () => {

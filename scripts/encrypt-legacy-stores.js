@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { readStore, writeStore } from '../store.js';
+import { readStore, writeStore } from '../src/lib/store.js';
 
 const dataDir = process.env.DATA_DIR;
 if (!dataDir) throw new Error('DATA_DIR must point to the legacy JSON volume.');

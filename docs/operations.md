@@ -24,6 +24,7 @@ This protects against a bad application write or database loss, but it is not an
 - Railway calls `/api/health` for deploy health checks. The endpoint fails closed if secure production configuration or PostgreSQL is unavailable.
 - GitHub Actions checks the production health endpoint hourly. A failed run is a signal to investigate immediately.
 - Railway logs must never contain financial payloads, access tokens, cursors, or secrets.
+- Use Railway Observability—not the Clarity customer app—for deployment health, resource use, logs, and availability. Private product-health measurement is documented in [Launch metrics](LAUNCH_METRICS.md). Any visual product report must be a separate private, read-only service.
 
 ## Provider cost controls
 

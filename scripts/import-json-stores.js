@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { closeDatabase, importLegacyStore, migrateDatabase } from '../database.js';
-import { readStore } from '../store.js';
+import { closeDatabase, importLegacyStore, migrateDatabase } from '../src/lib/database.js';
+import { readStore } from '../src/lib/store.js';
 
 const dryRun = process.argv.includes('--dry-run');
 const dataDir = process.env.DATA_DIR;

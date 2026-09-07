@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentLinkBalances, monthlyReview, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
-import { normalizeCandles } from '../market-data.js';
+import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentLinkBalances, monthlyReview, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
+import { normalizeCandles } from '../src/lib/market-data.js';
 import { filterSnapshots, scrubIndex } from '../public/chart-utils.js';
 
 test('estimated history is removed before the chart is served', () => {
@@ -470,7 +470,7 @@ test('each signed-in identity has an isolated persistent store', async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'clarity-user-store-'));
   const previousDataDir = process.env.DATA_DIR;
   process.env.DATA_DIR = tempDir;
-  const store = await import(`../store.js?isolation=${Date.now()}`);
+  const store = await import(`../src/lib/store.js?isolation=${Date.now()}`);
   const ownerKey = store.userStorageKey('owner@example.com');
   const partnerKey = store.userStorageKey('partner@example.com');
   store.writeStore({ accounts: [{ id: 'owner-account' }], items: [], transactions: [], snapshots: [], settings: {} }, ownerKey);

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { decryptPayload, encryptPayload, isEncryptedPayload } from './secure-payload.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+const DATA_DIR = process.env.DATA_DIR || path.resolve(__dirname, '../../data');
 const BACKUP_RETENTION_DAYS = 35;
 
 function demoMode() {

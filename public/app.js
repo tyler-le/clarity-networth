@@ -64,6 +64,18 @@ async function api(url, options = {}) {
   throw lastError;
 }
 
+// Private-beta success telemetry is intentionally tiny and invisible: no
+// amounts, merchants, account names, routes, or click replay leave the app.
+// A failed telemetry request must never interrupt financial data or UI flow.
+function trackProductEvent(event) {
+  if (!state.dashboard || state.demoPreview || state.dashboard.demoMode) return;
+  fetch('/api/launch-event', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ event })
+  }).catch(() => {});
+}
+
 function institutionMark(account) {
   if (account.institution_logo) return `<img class="institution-logo" src="${escapeHtml(account.institution_logo)}" alt="" />`;
   return `<span class="institution-fallback" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 9.5 12 4l9 5.5M5.5 11h13M6.5 11v7M11 11v7M15.5 11v7M4 20h16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
@@ -129,6 +141,11 @@ function setView(view) {
   $('#connectButton').classList.toggle('hidden', view === 'profile');
   $('#profileBack').classList.toggle('hidden', view !== 'profile');
   $('#profileButton').classList.toggle('hidden', view === 'profile');
+  const launchEvent = {
+    spending: 'cash_flow_viewed', investments: 'investments_viewed',
+    retirement: 'retirement_viewed', accounts: 'accounts_viewed'
+  }[view];
+  if (launchEvent) trackProductEvent(launchEvent);
   if (view === 'overview' && state.dashboard) {
     requestAnimationFrame(() => {
       renderNetWorthChartWhenVisible();
@@ -328,6 +345,7 @@ function renderLineChart(snapshots, summary) {
 
   el.addEventListener('pointerdown', (event) => {
     active = true;
+    trackProductEvent('net_worth_history_explored');
     el.setPointerCapture?.(event.pointerId);
     showPoint(event);
   });
@@ -1211,6 +1229,7 @@ function openRetirementMilestone(name) {
     }
   }[name];
   if (!details) return;
+  trackProductEvent('retirement_milestone_opened');
   const milestone = (plan.ladder || []).find((step) => step.key === name);
   const months = Number(milestone?.estimatedMonths);
   let timing = 'Set a saving pace';
@@ -1237,6 +1256,7 @@ $('#retirementInfoClose').addEventListener('click', () => $('#retirementInfoDial
 $('#accountGrid').addEventListener('click', (event) => {
   const groupButton = event.target.closest('[data-account-group]');
   if (groupButton) {
+    trackProductEvent('account_group_opened');
     const group = groupButton.dataset.accountGroup;
     if (state.expandedAccountGroups.has(group)) state.expandedAccountGroups.delete(group); else state.expandedAccountGroups.add(group);
     renderAccounts(state.dashboard?.accounts || []);
@@ -1269,12 +1289,14 @@ $('#accountGrid').addEventListener('click', (event) => {
 });
 $('#debtPayoffCard').addEventListener('click', async (event) => {
   if (event.target.closest('[data-toggle-debt-plan]')) {
+    trackProductEvent('debt_plan_opened');
     state.debtPlanExpanded = !state.debtPlanExpanded;
     renderDebtPayoff(state.dashboard?.debtPayoff);
     return;
   }
   const strategyButton = event.target.closest('[data-debt-strategy]');
   if (strategyButton) {
+    trackProductEvent('debt_strategy_selected');
     const strategy = strategyButton.dataset.debtStrategy;
     try {
       if (state.demoPreview) {
@@ -1407,7 +1429,7 @@ $$('[data-spending-range]').forEach((button) => button.addEventListener('click',
     $$('[data-spending-range]').forEach((control) => { control.disabled = false; });
   }
 }));
-$('#cashflowExpand').addEventListener('click', () => { const dialog = $('#cashflowDialog'); dialog.showModal(); renderCashFlowSankey(spendingForSelectedMonth(state.spending), $('#cashflowDialogContent'), true); });
+$('#cashflowExpand').addEventListener('click', () => { trackProductEvent('cash_flow_expanded'); const dialog = $('#cashflowDialog'); dialog.showModal(); renderCashFlowSankey(spendingForSelectedMonth(state.spending), $('#cashflowDialogContent'), true); });
 $('#cashflowDialogClose').addEventListener('click', () => $('#cashflowDialog').close());
 let cashflowResizeFrame;
 new ResizeObserver(() => {
@@ -1423,6 +1445,7 @@ $('#spendingCategoryFilter').addEventListener('change', (event) => { state.spend
 $('#spendingSort').addEventListener('change', (event) => { state.spendingSort = event.target.value; renderSpendingTransactions(spendingForSelectedMonth(state.spending)); });
 function openSpendingCategory(category) {
   if (!category) return;
+  trackProductEvent('cash_flow_drilldown');
   state.spendingCategory = category;
   const panel = $('#spendingTransactionsPanel');
   panel.open = true;
@@ -1513,6 +1536,7 @@ $('#spendingTrend').addEventListener('click', (event) => {
   const month = event.target.closest('[data-spending-month]')?.dataset.spendingMonth;
   const row = state.spending?.monthly?.find((entry) => entry.month === month);
   if (!row) return;
+  trackProductEvent('cash_flow_month_selected');
   state.spendingMonth = month;
   $$('[data-spending-range]').forEach((control) => control.classList.remove('active'));
   renderSpending(state.spending);
@@ -1533,6 +1557,7 @@ $$('[data-investment-range]').forEach((button) => button.addEventListener('click
 $('#investmentAllocation').addEventListener('click', (event) => {
   const filter = event.target.closest('[data-investment-filter]')?.dataset.investmentFilter;
   if (!filter) return;
+  trackProductEvent('investment_allocation_filtered');
   // Holdings sit above allocation on small screens. Preserve the selected
   // allocation row's screen position when the matching list changes height.
   const allocationTop = $('#investmentAllocationCard').getBoundingClientRect().top;
@@ -1571,6 +1596,7 @@ $('#investmentPositions').addEventListener('change', async (event) => {
 $('#investmentPositions').addEventListener('click', async (event) => {
   const add = event.target.closest('[data-add-manual-holding]');
   if (add) {
+    trackProductEvent('holding_reconciliation_started');
     const dialog = $('#manualHoldingDialog');
     dialog.dataset.accountId = add.dataset.addManualHolding;
     $('#manualHoldingHelp').textContent = `Your institution did not return holdings for ${add.dataset.manualAccountName}. Add up to ${fmt.format(Number(add.dataset.manualRemaining || 0))} so your allocation is accurate. This does not change anything at your institution.`;

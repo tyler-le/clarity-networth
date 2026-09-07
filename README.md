@@ -31,10 +31,12 @@ encrypted stores backed by Postgres in production. Browser responses are
 private and non-cacheable; Plaid access tokens never reach the client.
 
 ```text
-server.js / finance.js       API, Plaid orchestration, calculations
-database.js / store.js       Per-user encrypted financial persistence
-secure-payload.js            Payload encryption helpers
+src/server.js                API composition, auth, and Plaid orchestration
+src/lib/                     Financial calculations, persistence, providers,
+                            encryption, and domain utilities
 public/                      Responsive PWA shell, interactions, charts
+db/migrations/               Versioned Postgres schema changes
+scripts/                     Explicit maintenance and migration commands
 test/                        Unit, integration, and Playwright UI journeys
 ```
 
@@ -91,6 +93,7 @@ testing, and UX standards that guide changes.
 
 - [PWA installation guide for beta users](docs/PWA_INSTALL.md)
 - [Private beta launch checklist](docs/BETA_LAUNCH.md)
+- [Private launch measurement](docs/LAUNCH_METRICS.md)
 - [Operations and recovery notes](docs/operations.md)
 
 ## Data principles

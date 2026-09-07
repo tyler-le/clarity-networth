@@ -5,13 +5,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { OAuth2Client } from 'google-auth-library';
 import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
-import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './store.js';
-import { consumeRateLimit, databaseEnabled, databaseHealthy, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, writeDatabaseStore } from './database.js';
-import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentLinkBalances, investmentSummary, monthlyReview, reconstructInvestmentHistory, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
-import { loadHistoricalPrices } from './market-data.js';
-import { plaidConfigured, plaidPost } from './plaid.js';
+import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './lib/store.js';
+import { consumeRateLimit, databaseEnabled, databaseHealthy, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, recordLaunchEvent, writeDatabaseStore } from './lib/database.js';
+import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentLinkBalances, investmentSummary, monthlyReview, reconstructInvestmentHistory, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './lib/finance.js';
+import { loadHistoricalPrices } from './lib/market-data.js';
+import { plaidConfigured, plaidPost } from './lib/plaid.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = path.resolve(__dirname, '..');
 const app = express();
 const port = Number(process.env.PORT || 3000);
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -27,6 +28,15 @@ const userSyncQueues = new Map();
 const providerLimitFallback = new Map();
 const plaidWebhookKeyCache = new Map();
 const reconnectSessions = new Map();
+
+// This is deliberately not a general analytics API. The allowlist lives in
+// database.js, and failures are non-blocking so operational measurement can
+// never prevent a person from using their financial data.
+function trackLaunchEvent(user, eventName) {
+  recordLaunchEvent(user?.storageKey || null, eventName).catch((error) => {
+    console.warn('Launch telemetry unavailable:', error.message);
+  });
+}
 
 const productionSecurityErrors = [
   !dataEncryptionSecret || dataEncryptionSecret === 'development-only-key-change-me' ? 'DATA_ENCRYPTION_KEY is required.' : null,
@@ -123,7 +133,7 @@ app.use('/api', (_req, res, next) => {
   res.vary('Authorization');
   next();
 });
-app.use(express.static(path.join(__dirname, 'public'), {
+app.use(express.static(path.join(projectRoot, 'public'), {
   setHeaders(res, filePath) {
     // The PWA intentionally serves no cached shell or financial data.
     if (/\/(index\.html|app\.js|styles\.css|chart-utils\.js|sw\.js|manifest\.webmanifest)$/.test(filePath)) {
@@ -142,7 +152,7 @@ app.get('/runtime/app.js', (_req, res) => {
   res.setHeader('Cache-Control', 'private, no-store, no-cache, max-age=0, must-revalidate');
   res.setHeader('CDN-Cache-Control', 'no-store');
   res.setHeader('Surrogate-Control', 'no-store');
-  res.type('js').sendFile(path.join(__dirname, 'public', 'app.js'));
+  res.type('js').sendFile(path.join(projectRoot, 'public', 'app.js'));
 });
 
 function escapeLegalText(value) {
@@ -157,7 +167,7 @@ function legalPage(title, content) {
 }
 
 app.get('/privacy', (_req, res) => {
-  res.type('html').send(legalPage('Privacy Policy', (contact) => `<p>Clarity helps you view connected financial accounts. We collect your sign-in email and the financial information your chosen institutions make available through Plaid, including account balances, transactions, and investment holdings.</p><h2>How we use data</h2><p>We use this information only to provide the features you request: account aggregation, net-worth tracking, cash-flow views, investment summaries, and retirement estimates. We do not sell personal financial information or use it for advertising.</p><h2>How data is protected</h2><p>Connection credentials are exchanged through Plaid. Access tokens and stored financial data are encrypted at rest; the app serves over HTTPS. Access is limited to the signed-in account owner.</p><h2>Your choices</h2><p>You can unlink an institution at any time. In Profile, you can download an export of your stored data or permanently delete your account and financial data. Deletion also asks Plaid to revoke linked Items.</p><h2>Retention and contact</h2><p>We keep your data while your account is active, except where retention is required by law. For privacy questions or deletion help, contact ${contact}.</p>`));
+  res.type('html').send(legalPage('Privacy Policy', (contact) => `<p>Clarity helps you view connected financial accounts. We collect your sign-in email and the financial information your chosen institutions make available through Plaid, including account balances, transactions, and investment holdings.</p><h2>How we use data</h2><p>We use this information only to provide the features you request: account aggregation, net-worth tracking, cash-flow views, investment summaries, and retirement estimates. We do not sell personal financial information or use it for advertising.</p><h2>Limited operational measurement</h2><p>To improve the private beta, we record a small set of product-health events, such as a completed sign-in, successful account link, successful or failed sync, section view, or meaningful card action. These records never include balances, transactions, merchants, account names, financial inputs, click coordinates, session replay, raw IP addresses, or advertising profiles. They use an opaque account key, are kept for up to 90 days, and are deleted when you delete your account.</p><h2>How data is protected</h2><p>Connection credentials are exchanged through Plaid. Access tokens and stored financial data are encrypted at rest; the app serves over HTTPS. Access is limited to the signed-in account owner.</p><h2>Your choices</h2><p>You can unlink an institution at any time. In Profile, you can download an export of your stored data or permanently delete your account and financial data. Deletion also asks Plaid to revoke linked Items.</p><h2>Retention and contact</h2><p>We keep your data while your account is active, except where retention is required by law. For privacy questions or deletion help, contact ${contact}.</p>`));
 });
 
 app.get('/terms', (_req, res) => {
@@ -431,12 +441,14 @@ async function scheduledDailySync() {
         const persisted = databaseEnabled() ? await readDatabaseStore(storageKey) : null;
         const store = normalizeStore(persisted || readStore(storageKey));
         if (!store.items.some((item) => !item.demo)) return;
-        await syncStoreItems(store);
+        const results = await syncStoreItems(store);
         await saveStoreByKey(storageKey, store);
+        trackLaunchEvent({ storageKey }, results.some((result) => result.ok) ? 'sync_succeeded' : 'sync_failed');
       } catch (error) {
         // One person's unavailable institution or store must never block the
         // rest of the daily queue. Existing encrypted data stays intact.
         console.error('Daily sync failed for a financial store:', error.message);
+        trackLaunchEvent({ storageKey }, 'sync_failed');
       }
     });
   }
@@ -713,6 +725,7 @@ app.post('/api/auth/google', authLimiter, async (req, res) => {
     loginAttempts.delete(ip);
     const user = { email, name: String(payload.name || '') };
     setSession(res, user);
+    trackLaunchEvent({ storageKey: userStorageKey(email) }, 'sign_in_completed');
     res.json({ ok: true, user: publicUser(user) });
   } catch {
     loginAttempts.set(ip, [...recent, Date.now()]);
@@ -728,6 +741,7 @@ app.post('/api/auth/logout', (_req, res) => {
 // A seeded store is created in memory for the public preview; it never reads
 // from or writes to a person's authenticated financial data.
 app.get('/api/demo-preview', demoLimiter, (req, res) => {
+  trackLaunchEvent(null, 'demo_opened');
   const store = demoPreviewStore();
   const range = ['1m', '3m', '6m', 'ytd', '1y'].includes(req.query.range) ? req.query.range : '1m';
   res.json({
@@ -770,6 +784,18 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+// Background-only product telemetry. The client can submit an allowlisted
+// event name and nothing else; values, account metadata, routes, and browser
+// identifiers are deliberately not accepted.
+app.post('/api/launch-event', async (req, res) => {
+  try {
+    await recordLaunchEvent(req.user.storageKey, String(req.body?.event || ''));
+    res.sendStatus(204);
+  } catch {
+    res.status(400).json({ error: 'Invalid launch event.' });
+  }
+});
+
 app.get('/api/dashboard', async (req, res) => {
   const store = await loadStore(req.user);
   backfillRecentInvestmentLinkBalances(store);
@@ -802,6 +828,7 @@ app.get('/api/dashboard', async (req, res) => {
     demoMode: Boolean(store.settings?.demo_mode) || visibleStore.accounts.some((a) => a.demo),
     appearance: store.settings?.appearance || { theme: 'light' }
   });
+  trackLaunchEvent(req.user, 'dashboard_opened');
 });
 
 app.get('/api/spending', async (req, res) => {
@@ -983,6 +1010,7 @@ app.post('/api/goals', async (req, res) => {
   store.settings.goals.push({ id: crypto.randomUUID(), name, source, target: Math.round(target * 100) / 100, created_at: new Date().toISOString() });
   await saveStore(req.user, store);
   res.json({ ok: true });
+  trackLaunchEvent(req.user, 'goal_created');
 });
 
 app.delete('/api/goals/:id', async (req, res) => {
@@ -1111,8 +1139,10 @@ app.post('/api/items/:id/reconnected', plaidCostLimiter({ scope: 'plaid_reconnec
     snapshotInvestments(store);
     await saveStore(req.user, store);
     res.json({ ok: true });
+    trackLaunchEvent(req.user, 'sync_succeeded');
   } catch (error) {
     console.warn('Reconnect sync failed:', error.message);
+    trackLaunchEvent(req.user, 'sync_failed');
     res.status(503).json({ error: 'Your institution was reconnected, but its latest data is still catching up. We will retry automatically.' });
   }
 });
@@ -1134,6 +1164,7 @@ app.post('/api/plaid/create_link_token', plaidCostLimiter({ scope: 'plaid_link_t
     if (process.env.PLAID_WEBHOOK_URL) body.webhook = process.env.PLAID_WEBHOOK_URL;
     const data = await plaidPost('/link/token/create', body);
     res.json({ link_token: data.link_token });
+    trackLaunchEvent(req.user, 'account_link_started');
   } catch (error) {
     res.status(error.status || 500).json({ error: error.message, plaid: error.plaid });
   }
@@ -1166,6 +1197,8 @@ app.post('/api/plaid/exchange_public_token', plaidCostLimiter({ scope: 'plaid_it
     snapshotInvestments(store);
     await saveStore(req.user, store);
     res.json({ ok: true, item: publicItem(item) });
+    trackLaunchEvent(req.user, 'account_link_completed');
+    trackLaunchEvent(req.user, 'sync_succeeded');
   } catch (error) {
     res.status(error.status || 500).json({ error: error.message, plaid: error.plaid });
   }
@@ -1245,7 +1278,7 @@ app.post('/api/clear-demo', async (_req, res) => {
   res.json({ ok: true });
 });
 
-app.use((_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.use((_req, res) => res.sendFile(path.join(projectRoot, 'public', 'index.html')));
 
 export { app };
 

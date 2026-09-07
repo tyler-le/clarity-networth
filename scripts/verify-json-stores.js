@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import pg from 'pg';
-import { readStore } from '../store.js';
+import { readStore } from '../src/lib/store.js';
 
 const dataDir = process.env.DATA_DIR;
 if (!dataDir) throw new Error('DATA_DIR must point to the legacy JSON volume.');

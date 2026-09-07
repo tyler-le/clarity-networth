@@ -55,7 +55,7 @@ export default defineConfig({
     }
   ],
   webServer: networkDisabled ? undefined : {
-    command: 'node server.js',
+    command: 'node src/server.js',
     url: 'http://127.0.0.1:4173/api/health',
     reuseExistingServer: !process.env.CI,
     env: {
