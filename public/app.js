@@ -815,7 +815,11 @@ function renderSpendingTransactions(data) {
 }
 
 function portfolioSnapshots(data) {
-  const snapshots = data.snapshots || [];
+  // Older stores can contain more than one observation from a calendar day.
+  // A daily portfolio chart must use the most recent value for that day,
+  // otherwise it visually invents movement and can produce repeated axis
+  // labels for a person who has only recently started tracking.
+  const snapshots = uniqueDailySnapshots(data.snapshots || []);
   if (state.investmentRange === 'all' || !snapshots.length) return snapshots;
   const latest = new Date(`${snapshots.at(-1).date}T12:00:00`);
   const visible = filterSnapshots(snapshots, state.investmentRange, latest);
@@ -850,10 +854,17 @@ function renderPortfolioChart(data) {
   const points = values.map((value, index) => [plot.left + index / Math.max(values.length - 1, 1) * (width - plot.left - plot.right), plot.bottom - (value - min) / (max - min) * (plot.bottom - plot.top)]);
   const line = points.map(([x, y], index) => `${index ? 'L' : 'M'} ${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
   const area = `${line} L ${points.at(-1)[0]} ${plot.bottom} L ${points[0][0]} ${plot.bottom} Z`;
-  const label = (index) => new Date(`${snapshots[index].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+  const firstDate = new Date(`${snapshots[0].date}T12:00:00`);
+  const lastDate = new Date(`${snapshots.at(-1).date}T12:00:00`);
+  const sameMonth = firstDate.getFullYear() === lastDate.getFullYear() && firstDate.getMonth() === lastDate.getMonth();
+  // Month/year is useful over a long history, but becomes three identical
+  // "Sep 26" labels for a new connection. Use distinct days in that case.
+  const label = (index) => new Date(`${snapshots[index].date}T12:00:00`).toLocaleDateString('en-US', sameMonth
+    ? { month: 'short', day: 'numeric' }
+    : { month: 'short', year: '2-digit' });
   const xIndices = [...new Set(width > 420 ? [0, Math.floor((snapshots.length - 1) / 2), snapshots.length - 1] : [0, snapshots.length - 1])];
   const grid = [max, (max + min) / 2, min].map((value) => { const y = plot.bottom - (value - min) / (max - min) * (plot.bottom - plot.top); return `<line x1="${plot.left}" y1="${y}" x2="${width - plot.right}" y2="${y}" class="chart-grid"/><text x="${plot.left - 6}" y="${y + 3}" text-anchor="end" class="chart-axis-label">${axisCurrency(value)}</text>`; }).join('');
-  const xAxis = xIndices.map((index) => `<text x="${points[index][0]}" y="${height - 5}" text-anchor="${index === 0 ? 'start' : index === snapshots.length - 1 ? 'end' : 'middle'}" class="chart-axis-label">${label(index)}</text>`).join('');
+  const xAxis = xIndices.map((index) => `<text x="${points[index][0]}" y="${height - 5}" text-anchor="${index === 0 ? 'start' : index === snapshots.length - 1 ? 'end' : 'middle'}" class="chart-axis-label chart-x-axis-label">${label(index)}</text>`).join('');
   el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Scrubbable portfolio value history"><defs><linearGradient id="portfolioFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".16"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs>${grid}${xAxis}<path d="${area}" fill="url(#portfolioFade)"/><path class="main-history-line" pathLength="1" d="${line}" fill="none" stroke="#287143" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>${points.length === 1 ? `<circle cx="${points[0][0]}" cy="${points[0][1]}" r="5" fill="#287143"/>` : ''}<line class="scrub-line" x1="0" y1="${plot.top}" x2="0" y2="${plot.bottom}"/><circle class="scrub-dot" cx="0" cy="0" r="5"/></svg><div class="chart-tooltip hidden"></div>`;
   if (snapshots.length < 2) return;
   const scrubLine = el.querySelector('.scrub-line');

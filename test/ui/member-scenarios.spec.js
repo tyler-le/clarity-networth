@@ -74,6 +74,28 @@ test('a cash-first member sees what they have without being pushed into debt or 
   await expect(page.locator('.account-collection')).toHaveCount(2);
 });
 
+test('a recently connected member sees distinct portfolio dates, never repeated month labels', async ({ page }) => {
+  await openSignedInScenario(page, (preview) => {
+    // This is the real failure mode: several verified syncs in one month.
+    // Preserve the final value but ensure the chart is not allowed to label
+    // every tick with the same abbreviated month/year.
+    preview.investments.snapshots = [
+      { date: '2026-09-05', value: 215_200, source: 'verified' },
+      { date: '2026-09-06', value: 216_450, source: 'verified' },
+      { date: '2026-09-07', value: 217_745, source: 'verified' }
+    ];
+  });
+
+  await goToView(page, 'investments');
+  await expect(page.locator('#investmentChart svg')).toBeVisible();
+  const labels = await page.locator('#investmentChart .chart-x-axis-label').allTextContents();
+  expect(labels.length).toBeGreaterThanOrEqual(2);
+  expect(labels[0]).toBe('Sep 5');
+  expect(labels.at(-1)).toBe('Sep 7');
+  expect(labels.every((label) => /^Sep \d+$/.test(label))).toBe(true);
+  expect(new Set(labels).size).toBe(labels.length);
+});
+
 test('a member with debt receives one optional next step, not an alarming wall of payoff controls', async ({ page }) => {
   await openSignedInScenario(page, (preview) => {
     const credit = preview.dashboard.accounts.find((account) => account.type === 'credit');

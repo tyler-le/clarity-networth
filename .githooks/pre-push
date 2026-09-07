@@ -6,4 +6,5 @@ printf '%s\n' 'Running Clarity’s fast local verification before push…'
 # test hooks in seconds. GitHub Actions remains the final gate for the full
 # cross-device browser matrix before staging and production promotion.
 npm run test:fast
+unset CODEX_SANDBOX_NETWORK_DISABLED
 npm run test:ui:critical
