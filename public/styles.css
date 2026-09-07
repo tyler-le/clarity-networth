@@ -300,7 +300,7 @@ dialog::backdrop { background: rgba(10,15,10,.28); backdrop-filter: blur(3px); }
 .networth-card .chart-context { pointer-events: none; }
 .scrub-dot { fill: #fff; stroke: var(--accent); stroke-width: 3; opacity: 0; transition: opacity .12s ease; vector-effect: non-scaling-stroke; }
 .scrub-line.visible, .scrub-dot.visible { opacity: 1; }
-.chart-tooltip { position: absolute; top: 4px; transform: translateX(-50%); pointer-events: none; background: rgba(23,26,23,.92); color: white; padding: 6px 8px; border-radius: 8px; font-size: 11px; font-weight: 700; white-space: nowrap; box-shadow: 0 6px 18px rgba(0,0,0,.12); }
+.chart-tooltip { position: absolute; top: 4px; max-width: calc(100% - 16px); overflow: hidden; transform: translateX(-50%); pointer-events: none; background: rgba(23,26,23,.92); color: white; padding: 6px 8px; border-radius: 8px; font-size: 11px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; box-shadow: 0 6px 18px rgba(0,0,0,.12); }
 .chart-grid { stroke: #e8ece7; stroke-width: 1; }.chart-axis-label { fill: #7b827a; font-size: 10px; font-weight: 600; }
 .networth-separator { color: var(--muted); }
 

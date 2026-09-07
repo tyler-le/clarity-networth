@@ -45,6 +45,15 @@ function escapeHtml(value = '') {
   return String(value).replace(/[&<>'"]/g, (char) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]));
 }
 
+// Tooltips are centered on their selected point, except at either edge where
+// centering would place part of the value outside the chart (or its dialog).
+function placeChartTooltip(tooltip, anchorX, chartWidth) {
+  const inset = 8;
+  const halfWidth = Math.min(tooltip.offsetWidth / 2, Math.max(0, (chartWidth - inset * 2) / 2));
+  const left = Math.max(inset + halfWidth, Math.min(chartWidth - inset - halfWidth, anchorX));
+  tooltip.style.left = `${left}px`;
+}
+
 async function api(url, options = {}) {
   let lastError;
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -405,8 +414,8 @@ function renderLineChart(snapshots, summary, rangeStart = null) {
     scrubLine.classList.add('visible');
     scrubDot.classList.add('visible');
     tooltip.classList.remove('hidden');
-    tooltip.style.left = `${Math.max(8, Math.min(rect.width - 8, x / width * rect.width))}px`;
     tooltip.textContent = fmt.format(Number(snap.net_worth));
+    placeChartTooltip(tooltip, x / width * rect.width, rect.width);
 
     const date = new Date(`${snap.date}T12:00:00`);
     $('#netWorth').textContent = fmt.format(Number(snap.net_worth));
@@ -1007,8 +1016,8 @@ function renderPortfolioChart(data) {
     scrubDot.setAttribute('cx', x); scrubDot.setAttribute('cy', y);
     scrubLine.classList.add('visible'); scrubDot.classList.add('visible');
     tooltip.classList.remove('hidden');
-    tooltip.style.left = `${Math.max(8, Math.min(rect.width - 8, x / width * rect.width))}px`;
     tooltip.textContent = fmt.format(Number(snapshot.value || 0));
+    placeChartTooltip(tooltip, x / width * rect.width, rect.width);
     $('#investmentTotal').textContent = fmt.format(Number(snapshot.value || 0));
     $('#investmentChartDate').textContent = `${new Date(`${snapshot.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${snapshot.source === 'reconstructed' ? ' · Estimated from activity and prices' : ''}`;
     $('#investmentChartContext').classList.remove('hidden');
@@ -1112,8 +1121,8 @@ function renderHoldingHistoryChart(history, kind, emptyMessage = null, historySt
     const [pointX, pointY] = points[index];
     scrubLine.setAttribute('x1', pointX); scrubLine.setAttribute('x2', pointX); scrubDot.setAttribute('cx', pointX); scrubDot.setAttribute('cy', pointY);
     scrubLine.classList.add('visible'); scrubDot.classList.add('visible'); tooltip.classList.remove('hidden');
-    tooltip.style.left = `${Math.max(18, Math.min(rect.width - 18, pointX / width * rect.width))}px`;
     tooltip.textContent = `${kind === 'market' ? fmt.format(Number(pointsData[index].value)) : fmt.format(Number(pointsData[index].value))} · ${new Date(`${pointsData[index].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    placeChartTooltip(tooltip, pointX / width * rect.width, rect.width);
   };
   let active = false;
   svg.addEventListener('pointerdown', (event) => { active = true; svg.setPointerCapture?.(event.pointerId); showPoint(event); });

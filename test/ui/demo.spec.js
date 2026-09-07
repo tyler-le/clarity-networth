@@ -534,6 +534,23 @@ test('holding detail timeframes stay local to the drill-in chart', async ({ page
   await expect(page.locator(`[data-investment-range="${portfolioRangeName}"]`)).toHaveClass(/active/);
 });
 
+test('holding-chart values stay inside the chart at both timeline boundaries', async ({ page }) => {
+  await openDemo(page);
+  await goToView(page, 'investments');
+  await page.locator('[data-holding-history]').first().click();
+  const chart = page.locator('#holdingHistoryChart');
+  await expect(chart.locator('svg')).toBeVisible();
+  const box = await chart.boundingBox();
+  for (const x of [box.x + 1, box.x + box.width - 1]) {
+    await chart.hover({ position: { x: x - box.x, y: Math.min(90, box.height / 2) } });
+    const tooltip = chart.locator('.chart-tooltip');
+    await expect(tooltip).toBeVisible();
+    const tooltipBox = await tooltip.boundingBox();
+    expect(tooltipBox.x).toBeGreaterThanOrEqual(box.x - 1);
+    expect(tooltipBox.x + tooltipBox.width).toBeLessThanOrEqual(box.x + box.width + 1);
+  }
+});
+
 test('investment detail cards stay readable without horizontal overflow on a phone', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'phone', 'Phone-specific responsive coverage.');
   await openDemo(page);
