@@ -111,7 +111,7 @@ export async function recordAuditEvent(userKey, eventType) {
 // account identifier, credential, or financial value.
 export async function recordDependencyEvent({ dependency, operation, outcome, statusCode = null, durationMs }) {
   if (!/^[a-z0-9_]{1,40}$/.test(dependency) || !/^[a-z0-9_]{1,80}$/.test(operation)) throw new Error('Invalid dependency event.');
-  if (!['success', 'failure'].includes(outcome)) throw new Error('Invalid dependency outcome.');
+  if (!['success', 'failure', 'client_error', 'server_error'].includes(outcome)) throw new Error('Invalid dependency outcome.');
   if (statusCode != null && (!Number.isInteger(statusCode) || statusCode < 100 || statusCode > 599)) throw new Error('Invalid dependency status.');
   if (!Number.isFinite(durationMs) || durationMs < 0) throw new Error('Invalid dependency duration.');
   if (!databaseEnabled()) return;

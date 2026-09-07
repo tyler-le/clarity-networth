@@ -16,7 +16,7 @@ Railway's built-in dashboard is the correct home for infrastructure monitoring. 
 Keep reporting separated by decision type:
 
 1. **Clarity Product Health** answers whether people reach value and return. Use one selectable date range for activation, engagement, retention, tab use, core-card views, and meaningful actions.
-2. **Clarity Operations & Dependencies** answers whether the service is dependable. It shows Clarity availability from Railway alongside Plaid, Google sign-in, and market-data request volume, success rate, latency, retries, and failures. Its operational events retain no customer identifier or financial content and expire after 30 days.
+2. **Clarity Operations & Dependencies** answers whether the service is dependable. It shows grouped Clarity API status and latency alongside Plaid, Google sign-in, and market-data request volume, success rate, latency, retries, and failures. Railway remains the source for host CPU, memory, restarts, and edge availability. Operational events retain no customer identifier or financial content and expire after 30 days.
 
 Do not combine these into an in-app analytics surface or grant the reporting service access to encrypted financial stores.
 

@@ -133,6 +133,39 @@ app.use('/api', (_req, res, next) => {
   res.vary('Authorization');
   next();
 });
+
+// Internal API health is grouped into stable route families. We intentionally
+// never retain the requested path, parameter values, user identity, or body;
+// the operations report needs reliability signals, not customer activity.
+function apiOperation(pathname) {
+  if (pathname === '/api/launch-event') return null;
+  if (pathname === '/api/health') return 'health';
+  if (pathname.startsWith('/api/auth/')) return 'authentication';
+  if (pathname === '/api/dashboard') return 'dashboard';
+  if (pathname === '/api/spending') return 'cash_flow';
+  if (pathname === '/api/investments') return 'investments';
+  if (pathname === '/api/retirement' || pathname.startsWith('/api/settings/')) return 'planning_settings';
+  if (pathname.startsWith('/api/plaid/')) return 'account_connection';
+  if (pathname.startsWith('/api/items/')) return 'connected_accounts';
+  if (pathname.startsWith('/api/manual-')) return 'manual_accounts';
+  if (pathname.startsWith('/api/transactions/')) return 'transactions';
+  if (pathname === '/api/data-export') return 'data_export';
+  if (pathname === '/api/account') return 'account_lifecycle';
+  if (pathname.startsWith('/api/demo')) return 'public_demo';
+  return 'other_api';
+}
+
+app.use('/api', (req, res, next) => {
+  const operation = apiOperation(req.path);
+  if (!operation) return next();
+  const startedAt = Date.now();
+  res.once('finish', () => {
+    const statusCode = res.statusCode;
+    const outcome = statusCode >= 500 ? 'server_error' : statusCode >= 400 ? 'client_error' : 'success';
+    void recordDependencyEvent({ dependency: 'clarity_api', operation, outcome, statusCode, durationMs: Date.now() - startedAt }).catch(() => {});
+  });
+  next();
+});
 app.use(express.static(path.join(projectRoot, 'public'), {
   setHeaders(res, filePath) {
     // The PWA intentionally serves no cached shell or financial data.
