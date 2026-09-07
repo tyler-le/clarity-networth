@@ -97,7 +97,7 @@ test('demo recovers from one failed initial request instead of leaving an empty 
   expect(attempts).toBe(2);
 });
 
-test('a new visitor can explore the complete demo without signing in', async ({ page }) => {
+test('a new visitor can explore the complete demo without signing in @critical', async ({ page }) => {
   const pageErrors = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
   await openDemo(page);
@@ -288,7 +288,7 @@ test('cash-flow diagram stays readable on mobile and expands in-app', async ({ p
   await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
 });
 
-test('cash-flow quality holds at every supported viewport', async ({ page }) => {
+test('cash-flow quality holds at every supported viewport @critical', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');
   const diagram = page.locator('#cashflowSankey');
@@ -297,14 +297,12 @@ test('cash-flow quality holds at every supported viewport', async ({ page }) => 
   const edgeWidths = await diagram.locator('.cashflow-flow').evaluateAll((paths) => paths.map((path) => Number(path.getAttribute('stroke-width'))));
   expect(Math.max(...edgeWidths)).toBeLessThanOrEqual(35);
   expect(Math.max(...edgeWidths)).toBeGreaterThan(Math.min(...edgeWidths));
-  const nodeBoxes = await diagram.locator('.cashflow-target rect:first-child').evaluateAll((nodes) => nodes.map((node) => {
+  const nodeBoxes = await diagram.getByTestId('cashflow-node-surface').evaluateAll((nodes) => nodes.map((node) => {
     const box = node.getBoundingClientRect();
     return { width: box.width, height: box.height };
   }));
   expect(nodeBoxes.every((box) => box.width > 0 && box.height > 0)).toBe(true);
-  // SVG <title> is intentionally present for accessible hover labels, so
-  // select the accent stripe by SVG element type rather than child position.
-  const categoryColors = await diagram.locator('[data-cashflow-category] rect:nth-of-type(2)').evaluateAll((stripes) => new Set(stripes.map((stripe) => stripe.getAttribute('fill'))).size);
+  const categoryColors = await diagram.locator('[data-cashflow-category]').getByTestId('cashflow-node-accent').evaluateAll((stripes) => new Set(stripes.map((stripe) => stripe.getAttribute('fill'))).size);
   expect(categoryColors).toBeGreaterThan(2);
   await page.locator('#cashflowExpand').click();
   await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
@@ -354,7 +352,7 @@ test('payroll contributions open their own cash-flow activity', async ({ page })
   await expect(page.locator('#spendingTransactionsPanel summary')).toBeFocused();
 });
 
-test('net-worth history can be scrubbed and always identifies the selected date', async ({ page }) => {
+test('net-worth history can be scrubbed and always identifies the selected date @critical', async ({ page }) => {
   await openDemo(page);
   await page.locator('[data-networth-range="6m"]').click();
   await expect(page.locator('[data-networth-range="6m"]')).toHaveClass(/active/);
@@ -421,7 +419,7 @@ test('holding and account drill-ins show only a person’s verified position his
   await expect(dialog.getByRole('tab', { name: 'Your position' })).toBeVisible();
 });
 
-test('investment detail distinguishes loading, preparing, and unavailable personal history', async ({ page }) => {
+test('investment detail distinguishes loading, preparing, and unavailable personal history @critical', async ({ page }) => {
   let releaseHistory;
   const historyHeld = new Promise((resolve) => { releaseHistory = resolve; });
   await page.route('**/api/demo-investments/history**', async (route) => {

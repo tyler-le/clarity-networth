@@ -2,8 +2,8 @@
 set -e
 
 printf '%s\n' 'Running Clarity’s fast local verification before push…'
-# Browser checks run once in GitHub Actions, where the staging gate exercises
-# every supported viewport on a clean runner before any production deploy.
-# Keeping local pushes to syntax, unit, and integration checks preserves a
-# tight development loop without weakening the release path.
+# The focused phone journey catches broken user-facing interactions and stale
+# test hooks in seconds. GitHub Actions remains the final gate for the full
+# cross-device browser matrix before staging and production promotion.
 npm run test:fast
+npm run test:ui:critical

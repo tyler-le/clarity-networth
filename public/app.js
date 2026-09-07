@@ -1,4 +1,4 @@
-import { filterSnapshots, netWorthRangeBounds } from '/chart-utils.js';
+import { filterSnapshots, netWorthRangeBounds, preferredNetWorthRange, uniqueDailySnapshots } from '/chart-utils.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -13,6 +13,7 @@ const state = {
   investments: null,
   retirement: null,
   networthRange: 'ytd',
+  networthRangeInitialized: false,
   spendingRange: '1m',
   spendingMonth: null,
   allocationDisplay: 'percentage',
@@ -288,7 +289,14 @@ function netWorthRangeLabel(range) {
 }
 
 function visibleSnapshots(snapshots) {
-  return filterSnapshots(snapshots, state.networthRange);
+  return uniqueDailySnapshots(filterSnapshots(snapshots, state.networthRange));
+}
+
+function setInitialNetWorthRange(snapshots) {
+  if (state.networthRangeInitialized) return;
+  state.networthRange = preferredNetWorthRange(uniqueDailySnapshots(snapshots));
+  state.networthRangeInitialized = true;
+  $$('[data-networth-range]').forEach((control) => control.classList.toggle('active', control.dataset.networthRange === state.networthRange));
 }
 
 // The first response can arrive while the calm loading shell is still hiding
@@ -698,7 +706,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     const mobileLines = compact && words.length > 1 ? [words.slice(0, Math.ceil(words.length / 2)).join(' '), words.slice(Math.ceil(words.length / 2)).join(' ')] : [label];
     const labelMarkup = mobileLines.map((line, index) => `<tspan x="${x + 11}" dy="${index ? 10 : 0}">${escapeHtml(line)}</tspan>`).join('');
     const valueY = y + (mobileLines.length > 1 ? 36 : 28);
-    return `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" data-cashflow-node="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><title>${escapeHtml(`${label}: ${fmt.format(value)}`)}</title><rect x="${x}" y="${y}" width="${w}" height="${rowHeight}" rx="7" fill="var(--sankey-surface)" stroke="var(--sankey-border)"/><rect x="${x}" y="${y}" width="4" height="${rowHeight}" rx="2" fill="${color}"/><text x="${x + 11}" y="${y + 14}" class="cashflow-label">${labelMarkup}</text><text x="${x + 11}" y="${valueY}" class="cashflow-value">${fmt.format(value)}<tspan dx="3" class="cashflow-share">${displayShare(value, isIncome)}</tspan></text></g>`;
+    return `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" data-cashflow-node="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><title>${escapeHtml(`${label}: ${fmt.format(value)}`)}</title><rect data-testid="cashflow-node-surface" x="${x - 4}" y="${y - 4}" width="${w + 8}" height="${rowHeight + 8}" rx="4" fill="transparent" stroke="transparent"/><rect data-testid="cashflow-node-accent" x="${x}" y="${y}" width="6" height="${rowHeight}" rx="1" fill="${color}"/><text x="${x + 11}" y="${y + 14}" class="cashflow-label">${labelMarkup}</text><text x="${x + 11}" y="${valueY}" class="cashflow-value">${fmt.format(value)}<tspan dx="3" class="cashflow-share">${displayShare(value, isIncome)}</tspan></text></g>`;
   };
   // Use perceptual (square-root) scaling. Exact dollars stay in each node,
   // while the flow still makes large categories visibly heavier without one
@@ -1175,6 +1183,7 @@ function renderDashboard() {
   const d = state.dashboard;
   if (!d) return;
   const s = d.summary;
+  setInitialNetWorthRange(d.snapshots || []);
   if (state.view === 'overview') restoreNetWorthHero();
   $('#assets').textContent = `+${fmt.format(s.assets)}`;
   $('#liabilities').textContent = `−${fmt.format(s.liabilities)}`;

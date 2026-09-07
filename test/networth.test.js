@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentDetailHistory, investmentLinkBalances, monthlyReview, reconstructInvestmentHistory, refreshReconstructedInvestmentSnapshots, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
 import { normalizeCandles } from '../src/lib/market-data.js';
-import { filterSnapshots, scrubIndex } from '../public/chart-utils.js';
+import { filterSnapshots, preferredNetWorthRange, scrubIndex, uniqueDailySnapshots } from '../public/chart-utils.js';
 
 test('estimated history is removed before the chart is served', () => {
   const store = {
@@ -48,6 +48,19 @@ test('timeframe filtering only returns snapshots within the selected range', () 
   assert.deepEqual(filterSnapshots(snapshots, 'ytd', anchor).map((snapshot) => snapshot.date), ['2025-01-01', '2025-09-05']);
   assert.deepEqual(filterSnapshots(snapshots, '1y', anchor).map((snapshot) => snapshot.date), ['2024-12-31', '2025-01-01', '2025-09-05']);
   assert.deepEqual(filterSnapshots([{ date: '2025-03-29' }, { date: '2025-03-30' }, { date: '2025-09-05' }], '6m', anchor).map((snapshot) => snapshot.date), ['2025-03-30', '2025-09-05']);
+});
+
+test('a new connection defaults net worth to its available verified history', () => {
+  const anchor = new Date('2026-09-07T12:00:00');
+  assert.equal(preferredNetWorthRange([{ date: '2026-09-05' }, { date: '2026-09-07' }], anchor), 'all');
+  assert.equal(preferredNetWorthRange([{ date: '2026-08-01' }, { date: '2026-09-07' }], anchor), '1m');
+  assert.equal(preferredNetWorthRange([{ date: '2026-01-01' }, { date: '2026-09-07' }], anchor), 'ytd');
+});
+
+test('chart input keeps only the latest value for each snapshot day', () => {
+  assert.deepEqual(uniqueDailySnapshots([
+    { date: '2026-09-05', net_worth: 100 }, { date: '2026-09-05', net_worth: 120 }, { date: '2026-09-06', net_worth: 121 }
+  ]), [{ date: '2026-09-05', net_worth: 120 }, { date: '2026-09-06', net_worth: 121 }]);
 });
 
 test('scrubbing clamps to endpoints and selects the nearest data point', () => {

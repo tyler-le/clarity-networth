@@ -400,7 +400,7 @@ dialog::backdrop { background: rgba(10,15,10,.28); backdrop-filter: blur(3px); }
 .cashflow-flow.is-connected { stroke-opacity: .58 !important; filter: saturate(1.12); }
 .cashflow-target { transition: opacity .16s ease; }
 .cashflow-target rect:first-of-type { transition: stroke .16s ease, filter .16s ease; }
-.cashflow-target:hover rect:first-of-type, .cashflow-target.is-selected rect:first-of-type { stroke: color-mix(in srgb, var(--accent) 52%, var(--sankey-border)); stroke-width: 1.5px; filter: brightness(.99); }
+.cashflow-target:hover rect:first-of-type, .cashflow-target.is-selected rect:first-of-type { fill: color-mix(in srgb, var(--accent) 7%, transparent); stroke: color-mix(in srgb, var(--accent) 35%, transparent); stroke-width: 1px; filter: brightness(.99); }
 .cashflow-target.is-selected .cashflow-label { fill: var(--accent); }
 .cashflow-target.is-selected .cashflow-value { fill: var(--ink); }
 @media (max-width: 460px) {

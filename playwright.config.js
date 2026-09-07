@@ -13,6 +13,10 @@ export default defineConfig({
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: 'http://127.0.0.1:4173',
+    // UI tests should select durable, intentional hooks where semantics alone
+    // are insufficient. This prevents markup rearrangements from becoming
+    // release blockers while keeping accessibility-first locators preferred.
+    testIdAttribute: 'data-testid',
     browserName: 'chromium',
     // Service-worker lifecycle belongs to the PWA/browser boundary, not every
     // visual journey. Block it here so a newly claimed worker cannot reload a

@@ -99,6 +99,11 @@ clarity in existing core flows over adding a marginal feature.
   or flaky timing failure, and fix or stabilize it before proceeding.
 - Browser tests must cover the supported Playwright projects: phone, tablet,
   laptop, and desktop when a responsive component is affected.
+- Prefer accessible role/name queries for UI tests. When a visual or SVG
+  element needs a hook, add an intentional `data-testid`; never couple a test
+  to DOM child order, incidental class nesting, or decorative copy. Mock
+  network-dependent states deterministically, and keep the focused critical
+  browser journey passing locally before a push.
 
 ## Delivery
 
