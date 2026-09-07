@@ -243,8 +243,11 @@ test('cash-flow diagram stays readable on mobile and expands in-app', async ({ p
   await expect(page.locator('#cashflowSankey')).toContainText('Paychecks');
   const moreLabel = page.locator('#cashflowSankey .cashflow-more');
   if (await moreLabel.count()) {
-    const [labelBox, svgBox] = await Promise.all([moreLabel.boundingBox(), page.locator('#cashflowSankey svg').boundingBox()]);
-    expect(labelBox && svgBox && labelBox.x >= svgBox.x && labelBox.x + labelBox.width <= svgBox.x + svgBox.width).toBe(true);
+    const [labelBox, diagramBox] = await Promise.all([moreLabel.boundingBox(), page.locator('#cashflowSankey').boundingBox()]);
+    expect(labelBox && diagramBox && labelBox.x >= diagramBox.x && labelBox.x + labelBox.width <= diagramBox.x + diagramBox.width).toBe(true);
+    await moreLabel.click();
+    await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
+    await page.locator('#cashflowDialogClose').click();
   }
   await page.locator('#cashflowExpand').click();
   await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
@@ -261,13 +264,15 @@ test('cash-flow quality holds at every supported viewport', async ({ page }) => 
   await expect(diagram.locator('svg')).toBeVisible();
   await expect(diagram).toContainText('Paychecks');
   const edgeWidths = await diagram.locator('.cashflow-flow').evaluateAll((paths) => paths.map((path) => Number(path.getAttribute('stroke-width'))));
-  expect(Math.max(...edgeWidths)).toBeLessThanOrEqual(48);
+  expect(Math.max(...edgeWidths)).toBeLessThanOrEqual(35);
   expect(Math.max(...edgeWidths)).toBeGreaterThan(Math.min(...edgeWidths));
   const nodeBoxes = await diagram.locator('.cashflow-target rect:first-child').evaluateAll((nodes) => nodes.map((node) => {
     const box = node.getBoundingClientRect();
     return { width: box.width, height: box.height };
   }));
   expect(nodeBoxes.every((box) => box.width > 0 && box.height > 0)).toBe(true);
+  const categoryColors = await diagram.locator('[data-cashflow-category] rect:nth-child(2)').evaluateAll((stripes) => new Set(stripes.map((stripe) => stripe.getAttribute('fill'))).size);
+  expect(categoryColors).toBeGreaterThan(2);
   await page.locator('#cashflowExpand').click();
   await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
   await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();

@@ -383,6 +383,13 @@ dialog::backdrop { background: rgba(10,15,10,.28); backdrop-filter: blur(3px); }
 .cashflow-sankey { height: 232px; margin-top: 18px; padding-top: 14px; }
 .cashflow-label { font-size: 11px; font-weight: 700; }.cashflow-value { font-size: 12px; font-weight: 760; }
 @media (max-width: 460px) { .cashflow-sankey { height: 218px; }.cashflow-label { font-size: 10px; }.cashflow-value { font-size: 11px; } }
+.cashflow-sankey { height: 270px; display: flex; flex-direction: column; gap: 8px; overflow: visible; }
+.cashflow-sankey svg { height: auto; min-height: 0; flex: 1 1 auto; overflow: visible; }
+.cashflow-more { display: flex; width: 100%; align-items: center; justify-content: space-between; min-height: 30px; padding: 7px 10px; border: 1px solid color-mix(in srgb, var(--save) 30%, var(--line)); border-radius: 9px; color: var(--save); background: color-mix(in srgb, var(--save) 8%, var(--card)); font: inherit; font-size: 11px; font-weight: 760; text-align: left; cursor: pointer; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
+.cashflow-more:hover { border-color: var(--save); background: color-mix(in srgb, var(--save) 14%, var(--card)); transform: translateY(-1px); }
+.cashflow-more:focus-visible { outline: 3px solid color-mix(in srgb, var(--save) 32%, transparent); outline-offset: 2px; }
+.cashflow-more span { font-size: 14px; line-height: 1; }
+@media (max-width: 460px) { .cashflow-sankey { height: 270px; } .cashflow-more { min-height: 31px; } }
 .spending-transactions { scroll-margin-top: 16px; }
 .recurring-card { margin-top: 16px; overflow: hidden; }.recurring-card summary { display: flex; justify-content: space-between; padding: 17px 21px; cursor: pointer; list-style: none; font-size: 14px; font-weight: 720; }.recurring-card summary::-webkit-details-marker { display: none; }.recurring-card summary small { color: var(--muted); font-size: 11px; font-weight: 650; }.recurring-card[open] summary { border-bottom: 1px solid var(--line); }.recurring-card button { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 21px; border: 0; border-bottom: 1px solid var(--line); color: var(--ink); background: transparent; text-align: left; cursor: pointer; }.recurring-card button:last-child { border-bottom: 0; }.recurring-card button:hover { background: var(--accent-soft); }.recurring-card span { display: grid; gap: 3px; min-width: 0; }.recurring-card small { color: var(--muted); font-size: 11px; }.recurring-card strong { white-space: nowrap; font-size: 13px; font-variant-numeric: tabular-nums; }
 
