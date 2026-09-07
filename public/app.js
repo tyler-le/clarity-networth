@@ -1145,7 +1145,7 @@ function openRetirementMilestone(name) {
   const details = {
     coast: {
       label: 'COAST RETIREMENT', title: 'What is Coast independence?', value: plan.coast,
-      description: `If you reached this amount today and stopped adding to retirement savings, your investments could grow to cover retirement by age ${plan.retirementAge}. You would still need income for living costs before then.`
+      description: 'The amount you need invested today so that, without contributing any more, it can grow enough to fund your retirement by your target age.'
     },
     lean: {
       label: 'LEAN RETIREMENT', title: 'What is Lean retirement?', value: plan.lean,
