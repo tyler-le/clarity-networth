@@ -1622,7 +1622,16 @@ async function startDemoPreview() {
   state.view = 'overview';
   showAuthenticatedApp();
   try {
-    await loadAll();
+    // A public demo is often someone’s first impression. Retry one failed
+    // initial fetch automatically so a short service wake-up or connection
+    // blip does not strand them on an empty app shell.
+    let loaded = false;
+    let lastError;
+    for (let attempt = 0; attempt < 2 && !loaded; attempt += 1) {
+      try { await loadAll(); loaded = true; }
+      catch (error) { lastError = error; if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 450)); }
+    }
+    if (!loaded) throw lastError;
     setView('overview');
   } catch (error) {
     state.demoPreview = false;

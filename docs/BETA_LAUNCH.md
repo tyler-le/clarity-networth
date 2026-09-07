@@ -1,5 +1,7 @@
 # Private beta launch checklist
 
+For beta-user installation instructions, see [Install Clarity on your phone](./PWA_INSTALL.md).
+
 Clarity is ready for a small, invite-only beta after every item below is true. This document deliberately separates work enforced by the app from work that needs an account owner or legal/business decision.
 
 ## Enforced by the app and CI

@@ -72,6 +72,19 @@ test('a slow first load shows calm placeholders before financial data arrives', 
   await expect(page.locator('#netWorthChart svg')).toBeVisible();
 });
 
+test('demo recovers from one failed initial request instead of leaving an empty shell', async ({ page }) => {
+  let attempts = 0;
+  await page.route('**/api/demo-preview?range=1m', async (route) => {
+    attempts += 1;
+    if (attempts === 1) await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Temporarily unavailable' }) });
+    else await route.continue();
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: /explore the demo/i }).click();
+  await expect(page.locator('#netWorth')).toHaveText(/\$/);
+  expect(attempts).toBe(2);
+});
+
 test('a new visitor can explore the complete demo without signing in', async ({ page }) => {
   const pageErrors = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
