@@ -14,7 +14,7 @@ async function openDemo(page) {
   await expect(page.locator('#inviteCode')).toHaveValue('');
   await expect(page.getByRole('button', { name: 'Continue with Google' })).toHaveCount(0);
   await expect(page.locator('#googleSignIn')).toBeHidden();
-  await expect(page.locator('#accessCodeStatus')).toHaveText('Enter your access code to unlock Google sign-in.');
+  await expect(page.locator('#accessCodeStatus')).toHaveText('');
   await expect(page.locator('.auth-intro')).toHaveText('A calm, clear view of your net worth, accounts, and path ahead.');
   await expect(page.getByText(/By continuing, you agree to our/i)).toBeVisible();
   await expect(page.getByRole('link', { name: 'Terms' })).toHaveAttribute('href', '/terms');

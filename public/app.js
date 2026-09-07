@@ -1566,7 +1566,7 @@ async function startGoogleSignIn() {
   $('#googleSignIn').innerHTML = '';
   $('#googleSignIn').classList.add('hidden');
   if (!config.configured) return renderGoogleSignIn(config);
-  $('#accessCodeStatus').textContent = 'Enter your access code to unlock Google sign-in.';
+  $('#accessCodeStatus').textContent = '';
 }
 
 async function validateAccessCode() {
@@ -1574,7 +1574,7 @@ async function validateAccessCode() {
   if (!inviteCode) {
     $('#googleSignIn').innerHTML = '';
     $('#googleSignIn').classList.add('hidden');
-    $('#accessCodeStatus').textContent = 'Enter your access code to unlock Google sign-in.';
+    $('#accessCodeStatus').textContent = '';
     return;
   }
   if (!googleSignInConfig?.configured) {
@@ -1646,7 +1646,7 @@ $('#inviteCode').addEventListener('input', () => {
   $('#googleSignIn').innerHTML = '';
   $('#googleSignIn').classList.add('hidden');
   const code = $('#inviteCode').value.trim();
-  $('#accessCodeStatus').textContent = code ? 'Checking access code…' : 'Enter your access code to unlock Google sign-in.';
+  $('#accessCodeStatus').textContent = code ? 'Checking access code…' : '';
   if (code.length >= 4) accessCodeCheckTimer = setTimeout(validateAccessCode, 650);
 });
 $('#inviteCode').addEventListener('blur', () => {
