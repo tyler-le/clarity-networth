@@ -1,4 +1,4 @@
-import { filterSnapshots } from './chart-utils.js';
+import { filterSnapshots } from '/chart-utils.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];

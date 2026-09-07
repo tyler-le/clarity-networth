@@ -134,6 +134,17 @@ app.use(express.static(path.join(__dirname, 'public'), {
   }
 }));
 
+// Railway's edge can occasionally retain an older response for the stable
+// /app.js path even when it carries no-store directives. Keep the application
+// entrypoint on a separate, explicitly dynamic route so an HTML deployment
+// and the JavaScript it loads always come from the same release.
+app.get('/runtime/app.js', (_req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store, no-cache, max-age=0, must-revalidate');
+  res.setHeader('CDN-Cache-Control', 'no-store');
+  res.setHeader('Surrogate-Control', 'no-store');
+  res.type('js').sendFile(path.join(__dirname, 'public', 'app.js'));
+});
+
 function escapeLegalText(value) {
   return String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 }

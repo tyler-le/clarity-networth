@@ -61,6 +61,11 @@ integrationTest('serves the app shell with defensive browser headers', async () 
   assert.match(response.headers['content-security-policy'], /default-src 'self'/);
   assert.equal(response.headers['x-frame-options'], 'DENY');
   assert.match(response.headers['permissions-policy'], /camera=\(\)/);
+
+  const runtimeApp = await request(app).get('/runtime/app.js');
+  assert.equal(runtimeApp.status, 200);
+  assert.match(runtimeApp.text, /retirement-timeline-row/);
+  assert.match(runtimeApp.headers['cache-control'], /no-store/);
 });
 
 integrationTest('serves public legal, support, and dependency-aware health pages', async () => {
