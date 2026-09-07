@@ -98,7 +98,10 @@ testing, and UX standards that guide changes.
 
 ## Private product dashboard
 
-The owner-only [Clarity Product Health dashboard](https://clarity-insights-production.up.railway.app/dashboard/2) lives in a separate, password-protected Metabase service—not in the Clarity customer app. It shows activation, retention, sync health, tab usage, core-card views, and meaningful card actions. It reads only the minimal 90-day product-event table, never encrypted financial stores or financial values.
+These owner-only dashboards live in a separate, password-protected Metabase service—not in the Clarity customer app:
+
+- [Product Health](https://clarity-insights-production.up.railway.app/dashboard/2): selectable reporting window for activation, return visits, tab usage, core-card views, meaningful actions, and sync health. It reads only the minimal 90-day product-event table, never encrypted financial stores or financial values.
+- [Operations & Dependencies](https://clarity-insights-production.up.railway.app/dashboard/3): the last 24 hours of grouped Clarity API, Plaid, Google sign-in, and market-data status and latency. It contains no customer identifier, financial value, credential, or request payload.
 
 ## Data principles
 

@@ -7,7 +7,7 @@ Clarity has no customer-facing analytics dashboard, analytics card, navigation i
 - Use **Railway Observability** for service health: deployments, logs, CPU, memory, network, restarts, and `/api/health` failures.
 - Use the private `launch_events` table for product health. Connect a **separate, private, read-only reporting tool or Railway service** to Postgres if visual charts are useful. Do not add that report to the Clarity web service or expose it publicly.
 
-The owner dashboard uses one selectable reporting window for product metrics (rather than duplicating 7- and 28-day versions of every chart). Sync health remains a separate last-26-hours operational check: it answers whether today's automatic updates are working, not how a product feature is trending.
+The owner dashboard uses one selectable reporting window for product metrics (rather than duplicating 7- and 28-day versions of every chart). Sync health remains a separate last-24-hours operational check: it answers whether today's automatic updates are working, not how a product feature is trending.
 
 Railway's built-in dashboard is the correct home for infrastructure monitoring. It does not create product-retention charts from application data by itself.
 
