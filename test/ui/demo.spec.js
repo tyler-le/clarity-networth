@@ -225,6 +225,17 @@ test('cash-flow combines income before showing allocations instead of estimating
   expect(flows).not.toContain('income_paychecks investments');
 });
 
+test('selecting a cash-flow month keeps its income-source labels defined', async ({ page }) => {
+  await openDemo(page);
+  await goToView(page, 'spending');
+  const month = page.locator('#spendingTrend [data-spending-month]').last();
+  // The SVG group is the semantic target; dispatching its click avoids a
+  // viewport-dependent pointer hit-test on a thin chart bar.
+  await month.evaluate((node) => node.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  await expect(page.locator('#cashflowSankey')).not.toContainText('undefined');
+  await expect(page.locator('#cashflowSankey [data-cashflow-category="income_paychecks"]')).toContainText('Paychecks');
+});
+
 test('cash-flow blocks trace their connected paths before opening activity', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');

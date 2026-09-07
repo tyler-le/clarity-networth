@@ -598,7 +598,11 @@ function spendingForSelectedMonth(data) {
   const planTransactions = transactions.filter((transaction) => !['income', 'transfer', 'pre_tax_retirement'].includes(transaction.bucket));
   const total = planTransactions.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const income = transactions.filter((transaction) => transaction.bucket === 'income').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
-  const incomeSources = flowCategoryRows(transactions.filter((transaction) => transaction.flowGroup === 'income'));
+  // flowCategoryRows is also used by spending categories, where `name` is the
+  // public field. Normalize income sources at this boundary so a selected
+  // month has the same { key, label, amount } shape as the server response.
+  const incomeSources = flowCategoryRows(transactions.filter((transaction) => transaction.flowGroup === 'income'))
+    .map(({ key, name, amount }) => ({ key, label: name, amount }));
   const actualSpend = planTransactions.filter((transaction) => !['savings', 'investments'].includes(transaction.bucket)).reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const savings = planTransactions.filter((transaction) => transaction.bucket === 'savings').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const investments = planTransactions.filter((transaction) => transaction.bucket === 'investments').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
@@ -685,6 +689,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const tablet = !compact && availableWidth < 760;
   const allSpendCategories = (data.actualSpendCategories || []).filter((row) => hasVisibleAmount(row.amount));
   const incomeSources = (data.incomeSources?.length ? data.incomeSources : [{ key: 'income', label: 'Income received', amount: income }])
+    .map((source) => ({ ...source, label: source.label || source.name || 'Income received' }))
     .filter((source) => hasVisibleAmount(source.amount));
   const actualCategories = expanded ? allSpendCategories : allSpendCategories.slice(0, 4);
   const width = compact ? 390 : tablet ? 620 : 920;
@@ -710,7 +715,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const fundingGap = Math.max(0, bridgeTotal - sourceTotal);
   const unallocated = Math.max(0, bridgeTotal - knownAllocation);
   const fundingRows = fundingGap >= .5
-    ? [...incomeSources, { key: 'other_funding', label: 'Other funding', amount: fundingGap, color: '#879087' }]
+    ? [...incomeSources, { key: 'unmatched_cash_flow', label: 'Unmatched cash flow', amount: fundingGap, color: '#879087' }]
     : incomeSources;
   const allocationRows = unallocated >= .5
     ? [...middleNodes, { key: 'money_left', label: 'Money left', value: unallocated, color: 'var(--income)' }]
@@ -761,8 +766,8 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     const valueY = y + (displayLines.length > 1 ? 39 : 29);
     const accentX = side === 'right' ? x + w - 6 : x;
     const shareMarkup = share == null ? '' : `<tspan dx="4" class="cashflow-share">${share}%</tspan>`;
-    const description = category === 'other_funding'
-      ? `${label}: ${fmt.format(value)}. This period has more allocated than reported income, so the source is not identified.`
+    const description = category === 'unmatched_cash_flow'
+      ? `${label}: ${fmt.format(value)}. Spending, saving, and investing exceed reported income in this period. It may be prior cash, credit, or a transfer; Clarity does not count it as income.`
       : `${label}: ${fmt.format(value)}${share == null ? '' : ` (${share}%)`}`;
     return `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" data-cashflow-node="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="Highlight flows for ${escapeHtml(label)}"` : ''}><title>${escapeHtml(description)}</title><rect data-testid="cashflow-node-surface" x="${x}" y="${y}" width="${w}" height="${rowHeight}" rx="5" fill="${color}" fill-opacity=".10" stroke="${color}" stroke-opacity=".38"/><rect data-testid="cashflow-node-accent" x="${accentX}" y="${y}" width="6" height="${rowHeight}" rx="2" fill="${color}"/><text x="${x + 11}" y="${y + 14}" class="cashflow-label">${labelMarkup}</text><text x="${x + 11}" y="${valueY}" class="cashflow-value">${fmt.format(value)}${shareMarkup}</text></g>`;
   };
