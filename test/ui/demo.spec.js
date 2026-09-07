@@ -232,7 +232,7 @@ test('asset-allocation filters preserve the reader position', async ({ page }) =
   await expect(page.locator('#investmentHoldingsInsight')).toContainText('Funds');
 });
 
-test('cash-flow diagram shows clear dollar amounts without misleading over-income percentages', async ({ page }) => {
+test('cash-flow diagram pairs dollar amounts with meaningful secondary percentages', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');
   await expect(page.locator('#cashflowSankey')).toContainText('Paychecks');
@@ -240,7 +240,9 @@ test('cash-flow diagram shows clear dollar amounts without misleading over-incom
   await expect(page.locator('#cashflowSankey')).toContainText('$');
   await expect(page.locator('#cashflowSankey [data-cashflow-category="savings"]')).toBeVisible();
   await expect(page.locator('#cashflowSankey [data-cashflow-category="investments"]')).toBeVisible();
-  await expect(page.locator('#cashflowSankey')).not.toContainText('%');
+  const percentages = await page.locator('#cashflowSankey .cashflow-share').allTextContents();
+  expect(percentages.length).toBeGreaterThan(0);
+  expect(percentages.every((value) => /^\d{1,3}%$/.test(value) && Number(value.slice(0, -1)) <= 100)).toBe(true);
   await page.locator('[data-spending-range="6m"]').click();
   await expect(page.locator('[data-spending-range="6m"]')).toHaveClass(/active/);
   await expect(page.locator('#spendingView')).toHaveAttribute('aria-busy', 'false');

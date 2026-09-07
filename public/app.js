@@ -230,7 +230,7 @@ function restoreNetWorthHero() {
   const delta = s.netWorth - old;
   const startDate = snaps[0]?.date ? new Date(`${snaps[0].date}T12:00:00`) : null;
   const periodStart = startDate?.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) || 'start';
-  $('#netWorthDelta').textContent = `${delta >= 0 ? '+' : '−'}${fmt.format(Math.abs(delta))} since ${periodStart}`;
+  $('#netWorthDelta').textContent = `${delta >= 0 ? '+' : '−'}${fmt.format(Math.abs(delta))} since ${periodStart}${snaps.some((row) => row.source === 'reconstructed') ? ' · Includes estimated history' : ''}`;
 }
 
 function renderClarityLayer(data) {
@@ -364,9 +364,13 @@ function renderLineChart(snapshots, summary, rangeStart = null) {
   // Short spans need distinct days, not three calendar labels that round to
   // the same day. Longer spans retain a middle label for quick orientation.
   const tickTimes = sameMonth || width <= 420 ? [domainStart, domainEnd] : [domainStart, (domainStart + domainEnd) / 2, domainEnd];
-  const xAxis = tickTimes.map((time, index) => `<text x="${(plotLeft + ((time - domainStart) / (domainEnd - domainStart)) * (width - plotLeft - plotRight)).toFixed(1)}" y="${height - 5}" text-anchor="${index === 0 ? 'start' : index === tickTimes.length - 1 ? 'end' : 'middle'}" class="chart-axis-label chart-x-axis-label">${dateLabel(time)}</text>`).join('');
-  const unavailableLead = domainStart < firstObserved
-    ? `<path class="chart-unavailable-line" d="M ${plotLeft} ${points[0][1].toFixed(1)} L ${points[0][0].toFixed(1)} ${points[0][1].toFixed(1)}"/><text x="${((plotLeft + points[0][0]) / 2).toFixed(1)}" y="${Math.max(plotTop + 12, points[0][1] - 10).toFixed(1)}" text-anchor="middle" class="chart-unavailable-label">Tracking began ${new Date(`${snapshots[0].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</text>`
+  const hasUntrackedLead = domainStart < firstObserved;
+  // The tracking annotation already supplies the meaningful date. Showing
+  // endpoints as well creates duplicate, colliding labels in narrow cards.
+  const xAxis = hasUntrackedLead ? '' : tickTimes.map((time, index) => `<text x="${(plotLeft + ((time - domainStart) / (domainEnd - domainStart)) * (width - plotLeft - plotRight)).toFixed(1)}" y="${height - 5}" text-anchor="${index === 0 ? 'start' : index === tickTimes.length - 1 ? 'end' : 'middle'}" class="chart-axis-label chart-x-axis-label">${dateLabel(time)}</text>`).join('');
+  const trackingDate = new Date(`${snapshots[0].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  const unavailableLead = hasUntrackedLead
+    ? `<path class="chart-unavailable-line" d="M ${plotLeft} ${points[0][1].toFixed(1)} L ${points[0][0].toFixed(1)} ${points[0][1].toFixed(1)}"/><text x="${((plotLeft + points[0][0]) / 2).toFixed(1)}" y="${Math.max(plotTop + 12, points[0][1] - 10).toFixed(1)}" text-anchor="middle" class="chart-unavailable-label">${width < 360 ? 'Since' : 'Tracking began'} ${trackingDate}</text>`
     : '';
   el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Net worth history${domainStart < firstObserved ? '; earlier time is not tracked' : ''}">
     <defs><linearGradient id="areaFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f6f4a" stop-opacity=".16"/><stop offset="1" stop-color="#1f6f4a" stop-opacity="0"/></linearGradient></defs>
@@ -404,7 +408,7 @@ function renderLineChart(snapshots, summary, rangeStart = null) {
     const date = new Date(`${snap.date}T12:00:00`);
     $('#netWorth').textContent = fmt.format(Number(snap.net_worth));
     $('#netWorthDelta').innerHTML = `<span class="positive">Assets ${fmt.format(Number(snap.assets || 0))}</span><span class="networth-separator"> · </span><span class="negative">Debt ${fmt.format(Number(snap.liabilities || 0))}</span>`;
-    $('#netWorthChartDate').textContent = `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${snap.source === 'estimated' ? ' · Estimated from activity' : ''}`;
+    $('#netWorthChartDate').textContent = `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${['estimated', 'reconstructed'].includes(snap.source) ? ' · Estimated from activity' : ''}`;
     $('#netWorthChartContext').classList.remove('hidden');
   };
 
@@ -692,8 +696,15 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     { key: 'savings', label: 'Save', value: savings, color: 'var(--save)' },
     { key: 'investments', label: 'Invest', value: investments, color: 'var(--invest)' }
   ].filter((node) => hasVisibleAmount(node.value));
+  const withShare = (rows, total, valueKey = 'amount') => rows.map((row) => ({
+    ...row,
+    share: total > 0 ? Math.round(Number(row[valueKey] || 0) / total * 100) : null
+  }));
+  const incomeNodes = withShare(incomeSources, income);
+  const allocationNodes = withShare(middleNodes, middleNodes.reduce((sum, node) => sum + Number(node.value || 0), 0), 'value');
+  const categoryNodes = withShare(actualCategories, actualSpend);
   const contentHeight = (rows) => rows.length ? (rows.length - 1) * rowStep + rowHeight : 0;
-  const height = Math.max(224, contentHeight(incomeSources) + 16, contentHeight(middleNodes) + 16, contentHeight(actualCategories) + 16);
+  const height = Math.max(224, contentHeight(incomeNodes) + 16, contentHeight(allocationNodes) + 16, contentHeight(categoryNodes) + 16);
   // A node must visibly meet its flow. Fixed wide, transparent hit areas made
   // the bands appear to stop short of their labels on larger screens. Size
   // each column to its actual labels and render it as a quiet tinted block.
@@ -702,9 +713,9 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     const characterWidth = compact ? 5.4 : 6.2;
     return Math.max(minimum, Math.min(maximum, Math.ceil(25 + longest * characterWidth)));
   };
-  const sourceW = nodeWidth(incomeSources, compact ? 76 : 82, compact ? 108 : 142);
-  const middleW = nodeWidth(middleNodes, compact ? 80 : 86, compact ? 110 : 136);
-  const destinationW = nodeWidth(actualCategories.map((row) => ({ label: row.name })), compact ? 84 : 92, compact ? 106 : 142);
+  const sourceW = nodeWidth(incomeNodes, compact ? 76 : 82, compact ? 108 : 142);
+  const middleW = nodeWidth(allocationNodes, compact ? 80 : 86, compact ? 110 : 136);
+  const destinationW = nodeWidth(categoryNodes.map((row) => ({ label: row.name })), compact ? 84 : 92, compact ? 106 : 142);
   const sourceX = compact ? 6 : tablet ? 8 : 20;
   const middleX = compact ? 143 : tablet ? 248 : 389;
   const destinationX = compact ? 280 : tablet ? 488 : 758;
@@ -713,7 +724,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     actual_spend: 'var(--outflow)', savings: 'var(--save)', investments: 'var(--invest)',
     housing_bills: '#c87862', food_dining: '#c69656', shopping: '#9a78a2', transport: '#6996a7', health: '#6a9b88', insurance: '#728aac', services: '#8d87aa', entertainment: '#b47b92', travel: '#6499a0', education: '#8d9a5f', personal_care: '#b98675', home: '#739585', taxes: '#ab8066', civic: '#7d91a4', fees: '#9a8f81', uncategorized: '#9a8f81'
   }[key] || fallback);
-  const block = (x, y, w, color, label, value, category = '', side = 'left') => {
+  const block = (x, y, w, color, label, value, share, category = '', side = 'left') => {
     const maxChars = Math.max(7, Math.floor((w - 19) / (compact ? 5.4 : 6.2)));
     const words = String(label).trim().split(/\s+/).filter(Boolean);
     const lines = [];
@@ -728,42 +739,43 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     const labelMarkup = displayLines.map((line, index) => `<tspan x="${x + 11}" dy="${index ? 11 : 0}">${escapeHtml(line)}</tspan>`).join('');
     const valueY = y + (displayLines.length > 1 ? 39 : 29);
     const accentX = side === 'right' ? x + w - 6 : x;
-    return `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" data-cashflow-node="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><title>${escapeHtml(`${label}: ${fmt.format(value)}`)}</title><rect data-testid="cashflow-node-surface" x="${x}" y="${y}" width="${w}" height="${rowHeight}" rx="5" fill="${color}" fill-opacity=".10" stroke="${color}" stroke-opacity=".38"/><rect data-testid="cashflow-node-accent" x="${accentX}" y="${y}" width="6" height="${rowHeight}" rx="2" fill="${color}"/><text x="${x + 11}" y="${y + 14}" class="cashflow-label">${labelMarkup}</text><text x="${x + 11}" y="${valueY}" class="cashflow-value">${fmt.format(value)}</text></g>`;
+    const shareMarkup = share == null ? '' : `<tspan dx="4" class="cashflow-share">${share}%</tspan>`;
+    return `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" data-cashflow-node="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><title>${escapeHtml(`${label}: ${fmt.format(value)}${share == null ? '' : ` (${share}%)`}`)}</title><rect data-testid="cashflow-node-surface" x="${x}" y="${y}" width="${w}" height="${rowHeight}" rx="5" fill="${color}" fill-opacity=".10" stroke="${color}" stroke-opacity=".38"/><rect data-testid="cashflow-node-accent" x="${accentX}" y="${y}" width="6" height="${rowHeight}" rx="2" fill="${color}"/><text x="${x + 11}" y="${y + 14}" class="cashflow-label">${labelMarkup}</text><text x="${x + 11}" y="${valueY}" class="cashflow-value">${fmt.format(value)}${shareMarkup}</text></g>`;
   };
   // Use perceptual (square-root) scaling. Exact dollars stay in each node,
   // while the flow still makes large categories visibly heavier without one
   // unusually large payment consuming the entire chart.
-  const largestFlow = Math.max(...middleNodes.map((node) => node.value), 1);
+  const largestFlow = Math.max(...allocationNodes.map((node) => node.value), 1);
   const flow = (fromX, fromY, toX, toY, amount, color, nodes) => {
     const value = Math.max(0, Number(amount || 0));
     const thickness = value ? 2 + Math.sqrt(value / largestFlow) * 22 : 0;
     return `<path class="cashflow-flow" data-cashflow-flow="${escapeHtml(nodes.join(' '))}" d="M ${fromX} ${fromY} C ${fromX + (toX - fromX) * .42} ${fromY}, ${toX - (toX - fromX) * .42} ${toY}, ${toX} ${toY}" fill="none" stroke="${color}" stroke-opacity=".24" stroke-width="${thickness}" stroke-linecap="round"/>`;
   };
   const verticallyCenter = (rows) => Math.max(8, (height - contentHeight(rows)) / 2);
-  const sourceStart = verticallyCenter(incomeSources);
-  const middleStart = verticallyCenter(middleNodes);
-  const categoryStart = verticallyCenter(actualCategories);
-  const middleY = new Map(middleNodes.map((node, index) => [node.key, middleStart + index * rowStep]));
+  const sourceStart = verticallyCenter(incomeNodes);
+  const middleStart = verticallyCenter(allocationNodes);
+  const categoryStart = verticallyCenter(categoryNodes);
+  const middleY = new Map(allocationNodes.map((node, index) => [node.key, middleStart + index * rowStep]));
   let paths = '';
-  incomeSources.forEach((source, index) => {
+  incomeNodes.forEach((source, index) => {
     const share = income ? Number(source.amount || 0) / income : 0;
     const y = sourceStart + index * rowStep;
-    middleNodes.forEach((node) => {
+    allocationNodes.forEach((node) => {
       paths += flow(sourceX + sourceW, y + rowHeight / 2, middleX, middleY.get(node.key) + rowHeight / 2, node.value * share, node.color, [source.key, node.key]);
     });
   });
   let categories = '';
-  actualCategories.forEach((row, index) => {
+  categoryNodes.forEach((row, index) => {
     const y = categoryStart + index * rowStep;
     const categoryColor = colorFor(row.key, 'var(--outflow-muted)');
     const spendY = middleY.get('actual_spend');
     if (spendY != null) paths += flow(middleX + middleW, spendY + rowHeight / 2, destinationX, y + rowHeight / 2, Number(row.amount || 0), categoryColor, ['actual_spend', row.key]);
-    categories += block(destinationX, y, destinationW, categoryColor, row.name, row.amount, row.key, 'left');
+    categories += block(destinationX, y, destinationW, categoryColor, row.name, row.amount, row.share, row.key, 'left');
   });
   const hiddenCategoryCount = allSpendCategories.length - actualCategories.length;
   const more = !expanded && hiddenCategoryCount > 0 ? `<button type="button" class="cashflow-more" data-cashflow-expand aria-label="Show all ${hiddenCategoryCount + actualCategories.length} spending categories">View all ${allSpendCategories.length} spending categories <span>↗</span></button>` : '';
-  const sourceBlocks = incomeSources.map((source, index) => block(sourceX, sourceStart + index * rowStep, sourceW, colorFor(source.key, 'var(--income)'), source.label, source.amount, source.key, 'right')).join('');
-  const middleBlocks = middleNodes.map((node) => block(middleX, middleY.get(node.key), middleW, node.color, node.label, node.value, node.key, 'left')).join('');
+  const sourceBlocks = incomeNodes.map((source, index) => block(sourceX, sourceStart + index * rowStep, sourceW, colorFor(source.key, 'var(--income)'), source.label, source.amount, source.share, source.key, 'right')).join('');
+  const middleBlocks = allocationNodes.map((node) => block(middleX, middleY.get(node.key), middleW, node.color, node.label, node.value, node.share, node.key, 'left')).join('');
   el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Income sources split into spending, saving, and investing">${paths}${sourceBlocks}${middleBlocks}${categories}</svg>${more}`;
   // SVG focus delegation differs subtly across browsers. Bind directly as
   // well so keyboard focus always traces the same connected flow as hover.
@@ -929,9 +941,11 @@ function renderPortfolioChart(data) {
     : { month: 'short', year: '2-digit' });
   const xIndices = [...new Set(width > 420 ? [0, Math.floor((snapshots.length - 1) / 2), snapshots.length - 1] : [0, snapshots.length - 1])];
   const grid = [max, (max + min) / 2, min].map((value) => { const y = plot.bottom - (value - min) / (max - min) * (plot.bottom - plot.top); return `<line x1="${plot.left}" y1="${y}" x2="${width - plot.right}" y2="${y}" class="chart-grid"/><text x="${plot.left - 6}" y="${y + 3}" text-anchor="end" class="chart-axis-label">${axisCurrency(value)}</text>`; }).join('');
-  const xAxis = xIndices.map((index) => `<text x="${points[index][0]}" y="${height - 5}" text-anchor="${index === 0 ? 'start' : index === snapshots.length - 1 ? 'end' : 'middle'}" class="chart-axis-label chart-x-axis-label">${label(index)}</text>`).join('');
-  const unavailableLead = domainStart < firstObservedTime
-    ? `<path class="chart-unavailable-line" d="M ${plot.left} ${points[0][1].toFixed(1)} L ${points[0][0].toFixed(1)} ${points[0][1].toFixed(1)}"/><text x="${((plot.left + points[0][0]) / 2).toFixed(1)}" y="${Math.max(plot.top + 12, points[0][1] - 10).toFixed(1)}" text-anchor="middle" class="chart-unavailable-label">Tracking began ${firstDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</text>`
+  const hasUntrackedLead = domainStart < firstObservedTime;
+  const xAxis = hasUntrackedLead ? '' : xIndices.map((index) => `<text x="${points[index][0]}" y="${height - 5}" text-anchor="${index === 0 ? 'start' : index === snapshots.length - 1 ? 'end' : 'middle'}" class="chart-axis-label chart-x-axis-label">${label(index)}</text>`).join('');
+  const trackingDate = firstDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  const unavailableLead = hasUntrackedLead
+    ? `<path class="chart-unavailable-line" d="M ${plot.left} ${points[0][1].toFixed(1)} L ${points[0][0]} ${points[0][1]}"/><text x="${((plot.left + points[0][0]) / 2).toFixed(1)}" y="${Math.max(plot.top + 12, points[0][1] - 10).toFixed(1)}" text-anchor="middle" class="chart-unavailable-label">${width < 360 ? 'Since' : 'Tracking began'} ${trackingDate}</text>`
     : '';
   el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Scrubbable portfolio value history${domainStart < firstObservedTime ? '; earlier time is not tracked' : ''}"><defs><linearGradient id="portfolioFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".16"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs>${grid}${xAxis}${unavailableLead}<path d="${area}" fill="url(#portfolioFade)"/><path class="main-history-line" pathLength="1" d="${line}" fill="none" stroke="#287143" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>${points.length === 1 ? `<circle cx="${points[0][0]}" cy="${points[0][1]}" r="5" fill="#287143"/>` : ''}<line class="scrub-line" x1="0" y1="${plot.top}" x2="0" y2="${plot.bottom}"/><circle class="scrub-dot" cx="0" cy="0" r="5"/></svg><div class="chart-tooltip hidden"></div>`;
   if (snapshots.length < 2) return;
@@ -958,7 +972,7 @@ function renderPortfolioChart(data) {
     tooltip.style.left = `${Math.max(8, Math.min(rect.width - 8, x / width * rect.width))}px`;
     tooltip.textContent = fmt.format(Number(snapshot.value || 0));
     $('#investmentTotal').textContent = fmt.format(Number(snapshot.value || 0));
-    $('#investmentChartDate').textContent = `${new Date(`${snapshot.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${snapshot.source === 'reconstructed' ? ' · Reconstructed from reported activity' : ''}`;
+    $('#investmentChartDate').textContent = `${new Date(`${snapshot.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${snapshot.source === 'reconstructed' ? ' · Estimated from activity and prices' : ''}`;
     $('#investmentChartContext').classList.remove('hidden');
   };
   el.addEventListener('pointerdown', (event) => { active = true; el.setPointerCapture?.(event.pointerId); showPoint(event); });
@@ -1037,7 +1051,8 @@ function renderHoldingHistoryChart(history, kind, emptyMessage = null, historySt
   let min = Math.min(...values); let max = Math.max(...values);
   const spread = max - min || Math.max(Math.abs(max) * .08, 1);
   min -= spread * .12; max += spread * .12;
-  const points = values.map((value, index) => [plot.left + index / Math.max(pointsData.length - 1, 1) * (width - plot.left - plot.right), plot.bottom - (value - min) / (max - min) * (plot.bottom - plot.top)]);
+  const times = pointsData.map((row) => Date.parse(`${row.date}T00:00:00Z`));
+  const points = values.map((value, index) => [plot.left + (times[index] - times[0]) / Math.max(times.at(-1) - times[0], 1) * (width - plot.left - plot.right), plot.bottom - (value - min) / (max - min) * (plot.bottom - plot.top)]);
   const line = points.map(([x, y], index) => `${index ? 'L' : 'M'} ${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
   const area = `${line} L ${points.at(-1)[0]} ${plot.bottom} L ${points[0][0]} ${plot.bottom} Z`;
   const label = (entry) => new Date(`${entry.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
@@ -1148,7 +1163,7 @@ function renderInvestments(data) {
   const started = snapshots[0]?.date ? new Date(`${snapshots[0].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : null;
   const reconstructed = snapshots.some((snapshot) => snapshot.source === 'reconstructed');
   const changeCopy = periodChange == null ? (started ? `Tracking since ${started}` : 'Sync to begin tracking') : `${periodChange >= 0 ? '+' : '−'}${fmt.format(Math.abs(periodChange))} ${changePeriodLabel}`;
-  $('#investmentContext').textContent = accounts.length ? changeCopy : 'Connect an investment account to begin.';
+  $('#investmentContext').textContent = accounts.length ? `${changeCopy}${reconstructed ? ' · Includes estimated history' : ''}` : 'Connect an investment account to begin.';
   $('#investmentChartDate').textContent = '';
   $('#investmentChartContext').classList.add('hidden');
   renderPortfolioChart(data);
