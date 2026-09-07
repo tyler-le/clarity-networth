@@ -933,7 +933,25 @@ function renderHoldingHistoryDetail() {
   const positions = (state.investments?.positions || []).filter((position) => data.accountId ? position.account_id === data.accountId : data.ticker && String(position.ticker || '').toUpperCase() === data.ticker);
   const accounts = new Map((state.investments?.accounts || []).map((account) => [account.account_id, account]));
   const canEditClass = !state.demoPreview && !state.dashboard?.demoMode;
-  $('#holdingHistoryWhere').innerHTML = positions.length ? `<span>Where it’s held</span>${positions.map((position) => `<div><b>${escapeHtml(accounts.get(position.account_id)?.name || 'Investment account')}</b><small>${escapeHtml(assetClassLabel(position.type, position.asset_class_override))}</small><strong>${fmt.format(Number(position.value || 0))}</strong>${canEditClass ? holdingClassControl(position) : ''}</div>`).join('')}` : '';
+  // In an account drill-in, repeating the account name for every row hides
+  // the only useful differentiator: the security. Prefer a ticker, then a
+  // provider-supplied security name. When neither is meaningful, state that
+  // plainly instead of echoing the account name as if it were a holding.
+  const holdingLabel = (position, account) => {
+    const accountLabels = new Set([account?.name, account?.nickname, account?.official_name]
+      .filter(Boolean).map((value) => String(value).trim().toLowerCase()));
+    const ticker = String(position.ticker || '').trim();
+    if (ticker) return ticker;
+    const name = String(position.name || '').trim();
+    if (name && !accountLabels.has(name.toLowerCase())) return name;
+    return `Unnamed ${assetClassLabel(position.type, position.asset_class_override).toLowerCase()} holding`;
+  };
+  $('#holdingHistoryWhere').innerHTML = positions.length ? `<span>Holdings in this account</span>${positions.map((position) => {
+    const account = accounts.get(position.account_id);
+    const accountName = account?.name || 'Investment account';
+    const assetClass = assetClassLabel(position.type, position.asset_class_override);
+    return `<div><b>${escapeHtml(holdingLabel(position, account))}</b><small>${escapeHtml(`${accountName} · ${assetClass}`)}</small><strong>${fmt.format(Number(position.value || 0))}</strong>${canEditClass ? holdingClassControl(position) : ''}</div>`;
+  }).join('')}` : '';
 }
 
 async function openHoldingHistory({ ticker = '', accountId = '' } = {}) {

@@ -351,8 +351,18 @@ test('holding details preserve account context without crowding the overview', a
   await page.locator('[data-holding-history]').first().click();
   const dialog = page.locator('#holdingHistoryDialog');
   await expect(dialog).toBeVisible();
-  await expect(dialog.locator('#holdingHistoryWhere')).toContainText('Where it’s held');
+  await expect(dialog.locator('#holdingHistoryWhere')).toContainText('Holdings in this account');
   await expect(page.locator('.holding-row').first()).not.toHaveAttribute('open', '');
+});
+
+test('account detail names each holding instead of repeating the account name', async ({ page }) => {
+  await openDemo(page);
+  await goToView(page, 'investments');
+  await page.getByRole('button', { name: /View 401\(k\) performance history/i }).click();
+  const where = page.locator('#holdingHistoryWhere');
+  await expect(where).toContainText('Holdings in this account');
+  await expect(where.locator('b').first()).toContainText(/FXAIX|FSPSX/);
+  await expect(where.locator('small').first()).toContainText(/401\(k\).*Funds/);
 });
 
 test('holding and account drill-ins prioritize a person’s position before market price', async ({ page }) => {
