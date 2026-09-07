@@ -323,11 +323,11 @@ test('net-worth history can be scrubbed and always identifies the selected date'
 test('holding details preserve account context without crowding the overview', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'investments');
-  const holding = page.locator('.holding-row').first();
-  await holding.locator('summary').click();
-  await expect(holding).toHaveAttribute('open', '');
-  await expect(holding.locator('.holding-account-list')).toBeVisible();
-  await expect(holding.locator('.holding-account').first()).toBeVisible();
+  await page.locator('[data-holding-history]').first().click();
+  const dialog = page.locator('#holdingHistoryDialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator('#holdingHistoryWhere')).toContainText('Where it’s held');
+  await expect(page.locator('.holding-row').first()).not.toHaveAttribute('open', '');
 });
 
 test('holding and account drill-ins prioritize a person’s position before market price', async ({ page }) => {
