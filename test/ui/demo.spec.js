@@ -366,7 +366,7 @@ test('account detail names each holding instead of repeating the account name', 
   await expect(where.locator('small').first()).toContainText(/401\(k\).*Funds/);
 });
 
-test('holding and account drill-ins prioritize a person’s position before market price', async ({ page }) => {
+test('holding and account drill-ins show only a person’s verified position history', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'investments');
   await page.locator('[data-holding-history]').first().click();
@@ -374,10 +374,8 @@ test('holding and account drill-ins prioritize a person’s position before mark
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('tab', { name: 'Your position' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('#holdingHistoryChart svg')).toBeVisible();
-  await expect(page.locator('#holdingHistoryNote')).toContainText(/reported shares|reported trades|history/i);
-  await dialog.getByRole('tab', { name: 'Market price' }).click();
-  await expect(dialog.getByRole('tab', { name: 'Market price' })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.locator('#holdingHistoryNote')).toContainText('does not include your purchases');
+  await expect(page.locator('#holdingHistoryNote')).toContainText(/verified.*updates/i);
+  await expect(dialog.getByRole('tab', { name: 'Market price' })).toHaveCount(0);
   await page.locator('#holdingHistoryClose').click();
   await page.locator('[data-investment-account-history]').first().click();
   await expect(dialog).toBeVisible();

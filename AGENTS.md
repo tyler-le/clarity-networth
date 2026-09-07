@@ -83,6 +83,9 @@ clarity in existing core flows over adding a marginal feature.
 
 - Before changing behavior, locate the existing unit, integration, and UI tests
   that cover it. Update all affected expectations in the same change.
+- Every new feature or user-visible behavior change must add or update its
+  relevant tests in the same commit. A feature is not complete until its
+  correctness and supported-device behavior are covered.
 - Add a focused unit test for calculations and an integration test for changed
   API contracts. Add a Playwright interaction test whenever a user-visible
   action, loading state, or layout changes.
