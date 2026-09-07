@@ -131,7 +131,7 @@ test('a new visitor can explore the complete demo without signing in @critical',
   expect(pageErrors).toEqual([]);
 });
 
-test('cash flow shows an identifiable income inlet that filters its activity', async ({ page }) => {
+test('cash flow shows identifiable income inlets that highlight their flow', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');
   const paychecks = page.locator('#cashflowSankey [data-cashflow-category="income_paychecks"]');
@@ -141,8 +141,8 @@ test('cash flow shows an identifiable income inlet that filters its activity', a
   await expect(interest).toBeVisible();
   await expect(interest).toContainText('Interest');
   await paychecks.click();
-  await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
-  await expect(page.locator('#spendingTransactions')).toContainText('Payroll');
+  await expect(paychecks).toHaveClass(/is-selected/);
+  await expect(page.locator('#spendingTransactionsPanel')).not.toHaveAttribute('open', '');
 });
 
 test('a demo visitor can exit from Profile and return to sign-in', async ({ page }) => {
@@ -210,6 +210,19 @@ test('cash-flow taps keep the reader in the diagram and trace the selected flow'
   await expect(page.locator('#cashflowSankey .cashflow-flow.is-connected')).not.toHaveCount(0);
   await expect(page.locator('#cashflowSankey .cashflow-flow.is-muted')).not.toHaveCount(0);
   await expect(page.locator('#spendingTransactionsPanel')).not.toHaveAttribute('open', '');
+});
+
+test('cash-flow combines income before showing allocations instead of estimating paycheck destinations', async ({ page }) => {
+  await openDemo(page);
+  await goToView(page, 'spending');
+  const diagram = page.locator('#cashflowSankey');
+  await expect(diagram).toContainText('Money in');
+  const flows = await diagram.locator('.cashflow-flow').evaluateAll((paths) => paths.map((path) => path.dataset.cashflowFlow));
+  expect(flows).toContain('income_paychecks period_funds');
+  expect(flows).toContain('period_funds actual_spend');
+  expect(flows).not.toContain('income_paychecks actual_spend');
+  expect(flows).not.toContain('income_paychecks savings');
+  expect(flows).not.toContain('income_paychecks investments');
 });
 
 test('cash-flow blocks trace their connected paths before opening activity', async ({ page }) => {

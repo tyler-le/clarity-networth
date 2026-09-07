@@ -700,9 +700,25 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     ...row,
     share: total > 0 ? Math.round(Number(row[valueKey] || 0) / total * 100) : null
   }));
-  const incomeNodes = withShare(incomeSources, income);
-  const allocationNodes = withShare(middleNodes, middleNodes.reduce((sum, node) => sum + Number(node.value || 0), 0), 'value');
+  // A source and an outflow are not causally linked by Plaid. Build the
+  // Sankey as an honest hierarchy: sources feed one period-total node, then
+  // that total branches to the known allocations. This removes crossed,
+  // proportional source-to-outcome estimates.
+  const knownAllocation = middleNodes.reduce((sum, node) => sum + Number(node.value || 0), 0);
+  const sourceTotal = incomeSources.reduce((sum, source) => sum + Number(source.amount || 0), 0);
+  const bridgeTotal = Math.max(sourceTotal, knownAllocation);
+  const fundingGap = Math.max(0, bridgeTotal - sourceTotal);
+  const unallocated = Math.max(0, bridgeTotal - knownAllocation);
+  const fundingRows = fundingGap >= .5
+    ? [...incomeSources, { key: 'other_funding', label: 'Other funding', amount: fundingGap, color: '#879087' }]
+    : incomeSources;
+  const allocationRows = unallocated >= .5
+    ? [...middleNodes, { key: 'money_left', label: 'Money left', value: unallocated, color: 'var(--income)' }]
+    : middleNodes;
+  const incomeNodes = withShare(fundingRows, bridgeTotal);
+  const allocationNodes = withShare(allocationRows, bridgeTotal, 'value');
   const categoryNodes = withShare(actualCategories, actualSpend);
+  const bridgeNode = { key: 'period_funds', label: 'Money in', value: bridgeTotal, color: 'var(--income)' };
   const contentHeight = (rows) => rows.length ? (rows.length - 1) * rowStep + rowHeight : 0;
   const height = Math.max(224, contentHeight(incomeNodes) + 16, contentHeight(allocationNodes) + 16, contentHeight(categoryNodes) + 16);
   // A node must visibly meet its flow. Fixed wide, transparent hit areas made
@@ -713,11 +729,16 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     const characterWidth = compact ? 5.4 : 6.2;
     return Math.max(minimum, Math.min(maximum, Math.ceil(25 + longest * characterWidth)));
   };
-  const sourceW = nodeWidth(incomeNodes, compact ? 76 : 82, compact ? 108 : 142);
-  const middleW = nodeWidth(allocationNodes, compact ? 80 : 86, compact ? 110 : 136);
+  // Four columns still need breathing room on a phone. Keep the labels
+  // compact there rather than letting the allocation column collide with the
+  // spending-category column.
+  const sourceW = nodeWidth(incomeNodes, compact ? 70 : 82, compact ? 80 : 132);
+  const bridgeW = nodeWidth([bridgeNode], compact ? 64 : 88, compact ? 72 : 120);
+  const middleW = nodeWidth(allocationNodes, compact ? 68 : 86, compact ? 78 : 128);
   const destinationW = nodeWidth(categoryNodes.map((row) => ({ label: row.name })), compact ? 84 : 92, compact ? 106 : 142);
-  const sourceX = compact ? 6 : tablet ? 8 : 20;
-  const middleX = compact ? 143 : tablet ? 248 : 389;
+  const sourceX = compact ? 4 : tablet ? 8 : 20;
+  const bridgeX = compact ? 88 : tablet ? 166 : 230;
+  const middleX = compact ? 166 : tablet ? 330 : 482;
   const destinationX = compact ? 280 : tablet ? 488 : 758;
   const colorFor = (key, fallback) => ({
     income_paychecks: 'var(--income)', income_interest: '#b08a4a', income_dividends: '#8a71a5', income_benefits: '#5e91a2', income_business: '#5d9b81', income_other: '#7893a8',
@@ -740,12 +761,15 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     const valueY = y + (displayLines.length > 1 ? 39 : 29);
     const accentX = side === 'right' ? x + w - 6 : x;
     const shareMarkup = share == null ? '' : `<tspan dx="4" class="cashflow-share">${share}%</tspan>`;
-    return `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" data-cashflow-node="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><title>${escapeHtml(`${label}: ${fmt.format(value)}${share == null ? '' : ` (${share}%)`}`)}</title><rect data-testid="cashflow-node-surface" x="${x}" y="${y}" width="${w}" height="${rowHeight}" rx="5" fill="${color}" fill-opacity=".10" stroke="${color}" stroke-opacity=".38"/><rect data-testid="cashflow-node-accent" x="${accentX}" y="${y}" width="6" height="${rowHeight}" rx="2" fill="${color}"/><text x="${x + 11}" y="${y + 14}" class="cashflow-label">${labelMarkup}</text><text x="${x + 11}" y="${valueY}" class="cashflow-value">${fmt.format(value)}${shareMarkup}</text></g>`;
+    const description = category === 'other_funding'
+      ? `${label}: ${fmt.format(value)}. This period has more allocated than reported income, so the source is not identified.`
+      : `${label}: ${fmt.format(value)}${share == null ? '' : ` (${share}%)`}`;
+    return `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" data-cashflow-node="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="Highlight flows for ${escapeHtml(label)}"` : ''}><title>${escapeHtml(description)}</title><rect data-testid="cashflow-node-surface" x="${x}" y="${y}" width="${w}" height="${rowHeight}" rx="5" fill="${color}" fill-opacity=".10" stroke="${color}" stroke-opacity=".38"/><rect data-testid="cashflow-node-accent" x="${accentX}" y="${y}" width="6" height="${rowHeight}" rx="2" fill="${color}"/><text x="${x + 11}" y="${y + 14}" class="cashflow-label">${labelMarkup}</text><text x="${x + 11}" y="${valueY}" class="cashflow-value">${fmt.format(value)}${shareMarkup}</text></g>`;
   };
   // Use perceptual (square-root) scaling. Exact dollars stay in each node,
   // while the flow still makes large categories visibly heavier without one
   // unusually large payment consuming the entire chart.
-  const largestFlow = Math.max(...allocationNodes.map((node) => node.value), 1);
+  const largestFlow = Math.max(bridgeTotal, 1);
   const flow = (fromX, fromY, toX, toY, amount, color, nodes) => {
     const value = Math.max(0, Number(amount || 0));
     const thickness = value ? 2 + Math.sqrt(value / largestFlow) * 22 : 0;
@@ -755,14 +779,15 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const sourceStart = verticallyCenter(incomeNodes);
   const middleStart = verticallyCenter(allocationNodes);
   const categoryStart = verticallyCenter(categoryNodes);
+  const bridgeY = Math.max(8, (height - rowHeight) / 2);
   const middleY = new Map(allocationNodes.map((node, index) => [node.key, middleStart + index * rowStep]));
   let paths = '';
   incomeNodes.forEach((source, index) => {
-    const share = income ? Number(source.amount || 0) / income : 0;
     const y = sourceStart + index * rowStep;
-    allocationNodes.forEach((node) => {
-      paths += flow(sourceX + sourceW, y + rowHeight / 2, middleX, middleY.get(node.key) + rowHeight / 2, node.value * share, node.color, [source.key, node.key]);
-    });
+    paths += flow(sourceX + sourceW, y + rowHeight / 2, bridgeX, bridgeY + rowHeight / 2, source.amount, source.color || colorFor(source.key, 'var(--income)'), [source.key, bridgeNode.key]);
+  });
+  allocationNodes.forEach((node) => {
+    paths += flow(bridgeX + bridgeW, bridgeY + rowHeight / 2, middleX, middleY.get(node.key) + rowHeight / 2, node.value, node.color, [bridgeNode.key, node.key]);
   });
   let categories = '';
   categoryNodes.forEach((row, index) => {
@@ -774,9 +799,10 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   });
   const hiddenCategoryCount = allSpendCategories.length - actualCategories.length;
   const more = !expanded && hiddenCategoryCount > 0 ? `<button type="button" class="cashflow-more" data-cashflow-expand aria-label="Show all ${hiddenCategoryCount + actualCategories.length} spending categories">View all ${allSpendCategories.length} spending categories <span>↗</span></button>` : '';
-  const sourceBlocks = incomeNodes.map((source, index) => block(sourceX, sourceStart + index * rowStep, sourceW, colorFor(source.key, 'var(--income)'), source.label, source.amount, source.share, source.key, 'right')).join('');
+  const sourceBlocks = incomeNodes.map((source, index) => block(sourceX, sourceStart + index * rowStep, sourceW, source.color || colorFor(source.key, 'var(--income)'), source.label, source.amount, source.share, source.key, 'right')).join('');
+  const bridgeBlock = block(bridgeX, bridgeY, bridgeW, bridgeNode.color, bridgeNode.label, bridgeNode.value, null, bridgeNode.key, 'left');
   const middleBlocks = allocationNodes.map((node) => block(middleX, middleY.get(node.key), middleW, node.color, node.label, node.value, node.share, node.key, 'left')).join('');
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Income sources split into spending, saving, and investing">${paths}${sourceBlocks}${middleBlocks}${categories}</svg>${more}`;
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Income sources combine into total money in, then split into spending, saving, and investing">${paths}${sourceBlocks}${bridgeBlock}${middleBlocks}${categories}</svg>${more}`;
   // SVG focus delegation differs subtly across browsers. Bind directly as
   // well so keyboard focus always traces the same connected flow as hover.
   el.querySelectorAll('[data-cashflow-node]').forEach((node) => {
