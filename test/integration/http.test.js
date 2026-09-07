@@ -107,6 +107,11 @@ integrationTest('serves a complete public demo without a session', async () => {
   assert.ok(response.body.retirement.projectedAtRetirement > 0);
   assert.equal(response.body.dashboard.debtPayoff.strategy, 'avalanche');
   assert.equal(response.body.dashboard.debtPayoff.priority.name, 'Chase Sapphire Preferred');
+  const holdingHistory = await request(app).get('/api/demo-investments/history?ticker=VTI');
+  assert.equal(holdingHistory.status, 200);
+  assert.equal(holdingHistory.body.state, 'ready');
+  assert.ok(holdingHistory.body.history.length > 100);
+  assert.ok(holdingHistory.body.market.length > 100);
 });
 
 integrationTest('falls back safely for unsupported public-demo timeframes', async () => {

@@ -237,6 +237,70 @@ export function reconstructInvestmentHistory(store, endDate = new Date().toISOSt
   return snapshots;
 }
 
+// A detail chart is intentionally more conservative than a ticker chart. It
+// reconstructs the person's currently reported quantity from available trades
+// and historical prices, but never labels a missing trade record as a gain.
+export function investmentDetailHistory(store, { accountId = null, ticker = null, years = 1 } = {}) {
+  const visibleAccounts = new Set(store.accounts.filter((account) => !account.hidden && account.type === 'investment').map((account) => account.plaid_account_id));
+  const normalizedTicker = String(ticker || '').trim().toUpperCase();
+  const positions = (store.positions || []).filter((position) => {
+    if (!visibleAccounts.has(position.account_id) || position.hidden) return false;
+    if (accountId) return position.account_id === accountId;
+    return normalizedTicker && String(position.ticker || '').trim().toUpperCase() === normalizedTicker;
+  });
+  if (!positions.length) return { state: 'unavailable', reason: 'This holding is not available from your latest connection.', history: [], market: [] };
+  const resolvedTickers = [...new Set(positions.map((position) => String(position.ticker || '').trim().toUpperCase()).filter(Boolean))];
+  const value = positions.reduce((sum, position) => sum + Math.abs(Number(position.value || 0)), 0);
+  const completeCostBasis = positions.every((position) => position.cost_basis != null);
+  const costBasis = completeCostBasis ? positions.reduce((sum, position) => sum + Number(position.cost_basis || 0), 0) : null;
+  const label = accountId
+    ? (store.accounts.find((account) => account.plaid_account_id === accountId)?.nickname || store.accounts.find((account) => account.plaid_account_id === accountId)?.name || 'Investment account')
+    : (positions[0].name || normalizedTicker);
+  if (!resolvedTickers.length || positions.some((position) => !Number.isFinite(Number(position.quantity)))) {
+    return { state: 'unavailable', label, ticker: normalizedTicker || null, value, costBasis, gain: costBasis == null ? null : value - costBasis, reason: 'Your institution did not provide enough position detail to build a trustworthy history.', history: [], market: [] };
+  }
+  const end = new Date();
+  const start = new Date(end);
+  start.setFullYear(start.getFullYear() - Math.max(1, Math.min(2, Number(years) || 1)));
+  const endDate = end.toISOString().slice(0, 10);
+  const dates = [];
+  for (const date = new Date(`${start.toISOString().slice(0, 10)}T12:00:00`); date <= new Date(`${endDate}T12:00:00`); date.setDate(date.getDate() + 1)) dates.push(new Date(date).toISOString().slice(0, 10));
+  const relevantIds = new Set(positions.map((position) => position.security_id).filter(Boolean));
+  const transactions = (store.investment_transactions || []).filter((transaction) => transaction.date <= endDate && (relevantIds.has(transaction.security_id) || (!accountId && normalizedTicker && String(transaction.ticker || '').toUpperCase() === normalizedTicker)));
+  const history = [];
+  for (const date of dates) {
+    let total = 0;
+    let complete = true;
+    for (const position of positions) {
+      const tickerForPosition = String(position.ticker || '').toUpperCase();
+      const quantity = Number(position.quantity || 0) - transactions.filter((transaction) => (transaction.security_id && transaction.security_id === position.security_id) || (!transaction.security_id && String(transaction.ticker || '').toUpperCase() === tickerForPosition)).filter((transaction) => transaction.date > date).reduce((sum, transaction) => sum + Number(transaction.quantity || 0), 0);
+      if (!quantity) continue;
+      const price = position.type === 'cash' ? 1 : nearestPrice(store.market_prices?.[tickerForPosition], date);
+      if (!Number.isFinite(price)) { complete = false; break; }
+      total += quantity * price;
+    }
+    if (complete && Number.isFinite(total) && total >= 0) history.push({ date, value: Math.round(total * 100) / 100 });
+  }
+  // Market comparison is meaningful only for a single identifiable security.
+  const market = resolvedTickers.length === 1
+    ? Object.entries(store.market_prices?.[resolvedTickers[0]] || {}).filter(([date]) => date >= dates[0] && date <= endDate).map(([date, price]) => ({ date, value: Number(price) })).filter((entry) => Number.isFinite(entry.value))
+    : [];
+  const state = history.length > 1 ? 'ready' : 'unavailable';
+  return {
+    state,
+    label,
+    ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null,
+    value,
+    costBasis,
+    gain: costBasis == null ? null : value - costBasis,
+    gainPct: costBasis ? (value - costBasis) / costBasis : null,
+    history,
+    market,
+    reason: state === 'ready' ? null : 'A personal history will appear after we have enough position and price history.',
+    detail: history.length ? 'Your position is reconstructed from reported shares, available trades, and historical prices.' : null
+  };
+}
+
 function normalizedAccountText(value) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
@@ -902,6 +966,7 @@ export function seedDemo(store) {
     if (store.accounts.length && store.accounts.every((account) => account.demo)) {
       refreshDemoAccountLabels(store);
       addDemoHistory(store);
+      ensureDemoMarketHistory(store);
     }
     return store;
   }
@@ -935,6 +1000,7 @@ export function seedDemo(store) {
     ['demo-401k', 'FXAIX', 'Fidelity 500 Index Fund', 'mutual fund', 183, 191, 34953],
     ['demo-401k', 'FSPSX', 'Fidelity International Index Fund', 'mutual fund', 123, 72, 8856]
   ].map(([account_id, ticker, name, type, quantity, price, value]) => ({ id: `demo-position-${ticker}-${account_id}`, item_id: 'demo-fidelity', account_id, ticker, name, type, quantity, price, value, cost_basis: Math.round(value * .9), demo: true }));
+  ensureDemoMarketHistory(store);
   store.investment_snapshots = Array.from({ length: 84 }, (_, index) => { const date = new Date(now.getFullYear(), now.getMonth() - (83 - index), 1); return { date: date.toISOString().slice(0, 10), value: Math.round(21000 + index * 760 + Math.sin(index * .7) * 1800), source: 'verified' }; });
   const rows = [
     ['payroll-1', 'Payroll', -3100, d(1), 'income'],
@@ -980,6 +1046,31 @@ export function seedDemo(store) {
   });
   addDemoHistory(store);
   return store;
+}
+
+function ensureDemoMarketHistory(store) {
+  store.market_prices ||= {};
+  const today = new Date();
+  const byTicker = new Map();
+  for (const position of store.positions || []) {
+    if (!position.ticker || position.type === 'cash') continue;
+    byTicker.set(position.ticker, Number(position.price || (Number(position.value || 0) / Math.max(1, Number(position.quantity || 1)))));
+  }
+  for (const [ticker, currentPrice] of byTicker) {
+    if (Object.keys(store.market_prices[ticker] || {}).length >= 300) continue;
+    const prices = store.market_prices[ticker] ||= {};
+    const phase = [...ticker].reduce((sum, character) => sum + character.charCodeAt(0), 0) / 13;
+    for (let day = 365; day >= 0; day -= 1) {
+      const date = new Date(today);
+      date.setDate(today.getDate() - day);
+      const progress = (365 - day) / 365;
+      // Demonstration-only market history: varied but restrained, so the
+      // public preview teaches the chart interaction without implying a real
+      // past return for a visitor.
+      const multiplier = 0.88 + progress * 0.12 + Math.sin(progress * 17 + phase) * 0.018 + Math.sin(progress * 43 + phase) * 0.008;
+      prices[date.toISOString().slice(0, 10)] = Math.round(currentPrice * multiplier * 100) / 100;
+    }
+  }
 }
 
 function addDemoHistory(store) {

@@ -197,6 +197,17 @@
       <div class="dialog-actions"><button type="button" class="secondary" id="manualHoldingCancel">Cancel</button><button class="primary" id="manualHoldingSave" type="submit">Add holding</button></div>
     </form>
   </dialog>
+
+  <dialog class="holding-history-dialog" id="holdingHistoryDialog" aria-labelledby="holdingHistoryTitle">
+    <div class="holding-history-shell">
+      <header class="holding-history-head"><div><span class="card-label" id="holdingHistoryEyebrow">Holding</span><h2 id="holdingHistoryTitle">Investment detail</h2><p id="holdingHistorySubtitle">Loading your history…</p></div><button class="dialog-close" id="holdingHistoryClose" type="button" aria-label="Close investment detail">×</button></header>
+      <div class="holding-history-metrics" id="holdingHistoryMetrics"></div>
+      <div class="holding-history-tabs" id="holdingHistoryTabs" role="tablist" aria-label="History view"></div>
+      <p class="holding-history-note" id="holdingHistoryNote"></p>
+      <div class="holding-history-chart" id="holdingHistoryChart" aria-label="Scrubbable investment history"></div>
+      <div class="holding-history-where" id="holdingHistoryWhere"></div>
+    </div>
+  </dialog>
   <dialog class="nickname-dialog" id="manualAccountDialog" aria-labelledby="manualAccountDialogTitle"><form id="manualAccountForm"><button type="button" class="dialog-close" id="manualAccountClose" aria-label="Close">×</button><div class="card-label">MANUAL NET WORTH ITEM</div><h2 id="manualAccountDialogTitle">Add an asset or debt</h2><p>Use this for things your institution cannot connect, like a home, vehicle, private investment, or personal loan.</p><label>What is it?<input id="manualAccountName" name="name" maxlength="60" required placeholder="e.g. Home value" /></label><label>Type<select id="manualAccountKind" name="kind"><option value="asset">Asset</option><option value="liability">Debt</option></select></label><label>Category<input id="manualAccountSubtype" name="subtype" maxlength="60" placeholder="e.g. Property" /></label><label>Current value<input id="manualAccountValue" name="value" type="number" min="0" step="0.01" inputmode="decimal" required /></label><div class="dialog-actions"><button type="button" class="secondary" id="manualAccountDelete">Delete</button><button class="primary" id="manualAccountSave" type="submit">Save item</button></div></form></dialog>
   <dialog class="nickname-dialog" id="goalDialog" aria-labelledby="goalDialogTitle"><form id="goalForm"><button type="button" class="dialog-close" id="goalClose" aria-label="Close">×</button><div class="card-label">YOUR FOCUS</div><h2 id="goalDialogTitle">Add a goal</h2><p>Clarity updates progress from your connected balances automatically.</p><label>Name<input id="goalName" name="name" maxlength="60" required placeholder="e.g. Emergency fund" /></label><label>Track<select id="goalSource" name="source"><option value="cash">Cash & savings</option><option value="investments">Investments</option><option value="net_worth">Net worth</option><option value="debt">Debt payoff</option></select></label><label>Target<input id="goalTarget" name="target" type="number" min="1" step="1" inputmode="decimal" required /></label><div class="dialog-actions"><button type="button" class="secondary" id="goalCancel">Cancel</button><button class="primary" type="submit">Add goal</button></div></form></dialog>
   <dialog class="retirement-info-dialog" id="retirementInfoDialog" aria-labelledby="retirementInfoTitle">

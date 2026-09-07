@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentLinkBalances, monthlyReview, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
+import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentDetailHistory, investmentLinkBalances, monthlyReview, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
 import { normalizeCandles } from '../src/lib/market-data.js';
 import { filterSnapshots, scrubIndex } from '../public/chart-utils.js';
 
@@ -234,6 +234,23 @@ test('investment summary separates portfolio total, allocation, and positions', 
   assert.equal(result.positions[0].gain_pct, 700 / 6300);
   assert.deepEqual(result.allocation.map((row) => [row.name, row.value]), [['Equities', 7000], ['Cash', 2500], ['Cash & unclassified', 500]]);
   assert.deepEqual(result.unclassifiedAccounts, [{ account_id: 'plaid-ira', name: 'Roth IRA', institution_name: 'Fidelity', balance: 10000, holdings_value: 9500, difference: 500 }]);
+});
+
+test('holding detail history keeps a person’s reconstructed position separate from market price', () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const prior = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const store = {
+    accounts: [{ plaid_account_id: 'brokerage', type: 'investment', name: 'Brokerage', hidden: false }],
+    positions: [{ account_id: 'brokerage', security_id: 'vti', ticker: 'VTI', name: 'Vanguard Total Stock Market ETF', type: 'etf', quantity: 10, value: 1100, cost_basis: 900 }],
+    investment_transactions: [],
+    market_prices: { VTI: { [prior]: 100, [today]: 110 } }
+  };
+  const result = investmentDetailHistory(store, { ticker: 'VTI', years: 1 });
+  assert.equal(result.state, 'ready');
+  assert.equal(result.value, 1100);
+  assert.equal(result.gain, 200);
+  assert.deepEqual(result.market.slice(-2), [{ date: prior, value: 100 }, { date: today, value: 110 }]);
+  assert.deepEqual(result.history.slice(-2), [{ date: prior, value: 1000 }, { date: today, value: 1100 }]);
 });
 
 test('manual holdings fill only an institution-reported position gap', () => {

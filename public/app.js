@@ -21,6 +21,8 @@ const state = {
   investmentRange: '1y',
   investmentFilter: 'all',
   investmentSort: 'value',
+  holdingHistory: null,
+  holdingHistoryMode: 'position',
   expandedAccountGroups: new Set(),
   holdingsExpanded: false,
   demoGoal: null,
@@ -851,6 +853,88 @@ function aggregateHoldings(positions) {
   });
 }
 
+function historyForRange(history) {
+  if (!history?.length || state.investmentRange === 'all') return history || [];
+  return filterSnapshots(history, state.investmentRange, new Date(`${history.at(-1).date}T12:00:00`));
+}
+
+function renderHoldingHistoryChart(history, kind) {
+  const el = $('#holdingHistoryChart');
+  if (!history?.length || el.clientWidth < 80) {
+    el.innerHTML = '<div class="holding-history-empty"><b>History is still building</b><span>We will show this once we have enough verified position and price data.</span></div>';
+    return;
+  }
+  const pointsData = historyForRange(history);
+  const width = Math.max(1, Math.round(el.clientWidth));
+  const height = Math.max(1, Math.round(el.clientHeight));
+  const plot = { left: 12, right: 12, top: 12, bottom: height - 28 };
+  const values = pointsData.map((entry) => Number(entry.value || 0));
+  let min = Math.min(...values); let max = Math.max(...values);
+  const spread = max - min || Math.max(Math.abs(max) * .08, 1);
+  min -= spread * .12; max += spread * .12;
+  const points = values.map((value, index) => [plot.left + index / Math.max(pointsData.length - 1, 1) * (width - plot.left - plot.right), plot.bottom - (value - min) / (max - min) * (plot.bottom - plot.top)]);
+  const line = points.map(([x, y], index) => `${index ? 'L' : 'M'} ${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
+  const area = `${line} L ${points.at(-1)[0]} ${plot.bottom} L ${points[0][0]} ${plot.bottom} Z`;
+  const label = (entry) => new Date(`${entry.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+  const endpoints = [0, pointsData.length - 1];
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${kind === 'market' ? 'Market price' : 'Your position value'} history"><defs><linearGradient id="holdingHistoryFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".18"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs><path d="${area}" fill="url(#holdingHistoryFade)"/><path class="holding-history-line" pathLength="1" d="${line}" fill="none" stroke="#287143" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><line class="holding-scrub-line" x1="0" y1="${plot.top}" x2="0" y2="${plot.bottom}"/><circle class="holding-scrub-dot" cx="0" cy="0" r="4"/></svg><span class="holding-history-axis start">${label(pointsData[endpoints[0]])}</span><span class="holding-history-axis end">${label(pointsData[endpoints[1]])}</span><div class="chart-tooltip hidden"></div>`;
+  if (pointsData.length < 2) return;
+  const svg = el.querySelector('svg'); const tooltip = el.querySelector('.chart-tooltip'); const scrubLine = el.querySelector('.holding-scrub-line'); const scrubDot = el.querySelector('.holding-scrub-dot');
+  const showPoint = (event) => {
+    const rect = el.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, event.clientX - rect.left)) / rect.width * width;
+    const index = points.reduce((nearest, point, candidate) => Math.abs(point[0] - x) < Math.abs(points[nearest][0] - x) ? candidate : nearest, 0);
+    const [pointX, pointY] = points[index];
+    scrubLine.setAttribute('x1', pointX); scrubLine.setAttribute('x2', pointX); scrubDot.setAttribute('cx', pointX); scrubDot.setAttribute('cy', pointY);
+    scrubLine.classList.add('visible'); scrubDot.classList.add('visible'); tooltip.classList.remove('hidden');
+    tooltip.style.left = `${Math.max(18, Math.min(rect.width - 18, pointX / width * rect.width))}px`;
+    tooltip.textContent = `${kind === 'market' ? fmt.format(Number(pointsData[index].value)) : fmt.format(Number(pointsData[index].value))} · ${new Date(`${pointsData[index].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  };
+  let active = false;
+  svg.addEventListener('pointerdown', (event) => { active = true; svg.setPointerCapture?.(event.pointerId); showPoint(event); });
+  svg.addEventListener('pointermove', (event) => { if (active || event.pointerType === 'mouse') showPoint(event); });
+  svg.addEventListener('pointerup', () => { active = false; });
+  svg.addEventListener('pointerleave', () => { if (!active) { scrubLine.classList.remove('visible'); scrubDot.classList.remove('visible'); tooltip.classList.add('hidden'); } });
+}
+
+function renderHoldingHistoryDetail() {
+  const data = state.holdingHistory;
+  if (!data) return;
+  const isMarket = state.holdingHistoryMode === 'market';
+  const history = isMarket ? data.market : data.history;
+  $('#holdingHistoryEyebrow').textContent = isMarket ? 'Market price' : 'Your position';
+  $('#holdingHistoryTitle').textContent = data.ticker || data.label || 'Investment detail';
+  $('#holdingHistorySubtitle').textContent = data.ticker && data.label !== data.ticker ? data.label : (isMarket ? 'Price history for this security' : 'Your value over time');
+  const gain = data.gain;
+  $('#holdingHistoryMetrics').innerHTML = `<div><span>Current value</span><strong>${fmt.format(Number(data.value || 0))}</strong></div>${data.costBasis != null ? `<div><span>Market gain</span><strong class="${gain >= 0 ? 'positive' : 'negative'}">${gain >= 0 ? '+' : '−'}${fmt.format(Math.abs(gain || 0))}</strong><small>vs. reported cost basis</small></div>` : '<div><span>Cost basis</span><strong>Unavailable</strong><small>Your institution has not shared it</small></div>'}`;
+  const hasMarket = (data.market || []).length > 1;
+  $('#holdingHistoryTabs').innerHTML = `<button type="button" class="${!isMarket ? 'active' : ''}" data-holding-history-mode="position" role="tab" aria-selected="${!isMarket}">Your position</button>${hasMarket ? `<button type="button" class="${isMarket ? 'active' : ''}" data-holding-history-mode="market" role="tab" aria-selected="${isMarket}">Market price</button>` : ''}`;
+  $('#holdingHistoryNote').textContent = isMarket ? 'Market price does not include your purchases, sales, or contributions.' : (data.detail || data.reason || 'Your position history is unavailable.');
+  // A dialog has no stable width until the browser has painted it. Defer chart
+  // measurement one frame so mobile and desktop both receive a real canvas.
+  requestAnimationFrame(() => renderHoldingHistoryChart(history, isMarket ? 'market' : 'position'));
+  const positions = (state.investments?.positions || []).filter((position) => data.accountId ? position.account_id === data.accountId : data.ticker && String(position.ticker || '').toUpperCase() === data.ticker);
+  const accounts = new Map((state.investments?.accounts || []).map((account) => [account.account_id, account]));
+  $('#holdingHistoryWhere').innerHTML = positions.length ? `<span>Where it’s held</span>${positions.map((position) => `<div><b>${escapeHtml(accounts.get(position.account_id)?.name || 'Investment account')}</b><small>${escapeHtml(assetClassLabel(position.type, position.asset_class_override))}</small><strong>${fmt.format(Number(position.value || 0))}</strong></div>`).join('')}` : '';
+}
+
+async function openHoldingHistory({ ticker = '', accountId = '' } = {}) {
+  const dialog = $('#holdingHistoryDialog');
+  state.holdingHistory = { label: 'Investment detail', ticker, value: 0, history: [], market: [], reason: 'Loading your history…' };
+  state.holdingHistoryMode = 'position';
+  if (!dialog.open) dialog.showModal();
+  renderHoldingHistoryDetail();
+  try {
+    const base = state.demoPreview || state.dashboard?.demoMode ? '/api/demo-investments/history' : '/api/investments/history';
+    const query = accountId ? `account_id=${encodeURIComponent(accountId)}` : `ticker=${encodeURIComponent(ticker)}`;
+    state.holdingHistory = { ...(await api(`${base}?${query}`)), accountId: accountId || null };
+    renderHoldingHistoryDetail();
+  } catch (error) {
+    state.holdingHistory = { label: 'Investment detail', ticker, value: 0, history: [], market: [], reason: error.message || 'We could not load this history right now.' };
+    renderHoldingHistoryDetail();
+  }
+}
+
 function renderInvestments(data) {
   if (!data) return;
   const accounts = data.accounts || [];
@@ -887,7 +971,7 @@ function renderInvestments(data) {
     $('#investmentAllocationInsight').textContent = 'Allocation appears when your institution provides holdings.';
     $('#investmentAllocation').innerHTML = '<p class="spending-empty">Allocation appears when your institution provides holdings.</p>';
   }
-  $('#investmentAccounts').innerHTML = accounts.length ? accounts.map((account) => `<div class="investment-account-row"><div><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || '')} · Current value</span></div><b>${fmt.format(account.value)}</b></div>`).join('') : '<p class="spending-empty">No investment accounts connected.</p>';
+  $('#investmentAccounts').innerHTML = accounts.length ? accounts.map((account) => `<button type="button" class="investment-account-row" data-investment-account-history="${escapeHtml(account.account_id)}" aria-label="View ${escapeHtml(account.name)} performance history"><div><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || '')} · View history</span></div><b>${fmt.format(account.value)}</b><i aria-hidden="true">›</i></button>`).join('') : '<p class="spending-empty">No investment accounts connected.</p>';
   const names = new Map(accounts.map((account) => [account.account_id, account.name]));
   const isUnclassified = state.investmentFilter === 'Cash & unclassified';
   const unclassifiedAccounts = data.unclassifiedAccounts || [];
@@ -913,15 +997,9 @@ function renderInvestments(data) {
   $('#investmentPositions').innerHTML = data.positionsAvailable ? visiblePositions.map((position) => {
     const gain = position.gain_pct;
     const performance = gain == null ? 'Performance unavailable' : `${gain >= 0 ? '+' : '−'}${Math.abs(gain * 100).toFixed(1)}%`;
-    const canEdit = !state.demoPreview && !state.dashboard?.demoMode;
     const share = data.total ? Math.max(0, Number(position.value || 0) / Number(data.total) * 100) : 0;
-    const accountBreakdown = position.positions.map((part) => {
-      const categoryControl = canEdit ? `<select data-position-class="${escapeHtml(part.id)}" aria-label="Asset class for ${escapeHtml(part.name)} in ${escapeHtml(names.get(part.account_id) || 'investment account')}"><option value="" ${part.asset_class_override ? '' : 'selected'}>Automatic · ${escapeHtml(assetClassLabel(part.type))}</option>${['Equities', 'Funds', 'Fixed income', 'Cash', 'Crypto', 'Other'].map((option) => `<option value="${option}" ${part.asset_class_override === option ? 'selected' : ''}>${option}</option>`).join('')}</select>` : '';
-      const manualControl = canEdit && part.manual ? `<div class="manual-holding-controls"><select data-manual-holding-class="${escapeHtml(part.id)}" aria-label="Asset class for manually added ${escapeHtml(part.name)}">${['Equities', 'Funds', 'Fixed income', 'Cash', 'Crypto', 'Other'].map((option) => `<option value="${option}" ${part.asset_class_override === option ? 'selected' : ''}>${option}</option>`).join('')}</select><button type="button" class="manual-holding-remove" data-remove-manual-holding="${escapeHtml(part.id)}">Remove</button></div>` : categoryControl;
-      return `<div class="holding-account"><div><span>${escapeHtml(names.get(part.account_id) || 'Investment account')}</span><small>${part.manual ? 'Manual · ' : ''}${escapeHtml(assetClassLabel(part.type, part.asset_class_override))}</small></div><b>${fmt.format(part.value)}</b>${manualControl}</div>`;
-    }).join('');
     const location = position.positions.length === 1 ? 'Held in 1 account' : `Held in ${position.positions.length} accounts`;
-    return `<details class="holding-row"><summary aria-label="${escapeHtml(position.name)}, ${fmt.format(position.value)}"><div class="position-symbol">${escapeHtml(position.ticker || '•')}</div><div class="holding-copy"><strong class="holding-ticker">${escapeHtml(position.ticker || 'Holding')}</strong><div class="holding-weight"><i><b style="width:${Math.min(100, share).toFixed(1)}%"></b></i><span>${Math.round(share)}%</span></div></div><div class="position-value"><b>${fmt.format(position.value)}</b><small class="${gain == null ? '' : gain >= 0 ? 'positive' : 'negative'}">${performance}</small></div></summary><div class="holding-detail"><strong>${escapeHtml(position.name)}</strong><span>${escapeHtml(position.classification)} · ${location}</span><div class="holding-account-list">${accountBreakdown}</div></div></details>`;
+    return `<button type="button" class="holding-row" data-holding-history="${escapeHtml(position.ticker || '')}" aria-label="View ${escapeHtml(position.name)} history"><div class="position-symbol">${escapeHtml(position.ticker || '•')}</div><div class="holding-copy"><strong class="holding-ticker">${escapeHtml(position.ticker || 'Holding')}</strong><span>${escapeHtml(position.name)} · ${location}</span><div class="holding-weight"><i><b style="width:${Math.min(100, share).toFixed(1)}%"></b></i><span>${Math.round(share)}% of portfolio</span></div></div><div class="position-value"><b>${fmt.format(position.value)}</b><small class="${gain == null ? '' : gain >= 0 ? 'positive' : 'negative'}">${performance}</small></div><i class="holding-chevron" aria-hidden="true">›</i></button>`;
   }).join('') : '<p class="positions-empty">Position details aren’t available from this connection yet. Your investment account balances still count toward your portfolio and net worth.</p>';
   const more = $('#investmentHoldingsMore');
   more.classList.toggle('hidden', positions.length <= 3);
@@ -1624,6 +1702,10 @@ $('#investmentHoldingsMore').addEventListener('click', () => {
   state.holdingsExpanded = !state.holdingsExpanded;
   renderInvestments(state.investments);
 });
+$('#investmentAccounts').addEventListener('click', (event) => {
+  const account = event.target.closest('[data-investment-account-history]');
+  if (account) openHoldingHistory({ accountId: account.dataset.investmentAccountHistory });
+});
 $('#investmentPositions').addEventListener('change', async (event) => {
   const select = event.target.closest('[data-position-class]');
   const manualSelect = event.target.closest('[data-manual-holding-class]');
@@ -1655,6 +1737,11 @@ $('#investmentPositions').addEventListener('click', async (event) => {
     $('#manualHoldingTicker').focus();
     return;
   }
+  const holding = event.target.closest('[data-holding-history]');
+  if (holding) {
+    openHoldingHistory({ ticker: holding.dataset.holdingHistory });
+    return;
+  }
   const remove = event.target.closest('[data-remove-manual-holding]');
   if (!remove) return;
   if (!window.confirm('Remove this manual holding? Your institution data will stay unchanged.')) return;
@@ -1665,6 +1752,13 @@ $('#investmentPositions').addEventListener('click', async (event) => {
     showNotice('Manual holding removed.', 'success');
   } catch (error) { showNotice(error.message); remove.disabled = false; }
 });
+$('#holdingHistoryTabs').addEventListener('click', (event) => {
+  const tab = event.target.closest('[data-holding-history-mode]');
+  if (!tab) return;
+  state.holdingHistoryMode = tab.dataset.holdingHistoryMode;
+  renderHoldingHistoryDetail();
+});
+$('#holdingHistoryClose').addEventListener('click', () => $('#holdingHistoryDialog').close());
 $('#manualHoldingForm').addEventListener('submit', async (event) => {
   event.preventDefault();
   const dialog = $('#manualHoldingDialog');

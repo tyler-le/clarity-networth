@@ -16,6 +16,9 @@ async function openDemo(page) {
   // only the public configuration response so this test exercises the
   // production access-code gate without contacting Google.
   await page.route('**/api/auth/config', (route) => route.fulfill({ json: { configured: true, googleClientId: 'test-client-id.apps.googleusercontent.com' } }));
+  // The demo journey never authenticates. Stub the optional Google script so
+  // an unrelated third-party network delay cannot hold the document load open.
+  await page.route('https://accounts.google.com/gsi/client', (route) => route.fulfill({ contentType: 'application/javascript', body: 'window.google={accounts:{id:{initialize(){},renderButton(){}}}};' }));
   await page.goto('/');
   await expect(page.getByRole('heading', { name: /see your money/i })).toBeVisible();
   await expect(page.locator('#inviteCode')).toBeVisible();
@@ -325,6 +328,24 @@ test('holding details preserve account context without crowding the overview', a
   await expect(holding).toHaveAttribute('open', '');
   await expect(holding.locator('.holding-account-list')).toBeVisible();
   await expect(holding.locator('.holding-account').first()).toBeVisible();
+});
+
+test('holding and account drill-ins prioritize a person’s position before market price', async ({ page }) => {
+  await openDemo(page);
+  await goToView(page, 'investments');
+  await page.locator('[data-holding-history]').first().click();
+  const dialog = page.locator('#holdingHistoryDialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('tab', { name: 'Your position' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#holdingHistoryChart svg')).toBeVisible();
+  await expect(page.locator('#holdingHistoryNote')).toContainText(/reported shares|history/i);
+  await dialog.getByRole('tab', { name: 'Market price' }).click();
+  await expect(dialog.getByRole('tab', { name: 'Market price' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#holdingHistoryNote')).toContainText('does not include your purchases');
+  await page.locator('#holdingHistoryClose').click();
+  await page.locator('[data-investment-account-history]').first().click();
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('tab', { name: 'Your position' })).toBeVisible();
 });
 
 test('portfolio history can be scrubbed just like net worth', async ({ page }) => {

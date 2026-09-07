@@ -7,7 +7,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './lib/store.js';
 import { consumeRateLimit, databaseEnabled, databaseHealthy, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, recordDependencyEvent, recordLaunchEvent, writeDatabaseStore } from './lib/database.js';
-import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentLinkBalances, investmentSummary, monthlyReview, reconstructInvestmentHistory, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './lib/finance.js';
+import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentSummary, monthlyReview, reconstructInvestmentHistory, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './lib/finance.js';
 import { loadHistoricalPrices } from './lib/market-data.js';
 import { plaidConfigured, plaidPost } from './lib/plaid.js';
 
@@ -805,7 +805,7 @@ app.get('/api/demo-preview', demoLimiter, (req, res) => {
 });
 
 app.use('/api', (req, res, next) => {
-  if (req.path.startsWith('/auth/') || req.path === '/health' || req.path === '/plaid/webhook') return next();
+  if (req.path.startsWith('/auth/') || req.path === '/health' || req.path === '/plaid/webhook' || req.path === '/demo-investments/history') return next();
   const user = verifySession(req);
   if (!user) return res.status(401).json({ error: 'Sign in required.' });
   if (!securityReady()) return res.status(503).json({ error: 'The service is not securely configured.' });
@@ -882,6 +882,21 @@ app.get('/api/spending', async (req, res) => {
 
 app.get('/api/investments', async (req, res) => {
   res.json(investmentSummary(activeStore(await loadStore(req.user))));
+});
+
+app.get('/api/investments/history', async (req, res) => {
+  const accountId = String(req.query.account_id || '').trim().slice(0, 180);
+  const ticker = String(req.query.ticker || '').trim().toUpperCase().slice(0, 24);
+  if (!accountId && !ticker) return res.status(400).json({ error: 'Choose an investment account or holding.' });
+  const store = activeStore(await loadStore(req.user));
+  res.json(investmentDetailHistory(store, { accountId: accountId || null, ticker: ticker || null, years: 1 }));
+});
+
+app.get('/api/demo-investments/history', demoLimiter, (req, res) => {
+  const accountId = String(req.query.account_id || '').trim().slice(0, 180);
+  const ticker = String(req.query.ticker || '').trim().toUpperCase().slice(0, 24);
+  if (!accountId && !ticker) return res.status(400).json({ error: 'Choose an investment account or holding.' });
+  res.json(investmentDetailHistory(demoPreviewStore(), { accountId: accountId || null, ticker: ticker || null, years: 1 }));
 });
 
 app.get('/api/retirement', async (req, res) => {
