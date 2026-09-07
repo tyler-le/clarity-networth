@@ -927,20 +927,20 @@ function addDemoHistory(store) {
     const month = date.toISOString().slice(0, 7);
     const variation = Math.round(Math.sin(monthsAgo * 1.7) * 110);
     const rows = [
-      ['payroll', 'Payroll', -6200, 'income', 'demo-checking'],
-      ['rent', 'Rent', 1650, 'fixed', 'demo-credit'],
-      ['essentials', 'Groceries & utilities', 690 + variation, 'fixed', 'demo-credit'],
-      ['saving', 'Ally Savings', 250, 'savings', 'demo-credit'],
-      ['investing', 'Fidelity Brokerage', 350, 'investments', 'demo-credit'],
-      ['flex', 'Dining & leisure', 520 - variation, 'guilt_free', 'demo-credit']
+      ['payroll', 'Payroll', -6200, 'income', 'demo-checking', 'INCOME'],
+      ['rent', 'Rent', 1650, 'fixed', 'demo-credit', 'RENT_AND_UTILITIES'],
+      ['essentials', 'Groceries & utilities', 690 + variation, 'fixed', 'demo-credit', 'FOOD_AND_DRINK'],
+      ['saving', 'Ally Savings', 250, 'savings', 'demo-credit', 'TRANSFER_IN'],
+      ['investing', 'Fidelity Brokerage', 350, 'investments', 'demo-credit', 'INVESTMENT'],
+      ['flex', 'Dining & leisure', 520 - variation, 'guilt_free', 'demo-credit', 'ENTERTAINMENT']
     ];
-    for (const [kind, merchant, amount, bucket, accountId] of rows) {
+    for (const [kind, merchant, amount, bucket, accountId, pfcPrimary] of rows) {
       const id = `demo-history-${month}-${kind}`;
       if (existingTransactionIds.has(id)) continue;
       store.transactions.push({
         id, plaid_transaction_id: id, account_id: accountId, merchant_name: merchant, name: merchant,
         amount, date: `${month}-15`, bucket, excluded: false, pending: false,
-        pfc_primary: '', pfc_detailed: '', demo: true
+        pfc_primary: pfcPrimary, pfc_detailed: '', demo: true
       });
     }
     const contributionId = `demo-history-${month}-401k`;

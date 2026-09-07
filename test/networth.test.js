@@ -265,6 +265,15 @@ test('demo mode provides seven years of usable account and spending history', ()
   assert.ok(portfolioChange - contributions > 0, 'demo all-time investment growth should be positive');
 });
 
+test('demo spending remains categorized across its historical ranges', () => {
+  const store = { accounts: [], transactions: [], snapshots: [], items: [], positions: [], investment_snapshots: [] };
+  seedDemo(store);
+  const summary = spendingSummary(store, '1y');
+  assert.ok(summary.actualSpendCategories.length >= 3);
+  assert.equal(summary.actualSpendCategories.some((category) => category.key === 'uncategorized'), false);
+  assert.equal(summary.transactions.some((transaction) => transaction.flowKey === 'uncategorized'), false);
+});
+
 test('pre-tax retirement contributions remain visible without distorting take-home cash flow', () => {
   const store = { transactions: [
     { id: 'bank', date: '2026-09-01', amount: 7000, bucket: 'investments', name: 'Fidelity transfer' },
