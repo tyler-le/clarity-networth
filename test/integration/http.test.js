@@ -111,7 +111,7 @@ integrationTest('serves a complete public demo without a session', async () => {
   assert.equal(holdingHistory.status, 200);
   assert.equal(holdingHistory.body.state, 'ready');
   assert.ok(holdingHistory.body.history.length > 100);
-  assert.ok(holdingHistory.body.market.length > 100);
+  assert.deepEqual(holdingHistory.body.market, []);
 });
 
 integrationTest('falls back safely for unsupported public-demo timeframes', async () => {
