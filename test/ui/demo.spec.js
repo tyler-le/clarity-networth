@@ -74,7 +74,7 @@ test('a new visitor can explore the complete demo without signing in', async ({ 
   await expect(page.locator('.holding-row')).toHaveCount(3);
   await goToView(page, 'retirement');
   await expect(page.getByRole('heading', { name: 'Retirement' })).toBeVisible();
-  await expect(page.locator('.retirement-timeline-row')).toHaveCount(4);
+  await expect(page.locator('.retirement-milestone')).toHaveCount(4);
   expect(pageErrors).toEqual([]);
 });
 
@@ -260,8 +260,7 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await goToView(page, 'retirement');
   await expect(page.locator('#retirementPath')).toContainText('Emergency fund');
   await expect(page.locator('#retirementPath')).toContainText('Work-break runway');
-  await expect(page.locator('#retirementPath')).toContainText('Today');
-  await expect(page.locator('#retirementPath .retirement-timeline-track')).toHaveCount(4);
+  await expect(page.locator('#retirementPath .retirement-milestone')).toHaveCount(4);
   await expect(page.getByText('Retirement spending targets')).toBeVisible();
   await expect(page.locator('#retirementSpendContext')).toContainText('At retirement, in today’s dollars');
   await page.locator('#retirementAdjust summary').click();
@@ -282,6 +281,26 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await expect(page.locator('#retirementInfoDialog')).toHaveAttribute('open', '');
   await expect(page.locator('#retirementInfoTitle')).toHaveText('What is Coast FIRE?');
   await expect(page.locator('#retirementInfoDescription')).toContainText('without more retirement contributions');
+});
+
+test('the retirement ladder remains legible and usable on a phone', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'phone', 'Phone-specific layout regression');
+  await openDemo(page);
+  await goToView(page, 'retirement');
+  const layout = await page.locator('#retirementPath').evaluate((path) => {
+    const cards = [...path.querySelectorAll('.retirement-milestone')];
+    const pathRect = path.getBoundingClientRect();
+    return {
+      overflows: path.scrollWidth > path.clientWidth + 1,
+      cardCount: cards.length,
+      usableCardWidth: cards.every((card) => card.getBoundingClientRect().width >= pathRect.width * .42)
+    };
+  });
+  expect(layout.overflows).toBe(false);
+  expect(layout.cardCount).toBe(4);
+  expect(layout.usableCardWidth).toBe(true);
+  await page.locator('[data-retirement-milestone="coast"]').click();
+  await expect(page.locator('#retirementInfoDialog')).toHaveAttribute('open', '');
 });
 
 test('dark mode is a calm, persistent profile setting', async ({ page }) => {

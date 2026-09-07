@@ -64,7 +64,7 @@ integrationTest('serves the app shell with defensive browser headers', async () 
 
   const runtimeApp = await request(app).get('/runtime/app.js');
   assert.equal(runtimeApp.status, 200);
-  assert.match(runtimeApp.text, /retirement-timeline-row/);
+  assert.match(runtimeApp.text, /retirement-milestone/);
   assert.match(runtimeApp.headers['cache-control'], /no-store/);
 });
 
