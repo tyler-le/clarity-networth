@@ -2,6 +2,11 @@
 
 import { execFileSync } from 'node:child_process';
 
+// This flag exists only in Codex's restricted shell. A local release must
+// never treat that environment-specific limitation as permission to skip its
+// browser or integration coverage.
+delete process.env.CODEX_SANDBOX_NETWORK_DISABLED;
+
 const service = 'clarity-networth';
 const environments = [
   { name: 'staging', healthUrl: 'https://clarity-networth-staging.up.railway.app/api/health' },
