@@ -1,14 +1,15 @@
 name: Release through staging
 
 on:
-  push:
-    branches: [main]
+  # Temporary pre-launch fallback only. Releases are promoted locally with
+  # `npm run release:local`, so pushes do not consume GitHub Actions minutes
+  # or automatically deploy anything.
   workflow_dispatch:
 
-# A push to main follows one path: validate the exact commit, deploy it to the
-# isolated staging environment, smoke test the running service, then promote
-# that same commit to production. Railway's direct GitHub autodeploy must stay
-# disconnected so production cannot bypass this workflow.
+# Normal releases follow one local path: fast local verification, deployment to
+# isolated staging, a health check, then promotion to production. This manual
+# workflow remains available as a pre-launch fallback; Railway GitHub
+# autodeploy stays disconnected so production cannot bypass an explicit release.
 permissions:
   contents: read
 
