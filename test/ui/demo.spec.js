@@ -5,6 +5,9 @@ test.skip(Boolean(process.env.CODEX_SANDBOX_NETWORK_DISABLED), 'This workspace b
 async function openDemo(page) {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: /see your money/i })).toBeVisible();
+  await expect(page.locator('#inviteCode')).toBeVisible();
+  await expect(page.locator('#inviteCode')).toHaveAttribute('type', 'password');
+  await expect(page.locator('#inviteCode')).toHaveValue('');
   await expect(page.getByText(/By continuing, you agree to our/i)).toBeVisible();
   await page.getByRole('button', { name: /explore the demo/i }).click();
   await expect(page.locator('#appShell')).toBeVisible();

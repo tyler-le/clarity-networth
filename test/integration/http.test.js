@@ -17,6 +17,7 @@ const previousEnvironment = {
   PLAID_CLIENT_ID: process.env.PLAID_CLIENT_ID,
   PLAID_SECRET: process.env.PLAID_SECRET,
   PLAID_ENV: process.env.PLAID_ENV,
+  INVITE_CODE: process.env.INVITE_CODE,
   DOTENV_CONFIG_PATH: process.env.DOTENV_CONFIG_PATH
 };
 
@@ -32,6 +33,7 @@ delete process.env.GOOGLE_CLIENT_ID;
 delete process.env.PLAID_CLIENT_ID;
 delete process.env.PLAID_SECRET;
 delete process.env.PLAID_ENV;
+delete process.env.INVITE_CODE;
 // server.js imports dotenv/config. Point it at an empty test-only path so it
 // cannot load the repository's developer .env after the credentials above
 // have been removed.

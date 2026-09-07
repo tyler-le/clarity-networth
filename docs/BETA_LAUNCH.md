@@ -23,7 +23,7 @@ Clarity is ready for a small, invite-only beta after every item below is true. T
 
 ## First beta cohort
 
-- Invite 3–5 trusted testers first using `ALLOWED_EMAILS`.
+- Invite 3–5 trusted testers first with a private `INVITE_CODE`. Rotate the code if it is shared beyond the intended group.
 - Ask each person to sign in, link one institution, inspect Net Worth and Cash Flow, and unlink it. They should never share credentials or account numbers with you.
 - Review Railway logs and the hourly health workflow for several days. Treat an authentication, data-isolation, deletion, or Plaid-token issue as a pause-the-beta event.
 - Expand slowly only after normal daily syncs and the release pipeline remain stable.

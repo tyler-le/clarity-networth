@@ -20,7 +20,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 const dataEncryptionSecret = process.env.DATA_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY || '';
 const sessionSecretValue = process.env.SESSION_SECRET || (!isProduction ? dataEncryptionSecret || 'development-only-key-change-me' : '');
 const sessionSecret = crypto.createHash('sha256').update(sessionSecretValue || crypto.randomBytes(32)).digest();
-const allowedEmails = new Set(String(process.env.ALLOWED_EMAILS || '').split(',').map((email) => email.trim().toLowerCase()).filter(Boolean));
+const inviteCodeHash = process.env.INVITE_CODE ? crypto.createHash('sha256').update(process.env.INVITE_CODE).digest() : null;
 const DAILY_SYNC_INTERVAL_MS = Math.max(60 * 60 * 1000, Number(process.env.DAILY_SYNC_INTERVAL_MS) || 24 * 60 * 60 * 1000);
 const MAX_LINKED_ITEMS = Math.min(30, Math.max(1, Number(process.env.MAX_LINKED_ITEMS) || 15));
 const userSyncQueues = new Map();
@@ -239,7 +239,6 @@ function verifySession(req) {
     const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
     if (!payload.email || !payload.exp || payload.exp < Date.now()) return null;
     const email = String(payload.email).toLowerCase();
-    if (allowedEmails.size && !allowedEmails.has(email)) return null;
     return { email, name: String(payload.name || ''), storageKey: userStorageKey(email) };
   } catch { return null; }
 }
@@ -250,7 +249,13 @@ function setSession(res, user) {
 }
 
 function authConfigured() {
-  return Boolean(securityReady() && process.env.GOOGLE_CLIENT_ID && dataEncryptionSecret && dataEncryptionSecret !== 'development-only-key-change-me');
+  return Boolean(securityReady() && process.env.GOOGLE_CLIENT_ID && dataEncryptionSecret && dataEncryptionSecret !== 'development-only-key-change-me' && inviteCodeHash);
+}
+
+function inviteCodeMatches(value) {
+  if (!inviteCodeHash || typeof value !== 'string') return false;
+  const suppliedHash = crypto.createHash('sha256').update(value.trim()).digest();
+  return crypto.timingSafeEqual(inviteCodeHash, suppliedHash);
 }
 
 function publicUser(user) {
@@ -658,12 +663,12 @@ app.post('/api/auth/google', authLimiter, async (req, res) => {
   const recent = attempts.filter((time) => time > Date.now() - 10 * 60 * 1000);
   if (recent.length >= 10) return res.status(429).json({ error: 'Too many sign-in attempts. Try again shortly.' });
   try {
-    if (!authConfigured()) return res.status(503).json({ error: 'Google sign-in is not configured yet.' });
+    if (!authConfigured()) return res.status(503).json({ error: 'Sign-in is not configured yet.' });
     const ticket = await googleClient.verifyIdToken({ idToken: req.body?.credential, audience: process.env.GOOGLE_CLIENT_ID });
     const payload = ticket.getPayload();
     const email = String(payload?.email || '').toLowerCase();
     if (!payload?.email_verified) return res.status(403).json({ error: 'A verified Google email is required.' });
-    if (allowedEmails.size && !allowedEmails.has(email)) return res.status(403).json({ error: 'This is an invite-only app. This Google account has not been invited yet.' });
+    if (!inviteCodeMatches(req.body?.inviteCode)) return res.status(403).json({ error: 'This app is invite-only. Enter a valid access code to continue.' });
     loginAttempts.delete(ip);
     const user = { email, name: String(payload.name || '') };
     setSession(res, user);

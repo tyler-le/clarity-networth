@@ -1542,8 +1542,10 @@ async function startGoogleSignIn() {
     client_id: config.googleClientId,
     callback: async ({ credential }) => {
       try {
+        const inviteCode = $('#inviteCode').value.trim();
+        if (!inviteCode) { $('#authMessage').textContent = 'Enter your access code first.'; return; }
         $('#authMessage').textContent = 'Signing you in…';
-        await api('/api/auth/google', { method: 'POST', body: JSON.stringify({ credential }) });
+        await api('/api/auth/google', { method: 'POST', body: JSON.stringify({ credential, inviteCode }) });
         showAuthenticatedApp();
         await loadAll();
       } catch (error) { $('#authMessage').textContent = error.message; }
