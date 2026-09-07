@@ -205,17 +205,28 @@ test('portfolio history keeps one verified investment value for each day', () =>
   ]);
 });
 
-test('investment reconstruction reverses later purchases and uses historical closes', () => {
+test('investment reconstruction starts at a fully reported opening trade and uses historical closes', () => {
   const store = {
     positions: [{ security_id: 'fund', ticker: 'VFINX', type: 'mutual fund', quantity: 10, value: 1100 }],
-    investment_transactions: [{ security_id: 'fund', ticker: 'VFINX', security_type: 'mutual fund', date: '2026-09-03', quantity: 2 }],
-    market_prices: { VFINX: { '2026-09-01': 100, '2026-09-05': 110 } }
+    investment_transactions: [{ security_id: 'fund', ticker: 'VFINX', security_type: 'mutual fund', date: '2026-09-03', quantity: 10 }],
+    market_prices: { VFINX: { '2025-09-01': 90, '2026-09-01': 100, '2026-09-05': 110 } }
   };
   const history = reconstructInvestmentHistory(store, '2026-09-05');
   assert.equal(history.find((snapshot) => snapshot.date === '2026-09-03').value, 1000);
   assert.equal(history.at(-1).value, 1100);
-  assert.deepEqual(history.map((snapshot) => snapshot.date), ['2026-09-03', '2026-09-04', '2026-09-05']);
+  assert.equal(history[0].date, '2026-09-03');
+  assert.equal(history.at(-1).date, '2026-09-05');
   assert.ok(history.every((snapshot) => snapshot.source === 'reconstructed'));
+});
+
+test('investment reconstruction withholds an unknown opening balance inside the requested period', () => {
+  const history = reconstructInvestmentHistory({
+    positions: [{ security_id: 'fund', ticker: 'VFINX', type: 'mutual fund', quantity: 10, value: 1100 }],
+    // The two reported shares do not prove when the remaining eight arrived.
+    investment_transactions: [{ security_id: 'fund', ticker: 'VFINX', security_type: 'mutual fund', date: '2026-09-03', quantity: 2 }],
+    market_prices: { VFINX: { '2026-09-01': 100, '2026-09-05': 110 } }
+  }, '2026-09-05');
+  assert.deepEqual(history, []);
 });
 
 test('investment reconstruction refuses a sold security with no current provider position', () => {
@@ -281,6 +292,81 @@ test('reported trades and prices create history only after it reconciles to the 
   assert.match(result.detail, /matches your latest institution value/i);
 });
 
+test('a later holding does not erase earlier reported account history or create a pre-opening balance', () => {
+  const store = {
+    accounts: [{ plaid_account_id: '401k', type: 'investment', name: 'Work 401(k)', hidden: false }],
+    positions: [
+      { account_id: '401k', security_id: 'us', ticker: 'VTI', name: 'US fund', type: 'etf', quantity: 5, value: 550 },
+      { account_id: '401k', security_id: 'intl', ticker: 'VXUS', name: 'International fund', type: 'etf', quantity: 4, value: 200 }
+    ],
+    investment_transactions: [
+      { account_id: '401k', security_id: 'us', ticker: 'VTI', date: '2026-01-15', quantity: 5 },
+      { account_id: '401k', security_id: 'intl', ticker: 'VXUS', date: '2026-03-15', quantity: 4 }
+    ],
+    market_prices: {
+      VTI: { '2026-01-15': 100, '2026-03-15': 105, '2026-09-01': 110 },
+      VXUS: { '2026-03-15': 45, '2026-09-01': 50 }
+    }
+  };
+  const result = investmentDetailHistory(store, { accountId: '401k', years: 1 });
+  assert.equal(result.state, 'ready');
+  assert.equal(result.history[0].date, '2026-01-15');
+  assert.equal(result.history.find((row) => row.date === '2026-02-15').value, 500);
+  assert.equal(result.history.at(-1).value, 750);
+});
+
+test('account reconstruction includes a security sold during the selected history window', () => {
+  const store = {
+    accounts: [{ plaid_account_id: '401k', type: 'investment', name: 'Work 401(k)', current_balance: 550, hidden: false }],
+    positions: [
+      { account_id: '401k', security_id: 'us', ticker: 'VTI', name: 'US fund', type: 'etf', quantity: 5, value: 550 }
+    ],
+    investment_transactions: [
+      { account_id: '401k', security_id: 'us', ticker: 'VTI', security_type: 'etf', date: '2026-01-15', quantity: 5 },
+      { account_id: '401k', security_id: 'intl', ticker: 'VXUS', security_type: 'etf', date: '2026-01-15', quantity: 10 },
+      { account_id: '401k', security_id: 'intl', ticker: 'VXUS', security_type: 'etf', date: '2026-03-15', quantity: -10 }
+    ],
+    market_prices: {
+      VTI: { '2026-01-15': 100, '2026-03-15': 105, '2026-09-01': 110 },
+      VXUS: { '2026-01-15': 45, '2026-03-15': 50, '2026-09-01': 55 }
+    }
+  };
+
+  const detail = investmentDetailHistory(store, { accountId: '401k', years: 1 });
+  assert.equal(detail.state, 'ready');
+  assert.equal(detail.history[0].date, '2026-01-15');
+  assert.equal(detail.history.find((row) => row.date === '2026-02-15').value, 950);
+  assert.equal(detail.history.find((row) => row.date === '2026-04-15').value, 525);
+  assert.equal(detail.history.at(-1).value, 550);
+
+  const portfolio = refreshReconstructedInvestmentSnapshots(store, '2026-09-01', 1);
+  assert.equal(portfolio.find((row) => row.date === '2026-02-15').value, 950);
+  assert.equal(portfolio.at(-1).value, 550);
+});
+
+test('account and portfolio history are withheld when a sold security cannot be identified and priced', () => {
+  const store = {
+    accounts: [{ plaid_account_id: '401k', type: 'investment', name: 'Work 401(k)', current_balance: 550, hidden: false }],
+    positions: [
+      { account_id: '401k', security_id: 'us', ticker: 'VTI', name: 'US fund', type: 'etf', quantity: 5, value: 550 }
+    ],
+    investment_transactions: [
+      { account_id: '401k', security_id: 'us', ticker: 'VTI', security_type: 'etf', date: '2026-01-15', quantity: 5 },
+      { account_id: '401k', security_id: null, ticker: null, security_type: 'etf', date: '2026-03-15', quantity: -10 }
+    ],
+    market_prices: { VTI: { '2026-01-15': 100, '2026-09-01': 110 } },
+    investment_snapshots: []
+  };
+
+  const detail = investmentDetailHistory(store, { accountId: '401k', years: 1 });
+  assert.equal(detail.state, 'unavailable');
+  assert.match(detail.reason, /enough priced security detail/i);
+  assert.deepEqual(detail.history, []);
+
+  assert.deepEqual(refreshReconstructedInvestmentSnapshots(store, '2026-09-01', 1), []);
+  assert.deepEqual(store.investment_snapshots, []);
+});
+
 test('a reconstruction with a material current-value mismatch is withheld', () => {
   const store = {
     accounts: [{ plaid_account_id: 'brokerage', type: 'investment', name: 'Brokerage', hidden: false }],
@@ -297,8 +383,8 @@ test('portfolio history is reconstructed only when every visible investment acco
   const store = {
     accounts: [{ plaid_account_id: 'ira', type: 'investment', current_balance: 1100, hidden: false }],
     positions: [{ account_id: 'ira', security_id: 'fund', ticker: 'VFINX', type: 'mutual fund', quantity: 10, value: 1100 }],
-    investment_transactions: [{ account_id: 'ira', security_id: 'fund', ticker: 'VFINX', date: '2026-09-03', quantity: 2 }],
-    market_prices: { VFINX: { '2026-09-01': 100, '2026-09-05': 110 } },
+    investment_transactions: [{ account_id: 'ira', security_id: 'fund', ticker: 'VFINX', date: '2026-09-03', quantity: 10 }],
+    market_prices: { VFINX: { '2025-09-01': 90, '2026-09-01': 100, '2026-09-05': 110 } },
     investment_snapshots: []
   };
   const history = refreshReconstructedInvestmentSnapshots(store, '2026-09-05', 1);
@@ -328,7 +414,7 @@ test('a pending provider extraction never creates a personal investment history 
     market_prices: { VTI: { '2025-09-01': 100, '2026-01-01': 105, '2026-09-01': 120 } }
   };
   const result = investmentDetailHistory(store, { accountId: '401k', years: 1 });
-  assert.equal(result.state, 'unavailable');
+  assert.equal(result.state, 'preparing');
   assert.deepEqual(result.history, []);
   assert.match(result.reason, /still preparing/i);
 });

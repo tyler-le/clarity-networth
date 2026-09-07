@@ -212,6 +212,16 @@ test('cash-flow interactions lead from visual category to the relevant activity'
   await expect(page.locator('.spending-transaction-row').first()).toBeVisible();
 });
 
+test('cash-flow blocks trace their connected paths before opening activity', async ({ page }) => {
+  await openDemo(page);
+  await goToView(page, 'spending');
+  const paycheckBlock = page.locator('#cashflowSankey [data-cashflow-category="income_paychecks"]');
+  await paycheckBlock.focus();
+  await expect(page.locator('#cashflowSankey .cashflow-flow.is-connected')).not.toHaveCount(0);
+  await expect(page.locator('#cashflowSankey .cashflow-flow.is-muted')).not.toHaveCount(0);
+  await expect(paycheckBlock).toHaveClass(/is-selected/);
+});
+
 test('asset-allocation filters preserve the reader position', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'investments');
@@ -235,6 +245,15 @@ test('cash-flow diagram shows dollars and source shares of received income toget
   await expect(page.locator('[data-spending-range="6m"]')).toHaveClass(/active/);
   await expect(page.locator('#spendingView')).toHaveAttribute('aria-busy', 'false');
   await expect(page.locator('#spendingContext')).toContainText('last 6 completed months');
+});
+
+test('cash-flow diagram omits zero-dollar cells and flows', async ({ page }) => {
+  await openDemo(page);
+  await goToView(page, 'spending');
+  const zeroValueCells = await page.locator('#cashflowSankey .cashflow-target').evaluateAll((nodes) => nodes.filter((node) => /\$0(?:\.00)?(?:\s|$)/.test(node.textContent || '')).length);
+  expect(zeroValueCells).toBe(0);
+  const zeroWidthFlows = await page.locator('#cashflowSankey .cashflow-flow').evaluateAll((paths) => paths.filter((path) => Number(path.getAttribute('stroke-width')) <= 0).length);
+  expect(zeroWidthFlows).toBe(0);
 });
 
 test('monthly cash-flow values stay self-labeled instead of relying on a detached legend', async ({ page }, testInfo) => {
@@ -393,10 +412,65 @@ test('holding and account drill-ins show only a person’s verified position his
   await expect(page.locator('#holdingHistoryChart svg')).toBeVisible();
   await expect(page.locator('#holdingHistoryNote')).toContainText(/verified.*updates/i);
   await expect(dialog.getByRole('tab', { name: 'Market price' })).toHaveCount(0);
-  await page.locator('#holdingHistoryClose').click();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
   await page.locator('[data-investment-account-history]').first().click();
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('tab', { name: 'Your position' })).toBeVisible();
+});
+
+test('investment detail distinguishes loading, preparing, and unavailable personal history', async ({ page }) => {
+  let releaseHistory;
+  const historyHeld = new Promise((resolve) => { releaseHistory = resolve; });
+  await page.route('**/api/demo-investments/history**', async (route) => {
+    await historyHeld;
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        state: 'preparing',
+        label: 'Demo 401(k)',
+        ticker: 'FXAIX',
+        value: 12_345,
+        history: [],
+        market: [],
+        reason: 'Your institution is still preparing reported activity for this account.'
+      })
+    });
+  });
+  await openDemo(page);
+  await goToView(page, 'investments');
+  await page.locator('[data-holding-history]').first().click();
+  const chart = page.locator('#holdingHistoryChart');
+  await expect(chart.locator('[data-history-state="loading"]')).toBeVisible();
+  await expect(chart).toContainText(/loading history/i);
+
+  releaseHistory();
+  await expect(chart.locator('[data-history-state="preparing"]')).toBeVisible();
+  await expect(chart).toContainText(/preparing your history/i);
+  await expect(chart.locator('svg')).toHaveCount(0);
+
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#holdingHistoryDialog')).toBeHidden();
+  await page.unroute('**/api/demo-investments/history**');
+  await page.route('**/api/demo-investments/history**', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        state: 'unavailable',
+        label: 'Demo 401(k)',
+        ticker: 'FXAIX',
+        value: 12_345,
+        history: [],
+        market: [],
+        reason: 'We could not reconcile reported activity with this account’s current value.'
+      })
+    });
+  });
+  await page.locator('[data-holding-history]').first().click();
+  await expect(chart.locator('[data-history-state="unavailable"]')).toBeVisible();
+  await expect(chart).toContainText(/personal history unavailable/i);
+  await expect(chart).toContainText(/could not reconcile reported activity/i);
+  await expect(chart.locator('svg')).toHaveCount(0);
 });
 
 test('holding detail timeframes stay local to the drill-in chart', async ({ page }) => {
@@ -417,7 +491,9 @@ test('investment detail cards stay readable without horizontal overflow on a pho
   await page.locator('[data-holding-history]').first().click();
   const dialog = page.locator('#holdingHistoryDialog');
   await expect(dialog).toBeVisible();
-  await expect(dialog.locator('.holding-history-drag-handle')).toBeVisible();
+  const handle = dialog.locator('.holding-history-drag-handle');
+  await expect(handle).toBeVisible();
+  await expect(page.locator('#holdingHistoryClose')).toBeHidden();
   // Measure after the sheet has settled; transforms participate in bounding
   // boxes while its entry animation is still running.
   await page.waitForTimeout(350);
@@ -430,6 +506,13 @@ test('investment detail cards stay readable without horizontal overflow on a pho
   for (const selector of ['#holdingHistoryMetrics', '#holdingHistoryRange', '#holdingHistoryWhere']) {
     expect(await page.locator(selector).evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
   }
+  const handleBox = await handle.boundingBox();
+  expect(handleBox).not.toBeNull();
+  await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2 + 130, { steps: 4 });
+  await page.mouse.up();
+  await expect(dialog).toBeHidden();
 });
 
 test('portfolio history can be scrubbed just like net worth', async ({ page }) => {

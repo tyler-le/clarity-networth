@@ -1,4 +1,4 @@
-import { filterSnapshots } from '/chart-utils.js';
+import { filterSnapshots, netWorthRangeBounds } from '/chart-utils.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -302,20 +302,21 @@ function renderNetWorthChartWhenVisible(attempt = 0) {
     return;
   }
   restoreNetWorthHero();
-  renderLineChart(visibleSnapshots(state.dashboard.snapshots || []), state.dashboard.summary);
+  const rangeStart = netWorthRangeBounds(state.networthRange).startDate;
+  renderLineChart(visibleSnapshots(state.dashboard.snapshots || []), state.dashboard.summary, rangeStart);
 }
 
 function axisCurrency(value) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 0 }).format(value);
 }
 
-function renderLineChart(snapshots, summary) {
+function renderLineChart(snapshots, summary, rangeStart = null) {
   const el = $('#netWorthChart');
   // A hidden view reports a zero width. Leave the existing chart intact until
   // the view is visible, when setView/resize will render it at real size.
   if (el.clientWidth < 80 || el.clientHeight < 60) return;
   if (snapshots.length < 2) {
-    renderTimelineStart(el, snapshots.at(-1), summary);
+    renderTimelineStart(el, snapshots.at(-1), summary, rangeStart);
     return;
   }
 
@@ -323,7 +324,9 @@ function renderLineChart(snapshots, summary) {
   const height = Math.max(1, Math.round(el.clientHeight || 150));
   const plotLeft = 48, plotRight = 8, plotTop = 8, plotBottom = height - 22;
   const dateValue = (date) => new Date(`${date}T12:00:00`).getTime();
-  const domainStart = dateValue(snapshots[0].date);
+  const firstObserved = dateValue(snapshots[0].date);
+  const requestedStart = rangeStart ? dateValue(rangeStart) : firstObserved;
+  const domainStart = Math.min(firstObserved, requestedStart);
   const domainEnd = Math.max(domainStart + 86_400_000, dateValue(snapshots.at(-1).date));
   const xForDate = (date) => plotLeft + ((dateValue(date) - domainStart) / (domainEnd - domainStart)) * (width - plotLeft - plotRight);
   const vals = snapshots.map((s) => Number(s.net_worth));
@@ -352,9 +355,12 @@ function renderLineChart(snapshots, summary) {
   // the same day. Longer spans retain a middle label for quick orientation.
   const tickTimes = sameMonth || width <= 420 ? [domainStart, domainEnd] : [domainStart, (domainStart + domainEnd) / 2, domainEnd];
   const xAxis = tickTimes.map((time, index) => `<text x="${(plotLeft + ((time - domainStart) / (domainEnd - domainStart)) * (width - plotLeft - plotRight)).toFixed(1)}" y="${height - 5}" text-anchor="${index === 0 ? 'start' : index === tickTimes.length - 1 ? 'end' : 'middle'}" class="chart-axis-label chart-x-axis-label">${dateLabel(time)}</text>`).join('');
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img">
+  const unavailableLead = domainStart < firstObserved
+    ? `<path class="chart-unavailable-line" d="M ${plotLeft} ${points[0][1].toFixed(1)} L ${points[0][0].toFixed(1)} ${points[0][1].toFixed(1)}"/><text x="${((plotLeft + points[0][0]) / 2).toFixed(1)}" y="${Math.max(plotTop + 12, points[0][1] - 10).toFixed(1)}" text-anchor="middle" class="chart-unavailable-label">Tracking began ${new Date(`${snapshots[0].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</text>`
+    : '';
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Net worth history${domainStart < firstObserved ? '; earlier time is not tracked' : ''}">
     <defs><linearGradient id="areaFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f6f4a" stop-opacity=".16"/><stop offset="1" stop-color="#1f6f4a" stop-opacity="0"/></linearGradient></defs>
-    ${yAxis}${xAxis}<path d="${area}" fill="url(#areaFade)"/><path class="main-history-line" pathLength="1" d="${d}" fill="none" stroke="#1f6f4a" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>
+    ${yAxis}${xAxis}${unavailableLead}<path d="${area}" fill="url(#areaFade)"/><path class="main-history-line" pathLength="1" d="${d}" fill="none" stroke="#1f6f4a" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>
     <line class="scrub-line" x1="0" y1="${plotTop}" x2="0" y2="${plotBottom}"/>
     <circle class="scrub-dot" cx="0" cy="0" r="5"/>
   </svg>
@@ -417,20 +423,24 @@ function renderLineChart(snapshots, summary) {
   svg.addEventListener('dragstart', (event) => event.preventDefault());
 }
 
-function renderTimelineStart(el, snapshot, summary) {
+function renderTimelineStart(el, snapshot, summary, rangeStart = null) {
   const value = Number(snapshot?.net_worth ?? summary?.netWorth ?? 0);
   const date = snapshot?.date ? new Date(`${snapshot.date}T12:00:00`) : new Date();
   const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const width = Math.max(1, Math.round(el.clientWidth || 700));
   const height = Math.max(1, Math.round(el.clientHeight || 150));
-  const baseline = Math.round(height * .75);
-  const pointX = Math.round(width * .78);
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Net worth tracking starts today">
-    <line x1="12" y1="${baseline}" x2="${width - 12}" y2="${baseline}" stroke="#e4e9e4" stroke-width="2"/>
-    <line x1="${pointX}" y1="24" x2="${pointX}" y2="${baseline}" stroke="#b6c8bd" stroke-width="1.5" stroke-dasharray="4 5"/>
-    <circle cx="${pointX}" cy="${Math.round(height * .48)}" r="9" fill="#fff" stroke="#16704b" stroke-width="4"/>
-    <text x="${pointX}" y="38" text-anchor="middle" class="sankey-value">${fmt.format(value)}</text>
-    <text x="${pointX}" y="${height - 10}" text-anchor="middle" class="sankey-label">${label} · Start</text>
+  const baseline = Math.round(height * .62);
+  const rangeStartTime = rangeStart ? new Date(`${rangeStart}T12:00:00`).getTime() : date.getTime();
+  const rangeEndTime = Math.max(rangeStartTime + 86_400_000, date.getTime());
+  const naturalPoint = 24 + ((date.getTime() - rangeStartTime) / (rangeEndTime - rangeStartTime)) * (width - 48);
+  const pointX = Math.round(Math.max(width * .58, Math.min(width - 24, naturalPoint)));
+  const connectorStart = Math.max(18, pointX - 24);
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Net worth tracking began ${label}; earlier time is not tracked">
+    <line class="chart-unavailable-line" x1="18" y1="${baseline}" x2="${connectorStart}" y2="${baseline}"/>
+    <line class="chart-start-line" x1="${connectorStart}" y1="${baseline}" x2="${pointX}" y2="${baseline}"/>
+    <circle class="chart-start-point" cx="${pointX}" cy="${baseline}" r="8"/>
+    <text x="${pointX}" y="${baseline - 16}" text-anchor="middle" class="chart-start-value">${fmt.format(value)}</text>
+    <text x="${pointX}" y="${height - 10}" text-anchor="middle" class="chart-start-detail">Tracking began ${label}</text>
   </svg>`;
 }
 
@@ -655,22 +665,29 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const availableWidth = el.clientWidth;
   const compact = availableWidth < 520;
   const tablet = !compact && availableWidth < 760;
-  const allSpendCategories = data.actualSpendCategories || [];
+  const allSpendCategories = (data.actualSpendCategories || []).filter((row) => Number(row.amount || 0) > 0);
   const incomeSources = (data.incomeSources?.length ? data.incomeSources : [{ key: 'income', label: 'Income received', amount: income }])
     .filter((source) => Number(source.amount || 0) > 0);
   const actualCategories = expanded ? allSpendCategories : allSpendCategories.slice(0, 4);
   const width = compact ? 390 : tablet ? 620 : 920;
-  const rowHeight = 44, rowStep = 51;
-  const sourceHeight = Math.max(224, incomeSources.length * rowStep + 16);
-  const height = expanded ? Math.max(224, actualCategories.length * rowStep + 12, sourceHeight) : sourceHeight;
-  // Equal-width nodes make the reading path steady on every screen. Labels
-  // wrap inside their own card, rather than stealing room from the flow.
-  const nodeW = compact ? 104 : tablet ? 132 : 176;
+  // Treat the blocks as compact labels for the flow, rather than cards that
+  // compete with it. Phone labels get a little more vertical room to wrap.
+  const rowHeight = compact ? 42 : 38, rowStep = compact ? 49 : 46;
+  const middleNodes = [
+    { key: 'actual_spend', label: 'Actual spend', value: actualSpend, color: 'var(--outflow)' },
+    { key: 'savings', label: 'Save', value: savings, color: 'var(--save)' },
+    { key: 'investments', label: 'Invest', value: investments, color: 'var(--invest)' }
+  ].filter((node) => node.value > 0);
+  const contentHeight = (rows) => rows.length ? (rows.length - 1) * rowStep + rowHeight : 0;
+  const height = Math.max(224, contentHeight(incomeSources) + 16, contentHeight(middleNodes) + 16, contentHeight(actualCategories) + 16);
+  // Equal-width nodes make the reading path steady on every screen. Keeping
+  // them deliberately compact leaves the flows enough room to be legible.
+  const nodeW = compact ? 104 : tablet ? 124 : 142;
   const sourceX = compact ? 6 : tablet ? 8 : 20;
-  const middleX = compact ? 143 : tablet ? 244 : 372;
-  const destinationX = compact ? 280 : tablet ? 480 : 724;
+  const middleX = compact ? 143 : tablet ? 248 : 389;
+  const destinationX = compact ? 280 : tablet ? 488 : 758;
   const sourceW = nodeW, middleW = nodeW, destinationW = nodeW;
-  const displayShare = (value, isIncome = false) => !income ? '—' : `${Math.round((isIncome ? 1 : value / income) * 100)}%`;
+  const displayShare = (value, isIncome = false) => !income || isIncome ? '' : `${Math.round((value / income) * 100)}%`;
   const colorFor = (key, fallback) => ({
     income_paychecks: 'var(--income)', income_interest: '#b08a4a', income_dividends: '#8a71a5', income_benefits: '#5e91a2', income_business: '#5d9b81', income_other: '#7893a8',
     actual_spend: 'var(--outflow)', savings: 'var(--save)', investments: 'var(--invest)',
@@ -679,41 +696,45 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const block = (x, y, w, color, label, value, category = '', isIncome = false) => {
     const words = String(label).split(' ');
     const mobileLines = compact && words.length > 1 ? [words.slice(0, Math.ceil(words.length / 2)).join(' '), words.slice(Math.ceil(words.length / 2)).join(' ')] : [label];
-    const labelMarkup = mobileLines.map((line, index) => `<tspan x="${x + 12}" dy="${index ? 10 : 0}">${escapeHtml(line)}</tspan>`).join('');
-    const valueY = y + (mobileLines.length > 1 ? 37 : 30);
-    return `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><rect x="${x}" y="${y}" width="${w}" height="${rowHeight}" rx="9" fill="var(--sankey-surface)" stroke="var(--sankey-border)"/><rect x="${x}" y="${y}" width="5" height="${rowHeight}" rx="3" fill="${color}"/><text x="${x + 12}" y="${y + 15}" class="cashflow-label">${labelMarkup}</text><text x="${x + 12}" y="${valueY}" class="cashflow-value">${fmt.format(value)}<tspan dx="3" class="cashflow-share">${displayShare(value, isIncome)}</tspan></text></g>`;
+    const labelMarkup = mobileLines.map((line, index) => `<tspan x="${x + 11}" dy="${index ? 10 : 0}">${escapeHtml(line)}</tspan>`).join('');
+    const valueY = y + (mobileLines.length > 1 ? 36 : 28);
+    return `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" data-cashflow-node="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><title>${escapeHtml(`${label}: ${fmt.format(value)}`)}</title><rect x="${x}" y="${y}" width="${w}" height="${rowHeight}" rx="7" fill="var(--sankey-surface)" stroke="var(--sankey-border)"/><rect x="${x}" y="${y}" width="4" height="${rowHeight}" rx="2" fill="${color}"/><text x="${x + 11}" y="${y + 14}" class="cashflow-label">${labelMarkup}</text><text x="${x + 11}" y="${valueY}" class="cashflow-value">${fmt.format(value)}<tspan dx="3" class="cashflow-share">${displayShare(value, isIncome)}</tspan></text></g>`;
   };
   // Use perceptual (square-root) scaling. Exact dollars stay in each node,
   // while the flow still makes large categories visibly heavier without one
   // unusually large payment consuming the entire chart.
-  const largestFlow = Math.max(actualSpend, savings, investments, 1);
-  const flow = (fromX, fromY, toX, toY, amount, color) => {
+  const largestFlow = Math.max(...middleNodes.map((node) => node.value), 1);
+  const flow = (fromX, fromY, toX, toY, amount, color, nodes) => {
     const value = Math.max(0, Number(amount || 0));
-    const thickness = value ? 3 + Math.sqrt(value / largestFlow) * 31 : 0;
-    return `<path class="cashflow-flow" d="M ${fromX} ${fromY} C ${fromX + (toX - fromX) * .42} ${fromY}, ${toX - (toX - fromX) * .42} ${toY}, ${toX} ${toY}" fill="none" stroke="${color}" stroke-opacity=".34" stroke-width="${thickness}" stroke-linecap="round"/>`;
+    const thickness = value ? 2 + Math.sqrt(value / largestFlow) * 22 : 0;
+    return `<path class="cashflow-flow" data-cashflow-flow="${escapeHtml(nodes.join(' '))}" d="M ${fromX} ${fromY} C ${fromX + (toX - fromX) * .42} ${fromY}, ${toX - (toX - fromX) * .42} ${toY}, ${toX} ${toY}" fill="none" stroke="${color}" stroke-opacity=".24" stroke-width="${thickness}" stroke-linecap="round"/>`;
   };
-  const spendY = 13, saveY = 90, investY = 167;
-  const sourceStart = incomeSources.length === 1 ? 90 : 8;
-  const sourceStep = incomeSources.length === 1 ? 0 : rowStep;
+  const verticallyCenter = (rows) => Math.max(8, (height - contentHeight(rows)) / 2);
+  const sourceStart = verticallyCenter(incomeSources);
+  const middleStart = verticallyCenter(middleNodes);
+  const categoryStart = verticallyCenter(actualCategories);
+  const middleY = new Map(middleNodes.map((node, index) => [node.key, middleStart + index * rowStep]));
   let paths = '';
   incomeSources.forEach((source, index) => {
     const share = income ? Number(source.amount || 0) / income : 0;
-    const y = sourceStart + index * sourceStep;
-    paths += flow(sourceX + sourceW, y + rowHeight / 2, middleX, spendY + rowHeight / 2, actualSpend * share, 'var(--outflow)');
-    paths += flow(sourceX + sourceW, y + rowHeight / 2, middleX, saveY + rowHeight / 2, savings * share, 'var(--save)');
-    paths += flow(sourceX + sourceW, y + rowHeight / 2, middleX, investY + rowHeight / 2, investments * share, 'var(--invest)');
+    const y = sourceStart + index * rowStep;
+    middleNodes.forEach((node) => {
+      paths += flow(sourceX + sourceW, y + rowHeight / 2, middleX, middleY.get(node.key) + rowHeight / 2, node.value * share, node.color, [source.key, node.key]);
+    });
   });
   let categories = '';
   actualCategories.forEach((row, index) => {
-    const y = 8 + index * rowStep;
+    const y = categoryStart + index * rowStep;
     const categoryColor = colorFor(row.key, 'var(--outflow-muted)');
-    paths += flow(middleX + middleW, spendY + rowHeight / 2, destinationX, y + rowHeight / 2, Number(row.amount || 0), categoryColor);
+    const spendY = middleY.get('actual_spend');
+    if (spendY != null) paths += flow(middleX + middleW, spendY + rowHeight / 2, destinationX, y + rowHeight / 2, Number(row.amount || 0), categoryColor, ['actual_spend', row.key]);
     categories += block(destinationX, y, destinationW, categoryColor, row.name, row.amount, row.key);
   });
   const hiddenCategoryCount = allSpendCategories.length - actualCategories.length;
   const more = !expanded && hiddenCategoryCount > 0 ? `<button type="button" class="cashflow-more" data-cashflow-expand aria-label="Show all ${hiddenCategoryCount + actualCategories.length} spending categories">View all ${allSpendCategories.length} spending categories <span>↗</span></button>` : '';
-  const sourceBlocks = incomeSources.map((source, index) => block(sourceX, sourceStart + index * sourceStep, sourceW, colorFor(source.key, 'var(--income)'), source.label, source.amount, source.key, true)).join('');
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Income sources split into spending, saving, and investing">${paths}${sourceBlocks}${block(middleX, spendY, middleW, 'var(--outflow)', 'Actual spend', actualSpend, 'actual_spend')}${block(middleX, saveY, middleW, 'var(--save)', 'Save', savings, 'savings')}${block(middleX, investY, middleW, 'var(--invest)', 'Invest', investments, 'investments')}${categories}</svg>${more}`;
+  const sourceBlocks = incomeSources.map((source, index) => block(sourceX, sourceStart + index * rowStep, sourceW, colorFor(source.key, 'var(--income)'), source.label, source.amount, source.key, true)).join('');
+  const middleBlocks = middleNodes.map((node) => block(middleX, middleY.get(node.key), middleW, node.color, node.label, node.value, node.key)).join('');
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Income sources split into spending, saving, and investing">${paths}${sourceBlocks}${middleBlocks}${categories}</svg>${more}`;
 }
 
 function renderSpending(data) {
@@ -802,7 +823,13 @@ function renderPortfolioChart(data) {
   if (el.clientWidth < 80 || el.clientHeight < 60) return;
   const snapshots = portfolioSnapshots(data);
   if (!snapshots.length) {
-    el.innerHTML = `<div class="portfolio-snapshot"><span class="portfolio-snapshot-mark" aria-hidden="true">↗</span><div><strong>Portfolio snapshot</strong><p>Your current balance and allocation are up to date. Historical value will resume automatically when price history is available.</p></div></div>`;
+    const stateName = data.historyStatus?.state === 'preparing' ? 'preparing' : 'tracking';
+    const preparing = stateName === 'preparing';
+    el.innerHTML = `<div class="portfolio-snapshot history-state" data-history-state="${stateName}"><span class="portfolio-snapshot-mark" aria-hidden="true">${preparing ? '⋯' : '↗'}</span><div><strong>${preparing ? 'Preparing your history' : 'Portfolio tracking is starting'}</strong><p>${preparing ? 'Your institution is preparing its reported activity. We will only show a past trend when it can be verified.' : 'Your current balance and allocation are up to date. We will add verified snapshots automatically.'}</p></div></div>`;
+    return;
+  }
+  if (snapshots.length === 1) {
+    renderPortfolioTrackingStart(el, snapshots[0], data.total);
     return;
   }
   const width = Math.max(1, Math.round(el.clientWidth));
@@ -855,6 +882,23 @@ function renderPortfolioChart(data) {
   el.addEventListener('pointerleave', (event) => { if (event.pointerType === 'mouse' && !active) { scrubLine.classList.remove('visible'); scrubDot.classList.remove('visible'); tooltip.classList.add('hidden'); restore(); } });
 }
 
+function renderPortfolioTrackingStart(el, snapshot, total) {
+  const width = Math.max(1, Math.round(el.clientWidth || 700));
+  const height = Math.max(1, Math.round(el.clientHeight || 150));
+  const baseline = Math.round(height * .58);
+  const pointX = width - 28;
+  const connectorStart = Math.max(18, pointX - 34);
+  const value = Number(snapshot?.value ?? total ?? 0);
+  const label = new Date(`${snapshot.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Portfolio tracking began ${label}; earlier time is not tracked">
+    <line class="chart-unavailable-line" x1="18" y1="${baseline}" x2="${connectorStart}" y2="${baseline}"/>
+    <line class="chart-start-line" x1="${connectorStart}" y1="${baseline}" x2="${pointX}" y2="${baseline}"/>
+    <circle class="chart-start-point" cx="${pointX}" cy="${baseline}" r="7"/>
+    <text x="${pointX}" y="${baseline - 15}" text-anchor="end" class="chart-start-value">${fmt.format(value)}</text>
+    <text x="${pointX}" y="${height - 10}" text-anchor="end" class="chart-start-detail">Tracking began ${label}</text>
+  </svg>`;
+}
+
 function aggregateHoldings(positions) {
   const groups = new Map();
   for (const position of positions) {
@@ -879,11 +923,19 @@ function historyForRange(history, range = state.holdingHistoryRange) {
   return filtered.length ? filtered : history.slice(-1);
 }
 
-function renderHoldingHistoryChart(history, kind, emptyMessage = null) {
+function renderHoldingHistoryChart(history, kind, emptyMessage = null, historyState = 'ready') {
   const el = $('#holdingHistoryChart');
+  if (historyState === 'loading') {
+    el.innerHTML = `<div class="holding-history-state holding-history-skeleton" data-history-state="loading" role="status"><b>Loading history</b><span>Checking the latest reported activity.</span><i></i><i></i></div>`;
+    return;
+  }
+  if (historyState === 'preparing') {
+    el.innerHTML = `<div class="holding-history-state" data-history-state="preparing" role="status"><b>Preparing your history</b><span>${escapeHtml(emptyMessage || 'Your institution is preparing reported activity. We will only show a trend once it can be verified.')}</span></div>`;
+    return;
+  }
   if (!history?.length || el.clientWidth < 80) {
     const message = emptyMessage || 'Your institution has not provided enough reported activity to build a trustworthy personal history.';
-    el.innerHTML = `<div class="holding-history-empty"><b>Personal history unavailable</b><span>${escapeHtml(message)}</span></div>`;
+    el.innerHTML = `<div class="holding-history-empty holding-history-state" data-history-state="unavailable"><b>Personal history unavailable</b><span>${escapeHtml(message)}</span></div>`;
     return;
   }
   const pointsData = historyForRange(history, state.holdingHistoryRange);
@@ -936,7 +988,7 @@ function renderHoldingHistoryDetail() {
   $('#holdingHistoryNote').textContent = isMarket ? 'Market price does not include your purchases, sales, or contributions.' : (data.detail || data.reason || 'Your position history is unavailable.');
   // A dialog has no stable width until the browser has painted it. Defer chart
   // measurement one frame so mobile and desktop both receive a real canvas.
-  requestAnimationFrame(() => renderHoldingHistoryChart(history, isMarket ? 'market' : 'position', data.reason));
+  requestAnimationFrame(() => renderHoldingHistoryChart(history, isMarket ? 'market' : 'position', data.reason, isMarket ? 'ready' : data.state));
   const positions = (state.investments?.positions || []).filter((position) => data.accountId ? position.account_id === data.accountId : data.ticker && String(position.ticker || '').toUpperCase() === data.ticker);
   const accounts = new Map((state.investments?.accounts || []).map((account) => [account.account_id, account]));
   const canEditClass = !state.demoPreview && !state.dashboard?.demoMode;
@@ -963,7 +1015,7 @@ function renderHoldingHistoryDetail() {
 
 async function openHoldingHistory({ ticker = '', accountId = '' } = {}) {
   const dialog = $('#holdingHistoryDialog');
-  state.holdingHistory = { label: 'Investment detail', ticker, value: 0, history: [], market: [], reason: 'Loading your history…' };
+  state.holdingHistory = { state: 'loading', label: 'Investment detail', ticker, value: 0, history: [], market: [], reason: 'Loading your history…' };
   state.holdingHistoryMode = 'position';
   // This starts aligned with the page for continuity, then belongs only to
   // this drill-in. Changing it never alters the Investments overview.
@@ -976,7 +1028,7 @@ async function openHoldingHistory({ ticker = '', accountId = '' } = {}) {
     state.holdingHistory = { ...(await api(`${base}?${query}`)), accountId: accountId || null };
     renderHoldingHistoryDetail();
   } catch (error) {
-    state.holdingHistory = { label: 'Investment detail', ticker, value: 0, history: [], market: [], reason: error.message || 'We could not load this history right now.' };
+    state.holdingHistory = { state: 'unavailable', label: 'Investment detail', ticker, value: 0, history: [], market: [], reason: error.message || 'We could not load this history right now.' };
     renderHoldingHistoryDetail();
   }
 }
@@ -1064,7 +1116,7 @@ function assetClassLabel(type, override = null) {
 }
 
 const holdingClassOptions = [
-  ['', 'Automatic (from your institution)'],
+  ['', 'Automatic'],
   ['Equities', 'Equities'],
   ['Funds', 'Funds'],
   ['Fixed income', 'Fixed income'],
@@ -1076,7 +1128,7 @@ const holdingClassOptions = [
 function holdingClassControl(position) {
   const value = position.asset_class_override || '';
   const attribute = position.manual ? 'data-history-manual-holding-class' : 'data-history-position-class';
-  return `<label class="holding-history-class">Classification <select ${attribute}="${escapeHtml(position.id)}" aria-label="Classification for ${escapeHtml(position.name || position.ticker || 'holding')}">${holdingClassOptions.map(([option, label]) => `<option value="${option}" ${value === option ? 'selected' : ''}>${label}</option>`).join('')}</select></label>`;
+  return `<label class="holding-history-class">Asset type <select ${attribute}="${escapeHtml(position.id)}" aria-label="Asset type for ${escapeHtml(position.name || position.ticker || 'holding')}; Automatic uses your institution's classification" title="Automatic uses your institution's classification">${holdingClassOptions.map(([option, label]) => `<option value="${option}" ${value === option ? 'selected' : ''}>${label}</option>`).join('')}</select></label>`;
 }
 
 function renderRetirement(data) {
@@ -1667,6 +1719,38 @@ $('#cashflowSankey').addEventListener('keydown', (event) => {
   event.preventDefault();
   openSpendingCategory(target.dataset.cashflowCategory);
 });
+// Flows are deliberately not tap targets: once paths overlap, that interaction
+// becomes ambiguous. Instead, focusing or hovering a clear category block
+// quietly traces the part of the story it belongs to.
+function setCashflowFlowFocus(container, key = '') {
+  const hasFocus = Boolean(key);
+  container.querySelectorAll('.cashflow-flow').forEach((path) => {
+    const connected = key && (path.dataset.cashflowFlow || '').split(' ').includes(key);
+    path.classList.toggle('is-connected', Boolean(connected));
+    path.classList.toggle('is-muted', hasFocus && !connected);
+  });
+  container.querySelectorAll('[data-cashflow-node]').forEach((node) => {
+    node.classList.toggle('is-selected', Boolean(key && node.dataset.cashflowNode === key));
+  });
+}
+function wireCashflowFlowFocus(container) {
+  container.addEventListener('pointerover', (event) => {
+    const node = event.target.closest('[data-cashflow-node]');
+    if (node) setCashflowFlowFocus(container, node.dataset.cashflowNode);
+  });
+  container.addEventListener('pointerleave', () => setCashflowFlowFocus(container));
+  container.addEventListener('focusin', (event) => {
+    const node = event.target.closest('[data-cashflow-node]');
+    if (node) setCashflowFlowFocus(container, node.dataset.cashflowNode);
+  });
+  container.addEventListener('focusout', () => {
+    requestAnimationFrame(() => {
+      if (!container.contains(document.activeElement)) setCashflowFlowFocus(container);
+    });
+  });
+}
+wireCashflowFlowFocus($('#cashflowSankey'));
+wireCashflowFlowFocus($('#cashflowDialogContent'));
 // The expanded dialog renders into a separate DOM node, so it needs the same
 // category interaction as the inline Sankey. Close it before revealing the
 // filtered activity to make the result immediately visible on every device.
@@ -1859,6 +1943,49 @@ $('#holdingHistoryWhere').addEventListener('change', async (event) => {
   }
 });
 $('#holdingHistoryClose').addEventListener('click', () => $('#holdingHistoryDialog').close());
+// On phones the bottom-sheet handle is the single close affordance. It is a
+// real drag target, not decorative chrome; desktop retains its conventional
+// close button. Keep the threshold deliberate so chart scrubbing or a short
+// accidental touch cannot dismiss the detail.
+{
+  const dialog = $('#holdingHistoryDialog');
+  const handle = $('#holdingHistoryDragHandle');
+  let startY = null;
+  let dragging = false;
+  const isPhoneDrawer = () => window.matchMedia('(max-width: 560px)').matches;
+  const reset = () => { dialog.style.transform = ''; dialog.style.transition = ''; };
+  handle.addEventListener('pointerdown', (event) => {
+    if (!isPhoneDrawer()) return;
+    startY = event.clientY;
+    dragging = true;
+    dialog.style.transition = 'none';
+    handle.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  });
+  handle.addEventListener('pointermove', (event) => {
+    if (!dragging || startY == null) return;
+    const offset = Math.max(0, event.clientY - startY);
+    dialog.style.transform = `translateY(${offset}px)`;
+  });
+  const finishDrawerDrag = (event) => {
+    if (!dragging || startY == null) return;
+    const offset = Math.max(0, event.clientY - startY);
+    dragging = false;
+    startY = null;
+    handle.releasePointerCapture?.(event.pointerId);
+    if (offset >= Math.min(110, dialog.getBoundingClientRect().height * .2)) {
+      reset();
+      dialog.close();
+      return;
+    }
+    dialog.style.transition = 'transform .18s ease-out';
+    dialog.style.transform = 'translateY(0)';
+    window.setTimeout(reset, 190);
+  };
+  handle.addEventListener('pointerup', finishDrawerDrag);
+  handle.addEventListener('pointercancel', finishDrawerDrag);
+  dialog.addEventListener('close', reset);
+}
 $('#manualHoldingForm').addEventListener('submit', async (event) => {
   event.preventDefault();
   const dialog = $('#manualHoldingDialog');

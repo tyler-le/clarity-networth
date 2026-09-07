@@ -89,6 +89,23 @@ function assetClass(type, override = null) {
   return 'Other';
 }
 
+// Portfolio history has three honest states. "Preparing" means Plaid has
+// accepted an asynchronous historical-activity request; "tracking" means we
+// have a current baseline and will add provider-observed snapshots over time;
+// "ready" means a chart has at least two defensible points. This status is
+// derived from the stored evidence, never from a guessed start date.
+function investmentHistoryStatus(store, accounts) {
+  if (!accounts.length) return { state: 'not_applicable' };
+  const itemIds = new Set(accounts.map((account) => account.item_id).filter(Boolean));
+  if ((store.items || []).some((item) => itemIds.has(item.id) && item.investment_history_state === 'preparing')) {
+    return { state: 'preparing' };
+  }
+  if ((store.investment_snapshots || []).filter((snapshot) => ['verified', 'reconstructed'].includes(snapshot.source)).length >= 2) {
+    return { state: 'ready' };
+  }
+  return { state: 'tracking' };
+}
+
 export function investmentSummary(store) {
   const accounts = store.accounts.filter((account) => !account.hidden && account.type === 'investment');
   const accountIds = new Set(accounts.map((account) => account.plaid_account_id));
@@ -141,7 +158,7 @@ export function investmentSummary(store) {
     unclassifiedAccounts,
     positions: positions.map((position) => ({ ...position, gain: position.cost_basis == null ? null : Number(position.value || 0) - Number(position.cost_basis), gain_pct: position.cost_basis ? (Number(position.value || 0) - Number(position.cost_basis)) / Number(position.cost_basis) : null })).sort((a, b) => Number(b.value || 0) - Number(a.value || 0)),
     snapshots: (store.investment_snapshots || []).slice(-3650),
-    historyStatus: store.investment_history_status || { state: 'tracking', unavailable: [] },
+    historyStatus: investmentHistoryStatus(store, accounts),
     positionsAvailable: positions.length > 0
   };
 }
@@ -234,6 +251,31 @@ function transactionMatchesPosition(transaction, position) {
   return Boolean(transactionTicker && positionTicker && transactionTicker === positionTicker);
 }
 
+// An account trend needs to include securities that were sold during the
+// selected period, not only today's holdings. We can add such a security only
+// when Plaid supplied both a stable security ID and a priced ticker. Anything
+// less would quietly understate the earlier account value.
+function reportedHistoricalPositions(store, positions, accountId) {
+  const historical = [...positions];
+  const records = (store.investment_transactions || []).filter((transaction) => transaction.account_id === accountId && Number(transaction.quantity || 0) !== 0);
+  if (records.some((transaction) => !transaction.security_id || !transaction.ticker || String(transaction.security_type || '').toLowerCase() === 'cash')) {
+    return { positions: historical, reason: 'Your institution did not provide enough priced security detail to verify this account history.' };
+  }
+  for (const transaction of records) {
+    if (historical.some((position) => transactionMatchesPosition(transaction, position))) continue;
+    historical.push({
+      account_id: accountId,
+      security_id: transaction.security_id,
+      ticker: String(transaction.ticker).toUpperCase(),
+      type: transaction.security_type || 'other',
+      quantity: 0,
+      value: 0,
+      historical_only: true
+    });
+  }
+  return { positions: historical, reason: null };
+}
+
 function observedStartDate(positions, transactions, linkEvents = [], { requireReportedTrades = false } = {}) {
   const starts = positions.map((position) => {
     const firstTrade = transactions
@@ -266,17 +308,37 @@ function reconstructionTolerance(value) {
 function reconstructReportedPositions(store, positions, { endDate = new Date().toISOString().slice(0, 10), years = 1, expectedValue = null } = {}) {
   if (!positions.length || positions.some((position) => position.type === 'cash' || !position.security_id || !position.ticker || !Number.isFinite(Number(position.quantity)) || Number(position.quantity) < 0)) return { state: 'unavailable', reason: 'Your institution did not provide enough priced holding detail to verify a reconstruction.', history: [] };
   const relevant = (store.investment_transactions || []).filter((transaction) => transaction.date <= endDate && positions.some((position) => transactionMatchesPosition(transaction, position)));
-  const firstTradeByPosition = positions.map((position) => relevant.filter((transaction) => transactionMatchesPosition(transaction, position) && Number.isFinite(Number(transaction.quantity)) && Number(transaction.quantity) !== 0).map((transaction) => transaction.date).filter(Boolean).sort()[0]);
+  const tradesByPosition = positions.map((position) => relevant.filter((transaction) => transactionMatchesPosition(transaction, position) && Number.isFinite(Number(transaction.quantity)) && Number(transaction.quantity) !== 0));
+  const firstTradeByPosition = tradesByPosition.map((trades) => trades.map((transaction) => transaction.date).filter(Boolean).sort()[0]);
   if (firstTradeByPosition.some((date) => !date)) return { state: 'unavailable', reason: 'Your institution did not provide reported activity for every current holding.', history: [] };
-  const start = new Date(`${[...firstTradeByPosition].sort().at(-1)}T12:00:00`);
-  const requested = new Date(`${endDate}T12:00:00`);
-  requested.setFullYear(requested.getFullYear() - Math.max(1, Math.min(2, Number(years) || 1)));
-  if (start < requested) start.setTime(requested.getTime());
+  // A later purchase must not erase a real earlier balance from the same
+  // account. Start at the requested window and calculate the reported
+  // quantity for every day; empty days are trimmed below. This also means an
+  // account opened in January never receives a made-up pre-January balance.
+  const start = new Date(`${endDate}T12:00:00`);
+  start.setFullYear(start.getFullYear() - Math.max(1, Math.min(2, Number(years) || 1)));
+  const startDate = start.toISOString().slice(0, 10);
+  // If the first reported trade lands inside the requested period, a
+  // non-zero quantity immediately before it would be an unknown opening
+  // balance. Do not turn that unknown into a personal history. A complete
+  // ledger may establish a new position at zero; otherwise the chart waits
+  // for provider-observed snapshots.
+  for (let index = 0; index < positions.length; index += 1) {
+    const firstTrade = firstTradeByPosition[index];
+    if (firstTrade <= startDate) continue;
+    const quantityBeforeFirstTrade = Number(positions[index].quantity || 0) - tradesByPosition[index].reduce((sum, transaction) => sum + Number(transaction.quantity || 0), 0);
+    if (Math.abs(quantityBeforeFirstTrade) > .000001) return { state: 'unavailable', reason: 'Reported activity does not establish this holding’s opening balance for the requested period.', history: [] };
+  }
   const history = [];
   for (const cursor = new Date(start); cursor <= new Date(`${endDate}T12:00:00`); cursor.setUTCDate(cursor.getUTCDate() + 1)) {
     const date = cursor.toISOString().slice(0, 10);
     let value = 0;
-    for (const position of positions) {
+    for (let index = 0; index < positions.length; index += 1) {
+      const position = positions[index];
+      // A reported purchase establishes the first defensible day for this
+      // security. Earlier zero/unknown space remains absent rather than being
+      // rendered as a made-up balance.
+      if (date < firstTradeByPosition[index]) continue;
       const laterQuantity = relevant.filter((transaction) => transactionMatchesPosition(transaction, position) && transaction.date > date).reduce((sum, transaction) => sum + Number(transaction.quantity || 0), 0);
       const quantity = Number(position.quantity || 0) - laterQuantity;
       if (!Number.isFinite(quantity) || quantity < -.000001) return { state: 'unavailable', reason: 'Reported activity does not reconcile to the current quantity.', history: [] };
@@ -287,11 +349,15 @@ function reconstructReportedPositions(store, positions, { endDate = new Date().t
     }
     history.push({ date, value: Math.round(value * 100) / 100, source: 'reconstructed' });
   }
-  if (history.length < 2) return { state: 'unavailable', reason: 'There is not enough reported activity for a useful personal history.', history: [] };
+  // Do not make an account appear to have existed before its first reported
+  // position. We retain an actual zero only after the history has begun.
+  const firstValue = history.findIndex((snapshot) => snapshot.value > .005);
+  const visibleHistory = firstValue < 0 ? [] : history.slice(firstValue);
+  if (visibleHistory.length < 2) return { state: 'unavailable', reason: 'There is not enough reported activity for a useful personal history.', history: [] };
   const target = Number(expectedValue == null ? positions.reduce((sum, position) => sum + Math.abs(Number(position.value || 0)), 0) : expectedValue);
-  const difference = Math.abs(Number(history.at(-1).value || 0) - target);
+  const difference = Math.abs(Number(visibleHistory.at(-1).value || 0) - target);
   if (!Number.isFinite(target) || difference > reconstructionTolerance(target)) return { state: 'unavailable', reason: 'The reconstructed value does not closely match the latest institution value.', history: [] };
-  return { state: 'ready', history, startDate: history[0].date, difference };
+  return { state: 'ready', history: visibleHistory, startDate: visibleHistory[0].date, difference };
 }
 
 // Rebuild only derived snapshots from the evidence we already hold. This is
@@ -305,8 +371,11 @@ export function refreshReconstructedInvestmentSnapshots(store, endDate = new Dat
   const accounts = (store.accounts || []).filter((account) => account.type === 'investment' && !account.hidden);
   const reconstructed = [];
   for (const account of accounts) {
-    const positions = (store.positions || []).filter((position) => position.account_id === account.plaid_account_id && !position.hidden);
-    const positionValue = positions.reduce((sum, position) => sum + Math.abs(Number(position.value || 0)), 0);
+    const currentPositions = (store.positions || []).filter((position) => position.account_id === account.plaid_account_id && !position.hidden);
+    const coverage = reportedHistoricalPositions(store, currentPositions, account.plaid_account_id);
+    if (coverage.reason) return [];
+    const positions = coverage.positions;
+    const positionValue = currentPositions.reduce((sum, position) => sum + Math.abs(Number(position.value || 0)), 0);
     if (Math.abs(positionValue - Math.abs(Number(account.current_balance || 0))) > reconstructionTolerance(account.current_balance)) return [];
     const result = reconstructReportedPositions(store, positions, { endDate, years, expectedValue: positionValue });
     if (result.state !== 'ready') return [];
@@ -345,11 +414,14 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
   if (providerHistory.length < 2) {
     const itemIds = new Set((store.accounts || []).filter((account) => positions.some((position) => position.account_id === account.plaid_account_id)).map((account) => account.item_id));
     if ((store.items || []).some((item) => itemIds.has(item.id) && item.investment_history_state === 'preparing')) return {
-      state: 'unavailable', label, ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null, value,
+      state: 'preparing', label, ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null, value,
       costBasis, gain: costBasis == null ? null : value - costBasis, history: [], market: [],
       reason: 'Your institution is still preparing its reported investment activity. We will only build a chart after the complete activity is available.'
     };
-    const reconstructed = reconstructReportedPositions(store, positions, { years, expectedValue: value });
+    const coverage = accountId ? reportedHistoricalPositions(store, positions, accountId) : { positions, reason: null };
+    const reconstructed = coverage.reason
+      ? { state: 'unavailable', reason: coverage.reason, history: [] }
+      : reconstructReportedPositions(store, coverage.positions, { years, expectedValue: value });
     if (reconstructed.state === 'ready') return {
       state: 'ready', label, ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null, value,
       costBasis, gain: costBasis == null ? null : value - costBasis,

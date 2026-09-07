@@ -23,6 +23,11 @@ const sessionSecretValue = process.env.SESSION_SECRET || (!isProduction ? dataEn
 const sessionSecret = crypto.createHash('sha256').update(sessionSecretValue || crypto.randomBytes(32)).digest();
 const inviteCodeHash = process.env.INVITE_CODE ? crypto.createHash('sha256').update(process.env.INVITE_CODE).digest() : null;
 const DAILY_SYNC_INTERVAL_MS = Math.max(60 * 60 * 1000, Number(process.env.DAILY_SYNC_INTERVAL_MS) || 24 * 60 * 60 * 1000);
+// Plaid can take a short time to prepare its initial investment activity
+// extraction. Poll conservatively as a webhook fallback, rather than making a
+// person wait for tomorrow's account refresh.
+const INVESTMENT_HISTORY_RETRY_MS = Math.max(2 * 60 * 1000, Number(process.env.INVESTMENT_HISTORY_RETRY_MS) || 5 * 60 * 1000);
+const MAX_INVESTMENT_HISTORY_RETRY_ATTEMPTS = Math.max(1, Math.min(12, Number(process.env.MAX_INVESTMENT_HISTORY_RETRY_ATTEMPTS) || 6));
 const MAX_LINKED_ITEMS = Math.min(30, Math.max(1, Number(process.env.MAX_LINKED_ITEMS) || 15));
 const userSyncQueues = new Map();
 const providerLimitFallback = new Map();
@@ -524,6 +529,17 @@ async function requestPendingInvestmentHistory() {
             await syncRetirementContributionsForItem(store, item, { asyncUpdate: true });
             changed = true;
           }
+          // `HISTORICAL_UPDATE` normally arrives when Plaid finishes, but a
+          // webhook can be delayed or unavailable. A bounded, per-Item poll
+          // lets every connected person receive ready history promptly without
+          // exposing a manual sync control or repeatedly hitting Plaid.
+          const lastChecked = new Date(item.investment_history_last_checked_at || item.investment_history_requested_at || 0).getTime();
+          if (item.investment_history_state === 'preparing'
+            && Number(item.investment_history_poll_attempts || 0) < MAX_INVESTMENT_HISTORY_RETRY_ATTEMPTS
+            && (!Number.isFinite(lastChecked) || Date.now() - lastChecked >= INVESTMENT_HISTORY_RETRY_MS)) {
+            await syncRetirementContributionsForItem(store, item);
+            changed = true;
+          }
           if (item.investment_history_state === 'ready') {
             await hydrateInvestmentPriceHistory(store, item);
             changed = true;
@@ -537,6 +553,12 @@ async function requestPendingInvestmentHistory() {
       if (changed) await saveStoreByKey(storageKey, store);
     });
   }
+}
+
+function scheduleInvestmentHistoryRetries() {
+  const retry = () => requestPendingInvestmentHistory().catch((error) => console.error('Investment history retry failed:', error.message));
+  const interval = setInterval(retry, INVESTMENT_HISTORY_RETRY_MS);
+  interval.unref?.();
 }
 
 function millisecondsUntilDailySync() {
@@ -678,6 +700,7 @@ async function syncRetirementContributionsForItem(store, item, { asyncUpdate = f
   const hasInvestmentAccount = [...accounts.values()].some((account) => account.item_id === item.id && account.type === 'investment');
   if (!hasInvestmentAccount) return { state: 'not_applicable', imported: 0 };
   store.investment_transactions ||= [];
+  item.investment_history_last_checked_at = new Date().toISOString();
   try {
     while (offset < total) {
       const data = await plaidPost('/investments/transactions/get', {
@@ -716,15 +739,17 @@ async function syncRetirementContributionsForItem(store, item, { asyncUpdate = f
       offset += 500;
     }
   } catch (error) {
-    if (asyncUpdate && isPlaidProductNotReady(error)) {
-      item.investment_history_requested_at = new Date().toISOString();
+    if (isPlaidProductNotReady(error)) {
+      item.investment_history_requested_at ||= new Date().toISOString();
       item.investment_history_state = 'preparing';
+      if (!asyncUpdate) item.investment_history_poll_attempts = Number(item.investment_history_poll_attempts || 0) + 1;
       return { state: 'preparing', imported: 0 };
     }
     throw error;
   }
   item.investment_history_state = 'ready';
   item.investment_history_received_at = new Date().toISOString();
+  delete item.investment_history_poll_attempts;
   return { state: 'ready', imported };
 }
 
@@ -1409,6 +1434,7 @@ async function startServer() {
   });
   scheduleDailySync();
   requestPendingInvestmentHistory().catch((error) => console.error('Investment history request scheduler failed:', error.message));
+  scheduleInvestmentHistoryRetries();
 }
 
 if (process.env.CLARITY_LISTEN !== 'false') {
