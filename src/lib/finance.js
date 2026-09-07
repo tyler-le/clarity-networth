@@ -1099,6 +1099,7 @@ export function seedDemo(store) {
 
 function ensureDemoMarketHistory(store) {
   store.market_prices ||= {};
+  store.investment_transactions ||= [];
   const today = new Date();
   const byTicker = new Map();
   for (const position of store.positions || []) {
@@ -1119,6 +1120,16 @@ function ensureDemoMarketHistory(store) {
       const multiplier = 0.88 + progress * 0.12 + Math.sin(progress * 17 + phase) * 0.018 + Math.sin(progress * 43 + phase) * 0.008;
       prices[date.toISOString().slice(0, 10)] = Math.round(currentPrice * multiplier * 100) / 100;
     }
+  }
+  // Demo-only acquisition records keep its personal-history chart internally
+  // consistent with the same conservative rules used for real connections.
+  for (const position of store.positions || []) {
+    if (!position.ticker || position.type === 'cash') continue;
+    const id = `demo-trade-${position.account_id}-${position.ticker}`;
+    if (store.investment_transactions.some((transaction) => transaction.id === id)) continue;
+    const date = new Date(today);
+    date.setFullYear(date.getFullYear() - 1);
+    store.investment_transactions.push({ id, account_id: position.account_id, security_id: position.security_id || null, ticker: position.ticker, security_type: position.type, date: date.toISOString().slice(0, 10), quantity: Number(position.quantity || 0), price: Number(position.price || 0), amount: Number(position.value || 0), type: 'buy', subtype: 'buy', demo: true });
   }
 }
 

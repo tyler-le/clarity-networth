@@ -359,6 +359,19 @@ test('holding detail timeframes stay local to the drill-in chart', async ({ page
   await expect(page.locator('[data-investment-range="1m"]')).not.toHaveClass(/active/);
 });
 
+test('investment detail cards stay readable without horizontal overflow on a phone', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'phone', 'Phone-specific responsive coverage.');
+  await openDemo(page);
+  await goToView(page, 'investments');
+  await page.locator('[data-holding-history]').first().click();
+  const dialog = page.locator('#holdingHistoryDialog');
+  await expect(dialog).toBeVisible();
+  expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  for (const selector of ['#holdingHistoryMetrics', '#holdingHistoryRange', '#holdingHistoryWhere']) {
+    expect(await page.locator(selector).evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  }
+});
+
 test('portfolio history can be scrubbed just like net worth', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'investments');

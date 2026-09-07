@@ -962,7 +962,7 @@ function renderInvestments(data) {
   renderPortfolioChart(data);
   const allocation = data.allocation || [];
   $('#investmentAllocationCard').classList.toggle('hidden', !data.positionsAvailable);
-  $('#investmentAccountsCard').classList.toggle('hidden', accounts.length < 2);
+  $('#investmentAccountsCard').classList.toggle('hidden', accounts.length < 1);
   $('#investmentHoldingsPanel').classList.toggle('hidden', !data.positionsAvailable);
   let cursor = 0;
   const colors = ['#287143', '#7ea98b', '#d5a75f', '#9ca9bd', '#b88692', '#7d91a5'];
@@ -972,7 +972,7 @@ function renderInvestments(data) {
     $('#investmentAllocationInsight').textContent = `${largest.name} is your largest allocation at ${Math.round(largest.share * 100)}%. Current mix · ${periodLabel} selected.`;
     const selected = allocation.find((row) => row.name === state.investmentFilter);
     donut.style.background = `conic-gradient(${allocation.map((row, index) => { const next = cursor + row.share * 100; const color = state.investmentFilter === 'all' || row.name === state.investmentFilter ? colors[index % colors.length] : '#dde4dd'; const stop = `${color} ${cursor.toFixed(2)}% ${next.toFixed(2)}%`; cursor = next; return stop; }).join(', ')})`;
-    donut.innerHTML = selected ? `<span><strong>${fmt.format(selected.value)}</strong><small>${escapeHtml(selected.name)} · ${Math.round(selected.share * 100)}%</small></span>` : '<span><strong>Your mix</strong><small>Tap a category</small></span>';
+    donut.innerHTML = selected ? `<span><strong>${fmt.format(selected.value)}</strong><small>${escapeHtml(selected.name)} · ${Math.round(selected.share * 100)}%</small></span>` : `<span><strong>${fmt.format(data.total || 0)}</strong><small>All assets</small></span>`;
     $('#investmentAllocation').innerHTML = `<button class="investment-allocation-row ${state.investmentFilter === 'all' ? 'active' : ''}" data-investment-filter="all"><i></i><span>All assets</span><strong>${fmt.format(data.total || 0)}</strong></button>${allocation.map((row, index) => `<button class="investment-allocation-row ${state.investmentFilter === row.name ? 'active' : ''}" data-investment-filter="${escapeHtml(row.name)}"><i style="background:${colors[index % colors.length]}"></i><span>${escapeHtml(row.name)}</span><small>${Math.round(row.share * 100)}%</small><strong>${fmt.format(row.value)}</strong></button>`).join('')}`;
   } else {
     donut.style.background = '#edf0eb'; donut.innerHTML = '<span>Awaiting<br>holdings</span>';
