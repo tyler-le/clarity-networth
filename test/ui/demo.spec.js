@@ -223,10 +223,11 @@ test('asset-allocation filters preserve the reader position', async ({ page }) =
   await expect(page.locator('#investmentHoldingsInsight')).toContainText('Funds');
 });
 
-test('cash-flow diagram shows dollars and share of take-home income together', async ({ page }) => {
+test('cash-flow diagram shows dollars and source shares of received income together', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');
-  await expect(page.locator('#cashflowSankey')).toContainText('100%');
+  await expect(page.locator('#cashflowSankey')).toContainText('Paychecks');
+  await expect(page.locator('#cashflowSankey')).toContainText('Interest');
   await expect(page.locator('#cashflowSankey')).toContainText('$');
   await expect(page.locator('#cashflowSankey [data-cashflow-category="savings"]')).toBeVisible();
   await expect(page.locator('#cashflowSankey [data-cashflow-category="investments"]')).toBeVisible();
@@ -239,7 +240,7 @@ test('cash-flow diagram shows dollars and share of take-home income together', a
 test('cash-flow diagram stays readable on mobile and expands in-app', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');
-  await expect(page.locator('#cashflowSankey')).toContainText('Take-home');
+  await expect(page.locator('#cashflowSankey')).toContainText('Paychecks');
   const moreLabel = page.locator('#cashflowSankey .cashflow-more');
   if (await moreLabel.count()) {
     const [labelBox, svgBox] = await Promise.all([moreLabel.boundingBox(), page.locator('#cashflowSankey svg').boundingBox()]);
@@ -258,7 +259,7 @@ test('cash-flow quality holds at every supported viewport', async ({ page }) => 
   await goToView(page, 'spending');
   const diagram = page.locator('#cashflowSankey');
   await expect(diagram.locator('svg')).toBeVisible();
-  await expect(diagram).toContainText('Take-home');
+  await expect(diagram).toContainText('Paychecks');
   const edgeWidths = await diagram.locator('.cashflow-flow').evaluateAll((paths) => paths.map((path) => Number(path.getAttribute('stroke-width'))));
   expect(Math.max(...edgeWidths)).toBeLessThanOrEqual(48);
   expect(Math.max(...edgeWidths)).toBeGreaterThan(Math.min(...edgeWidths));
@@ -298,9 +299,9 @@ test('the complete app stays navigable and coherent at every supported viewport'
 test('the income source opens income activity from the cash-flow diagram', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');
-  await page.locator('#cashflowSankey [data-cashflow-category="income"]').click();
+  await page.locator('#cashflowSankey [data-cashflow-category="income_paychecks"]').click();
   await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
-  await expect(page.locator('#spendingCategoryFilter')).toHaveValue('income');
+  await expect(page.locator('#spendingCategoryFilter')).toHaveValue('income_paychecks');
   await expect(page.locator('.income-transaction').first()).toBeVisible();
 });
 
