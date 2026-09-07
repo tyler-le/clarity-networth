@@ -46,6 +46,38 @@ export function accountSide(type) {
   return 'asset';
 }
 
+// A debt plan should be an honest next step, not an optimistic payoff
+// projection.  Institutions do not always return APRs, so only recommend an
+// avalanche target when we have a rate to support it.  Snowball works from a
+// balance alone and remains useful for every debt account.
+export function debtPayoffPlan(store) {
+  const debts = (store.accounts || [])
+    .filter((account) => !account.hidden && ['credit', 'loan'].includes(String(account.type || '').toLowerCase()))
+    .map((account) => {
+      const rate = Number(account.interest_rate);
+      return {
+        id: account.id,
+        name: account.nickname || account.name || 'Unnamed account',
+        balance: Math.abs(Number(account.current_balance || 0)),
+        interestRate: Number.isFinite(rate) && rate >= 0 && rate <= 100 ? rate : null
+      };
+    })
+    .filter((account) => account.balance > 0);
+  const strategy = store.settings?.debt_strategy === 'snowball' ? 'snowball' : 'avalanche';
+  const withRates = debts.filter((account) => account.interestRate != null);
+  const priority = strategy === 'snowball'
+    ? [...debts].sort((a, b) => a.balance - b.balance)[0] || null
+    : [...withRates].sort((a, b) => b.interestRate - a.interestRate || a.balance - b.balance)[0] || null;
+  return {
+    totalDebt: debts.reduce((sum, account) => sum + account.balance, 0),
+    accountCount: debts.length,
+    strategy,
+    priority,
+    debts,
+    missingRates: debts.filter((account) => account.interestRate == null).length
+  };
+}
+
 function assetClass(type, override = null) {
   if (override) return override;
   const value = String(type || '').toLowerCase();
@@ -873,8 +905,8 @@ export function seedDemo(store) {
     { id: 'demo-brokerage', item_id: 'demo-fidelity', plaid_account_id: 'demo-brokerage', institution_name: 'Fidelity', name: 'Brokerage', type: 'investment', subtype: 'brokerage', current_balance: 18200, updated_at: new Date().toISOString(), demo: true },
     { id: 'demo-roth', item_id: 'demo-fidelity', plaid_account_id: 'demo-roth', institution_name: 'Fidelity', name: 'Roth IRA', type: 'investment', subtype: 'ira', current_balance: 26400, updated_at: new Date().toISOString(), demo: true },
     { id: 'demo-401k', item_id: 'demo-fidelity', plaid_account_id: 'demo-401k', institution_name: 'Fidelity', name: '401(k)', type: 'investment', subtype: '401k', current_balance: 43800, updated_at: new Date().toISOString(), demo: true },
-    { id: 'demo-credit', item_id: 'demo-chase', plaid_account_id: 'demo-credit', institution_name: 'Chase', name: 'Credit Card', type: 'credit', subtype: 'credit card', current_balance: 1160, updated_at: new Date().toISOString(), demo: true },
-    { id: 'demo-auto', item_id: 'demo-capital-one', plaid_account_id: 'demo-auto', institution_name: 'Capital One', name: 'Auto loan', type: 'loan', subtype: 'auto', current_balance: 9350, updated_at: new Date().toISOString(), demo: true }
+    { id: 'demo-credit', item_id: 'demo-chase', plaid_account_id: 'demo-credit', institution_name: 'Chase', name: 'Credit Card', type: 'credit', subtype: 'credit card', current_balance: 1160, interest_rate: 24.49, interest_rate_source: 'institution', updated_at: new Date().toISOString(), demo: true },
+    { id: 'demo-auto', item_id: 'demo-capital-one', plaid_account_id: 'demo-auto', institution_name: 'Capital One', name: 'Auto loan', type: 'loan', subtype: 'auto', current_balance: 9350, interest_rate: 5.9, interest_rate_source: 'institution', updated_at: new Date().toISOString(), demo: true }
   ];
   store.positions = [
     ['demo-brokerage', 'VTI', 'Vanguard Total Stock Market ETF', 'etf', 92, 274, 25208],

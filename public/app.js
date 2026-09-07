@@ -429,6 +429,30 @@ function renderAccounts(accounts) {
   }).join('');
 }
 
+function debtPlanForStrategy(plan, strategy) {
+  const debts = plan?.debts || [];
+  const priority = strategy === 'snowball'
+    ? [...debts].sort((a, b) => Number(a.balance) - Number(b.balance))[0] || null
+    : [...debts].filter((a) => a.interestRate != null).sort((a, b) => Number(b.interestRate) - Number(a.interestRate) || Number(a.balance) - Number(b.balance))[0] || null;
+  return { ...plan, strategy, priority };
+}
+
+function renderDebtPayoff(plan) {
+  const card = $('#debtPayoffCard');
+  if (!plan?.accountCount) { card.classList.add('hidden'); card.innerHTML = ''; return; }
+  card.classList.remove('hidden');
+  const avalanche = plan.strategy !== 'snowball';
+  const priority = plan.priority;
+  const target = priority ? `<strong>${escapeHtml(priority.name)}</strong>` : null;
+  const nextStep = avalanche
+    ? target ? `Put any extra payment toward ${target}${priority.interestRate != null ? ` at ${Number(priority.interestRate).toFixed(2).replace(/\.00$/, '')}% APR` : ''}.`
+      : 'Add interest rates to see which balance is costing you the most.'
+    : target ? `Put any extra payment toward ${target}, your smallest balance.` : 'Your balances will appear here once they are available.';
+  const rateEditor = avalanche && plan.missingRates
+    ? `<details class="debt-rate-editor"><summary>${plan.missingRates === 1 ? 'Add 1 interest rate' : `Add ${plan.missingRates} interest rates`} <span>Optional</span></summary><p>Some institutions do not share rates. Adding yours makes this recommendation specific.</p><div class="debt-rate-list">${plan.debts.filter((debt) => debt.interestRate == null).map((debt) => `<label>${escapeHtml(debt.name)}<span><input data-debt-rate="${escapeHtml(debt.id)}" type="number" min="0" max="100" step="0.01" inputmode="decimal" aria-label="Annual interest rate for ${escapeHtml(debt.name)}" placeholder="APR" /><b>%</b></span></label>`).join('')}</div><button class="secondary debt-rate-save" type="button" data-save-debt-rates>Save rates</button></details>` : '';
+  card.innerHTML = `<div class="debt-payoff-head"><div><div class="card-label">DEBT PAYOFF</div><h2>${fmt.format(plan.totalDebt)} to pay down</h2><p>${plan.accountCount} balance${plan.accountCount === 1 ? '' : 's'} · choose the approach that fits you.</p></div></div><div class="debt-strategy-choice" role="group" aria-label="Debt payoff approach"><button type="button" class="${avalanche ? 'active' : ''}" data-debt-strategy="avalanche"><strong>Save most interest</strong><span>Highest rate first</span></button><button type="button" class="${!avalanche ? 'active' : ''}" data-debt-strategy="snowball"><strong>Small wins first</strong><span>Smallest balance first</span></button></div><div class="debt-next-step"><span>Next step</span><p>${nextStep}</p></div>${rateEditor}`;
+}
+
 function renderConnections(items) {
   const panel = $('#connectionsList');
   const health = new Map((state.dashboard?.connectionHealth || []).map((entry) => [entry.id, entry]));
@@ -877,6 +901,7 @@ function renderDashboard() {
   $('#liabilities').classList.add('negative');
   if (state.view === 'overview') renderNetWorthChartWhenVisible();
   renderAccounts(d.accounts || []);
+  renderDebtPayoff(d.debtPayoff);
   renderConnections(d.items || []);
   renderClarityLayer(d);
   $('#demoToggle').textContent = d.demoMode ? 'Exit demo' : 'Try demo';
@@ -1216,6 +1241,43 @@ $('#accountGrid').addEventListener('click', (event) => {
   dialog.showModal();
   $('#nicknameInput').focus();
   $('#nicknameInput').select();
+});
+$('#debtPayoffCard').addEventListener('click', async (event) => {
+  const strategyButton = event.target.closest('[data-debt-strategy]');
+  if (strategyButton) {
+    const strategy = strategyButton.dataset.debtStrategy;
+    try {
+      if (state.demoPreview) {
+        state.dashboard.debtPayoff = debtPlanForStrategy(state.dashboard.debtPayoff, strategy);
+      } else {
+        state.dashboard.debtPayoff = await api('/api/settings/debt-strategy', { method: 'PATCH', body: JSON.stringify({ strategy }) });
+      }
+      renderDebtPayoff(state.dashboard.debtPayoff);
+    } catch (error) { showNotice(error.message); }
+    return;
+  }
+  if (!event.target.closest('[data-save-debt-rates]')) return;
+  const button = event.target.closest('[data-save-debt-rates]');
+  const inputs = [...$('#debtPayoffCard').querySelectorAll('[data-debt-rate]')];
+  const entries = inputs.filter((input) => input.value.trim() !== '');
+  if (!entries.length) { showNotice('Enter at least one annual interest rate.'); return; }
+  button.disabled = true;
+  try {
+    if (state.demoPreview) {
+      for (const input of entries) {
+        const debt = state.dashboard.debtPayoff.debts.find((entry) => entry.id === input.dataset.debtRate);
+        if (debt) debt.interestRate = Number(input.value);
+      }
+      state.dashboard.debtPayoff.missingRates = state.dashboard.debtPayoff.debts.filter((debt) => debt.interestRate == null).length;
+      state.dashboard.debtPayoff = debtPlanForStrategy(state.dashboard.debtPayoff, state.dashboard.debtPayoff.strategy);
+    } else {
+      let plan = state.dashboard.debtPayoff;
+      for (const input of entries) plan = await api(`/api/accounts/${encodeURIComponent(input.dataset.debtRate)}/debt-details`, { method: 'PATCH', body: JSON.stringify({ interest_rate: input.value }) });
+      state.dashboard.debtPayoff = plan;
+    }
+    renderDebtPayoff(state.dashboard.debtPayoff);
+    showNotice('Debt payoff plan updated.', 'success');
+  } catch (error) { showNotice(error.message); } finally { button.disabled = false; }
 });
 $('#nicknameForm').addEventListener('submit', async (event) => {
   event.preventDefault();

@@ -7,7 +7,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './store.js';
 import { consumeRateLimit, databaseEnabled, databaseHealthy, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, writeDatabaseStore } from './database.js';
-import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentLinkBalances, investmentSummary, monthlyReview, reconstructInvestmentHistory, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
+import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentLinkBalances, investmentSummary, monthlyReview, reconstructInvestmentHistory, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './finance.js';
 import { loadHistoricalPrices } from './market-data.js';
 import { plaidConfigured, plaidPost } from './plaid.js';
 
@@ -335,7 +335,29 @@ async function refreshAccountsForItem(store, item) {
     } catch (e) { console.warn('Investments not available:', e.message); }
   }
   if (types.has('credit') || types.has('loan')) {
-    try { await plaidPost('/liabilities/get', { access_token }); } catch (e) { console.warn('Liabilities not available:', e.message); }
+    try {
+      const liabilities = await plaidPost('/liabilities/get', { access_token });
+      // Rates are useful for a payoff recommendation. Never invent one when
+      // an institution does not provide it.
+      const records = [
+        ...(liabilities.liabilities?.credit || []),
+        ...(liabilities.liabilities?.mortgage || []),
+        ...(liabilities.liabilities?.student || [])
+      ];
+      for (const record of records) {
+        const account = store.accounts.find((entry) => entry.plaid_account_id === record.account_id);
+        if (!account) continue;
+        const aprs = Array.isArray(record.aprs) ? record.aprs : [];
+        const preferred = aprs.find((apr) => /purchase|interest|variable|fixed/i.test(String(apr.apr_type || ''))) || aprs[0];
+        const rate = Number(preferred?.apr_percentage);
+        if (account.interest_rate_source !== 'manual' && Number.isFinite(rate) && rate >= 0 && rate <= 100) {
+          account.interest_rate = rate;
+          account.interest_rate_source = 'institution';
+        }
+        const minimum = Number(record.minimum_payment_amount);
+        if (Number.isFinite(minimum) && minimum >= 0) account.minimum_payment = minimum;
+      }
+    } catch (e) { console.warn('Liabilities not available:', e.message); }
   }
 }
 
@@ -706,6 +728,7 @@ app.get('/api/demo-preview', demoLimiter, (req, res) => {
       recurring: recurringCharges(store),
       investmentContributions: investmentContributions(store),
       investmentLinkBalances: investmentLinkBalances(store),
+      debtPayoff: debtPayoffPlan(store),
       accounts: store.accounts.filter((account) => !account.hidden).sort((a, b) => Number(b.current_balance || 0) - Number(a.current_balance || 0)),
       snapshots: store.snapshots.slice(-3650),
       items: store.items.map(publicItem),
@@ -761,6 +784,7 @@ app.get('/api/dashboard', async (req, res) => {
     recurring: recurringCharges(visibleStore),
     investmentContributions: investmentContributions(visibleStore),
     investmentLinkBalances: investmentLinkBalances(visibleStore),
+    debtPayoff: debtPayoffPlan(visibleStore),
     accounts,
     snapshots,
     items: visibleStore.items.map(publicItem),
@@ -872,6 +896,31 @@ app.patch('/api/accounts/:id/nickname', async (req, res) => {
   account.nickname = nickname || null;
   await saveStore(req.user, store);
   res.json({ ok: true, nickname: account.nickname });
+});
+
+app.patch('/api/settings/debt-strategy', async (req, res) => {
+  const strategy = String(req.body?.strategy || '');
+  if (!['avalanche', 'snowball'].includes(strategy)) return res.status(400).json({ error: 'Choose a debt payoff approach.' });
+  const store = await loadStore(req.user);
+  store.settings ||= {};
+  store.settings.debt_strategy = strategy;
+  await saveStore(req.user, store);
+  res.json(debtPayoffPlan(activeStore(store)));
+});
+
+app.patch('/api/accounts/:id/debt-details', async (req, res) => {
+  const rawRate = req.body?.interest_rate;
+  const interestRate = rawRate === '' || rawRate == null ? null : Number(rawRate);
+  if (interestRate != null && (!Number.isFinite(interestRate) || interestRate < 0 || interestRate > 100)) return res.status(400).json({ error: 'Enter an annual rate from 0% to 100%.' });
+  const store = await loadStore(req.user);
+  const account = store.accounts.find((record) => record.id === req.params.id && !record.demo && ['credit', 'loan'].includes(String(record.type || '').toLowerCase()));
+  if (!account) return res.status(404).json({ error: 'Debt account not found.' });
+  // A manual value is deliberately preserved across provider refreshes until
+  // the person clears it, since not every bank shares liabilities metadata.
+  account.interest_rate = interestRate;
+  account.interest_rate_source = interestRate == null ? null : 'manual';
+  await saveStore(req.user, store);
+  res.json(debtPayoffPlan(activeStore(store)));
 });
 
 app.post('/api/manual-accounts', async (req, res) => {

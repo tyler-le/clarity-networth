@@ -106,6 +106,19 @@ test('a new visitor can explore the complete demo without signing in', async ({ 
   expect(pageErrors).toEqual([]);
 });
 
+test('accounts makes a simple debt payoff choice actionable without a separate dashboard', async ({ page }) => {
+  await openDemo(page);
+  await goToView(page, 'accounts');
+  const card = page.locator('#debtPayoffCard');
+  await expect(card).toBeVisible();
+  await expect(card).toContainText(/debt payoff/i);
+  await expect(card).toContainText('Save most interest');
+  await expect(card).toContainText('Credit Card');
+  await card.getByRole('button', { name: /small wins first/i }).click();
+  await expect(card.getByRole('button', { name: /small wins first/i })).toHaveClass(/active/);
+  await expect(card).toContainText('Credit Card, your smallest balance');
+});
+
 test('cash-flow interactions lead from visual category to the relevant activity', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');

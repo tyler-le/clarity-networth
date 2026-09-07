@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentLinkBalances, monthlyReview, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
+import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentLinkBalances, monthlyReview, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../finance.js';
 import { normalizeCandles } from '../market-data.js';
 import { filterSnapshots, scrubIndex } from '../public/chart-utils.js';
 
@@ -328,6 +328,29 @@ test('goals use tracked balances and debt payoff measures progress downward', ()
   const [cash, debt] = goalProgress(store);
   assert.equal(cash.current, 4000); assert.equal(cash.progress, .4);
   assert.equal(debt.current, 6000); assert.equal(debt.progress, .5);
+});
+
+test('debt payoff plan recommends the highest known rate or the smallest balance by choice', () => {
+  const store = { accounts: [
+    { id: 'card', name: 'Card', type: 'credit', current_balance: 1200, interest_rate: 25.99 },
+    { id: 'auto', name: 'Auto', type: 'loan', current_balance: 9000, interest_rate: 5.9 },
+    { id: 'medical', name: 'Medical', type: 'loan', current_balance: 450 }
+  ], settings: {} };
+  const avalanche = debtPayoffPlan(store);
+  assert.equal(avalanche.totalDebt, 10650);
+  assert.equal(avalanche.accountCount, 3);
+  assert.equal(avalanche.strategy, 'avalanche');
+  assert.equal(avalanche.priority.id, 'card');
+  assert.equal(avalanche.missingRates, 1);
+  store.settings.debt_strategy = 'snowball';
+  const snowball = debtPayoffPlan(store);
+  assert.equal(snowball.priority.id, 'medical');
+});
+
+test('avalanche does not pretend to know a target without an interest rate', () => {
+  const plan = debtPayoffPlan({ accounts: [{ id: 'loan', name: 'Loan', type: 'loan', current_balance: 1000 }], settings: {} });
+  assert.equal(plan.priority, null);
+  assert.equal(plan.missingRates, 1);
 });
 
 test('monthly review surfaces only a large, repeatable category deviation', () => {

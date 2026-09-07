@@ -179,6 +179,19 @@ input[type="month"], .search { border: 1px solid var(--line); background: white;
 .accounts-summary div:last-child { border-right: 0; }
 .accounts-summary span { color: var(--muted); font-size: 12px; font-weight: 600; }
 .accounts-summary strong { font-size: 22px; letter-spacing: -.03em; }
+.debt-payoff-card { margin: -4px 0 18px; padding: 18px; border-color: #ecd9d5; background: linear-gradient(135deg, #fff 0%, #fffaf9 100%); }
+.debt-payoff-head h2 { margin: 5px 0 3px; font-size: 25px; letter-spacing: -.04em; }
+.debt-payoff-head p { margin: 0; color: var(--muted); font-size: 13px; }
+.debt-strategy-choice { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-top: 16px; }
+.debt-strategy-choice button { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--text); text-align: left; }
+.debt-strategy-choice button.active { border-color: #c97b68; background: #fff6f3; box-shadow: inset 0 0 0 1px rgba(201,123,104,.12); }
+.debt-strategy-choice strong, .debt-strategy-choice span { display: block; }
+.debt-strategy-choice strong { font-size: 13px; }.debt-strategy-choice span { margin-top: 3px; color: var(--muted); font-size: 11px; }
+.debt-next-step { display: grid; gap: 3px; margin-top: 14px; padding: 11px 12px; border-radius: 11px; background: rgba(177,76,61,.06); }
+.debt-next-step > span { color: var(--muted); font-size: 10px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.debt-next-step p { margin: 0; font-size: 13px; line-height: 1.4; }.debt-next-step strong { font-weight: 750; }
+.debt-rate-editor { margin-top: 13px; border-top: 1px solid var(--line); padding-top: 12px; }.debt-rate-editor summary { cursor: pointer; color: var(--accent); font-size: 12px; font-weight: 700; }.debt-rate-editor summary span { color: var(--muted); font-weight: 500; }.debt-rate-editor p { margin: 9px 0; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.debt-rate-list { display: grid; gap: 8px; }.debt-rate-list label { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--text); font-size: 12px; font-weight: 650; }.debt-rate-list label > span { display: inline-flex; align-items: center; gap: 5px; }.debt-rate-list input { width: 74px; padding: 7px 8px; border: 1px solid var(--line); border-radius: 8px; font: inherit; text-align: right; }.debt-rate-list b { color: var(--muted); font-size: 12px; }.debt-rate-save { margin-top: 10px; padding: 7px 10px; border-radius: 8px; font-size: 12px; }
 .account-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 .account-tile { padding: 19px; }
 .account-tile .account-balance { font-size: 25px; margin-top: 18px; }
@@ -443,6 +456,11 @@ html[data-theme="dark"] .holding-detail, html[data-theme="dark"] .holding-accoun
 html[data-theme="dark"] .holding-account, html[data-theme="dark"] .holding-account-list { background: #1c231e; }
 html[data-theme="dark"] .investment-donut::before, html[data-theme="dark"] .spending-donut::before { background: var(--card); }
 html[data-theme="dark"] .account-collection, html[data-theme="dark"] .accounts-summary { background: var(--card); }
+html[data-theme="dark"] .debt-payoff-card { border-color: #4e3b38; background: var(--card); }
+html[data-theme="dark"] .debt-strategy-choice button { background: #1a201d; border-color: var(--line); }
+html[data-theme="dark"] .debt-strategy-choice button.active { background: #2b211f; border-color: #93584c; }
+html[data-theme="dark"] .debt-next-step { background: rgba(196,112,91,.12); }
+html[data-theme="dark"] .debt-rate-list input { background: #151a17; color: var(--text); }
 html[data-theme="dark"] .account-group-more { background: #1e261f; }
 html[data-theme="dark"] .institution-logo, html[data-theme="dark"] .institution-fallback, html[data-theme="dark"] .connection-logo, html[data-theme="dark"] .connection-fallback { border-color: var(--line); background: #252d27; }
 html[data-theme="dark"] .connections-panel { border-color: var(--line); background: #1a201c; }
