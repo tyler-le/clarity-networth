@@ -88,6 +88,7 @@ test('a recently connected member sees distinct portfolio dates, never repeated 
 
   await goToView(page, 'investments');
   await expect(page.locator('#investmentChart svg')).toBeVisible();
+  await expect(page.locator('#investmentContext')).toContainText('since Sep 5');
   const labels = await page.locator('#investmentChart .chart-x-axis-label').allTextContents();
   expect(labels.length).toBeGreaterThanOrEqual(2);
   expect(labels[0]).toBe('Sep 5');

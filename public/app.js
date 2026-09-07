@@ -830,6 +830,21 @@ function investmentRangeLabel(range) {
   return ({ '1m': 'last month', '3m': 'last 3 months', '6m': 'last 6 months', ytd: 'year to date', '1y': 'last year', all: 'all history' })[range] || 'last year';
 }
 
+function portfolioChangeLabel(snapshots) {
+  const first = snapshots[0];
+  const last = snapshots.at(-1);
+  if (!first || !last) return investmentRangeLabel(state.investmentRange);
+  if (state.investmentRange === 'all') return 'all history';
+  const latest = new Date(`${last.date}T12:00:00`);
+  const { startDate } = netWorthRangeBounds(state.investmentRange, latest);
+  const start = new Date(`${first.date}T12:00:00`);
+  // A small allowance covers a connection just after a calendar edge. If it
+  // is not met, the selected control is a viewing preference—not evidence of
+  // a complete period—so name the real tracking start instead.
+  if (startDate && start.getTime() <= new Date(`${startDate}T12:00:00`).getTime() + 10 * 86400000) return investmentRangeLabel(state.investmentRange);
+  return `since ${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+}
+
 function renderPortfolioChart(data) {
   const el = $('#investmentChart');
   if (el.clientWidth < 80 || el.clientHeight < 60) return;
@@ -1061,10 +1076,11 @@ function renderInvestments(data) {
   const displayedTotal = Number(endSnapshot?.value ?? data.total ?? 0);
   const periodChange = snapshots.length > 1 ? displayedTotal - Number(startSnapshot?.value || 0) : null;
   const periodLabel = investmentRangeLabel(state.investmentRange);
+  const changePeriodLabel = portfolioChangeLabel(snapshots);
   $('#investmentTotal').textContent = fmt.format(displayedTotal);
   const started = snapshots[0]?.date ? new Date(`${snapshots[0].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : null;
   const reconstructed = snapshots.some((snapshot) => snapshot.source === 'reconstructed');
-  const changeCopy = periodChange == null ? (started ? `Tracking since ${started}` : 'Sync to begin tracking') : `${periodChange >= 0 ? '+' : '−'}${fmt.format(Math.abs(periodChange))} ${periodLabel}`;
+  const changeCopy = periodChange == null ? (started ? `Tracking since ${started}` : 'Sync to begin tracking') : `${periodChange >= 0 ? '+' : '−'}${fmt.format(Math.abs(periodChange))} ${changePeriodLabel}`;
   $('#investmentContext').textContent = accounts.length ? changeCopy : 'Connect an investment account to begin.';
   $('#investmentChartDate').textContent = '';
   $('#investmentChartContext').classList.add('hidden');
