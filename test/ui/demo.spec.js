@@ -9,6 +9,8 @@ async function openDemo(page) {
   await expect(page.locator('#inviteCode')).toHaveAttribute('type', 'password');
   await expect(page.locator('#inviteCode')).toHaveValue('');
   await expect(page.getByText(/By continuing, you agree to our/i)).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Terms' })).toHaveAttribute('href', '/terms');
+  await expect(page.getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute('href', '/privacy');
   await page.getByRole('button', { name: /explore the demo/i }).click();
   await expect(page.locator('#appShell')).toBeVisible();
   // The shell is shown before its first data request completes. Wait for a

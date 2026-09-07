@@ -565,8 +565,8 @@ html[data-theme="dark"] .auth-halo { display: none; }
 .legal-kicker, .legal-updated { color: var(--subtle); font-size: .8rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .legal-back { text-decoration: none; }
 .auth-legal { margin: 14px 0 0; color: var(--subtle); font-size: .78rem; }
-.auth-legal a { color: inherit; text-decoration: none; }
-.auth-legal a:hover { color: var(--green); }
+.auth-legal a { display: inline-block; padding: 3px 1px; border-radius: 4px; color: var(--accent); font-weight: 720; text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 42%, transparent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+.auth-legal a:hover, .auth-legal a:focus-visible { color: var(--green); text-decoration-color: currentColor; outline: none; }
 .auth-legal span { margin: 0 7px; }
 
 /* Retirement is a short path, not a wall of calculator inputs. */
