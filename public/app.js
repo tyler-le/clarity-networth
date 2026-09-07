@@ -915,7 +915,8 @@ function renderHoldingHistoryDetail() {
   requestAnimationFrame(() => renderHoldingHistoryChart(history, isMarket ? 'market' : 'position'));
   const positions = (state.investments?.positions || []).filter((position) => data.accountId ? position.account_id === data.accountId : data.ticker && String(position.ticker || '').toUpperCase() === data.ticker);
   const accounts = new Map((state.investments?.accounts || []).map((account) => [account.account_id, account]));
-  $('#holdingHistoryWhere').innerHTML = positions.length ? `<span>Where it’s held</span>${positions.map((position) => `<div><b>${escapeHtml(accounts.get(position.account_id)?.name || 'Investment account')}</b><small>${escapeHtml(assetClassLabel(position.type, position.asset_class_override))}</small><strong>${fmt.format(Number(position.value || 0))}</strong></div>`).join('')}` : '';
+  const canEditClass = !state.demoPreview && !state.dashboard?.demoMode;
+  $('#holdingHistoryWhere').innerHTML = positions.length ? `<span>Where it’s held</span>${positions.map((position) => `<div><b>${escapeHtml(accounts.get(position.account_id)?.name || 'Investment account')}</b><small>${escapeHtml(assetClassLabel(position.type, position.asset_class_override))}</small><strong>${fmt.format(Number(position.value || 0))}</strong>${canEditClass ? holdingClassControl(position) : ''}</div>`).join('')}` : '';
 }
 
 async function openHoldingHistory({ ticker = '', accountId = '' } = {}) {
@@ -1015,6 +1016,22 @@ function assetClassLabel(type, override = null) {
   if (value === 'cash') return 'Cash';
   if (value === 'cryptocurrency') return 'Crypto';
   return 'Other';
+}
+
+const holdingClassOptions = [
+  ['', 'Use institution classification'],
+  ['Equities', 'Equities'],
+  ['Funds', 'Funds'],
+  ['Fixed income', 'Fixed income'],
+  ['Cash', 'Cash'],
+  ['Crypto', 'Crypto'],
+  ['Other', 'Other']
+];
+
+function holdingClassControl(position) {
+  const value = position.asset_class_override || '';
+  const attribute = position.manual ? 'data-history-manual-holding-class' : 'data-history-position-class';
+  return `<label class="holding-history-class">Classification <select ${attribute}="${escapeHtml(position.id)}" aria-label="Classification for ${escapeHtml(position.name || position.ticker || 'holding')}">${holdingClassOptions.map(([option, label]) => `<option value="${option}" ${value === option ? 'selected' : ''}>${label}</option>`).join('')}</select></label>`;
 }
 
 function renderRetirement(data) {
@@ -1757,6 +1774,26 @@ $('#holdingHistoryTabs').addEventListener('click', (event) => {
   if (!tab) return;
   state.holdingHistoryMode = tab.dataset.holdingHistoryMode;
   renderHoldingHistoryDetail();
+});
+$('#holdingHistoryWhere').addEventListener('change', async (event) => {
+  const select = event.target.closest('[data-history-position-class]');
+  const manualSelect = event.target.closest('[data-history-manual-holding-class]');
+  if (!select && !manualSelect) return;
+  const control = select || manualSelect;
+  const path = select
+    ? `/api/positions/${encodeURIComponent(select.dataset.historyPositionClass)}/asset-class`
+    : `/api/manual-holdings/${encodeURIComponent(manualSelect.dataset.historyManualHoldingClass)}/asset-class`;
+  control.disabled = true;
+  try {
+    const response = await api(path, { method: 'PATCH', body: JSON.stringify({ asset_class: control.value }) });
+    state.investments = select ? await api('/api/investments') : response;
+    renderInvestments(state.investments);
+    renderHoldingHistoryDetail();
+    showNotice(control.value ? 'Holding classification updated.' : 'Using the institution classification.', 'success');
+  } catch (error) {
+    showNotice(error.message);
+    control.disabled = false;
+  }
 });
 $('#holdingHistoryClose').addEventListener('click', () => $('#holdingHistoryDialog').close());
 $('#manualHoldingForm').addEventListener('submit', async (event) => {
