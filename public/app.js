@@ -732,7 +732,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   // Four columns still need breathing room on a phone. Keep the labels
   // compact there rather than letting the allocation column collide with the
   // spending-category column.
-  const sourceW = nodeWidth(incomeNodes, compact ? 70 : 82, compact ? 80 : 132);
+  const sourceW = nodeWidth(incomeNodes, compact ? 80 : 82, compact ? 80 : 132);
   const bridgeW = nodeWidth([bridgeNode], compact ? 64 : 88, compact ? 72 : 120);
   const middleW = nodeWidth(allocationNodes, compact ? 68 : 86, compact ? 78 : 128);
   const destinationW = nodeWidth(categoryNodes.map((row) => ({ label: row.name })), compact ? 84 : 92, compact ? 106 : 142);
