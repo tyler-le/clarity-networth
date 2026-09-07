@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { OAuth2Client } from 'google-auth-library';
 import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './lib/store.js';
-import { consumeRateLimit, databaseEnabled, databaseHealthy, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, recordLaunchEvent, writeDatabaseStore } from './lib/database.js';
+import { consumeRateLimit, databaseEnabled, databaseHealthy, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, recordDependencyEvent, recordLaunchEvent, writeDatabaseStore } from './lib/database.js';
 import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentLinkBalances, investmentSummary, monthlyReview, reconstructInvestmentHistory, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './lib/finance.js';
 import { loadHistoricalPrices } from './lib/market-data.js';
 import { plaidConfigured, plaidPost } from './lib/plaid.js';
@@ -715,9 +715,11 @@ app.post('/api/auth/google', authLimiter, async (req, res) => {
   const attempts = loginAttempts.get(ip) || [];
   const recent = attempts.filter((time) => time > Date.now() - 10 * 60 * 1000);
   if (recent.length >= 10) return res.status(429).json({ error: 'Too many sign-in attempts. Try again shortly.' });
+  const startedAt = Date.now();
   try {
     if (!authConfigured()) return res.status(503).json({ error: 'Sign-in is not configured yet.' });
     const ticket = await googleClient.verifyIdToken({ idToken: req.body?.credential, audience: process.env.GOOGLE_CLIENT_ID });
+    void recordDependencyEvent({ dependency: 'google_oauth', operation: 'verify_id_token', outcome: 'success', durationMs: Date.now() - startedAt }).catch(() => {});
     const payload = ticket.getPayload();
     const email = String(payload?.email || '').toLowerCase();
     if (!payload?.email_verified) return res.status(403).json({ error: 'A verified Google email is required.' });
@@ -728,6 +730,7 @@ app.post('/api/auth/google', authLimiter, async (req, res) => {
     trackLaunchEvent({ storageKey: userStorageKey(email) }, 'sign_in_completed');
     res.json({ ok: true, user: publicUser(user) });
   } catch {
+    void recordDependencyEvent({ dependency: 'google_oauth', operation: 'verify_id_token', outcome: 'failure', durationMs: Date.now() - startedAt }).catch(() => {});
     loginAttempts.set(ip, [...recent, Date.now()]);
     res.status(401).json({ error: 'Google sign-in could not be verified.' });
   }

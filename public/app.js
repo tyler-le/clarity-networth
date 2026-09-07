@@ -76,6 +76,52 @@ function trackProductEvent(event) {
   }).catch(() => {});
 }
 
+// A card view is deliberately stricter than a scroll: the primary content has
+// to be at least half visible for 750ms. This lets product reporting describe
+// whether a non-interactive card was actually seen, without collecting scroll
+// position, mouse data, or any financial content.
+const coreCardViewEvents = {
+  netWorthCard: 'net_worth_card_viewed',
+  goalInsight: 'goal_card_viewed',
+  cashFlowOverviewCard: 'cash_flow_overview_viewed',
+  monthlyCashFlowCard: 'monthly_cash_flow_viewed',
+  investmentHoldingsPanel: 'investment_holdings_viewed',
+  investmentAllocationCard: 'investment_allocation_viewed',
+  retirementOutlookCard: 'retirement_outlook_viewed',
+  retirementSpendingTargetsCard: 'retirement_spending_targets_viewed',
+  debtPayoffCard: 'debt_payoff_viewed'
+};
+let coreCardObserver;
+const coreCardTimers = new Map();
+const coreCardTracked = new Set();
+
+function observeCoreCardViews() {
+  if (state.demoPreview || state.dashboard?.demoMode || coreCardObserver || !('IntersectionObserver' in window)) return;
+  coreCardObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      const event = coreCardViewEvents[entry.target.id];
+      if (!event || coreCardTracked.has(event)) return;
+      if (!entry.isIntersecting || entry.intersectionRatio < 0.5) {
+        clearTimeout(coreCardTimers.get(event));
+        coreCardTimers.delete(event);
+        return;
+      }
+      if (coreCardTimers.has(event)) return;
+      const timer = window.setTimeout(() => {
+        coreCardTimers.delete(event);
+        if (coreCardTracked.has(event)) return;
+        coreCardTracked.add(event);
+        trackProductEvent(event);
+      }, 750);
+      coreCardTimers.set(event, timer);
+    });
+  }, { threshold: [0.5] });
+  Object.keys(coreCardViewEvents).forEach((id) => {
+    const card = document.getElementById(id);
+    if (card) coreCardObserver.observe(card);
+  });
+}
+
 function institutionMark(account) {
   if (account.institution_logo) return `<img class="institution-logo" src="${escapeHtml(account.institution_logo)}" alt="" />`;
   return `<span class="institution-fallback" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 9.5 12 4l9 5.5M5.5 11h13M6.5 11v7M11 11v7M15.5 11v7M4 20h16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
@@ -987,6 +1033,7 @@ async function loadAll() {
     renderSpending(spending);
     renderInvestments(investments);
     renderRetirement(retirement);
+    observeCoreCardViews();
     $('#monthLabel').textContent = 'Account overview';
   } finally {
     clearTimeout(skeletonTimer);

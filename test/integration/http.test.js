@@ -137,7 +137,7 @@ integrationTest('protects personal financial endpoints without a session', async
 
 integrationTest('accepts only minimal allowlisted launch telemetry', async () => {
   const cookie = signedTestCookie('launch-event@example.com');
-  const valid = await request(app).post('/api/launch-event').set('Cookie', cookie).send({ event: 'cash_flow_viewed' });
+  const valid = await request(app).post('/api/launch-event').set('Cookie', cookie).send({ event: 'retirement_outlook_viewed' });
   assert.equal(valid.status, 204);
   const invalid = await request(app).post('/api/launch-event').set('Cookie', cookie).send({ event: 'screen_recording_or_balance' });
   assert.equal(invalid.status, 400);

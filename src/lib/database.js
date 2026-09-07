@@ -106,6 +106,24 @@ export async function recordAuditEvent(userKey, eventType) {
   );
 }
 
+// Dependency events are intentionally operational rather than customer
+// telemetry. They never carry a user key, URL parameters, provider payload,
+// account identifier, credential, or financial value.
+export async function recordDependencyEvent({ dependency, operation, outcome, statusCode = null, durationMs }) {
+  if (!/^[a-z0-9_]{1,40}$/.test(dependency) || !/^[a-z0-9_]{1,80}$/.test(operation)) throw new Error('Invalid dependency event.');
+  if (!['success', 'failure'].includes(outcome)) throw new Error('Invalid dependency outcome.');
+  if (statusCode != null && (!Number.isInteger(statusCode) || statusCode < 100 || statusCode > 599)) throw new Error('Invalid dependency status.');
+  if (!Number.isFinite(durationMs) || durationMs < 0) throw new Error('Invalid dependency duration.');
+  if (!databaseEnabled()) return;
+  const database = getPool();
+  await database.query("DELETE FROM dependency_events WHERE created_at < now() - interval '30 days'");
+  await database.query(
+    `INSERT INTO dependency_events (id, dependency, operation, outcome, status_code, duration_ms)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [crypto.randomUUID(), dependency, operation, outcome, statusCode, Math.round(durationMs)]
+  );
+}
+
 const launchEventNames = new Set([
   'demo_opened', 'sign_in_completed', 'dashboard_opened', 'account_link_started',
   'account_link_completed', 'sync_succeeded', 'sync_failed', 'cash_flow_viewed',
@@ -113,7 +131,11 @@ const launchEventNames = new Set([
   'net_worth_history_explored', 'cash_flow_drilldown',
   'cash_flow_month_selected', 'cash_flow_expanded', 'investment_allocation_filtered',
   'holding_reconciliation_started', 'account_group_opened', 'debt_plan_opened',
-  'debt_strategy_selected', 'retirement_milestone_opened', 'goal_created'
+  'debt_strategy_selected', 'retirement_milestone_opened', 'goal_created',
+  'net_worth_card_viewed', 'goal_card_viewed', 'cash_flow_overview_viewed',
+  'monthly_cash_flow_viewed', 'investment_holdings_viewed',
+  'investment_allocation_viewed', 'retirement_outlook_viewed',
+  'retirement_spending_targets_viewed', 'debt_payoff_viewed'
 ]);
 
 // Launch telemetry intentionally records only a tiny set of product-health
@@ -192,7 +214,7 @@ export async function launchMetrics() {
       SELECT event_name, COUNT(DISTINCT user_key)::int AS members, COUNT(*)::int AS active_days
       FROM launch_events
       WHERE created_at >= now() - interval '28 days'
-        AND event_name IN ('cash_flow_viewed', 'investments_viewed', 'retirement_viewed', 'accounts_viewed', 'net_worth_history_explored', 'cash_flow_drilldown', 'cash_flow_month_selected', 'cash_flow_expanded', 'investment_allocation_filtered', 'holding_reconciliation_started', 'account_group_opened', 'debt_plan_opened', 'debt_strategy_selected', 'retirement_milestone_opened', 'goal_created')
+        AND event_name IN ('cash_flow_viewed', 'investments_viewed', 'retirement_viewed', 'accounts_viewed', 'net_worth_history_explored', 'cash_flow_drilldown', 'cash_flow_month_selected', 'cash_flow_expanded', 'investment_allocation_filtered', 'holding_reconciliation_started', 'account_group_opened', 'debt_plan_opened', 'debt_strategy_selected', 'retirement_milestone_opened', 'goal_created', 'net_worth_card_viewed', 'goal_card_viewed', 'cash_flow_overview_viewed', 'monthly_cash_flow_viewed', 'investment_holdings_viewed', 'investment_allocation_viewed', 'retirement_outlook_viewed', 'retirement_spending_targets_viewed', 'debt_payoff_viewed')
       GROUP BY event_name
       ORDER BY count DESC, event_name ASC
     `)

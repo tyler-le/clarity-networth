@@ -96,6 +96,10 @@ testing, and UX standards that guide changes.
 - [Private launch measurement](docs/LAUNCH_METRICS.md)
 - [Operations and recovery notes](docs/operations.md)
 
+## Private product dashboard
+
+The owner-only [Clarity Product Health dashboard](https://clarity-insights-production.up.railway.app/dashboard/2) lives in a separate, password-protected Metabase service—not in the Clarity customer app. It shows activation, retention, sync health, tab usage, core-card views, and meaningful card actions. It reads only the minimal 90-day product-event table, never encrypted financial stores or financial values.
+
 ## Data principles
 
 - Net worth is assets minus liabilities; debt is always visually distinct.
