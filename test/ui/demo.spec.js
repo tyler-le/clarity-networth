@@ -272,8 +272,9 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await expect(page.locator('#retirementLifestylePaths')).toContainText('Current lifestyle');
   await page.getByLabel('How the freedom ladder is calculated').click();
   await expect(page.locator('.retirement-hero')).toHaveCSS('overflow', 'visible');
-  await expect(page.getByText('Based on your plan')).toBeVisible();
+  await expect(page.getByText('What the ladder represents')).toBeVisible();
   await expect(page.getByText('Cash milestones')).toBeVisible();
+  await expect(page.locator('.retirement-hero .retirement-method-popover').getByText('Coast FI', { exact: true })).toBeVisible();
   await page.getByText('Your freedom ladder').click();
   await expect(page.locator('.retirement-method').first()).not.toHaveAttribute('open', '');
   await page.getByLabel('How the freedom ladder is calculated').click();
@@ -301,6 +302,23 @@ test('the retirement ladder remains legible and usable on a phone', async ({ pag
   expect(layout.usableCardWidth).toBe(true);
   await page.locator('[data-retirement-milestone="coast"]').click();
   await expect(page.locator('#retirementInfoDialog')).toHaveAttribute('open', '');
+});
+
+test('retirement spending help stays inside a phone viewport', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'phone', 'Phone-specific help layout regression');
+  await openDemo(page);
+  await goToView(page, 'retirement');
+  await page.getByLabel('How lifestyle paths are calculated').click();
+  const bounds = await page.locator('.retirement-lifestyles .retirement-method-popover').evaluate((popover) => {
+    const rect = popover.getBoundingClientRect();
+    return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, viewportWidth: window.innerWidth, viewportHeight: window.innerHeight };
+  });
+  expect(bounds.left).toBeGreaterThanOrEqual(0);
+  expect(bounds.right).toBeLessThanOrEqual(bounds.viewportWidth);
+  expect(bounds.top).toBeGreaterThanOrEqual(0);
+  expect(bounds.bottom).toBeLessThanOrEqual(bounds.viewportHeight);
+  await page.getByRole('heading', { name: 'Retirement' }).click();
+  await expect(page.locator('.retirement-lifestyles .retirement-method')).not.toHaveAttribute('open', '');
 });
 
 test('dark mode is a calm, persistent profile setting', async ({ page }) => {
