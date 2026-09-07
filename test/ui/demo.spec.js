@@ -2,6 +2,15 @@ import { test, expect } from '@playwright/test';
 
 test.skip(Boolean(process.env.CODEX_SANDBOX_NETWORK_DISABLED), 'This workspace blocks browser loopback networking; GitHub CI runs the full browser suite.');
 
+// The public demo is rate-limited per visitor in production. Each Playwright
+// test is a separate visitor journey, so give it a distinct documentation-only
+// address rather than making all 92 journeys look like one abusive client.
+// This preserves the real limiter while keeping viewport coverage deterministic.
+let nextTestClient = 10;
+test.beforeEach(async ({ page }) => {
+  await page.setExtraHTTPHeaders({ 'X-Forwarded-For': `198.51.100.${nextTestClient++}` });
+});
+
 async function openDemo(page) {
   // The local browser server deliberately has no real OAuth credentials. Mock
   // only the public configuration response so this test exercises the
