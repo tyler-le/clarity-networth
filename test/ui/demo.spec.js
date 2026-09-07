@@ -111,12 +111,17 @@ test('accounts makes a simple debt payoff choice actionable without a separate d
   await goToView(page, 'accounts');
   const card = page.locator('#debtPayoffCard');
   await expect(card).toBeVisible();
+  await expect(card).toContainText('One clear next step, when you’re ready');
+  await expect(card.getByRole('button', { name: /view plan/i })).toBeVisible();
+  await expect(card.getByRole('button', { name: /save most interest/i })).toHaveCount(0);
+  await card.getByRole('button', { name: /view plan/i }).click();
   await expect(card).toContainText(/debt payoff/i);
   await expect(card).toContainText('Save most interest');
-  await expect(card).toContainText('Credit Card');
+  await expect(card).toContainText('Chase Sapphire Preferred');
   await card.getByRole('button', { name: /small wins first/i }).click();
   await expect(card.getByRole('button', { name: /small wins first/i })).toHaveClass(/active/);
-  await expect(card).toContainText('Credit Card, your smallest balance');
+  await expect(card).toContainText('Capital One Venture, your smallest balance');
+  await expect(page.locator('#accountGrid')).toContainText('••4821');
 });
 
 test('demo visitors can try a goal without creating personal data', async ({ page }) => {
@@ -129,6 +134,21 @@ test('demo visitors can try a goal without creating personal data', async ({ pag
   await expect(page.locator('#goalTitle')).toHaveText('Travel fund');
   await expect(page.locator('#goalDetail')).toContainText('Demo only');
   await expect(page.locator('#goalAction')).toHaveText('Remove');
+});
+
+test('debt rates remain editable after a first entry', async ({ page }) => {
+  await openDemo(page);
+  await goToView(page, 'accounts');
+  const card = page.locator('#debtPayoffCard');
+  await card.getByRole('button', { name: /view plan/i }).click();
+  await card.locator('.debt-rate-editor summary').click();
+  const rate = card.locator('[data-debt-rate="demo-credit"]');
+  await expect(rate).toHaveValue('24.49');
+  await rate.fill('18.5');
+  await card.getByRole('button', { name: 'Save rates' }).click();
+  await expect(card.locator('.debt-rate-editor summary')).toContainText('Edit interest rates');
+  await card.locator('.debt-rate-editor summary').click();
+  await expect(card.locator('[data-debt-rate="demo-credit"]')).toHaveValue('18.5');
 });
 
 test('cash-flow interactions lead from visual category to the relevant activity', async ({ page }) => {

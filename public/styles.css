@@ -179,7 +179,11 @@ input[type="month"], .search { border: 1px solid var(--line); background: white;
 .accounts-summary div:last-child { border-right: 0; }
 .accounts-summary span { color: var(--muted); font-size: 12px; font-weight: 600; }
 .accounts-summary strong { font-size: 22px; letter-spacing: -.03em; }
-.debt-payoff-card { margin: -4px 0 18px; padding: 18px; border-color: #ecd9d5; background: linear-gradient(135deg, #fff 0%, #fffaf9 100%); }
+.debt-payoff-card { margin: -4px 0 18px; padding: 0; border-color: var(--line); background: var(--card); overflow: hidden; }
+.debt-plan-summary { display: grid; width: 100%; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 14px 16px; border: 0; background: transparent; color: var(--text); text-align: left; }
+.debt-plan-summary:hover { background: rgba(31,111,74,.035); }.debt-plan-summary > span:not(.debt-plan-mark) { display: grid; gap: 2px; }.debt-plan-summary small { color: var(--muted); font-size: 10px; font-weight: 750; letter-spacing: .08em; }.debt-plan-summary strong { font-size: 14px; font-weight: 680; }.debt-plan-summary b { color: var(--accent); font-size: 12px; font-weight: 700; white-space: nowrap; }.debt-plan-summary b i { display: inline-block; font-size: 18px; font-style: normal; line-height: .5; transform: translateY(1px); }.debt-plan-summary[aria-expanded="true"] b i { transform: translateY(1px) rotate(-90deg); }
+.debt-plan-mark { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 11px; background: #f2f4f0; color: #667068; font-size: 17px; font-weight: 700; }
+.debt-plan-expanded { border-top: 1px solid var(--line); padding: 18px; }
 .debt-payoff-head h2 { margin: 5px 0 3px; font-size: 25px; letter-spacing: -.04em; }
 .debt-payoff-head p { margin: 0; color: var(--muted); font-size: 13px; }
 .debt-strategy-choice { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-top: 16px; }
@@ -456,7 +460,9 @@ html[data-theme="dark"] .holding-detail, html[data-theme="dark"] .holding-accoun
 html[data-theme="dark"] .holding-account, html[data-theme="dark"] .holding-account-list { background: #1c231e; }
 html[data-theme="dark"] .investment-donut::before, html[data-theme="dark"] .spending-donut::before { background: var(--card); }
 html[data-theme="dark"] .account-collection, html[data-theme="dark"] .accounts-summary { background: var(--card); }
-html[data-theme="dark"] .debt-payoff-card { border-color: #4e3b38; background: var(--card); }
+html[data-theme="dark"] .debt-payoff-card { border-color: var(--line); background: var(--card); }
+html[data-theme="dark"] .debt-plan-summary:hover { background: rgba(255,255,255,.025); }
+html[data-theme="dark"] .debt-plan-mark { background: #252d28; color: #aeb8af; }
 html[data-theme="dark"] .debt-strategy-choice button { background: #1a201d; border-color: var(--line); }
 html[data-theme="dark"] .debt-strategy-choice button.active { background: #2b211f; border-color: #93584c; }
 html[data-theme="dark"] .debt-next-step { background: rgba(196,112,91,.12); }

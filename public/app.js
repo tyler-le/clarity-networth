@@ -24,6 +24,7 @@ const state = {
   expandedAccountGroups: new Set(),
   holdingsExpanded: false,
   demoGoal: null,
+  debtPlanExpanded: false,
   view: 'overview',
   returnView: 'overview',
   demoPreview: false
@@ -387,6 +388,15 @@ function displayBalance(a) {
   return fmt2.format(value);
 }
 
+function accountSubtitle(account) {
+  const institution = account.institution_name || '';
+  const type = accountDescriptor(account.subtype || account.type);
+  const mask = String(account.mask || '').replace(/\D/g, '').slice(-4);
+  // The last four digits are only a visual disambiguator for accounts that
+  // Plaid identifies as cards; do not imply that an absent mask is an error.
+  return [institution, type, ...(String(account.type || '').toLowerCase() === 'credit' && mask ? [`••${mask}`] : [])].filter(Boolean).join(' · ');
+}
+
 function accountDescriptor(value) {
   const raw = String(value || '').trim().toLowerCase();
   const known = {
@@ -410,7 +420,7 @@ function groupedAccounts(accounts) {
 
 function accountRow(a) {
   return `<div class="account-row">
-    <div class="account-meta"><div class="account-icon">${escapeHtml((a.institution_name || a.name || '?')[0])}</div><div><div class="account-name">${escapeHtml(a.nickname || a.name)}</div><div class="account-inst">${escapeHtml(a.institution_name || '')} · ${escapeHtml(a.subtype || a.type)}</div></div></div>
+    <div class="account-meta"><div class="account-icon">${escapeHtml((a.institution_name || a.name || '?')[0])}</div><div><div class="account-name">${escapeHtml(a.nickname || a.name)}</div><div class="account-inst">${escapeHtml(accountSubtitle(a))}</div></div></div>
     <div class="account-balance ${isDebt(a) ? 'negative' : 'positive'}">${displayBalance(a)}</div>
   </div>`;
 }
@@ -436,7 +446,7 @@ function renderAccounts(accounts) {
     return `<section class="account-collection ${debt ? 'debt' : 'asset'}">
       <div class="account-collection-head"><span class="account-collection-icon" aria-hidden="true">${accountGroupIcons[name] || '◇'}</span><div><h2>${name}</h2><p>${items.length} account${items.length === 1 ? '' : 's'}</p></div><div class="account-collection-total ${debt ? 'negative' : 'positive'}"><span>${debt ? 'Owed' : 'Held'}</span><strong>${fmt.format(total)}</strong></div></div>
       <div class="account-collection-items">${sorted.map((account, index) => `<article class="account-item ${debt ? 'debt' : 'asset'} ${index >= previewCount && !expanded ? 'hidden' : ''}">
-        ${institutionMark(account)}<div class="account-copy"><div class="account-name">${escapeHtml(account.nickname || account.name)}</div><div class="account-inst">${escapeHtml(account.institution_name || '')} · ${escapeHtml(accountDescriptor(account.subtype || account.type))}</div><div class="account-inline-balance ${debt ? 'negative' : 'positive'}">${displayBalance(account)}</div></div>${account.manual ? `<button class="account-rename" data-manual-account="${escapeHtml(account.id)}" data-manual-name="${escapeHtml(account.name)}" data-manual-subtype="${escapeHtml(account.subtype || '')}" data-manual-value="${escapeHtml(account.current_balance)}" data-manual-kind="${debt ? 'liability' : 'asset'}" aria-label="Edit ${escapeHtml(account.name)}">✎</button>` : `<button class="account-rename" data-account-rename="${escapeHtml(account.id)}" data-account-name="${escapeHtml(account.nickname || account.name)}" aria-label="Rename ${escapeHtml(account.nickname || account.name)}">✎</button>`}
+        ${institutionMark(account)}<div class="account-copy"><div class="account-name">${escapeHtml(account.nickname || account.name)}</div><div class="account-inst">${escapeHtml(accountSubtitle(account))}</div><div class="account-inline-balance ${debt ? 'negative' : 'positive'}">${displayBalance(account)}</div></div>${account.manual ? `<button class="account-rename" data-manual-account="${escapeHtml(account.id)}" data-manual-name="${escapeHtml(account.name)}" data-manual-subtype="${escapeHtml(account.subtype || '')}" data-manual-value="${escapeHtml(account.current_balance)}" data-manual-kind="${debt ? 'liability' : 'asset'}" aria-label="Edit ${escapeHtml(account.name)}">✎</button>` : `<button class="account-rename" data-account-rename="${escapeHtml(account.id)}" data-account-name="${escapeHtml(account.nickname || account.name)}" aria-label="Rename ${escapeHtml(account.nickname || account.name)}">✎</button>`}
       </article>`).join('')}</div>${items.length > previewCount ? `<button class="account-group-more" data-account-group="${escapeHtml(name)}">${expanded ? 'Show less' : `View ${items.length - previewCount} more`}</button>` : ''}
     </section>`;
   }).join('');
@@ -455,15 +465,17 @@ function renderDebtPayoff(plan) {
   if (!plan?.accountCount) { card.classList.add('hidden'); card.innerHTML = ''; return; }
   card.classList.remove('hidden');
   const avalanche = plan.strategy !== 'snowball';
+  const expanded = state.debtPlanExpanded;
   const priority = plan.priority;
   const target = priority ? `<strong>${escapeHtml(priority.name)}</strong>` : null;
   const nextStep = avalanche
     ? target ? `Put any extra payment toward ${target}${priority.interestRate != null ? ` at ${Number(priority.interestRate).toFixed(2).replace(/\.00$/, '')}% APR` : ''}.`
       : 'Add interest rates to see which balance is costing you the most.'
     : target ? `Put any extra payment toward ${target}, your smallest balance.` : 'Your balances will appear here once they are available.';
-  const rateEditor = avalanche && plan.missingRates
-    ? `<details class="debt-rate-editor"><summary>${plan.missingRates === 1 ? 'Add 1 interest rate' : `Add ${plan.missingRates} interest rates`} <span>Optional</span></summary><p>Some institutions do not share rates. Adding yours makes this recommendation specific.</p><div class="debt-rate-list">${plan.debts.filter((debt) => debt.interestRate == null).map((debt) => `<label>${escapeHtml(debt.name)}<span><input data-debt-rate="${escapeHtml(debt.id)}" type="number" min="0" max="100" step="0.01" inputmode="decimal" aria-label="Annual interest rate for ${escapeHtml(debt.name)}" placeholder="APR" /><b>%</b></span></label>`).join('')}</div><button class="secondary debt-rate-save" type="button" data-save-debt-rates>Save rates</button></details>` : '';
-  card.innerHTML = `<div class="debt-payoff-head"><div><div class="card-label">DEBT PAYOFF</div><h2>${fmt.format(plan.totalDebt)} to pay down</h2><p>${plan.accountCount} balance${plan.accountCount === 1 ? '' : 's'} · choose the approach that fits you.</p></div></div><div class="debt-strategy-choice" role="group" aria-label="Debt payoff approach"><button type="button" class="${avalanche ? 'active' : ''}" data-debt-strategy="avalanche"><strong>Save most interest</strong><span>Highest rate first</span></button><button type="button" class="${!avalanche ? 'active' : ''}" data-debt-strategy="snowball"><strong>Small wins first</strong><span>Smallest balance first</span></button></div><div class="debt-next-step"><span>Next step</span><p>${nextStep}</p></div>${rateEditor}`;
+  const rateEditor = `<details class="debt-rate-editor"><summary>${plan.missingRates ? (plan.missingRates === 1 ? 'Add 1 interest rate' : `Add ${plan.missingRates} interest rates`) : 'Edit interest rates'} <span>Optional</span></summary><p>Rates make “Save most interest” specific. Update a rate anytime, or clear a manually entered rate to use your institution’s next available update.</p><div class="debt-rate-list">${plan.debts.map((debt) => { const rate = debt.interestRate == null ? '' : String(Number(debt.interestRate)); return `<label>${escapeHtml(debt.name)}<span><input data-debt-rate="${escapeHtml(debt.id)}" data-initial-rate="${escapeHtml(rate)}" value="${escapeHtml(rate)}" type="number" min="0" max="100" step="0.01" inputmode="decimal" aria-label="Annual interest rate for ${escapeHtml(debt.name)}" placeholder="APR" /><b>%</b></span></label>`; }).join('')}</div><button class="secondary debt-rate-save" type="button" data-save-debt-rates>Save rates</button></details>`;
+  const summary = `<button class="debt-plan-summary" type="button" data-toggle-debt-plan aria-expanded="${expanded}"><span class="debt-plan-mark" aria-hidden="true">↘</span><span><small>DEBT PLAN</small><strong>One clear next step, when you’re ready</strong></span><b>${expanded ? 'Hide' : 'View plan'} <i aria-hidden="true">›</i></b></button>`;
+  const planBody = `<div class="debt-plan-expanded"><div class="debt-payoff-head"><div><div class="card-label">DEBT PAYOFF</div><h2>${fmt.format(plan.totalDebt)} to pay down</h2><p>${plan.accountCount} balance${plan.accountCount === 1 ? '' : 's'} · choose the approach that fits you.</p></div></div><div class="debt-strategy-choice" role="group" aria-label="Debt payoff approach"><button type="button" class="${avalanche ? 'active' : ''}" data-debt-strategy="avalanche"><strong>Save most interest</strong><span>Highest rate first</span></button><button type="button" class="${!avalanche ? 'active' : ''}" data-debt-strategy="snowball"><strong>Small wins first</strong><span>Smallest balance first</span></button></div><div class="debt-next-step"><span>Next step</span><p>${nextStep}</p></div>${rateEditor}</div>`;
+  card.innerHTML = `${summary}${expanded ? planBody : ''}`;
 }
 
 function renderConnections(items) {
@@ -1256,6 +1268,11 @@ $('#accountGrid').addEventListener('click', (event) => {
   $('#nicknameInput').select();
 });
 $('#debtPayoffCard').addEventListener('click', async (event) => {
+  if (event.target.closest('[data-toggle-debt-plan]')) {
+    state.debtPlanExpanded = !state.debtPlanExpanded;
+    renderDebtPayoff(state.dashboard?.debtPayoff);
+    return;
+  }
   const strategyButton = event.target.closest('[data-debt-strategy]');
   if (strategyButton) {
     const strategy = strategyButton.dataset.debtStrategy;
@@ -1272,14 +1289,14 @@ $('#debtPayoffCard').addEventListener('click', async (event) => {
   if (!event.target.closest('[data-save-debt-rates]')) return;
   const button = event.target.closest('[data-save-debt-rates]');
   const inputs = [...$('#debtPayoffCard').querySelectorAll('[data-debt-rate]')];
-  const entries = inputs.filter((input) => input.value.trim() !== '');
-  if (!entries.length) { showNotice('Enter at least one annual interest rate.'); return; }
+  const entries = inputs.filter((input) => input.value.trim() !== String(input.dataset.initialRate || ''));
+  if (!entries.length) { showNotice('Change a rate before saving.'); return; }
   button.disabled = true;
   try {
     if (state.demoPreview) {
       for (const input of entries) {
         const debt = state.dashboard.debtPayoff.debts.find((entry) => entry.id === input.dataset.debtRate);
-        if (debt) debt.interestRate = Number(input.value);
+        if (debt) debt.interestRate = input.value.trim() === '' ? null : Number(input.value);
       }
       state.dashboard.debtPayoff.missingRates = state.dashboard.debtPayoff.debts.filter((debt) => debt.interestRate == null).length;
       state.dashboard.debtPayoff = debtPlanForStrategy(state.dashboard.debtPayoff, state.dashboard.debtPayoff.strategy);

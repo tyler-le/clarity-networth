@@ -882,9 +882,27 @@ export function removeEstimatedNetWorthHistory(store) {
   return store.snapshots.length !== before;
 }
 
+function refreshDemoAccountLabels(store) {
+  const now = new Date().toISOString();
+  const chase = store.accounts.find((account) => account.id === 'demo-credit');
+  // Upgrade older demo snapshots without overwriting a person’s optional
+  // sample nickname. These are recognizable products, not generic labels.
+  if (chase && !chase.nickname) {
+    chase.name = 'Chase Sapphire Preferred';
+    chase.mask ||= '4821';
+    chase.interest_rate ??= 24.49;
+  }
+  if (!store.accounts.some((account) => account.id === 'demo-venture')) {
+    store.accounts.push({ id: 'demo-venture', item_id: 'demo-capital-one', plaid_account_id: 'demo-venture', institution_name: 'Capital One', name: 'Capital One Venture', type: 'credit', subtype: 'credit card', current_balance: 640, interest_rate: 19.99, interest_rate_source: 'institution', mask: '6108', updated_at: now, demo: true });
+  }
+}
+
 export function seedDemo(store) {
   if (store.accounts.length || store.transactions.length || store.snapshots.length) {
-    if (store.accounts.length && store.accounts.every((account) => account.demo)) addDemoHistory(store);
+    if (store.accounts.length && store.accounts.every((account) => account.demo)) {
+      refreshDemoAccountLabels(store);
+      addDemoHistory(store);
+    }
     return store;
   }
   const now = new Date();
@@ -905,7 +923,8 @@ export function seedDemo(store) {
     { id: 'demo-brokerage', item_id: 'demo-fidelity', plaid_account_id: 'demo-brokerage', institution_name: 'Fidelity', name: 'Brokerage', type: 'investment', subtype: 'brokerage', current_balance: 18200, updated_at: new Date().toISOString(), demo: true },
     { id: 'demo-roth', item_id: 'demo-fidelity', plaid_account_id: 'demo-roth', institution_name: 'Fidelity', name: 'Roth IRA', type: 'investment', subtype: 'ira', current_balance: 26400, updated_at: new Date().toISOString(), demo: true },
     { id: 'demo-401k', item_id: 'demo-fidelity', plaid_account_id: 'demo-401k', institution_name: 'Fidelity', name: '401(k)', type: 'investment', subtype: '401k', current_balance: 43800, updated_at: new Date().toISOString(), demo: true },
-    { id: 'demo-credit', item_id: 'demo-chase', plaid_account_id: 'demo-credit', institution_name: 'Chase', name: 'Credit Card', type: 'credit', subtype: 'credit card', current_balance: 1160, interest_rate: 24.49, interest_rate_source: 'institution', updated_at: new Date().toISOString(), demo: true },
+    { id: 'demo-credit', item_id: 'demo-chase', plaid_account_id: 'demo-credit', institution_name: 'Chase', name: 'Chase Sapphire Preferred', type: 'credit', subtype: 'credit card', current_balance: 1160, interest_rate: 24.49, interest_rate_source: 'institution', mask: '4821', updated_at: new Date().toISOString(), demo: true },
+    { id: 'demo-venture', item_id: 'demo-capital-one', plaid_account_id: 'demo-venture', institution_name: 'Capital One', name: 'Capital One Venture', type: 'credit', subtype: 'credit card', current_balance: 640, interest_rate: 19.99, interest_rate_source: 'institution', mask: '6108', updated_at: new Date().toISOString(), demo: true },
     { id: 'demo-auto', item_id: 'demo-capital-one', plaid_account_id: 'demo-auto', institution_name: 'Capital One', name: 'Auto loan', type: 'loan', subtype: 'auto', current_balance: 9350, interest_rate: 5.9, interest_rate_source: 'institution', updated_at: new Date().toISOString(), demo: true }
   ];
   store.positions = [
