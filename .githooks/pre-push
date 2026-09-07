@@ -1,5 +1,9 @@
 #!/bin/sh
 set -e
 
-printf '%s\n' 'Running Clarity’s full local verification before push…'
-CODEX_SANDBOX_NETWORK_DISABLED= npm run test:ci
+printf '%s\n' 'Running Clarity’s fast local verification before push…'
+# Browser checks run once in GitHub Actions, where the staging gate exercises
+# every supported viewport on a clean runner before any production deploy.
+# Keeping local pushes to syntax, unit, and integration checks preserves a
+# tight development loop without weakening the release path.
+npm run test:fast
