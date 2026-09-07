@@ -519,12 +519,13 @@ test('investment detail distinguishes loading, preparing, and unavailable person
 test('holding detail timeframes stay local to the drill-in chart', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'investments');
-  await expect(page.locator('[data-investment-range="1y"]')).toHaveClass(/active/);
+  const portfolioRange = page.locator('[data-investment-range].active');
+  await expect(portfolioRange).toHaveCount(1);
+  const portfolioRangeName = await portfolioRange.getAttribute('data-investment-range');
   await page.locator('[data-holding-history]').first().click();
   await page.locator('[data-holding-history-range="1m"]').click();
   await expect(page.locator('[data-holding-history-range="1m"]')).toHaveClass(/active/);
-  await expect(page.locator('[data-investment-range="1y"]')).toHaveClass(/active/);
-  await expect(page.locator('[data-investment-range="1m"]')).not.toHaveClass(/active/);
+  await expect(page.locator(`[data-investment-range="${portfolioRangeName}"]`)).toHaveClass(/active/);
 });
 
 test('investment detail cards stay readable without horizontal overflow on a phone', async ({ page }, testInfo) => {

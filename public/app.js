@@ -19,7 +19,10 @@ const state = {
   allocationDisplay: 'percentage',
   spendingCategory: 'all',
   spendingSort: 'recent',
-  investmentRange: '1y',
+  // Set after the first verified portfolio payload arrives. Starting at "all"
+  // avoids a transient 1Y selection that would turn a new connection into a
+  // misleading vertical spike.
+  investmentRange: 'all',
   investmentRangeInitialized: false,
   investmentFilter: 'all',
   investmentSort: 'value',
@@ -900,6 +903,8 @@ function portfolioSnapshots(data) {
 
 function syncPortfolioRangeControls(snapshots) {
   if (!state.investmentRangeInitialized) {
+    const latest = snapshots.at(-1)?.date ? new Date(`${snapshots.at(-1).date}T12:00:00`) : new Date();
+    state.investmentRange = preferredNetWorthRange(snapshots, latest);
     state.investmentRangeInitialized = true;
   }
   $$('[data-investment-range]').forEach((control) => {

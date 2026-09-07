@@ -124,6 +124,9 @@ test('a recently connected member sees distinct portfolio dates, never repeated 
 
   await goToView(page, 'investments');
   await expect(page.locator('#investmentChart svg')).toBeVisible();
+  // A few days of verified history should use its real span by default, not
+  // render as a narrow spike inside an untracked one-year canvas.
+  await expect(page.locator('[data-investment-range="all"]')).toHaveClass(/active/);
   await expect(page.locator('#investmentContext')).toContainText('since Sep 5');
   await page.locator('[data-investment-range="all"]').click();
   await expect(page.locator('[data-investment-range="all"]')).toHaveClass(/active/);
