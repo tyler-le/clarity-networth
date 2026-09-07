@@ -395,6 +395,7 @@ dialog::backdrop { background: rgba(10,15,10,.28); backdrop-filter: blur(3px); }
    proportional but quiet until a person asks to follow one category. */
 .cashflow-sankey { height: 270px; gap: 10px; }
 .cashflow-sankey svg { overflow: visible; }
+.cashflow-reconciliation-note { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.35; }
 .cashflow-flow { vector-effect: non-scaling-stroke; transition: stroke-opacity .16s ease, filter .16s ease; }
 .cashflow-flow.is-muted { stroke-opacity: .055 !important; }
 .cashflow-flow.is-connected { stroke-opacity: .58 !important; filter: saturate(1.12); }
