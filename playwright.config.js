@@ -14,6 +14,10 @@ export default defineConfig({
   use: {
     baseURL: 'http://127.0.0.1:4173',
     browserName: 'chromium',
+    // Service-worker lifecycle belongs to the PWA/browser boundary, not every
+    // visual journey. Block it here so a newly claimed worker cannot reload a
+    // page halfway through a deterministic UI test.
+    serviceWorkers: 'block',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure'
   },

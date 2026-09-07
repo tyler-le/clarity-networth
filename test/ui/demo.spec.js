@@ -195,6 +195,7 @@ test('cash-flow diagram shows dollars and share of take-home income together', a
   await expect(page.locator('#cashflowSankey [data-cashflow-category="investments"]')).toBeVisible();
   await page.locator('[data-spending-range="6m"]').click();
   await expect(page.locator('[data-spending-range="6m"]')).toHaveClass(/active/);
+  await expect(page.locator('#spendingView')).toHaveAttribute('aria-busy', 'false');
   await expect(page.locator('#spendingContext')).toContainText('last 6 completed months');
 });
 

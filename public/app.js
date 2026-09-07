@@ -1396,10 +1396,16 @@ $$('[data-spending-range]').forEach((button) => button.addEventListener('click',
   state.spendingRange = button.dataset.spendingRange;
   state.spendingMonth = null;
   $$('[data-spending-range]').forEach((control) => control.classList.toggle('active', control === button));
+  $('#spendingView').setAttribute('aria-busy', 'true');
+  $$('[data-spending-range]').forEach((control) => { control.disabled = true; });
   try {
     state.spending = await loadSpending();
     renderSpending(state.spending);
   } catch (error) { showNotice(error.message); }
+  finally {
+    $('#spendingView').setAttribute('aria-busy', 'false');
+    $$('[data-spending-range]').forEach((control) => { control.disabled = false; });
+  }
 }));
 $('#cashflowExpand').addEventListener('click', () => { const dialog = $('#cashflowDialog'); dialog.showModal(); renderCashFlowSankey(spendingForSelectedMonth(state.spending), $('#cashflowDialogContent'), true); });
 $('#cashflowDialogClose').addEventListener('click', () => $('#cashflowDialog').close());
@@ -1743,7 +1749,9 @@ $('#updateAppButton').addEventListener('click', () => {
   });
 });
 
-navigator.serviceWorker?.addEventListener('controllerchange', () => window.location.reload());
+// The worker intentionally caches no app or financial data. Reloading when it
+// claims a page can interrupt an initial sign-in or demo load, so there is no
+// reason to force a navigation here. New assets take effect on the next launch.
 window.addEventListener('offline', () => showNotice('You’re offline. Reconnect when you’re ready to refresh your data.'));
 window.addEventListener('online', async () => {
   if (!state.dashboard || state.demoPreview) return;
