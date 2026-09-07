@@ -11,7 +11,7 @@ Railway's built-in dashboard is the correct home for infrastructure monitoring. 
 
 ## What is collected
 
-One opaque account key and one allowlisted event name are retained at most once per account per event per day. Demo opens are anonymous counts. Events contain no balances, transactions, merchant names, account names, financial inputs, routes, device fingerprinting, raw IP address, or click replay.
+One opaque account key and one allowlisted event name are retained at most once per account per event per day. A valid authenticated dashboard visit establishes a signed-in member, so people with an existing persistent session are counted without needing to sign out and back in. Demo opens are anonymous counts. Events contain no balances, transactions, merchant names, account names, financial inputs, routes, device fingerprinting, raw IP address, or click replay.
 
 Events are retained for 90 days and are removed when the corresponding account is deleted.
 

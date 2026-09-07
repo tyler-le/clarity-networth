@@ -828,6 +828,11 @@ app.get('/api/dashboard', async (req, res) => {
     demoMode: Boolean(store.settings?.demo_mode) || visibleStore.accounts.some((a) => a.demo),
     appearance: store.settings?.appearance || { theme: 'light' }
   });
+  // A person with a persistent Google session does not pass through the OAuth
+  // callback again on every visit. Mark the first authenticated dashboard
+  // visit as a member too, so product metrics do not exclude existing users
+  // merely because telemetry was introduced after they signed in.
+  trackLaunchEvent(req.user, 'sign_in_completed');
   trackLaunchEvent(req.user, 'dashboard_opened');
 });
 

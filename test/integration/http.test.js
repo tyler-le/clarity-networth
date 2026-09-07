@@ -144,6 +144,16 @@ integrationTest('accepts only minimal allowlisted launch telemetry', async () =>
   assert.equal(invalid.body.error, 'Invalid launch event.');
 });
 
+integrationTest('serves an authenticated dashboard for an existing member session', async () => {
+  const email = 'existing-member@example.com';
+  const key = userStorageKey(email);
+  writeStore({ items: [], accounts: [], transactions: [], snapshots: [] }, key);
+  const response = await request(app).get('/api/dashboard').set('Cookie', signedTestCookie(email));
+  assert.equal(response.status, 200);
+  assert.ok(response.body.summary);
+  deleteStore(key);
+});
+
 integrationTest('does not expose sign-in configuration secrets', async () => {
   const response = await request(app).get('/api/auth/config');
   assert.equal(response.status, 200);
