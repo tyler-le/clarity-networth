@@ -152,7 +152,10 @@ function apiOperation(pathname) {
   if (pathname === '/api/data-export') return 'data_export';
   if (pathname === '/api/account') return 'account_lifecycle';
   if (pathname.startsWith('/api/demo')) return 'public_demo';
-  return 'other_api';
+  // Unknown routes are intentionally not counted. A vague catch-all makes an
+  // operations dashboard less useful and can conceal a route that deserves
+  // its own explicit, privacy-safe reliability group.
+  return null;
 }
 
 app.use('/api', (req, res, next) => {
