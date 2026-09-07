@@ -1531,7 +1531,6 @@ async function startDemoPreview() {
 }
 
 let googleSignInConfig = null;
-let accessCodeCheckTimer;
 let accessCodeCheckVersion = 0;
 
 async function renderGoogleSignIn(config) {
@@ -1641,20 +1640,13 @@ window.addEventListener('online', async () => {
 
 $('#demoPreviewButton').addEventListener('click', startDemoPreview);
 $('#inviteCode').addEventListener('input', () => {
-  clearTimeout(accessCodeCheckTimer);
   accessCodeCheckVersion += 1;
   $('#googleSignIn').innerHTML = '';
   $('#googleSignIn').classList.add('hidden');
-  const code = $('#inviteCode').value.trim();
-  $('#accessCodeStatus').textContent = code ? 'Checking access code…' : '';
-  if (code.length >= 4) accessCodeCheckTimer = setTimeout(validateAccessCode, 650);
-});
-$('#inviteCode').addEventListener('blur', () => {
-  clearTimeout(accessCodeCheckTimer);
-  if ($('#inviteCode').value.trim()) validateAccessCode();
+  $('#accessCodeStatus').textContent = '';
 });
 $('#inviteCode').addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') { event.preventDefault(); clearTimeout(accessCodeCheckTimer); validateAccessCode(); }
+  if (event.key === 'Enter') { event.preventDefault(); validateAccessCode(); }
 });
 
 $('#signOutButton').addEventListener('click', async () => {

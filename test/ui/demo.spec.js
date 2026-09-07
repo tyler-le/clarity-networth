@@ -10,7 +10,7 @@ async function openDemo(page) {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: /see your money/i })).toBeVisible();
   await expect(page.locator('#inviteCode')).toBeVisible();
-  await expect(page.locator('#inviteCode')).toHaveAttribute('type', 'password');
+  await expect(page.locator('#inviteCode')).toHaveAttribute('type', 'text');
   await expect(page.locator('#inviteCode')).toHaveValue('');
   await expect(page.getByRole('button', { name: 'Continue with Google' })).toHaveCount(0);
   await expect(page.locator('#googleSignIn')).toBeHidden();
@@ -37,6 +37,7 @@ test('a verified access code unlocks the single Google sign-in action', async ({
   }));
   await page.goto('/');
   await page.locator('#inviteCode').fill('VALID-CODE');
+  await page.locator('#inviteCode').press('Enter');
   await expect(page.locator('#accessCodeStatus')).toHaveText('Access confirmed. Continue with Google.');
   await expect(page.locator('#googleSignIn').getByRole('button', { name: 'Continue with Google' })).toBeVisible();
   await expect(page.locator('#beginGoogleSignIn')).toHaveCount(0);
