@@ -74,6 +74,42 @@ test('a cash-first member sees what they have without being pushed into debt or 
   await expect(page.locator('.account-collection')).toHaveCount(2);
 });
 
+test('reconstructed history is labeled on net worth, portfolio and account charts @critical', async ({ page }) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const ago = (days) => new Date(Date.parse(`${today}T00:00:00Z`) - days * 86400000).toISOString().slice(0, 10);
+  const history = [100, 30, 2, 0].map((days, index) => ({ date: ago(days), value: 1000 + index * 100, source: days > 2 ? 'reconstructed' : 'verified' }));
+  await openSignedInScenario(page, (preview) => {
+    preview.dashboard.snapshots = history.map((row) => ({ ...row, net_worth: row.value, assets: row.value, liabilities: 0 }));
+    preview.dashboard.summary = { ...preview.dashboard.summary, netWorth: 1300, assets: 1300, liabilities: 0 };
+    preview.investments.snapshots = history;
+    preview.investments.total = 1300;
+  });
+  await page.locator('[data-networth-range="all"]').click();
+  await expect(page.locator('#netWorthDelta')).toContainText('Includes estimated history');
+  const netChart = page.locator('#netWorthChart');
+  const netBox = await netChart.boundingBox();
+  await netChart.dispatchEvent('pointerdown', { clientX: netBox.x + 48, clientY: netBox.y + netBox.height / 2, pointerId: 1 });
+  await expect(page.locator('#netWorthChartDate')).toContainText('Estimated from activity');
+  await netChart.dispatchEvent('pointerup');
+  await goToView(page, 'investments');
+  await page.locator('[data-investment-range="all"]').click();
+  await expect(page.locator('#investmentContext')).toContainText('Includes estimated history');
+  await page.route('**/api/investments/history**', (route) => route.fulfill({ json: {
+    state: 'ready', label: 'Investment account', value: 1300, reconstructed: true, history, market: [],
+    detail: 'Earlier values are estimated from reported activity and historical prices. Saved balances take over when tracking begins.'
+  } }));
+  await page.getByRole('button', { name: /View .+ performance history/ }).first().click();
+  await expect(page.locator('#holdingHistoryDialog')).toBeVisible();
+  await expect(page.locator('#holdingHistoryNote')).toContainText('Earlier values are estimated');
+  await page.getByRole('button', { name: 'All', exact: true }).last().click();
+  await expect(page.locator('#holdingHistoryChart svg')).toBeVisible();
+  const fits = await page.evaluate(() => {
+    const dialog = document.querySelector('#holdingHistoryDialog');
+    return document.documentElement.scrollWidth <= window.innerWidth + 1 && dialog.scrollWidth <= dialog.clientWidth + 1;
+  });
+  expect(fits).toBe(true);
+});
+
 test('a recently connected member sees distinct portfolio dates, never repeated month labels', async ({ page }) => {
   await openSignedInScenario(page, (preview) => {
     // This is the real failure mode: several verified syncs in one month.
@@ -89,8 +125,9 @@ test('a recently connected member sees distinct portfolio dates, never repeated 
   await goToView(page, 'investments');
   await expect(page.locator('#investmentChart svg')).toBeVisible();
   await expect(page.locator('#investmentContext')).toContainText('since Sep 5');
+  await page.locator('[data-investment-range="all"]').click();
   await expect(page.locator('[data-investment-range="all"]')).toHaveClass(/active/);
-  await expect(page.locator('[data-investment-range="1m"]')).toBeDisabled();
+  await expect(page.locator('[data-investment-range="1m"]')).toBeEnabled();
   const labels = await page.locator('#investmentChart .chart-x-axis-label').allTextContents();
   expect(labels.length).toBeGreaterThanOrEqual(2);
   expect(labels[0]).toBe('Sep 5');
@@ -109,6 +146,7 @@ test('a short portfolio window spanning months still uses distinct calendar date
   });
 
   await goToView(page, 'investments');
+  await page.locator('[data-investment-range="all"]').click();
   await expect(page.locator('#investmentChart svg')).toBeVisible();
   const labels = await page.locator('#investmentChart .chart-x-axis-label').allTextContents();
   expect(labels.length).toBeGreaterThanOrEqual(2);

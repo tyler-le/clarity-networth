@@ -161,6 +161,100 @@ integrationTest('serves an authenticated dashboard for an existing member sessio
   deleteStore(key);
 });
 
+integrationTest('pre-link investment history survives saved updates and stays isolated by session', async () => {
+  const email = 'history-owner@example.test';
+  const key = userStorageKey(email);
+  const today = new Date().toISOString().slice(0, 10);
+  const ago = (days) => new Date(Date.parse(`${today}T00:00:00Z`) - days * 86400000).toISOString().slice(0, 10);
+  writeStore({
+    items: [{ id: 'history-item', investment_ledger: { complete: true, start_date: ago(730), end_date: today, holdings_sync_id: 'sync' } }],
+    accounts: [{ id: 'ira', plaid_account_id: 'ira', item_id: 'history-item', name: 'IRA', type: 'investment', current_balance: 100,
+      investment_balance_anchor: { date: today, sync_id: 'sync', balance: 100, iso_currency_code: 'USD' } }],
+    positions: [{ account_id: 'ira', security_id: 'cash', type: 'cash', quantity: 100, price: 1, value: 100, iso_currency_code: 'USD' }],
+    investment_transactions: [{ account_id: 'ira', date: ago(100), type: 'cash', subtype: 'deposit', quantity: 0, amount: -100, iso_currency_code: 'USD' }],
+    investment_position_snapshots: [7, 0].map((days) => ({ date: ago(days), account_id: 'ira', kind: 'account', value: 100, source: 'verified' })),
+    investment_snapshots: [7, 0].map((days) => ({ date: ago(days), value: 100, source: 'verified' })),
+    transactions: [], snapshots: []
+  }, key);
+  const detail = await request(app).get('/api/investments/history?account_id=ira').set('Cookie', signedTestCookie(email));
+  assert.equal(detail.status, 200);
+  assert.equal(detail.body.history[0].date, ago(100));
+  assert.equal(detail.body.reconstructed, true);
+  assert.match(detail.body.detail, /estimated/);
+  assert.equal(detail.body.history.some((row) => row.date === ago(6)), false);
+  const portfolio = await request(app).get('/api/investments').set('Cookie', signedTestCookie(email));
+  assert.equal(portfolio.body.snapshots[0].source, 'reconstructed');
+  assert.equal(portfolio.body.snapshots.at(-1).source, 'verified');
+  const other = await request(app).get('/api/investments/history?account_id=ira').set('Cookie', signedTestCookie('other-history@example.test'));
+  assert.deepEqual(other.body.history, []);
+});
+
+integrationTest('net worth returns reconstructed history only when all visible accounts have coverage', async () => {
+  const email = 'cash-history@example.test';
+  const key = userStorageKey(email);
+  const today = new Date().toISOString().slice(0, 10);
+  const earlier = new Date(Date.parse(`${today}T00:00:00Z`) - 100 * 86400000).toISOString().slice(0, 10);
+  writeStore({ items: [{ id: 'bank', transactions_history_complete: true }],
+    accounts: [{ id: 'cash', plaid_account_id: 'cash', item_id: 'bank', type: 'depository', name: 'Checking', current_balance: 500,
+      transaction_balance_anchor: { date: today, balance: 500, iso_currency_code: 'USD' } }],
+    transactions: [{ account_id: 'cash', date: earlier, amount: -500, iso_currency_code: 'USD' }], snapshots: []
+  }, key);
+  const response = await request(app).get('/api/dashboard').set('Cookie', signedTestCookie(email));
+  assert.equal(response.status, 200);
+  assert.equal(response.body.snapshots[0].date, earlier);
+  assert.equal(response.body.snapshots[0].source, 'reconstructed');
+  assert.equal(response.body.snapshots[0].net_worth, 500);
+  assert.equal(response.body.snapshots.at(-1).source, 'verified');
+  // Derived values are recalculated; they never become saved provider facts.
+  const stored = readStore(key);
+  assert.ok(stored.snapshots.every((row) => row.source === 'verified'));
+  stored.accounts.push({ id: 'loan', type: 'loan', current_balance: 1000, name: 'Loan' });
+  writeStore(stored, key);
+  const incomplete = await request(app).get('/api/dashboard').set('Cookie', signedTestCookie(email));
+  assert.ok(incomplete.body.snapshots.every((row) => row.source === 'verified'));
+});
+
+integrationTest('link sync retains complete ledger evidence and removes canceled investment activity across pages', async (t) => {
+  const oldId = process.env.PLAID_CLIENT_ID, oldSecret = process.env.PLAID_SECRET;
+  process.env.PLAID_CLIENT_ID = 'test-only'; process.env.PLAID_SECRET = 'test-only';
+  t.after(() => {
+    if (oldId === undefined) delete process.env.PLAID_CLIENT_ID; else process.env.PLAID_CLIENT_ID = oldId;
+    if (oldSecret === undefined) delete process.env.PLAID_SECRET; else process.env.PLAID_SECRET = oldSecret;
+  });
+  const today = new Date().toISOString().slice(0, 10);
+  const earlier = new Date(Date.parse(`${today}T00:00:00Z`) - 30 * 86400000).toISOString().slice(0, 10);
+  const accounts = [
+    { account_id: 'linked-cash', name: 'Checking', type: 'depository', balances: { current: 500, iso_currency_code: 'USD' } },
+    { account_id: 'linked-ira', name: 'IRA', subtype: 'ira', type: 'investment', balances: { current: 100, iso_currency_code: 'USD' } }
+  ];
+  const investment = { account_id: 'linked-ira', date: earlier, name: 'IRA contribution', type: 'cash', subtype: 'contribution', quantity: 0, amount: -100, iso_currency_code: 'USD' };
+  const rows = [{ ...investment, investment_transaction_id: 'canceled' }, { ...investment, investment_transaction_id: 'cancellation', cancel_transaction_id: 'canceled' }, { ...investment, investment_transaction_id: 'valid' }];
+  let pages = 0;
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    const pathname = new URL(url).pathname;
+    const body = JSON.parse(init.body);
+    let data;
+    if (pathname === '/item/public_token/exchange') data = { item_id: 'test-item', access_token: 'test-access' };
+    else if (pathname === '/institutions/search') data = { institutions: [] };
+    else if (pathname === '/accounts/get') data = { accounts };
+    else if (pathname === '/investments/holdings/get') data = { accounts, securities: [{ security_id: 'cash-security', type: 'cash', iso_currency_code: 'USD' }], holdings: [{ account_id: 'linked-ira', security_id: 'cash-security', quantity: 100, institution_price: 1, institution_value: 100, iso_currency_code: 'USD' }] };
+    else if (pathname === '/transactions/sync') data = { accounts, added: [{ transaction_id: 'deposit', account_id: 'linked-cash', date: earlier, amount: -500, iso_currency_code: 'USD' }], modified: [], removed: [], has_more: false, next_cursor: 'complete-cursor', transactions_update_status: 'HISTORICAL_UPDATE_COMPLETE' };
+    else if (pathname === '/investments/transactions/get') { pages += 1; data = { total_investment_transactions: 3, investment_transactions: [rows[body.options.offset]], securities: [] }; }
+    else throw new Error(`Unexpected test dependency: ${pathname}`);
+    return { ok: true, status: 200, json: async () => data };
+  });
+  const email = 'linked-history@example.test';
+  const response = await request(app).post('/api/plaid/exchange_public_token').set('Cookie', signedTestCookie(email)).send({ public_token: 'test-public', institution_name: 'Test Bank' });
+  assert.equal(response.status, 200);
+  assert.equal(pages, 3);
+  const stored = readStore(userStorageKey(email));
+  assert.deepEqual(stored.investment_transactions.map((row) => row.id), ['valid']);
+  assert.equal(stored.items[0].investment_ledger.complete, true);
+  assert.equal(stored.items[0].transactions_history_complete, true);
+  assert.equal(stored.accounts[0].transaction_balance_anchor.balance, 500);
+  assert.equal(stored.transactions.filter((row) => row.source === 'investment_transaction').length, 1);
+});
+
 integrationTest('does not expose sign-in configuration secrets', async () => {
   const response = await request(app).get('/api/auth/config');
   assert.equal(response.status, 200);

@@ -18,6 +18,10 @@ export async function loadHistoricalPrices({ symbol, securityType, from, to }) {
   const url = new URL(`${API_ROOT}/${collection}/candles/D/${encodeURIComponent(symbol)}/`);
   url.searchParams.set('from', from);
   url.searchParams.set('to', to);
+  if (collection === 'stocks') {
+    url.searchParams.set('adjustsplits', 'false');
+    url.searchParams.set('adjustdividends', 'false');
+  }
   let lastError;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const startedAt = Date.now();

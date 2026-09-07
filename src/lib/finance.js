@@ -1,3 +1,5 @@
+import { combinedHistory, mergeReportedHistory, reconstructInvestmentAccount } from './history.js';
+
 export function classifyTransaction(tx) {
   const primary = (tx.personal_finance_category?.primary || '').toUpperCase();
   const detailed = (tx.personal_finance_category?.detailed || '').toUpperCase();
@@ -212,6 +214,7 @@ function providerPositionHistory(store, { accountId = null, ticker = null } = {}
   const normalizedTicker = String(ticker || '').trim().toUpperCase();
   const records = (store.investment_position_snapshots || []).filter((record) => {
     if (record.source !== 'verified') return false;
+    if (!(store.accounts || []).some((account) => !account.hidden && account.type === 'investment' && account.plaid_account_id === record.account_id)) return false;
     if (accountId) return record.kind === 'account' && record.account_id === accountId;
     return record.kind === 'holding' && record.ticker === normalizedTicker;
   });
@@ -223,20 +226,13 @@ function providerPositionHistory(store, { accountId = null, ticker = null } = {}
 // Some institutions send a display label in place of a tradable target-date
 // fund ticker. Historical pricing needs a real ticker to build a timeline.
 export function historicalTicker(ticker, securityName = '') {
-  const rawTicker = String(ticker || '').trim();
-  const text = `${rawTicker} ${securityName}`.toLowerCase();
-  const targetRetirementTickers = {
-    2020: 'VTWNX', 2025: 'VTTVX', 2030: 'VTHRX', 2035: 'VTTHX', 2040: 'VFORX',
-    2045: 'VTIVX', 2050: 'VFIFX', 2055: 'VFFVX', 2060: 'VTTSX', 2065: 'VLXVX', 2070: 'VSVNX'
-  };
-  const match = text.match(/vanguard\s+target(?:\s+retirement)?\s+(20\d{2})/i);
-  return match && targetRetirementTickers[match[1]] ? targetRetirementTickers[match[1]] : rawTicker;
+  // A plan trust and a retail fund can share a name/year but have different
+  // unit values. Only a provider-supplied symbol establishes the security.
+  return String(ticker || '').trim().toUpperCase();
 }
 
 export function historicalSecurity({ ticker, name = '', type = 'other' } = {}) {
-  const resolvedTicker = historicalTicker(ticker, name);
-  const targetDateFund = resolvedTicker !== String(ticker || '').trim() && /vanguard\s+target/i.test(`${ticker || ''} ${name}`);
-  return { ticker: resolvedTicker, type: targetDateFund ? 'mutual fund' : type };
+  return { ticker: historicalTicker(ticker, name), type };
 }
 
 function nearestPrice(prices, date) {
@@ -390,6 +386,12 @@ export function refreshReconstructedInvestmentSnapshots(store, endDate = new Dat
   const accounts = (store.accounts || []).filter((account) => account.type === 'investment' && !account.hidden);
   const reconstructed = [];
   for (const account of accounts) {
+    if (account.item_id && !account.demo) {
+      const result = reconstructInvestmentAccount(store, account, { years, today: endDate });
+      if (result.state !== 'ready') return [];
+      reconstructed.push(result.history);
+      continue;
+    }
     const currentPositions = (store.positions || []).filter((position) => position.account_id === account.plaid_account_id && !position.hidden);
     const coverage = reportedHistoricalPositions(store, currentPositions, account.plaid_account_id);
     if (coverage.reason) return [];
@@ -405,8 +407,7 @@ export function refreshReconstructedInvestmentSnapshots(store, endDate = new Dat
   const combined = [...sharedDates].sort().map((date) => ({ date, value: Math.round(reconstructed.reduce((sum, history) => sum + Number(history.find((row) => row.date === date)?.value || 0), 0) * 100) / 100, source: 'reconstructed' }));
   if (combined.length < 2) return [];
   const verified = store.investment_snapshots;
-  const verifiedDates = new Set(verified.map((snapshot) => snapshot.date));
-  store.investment_snapshots = [...combined.filter((snapshot) => !verifiedDates.has(snapshot.date)), ...verified].sort((a, b) => a.date.localeCompare(b.date));
+  store.investment_snapshots = mergeReportedHistory(combined, verified);
   return combined;
 }
 
@@ -430,6 +431,26 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
     ? (store.accounts.find((account) => account.plaid_account_id === accountId)?.nickname || store.accounts.find((account) => account.plaid_account_id === accountId)?.name || 'Investment account')
     : (positions[0].name || normalizedTicker);
   const providerHistory = providerPositionHistory(store, { accountId, ticker: normalizedTicker });
+  // Real accounts use the complete ledger, cash movements and exact security
+  // identities. Demo fixtures retain their explicitly synthetic timeline.
+  const realAccounts = store.accounts.filter((account) => visibleAccounts.has(account.plaid_account_id)
+    && account.item_id && !account.demo && positions.some((position) => position.account_id === account.plaid_account_id));
+  if (realAccounts.length) {
+    const results = realAccounts.map((account) => reconstructInvestmentAccount(store, account, { years, ticker: accountId ? null : normalizedTicker }));
+    const reconstructed = results.every((result) => result.state === 'ready') ? combinedHistory(results.map((result) => result.history)) : [];
+    const history = mergeReportedHistory(reconstructed, providerHistory);
+    const estimated = history.some((row) => row.source === 'reconstructed');
+    const preparing = realAccounts.some((account) => store.items?.some((item) => item.id === account.item_id && item.investment_history_state === 'preparing'));
+    const currentValue = accountId ? Number(realAccounts[0].current_balance) : value;
+    return {
+      state: history.length >= 2 ? 'ready' : preparing ? 'preparing' : 'unavailable',
+      label, ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null, value: currentValue,
+      costBasis, gain: costBasis == null ? null : value - costBasis,
+      history, market: [], reconstructed: estimated,
+      detail: estimated ? 'Earlier values are estimated from reported activity and historical prices. Saved balances take over when tracking begins.' : (history.length >= 2 ? `Based on ${providerHistory.length} verified updates from your connected institution.` : undefined),
+      reason: preparing ? 'Your institution is still preparing its reported investment activity.' : results.find((result) => result.state !== 'ready')?.reason
+    };
+  }
   if (providerHistory.length < 2) {
     const itemIds = new Set((store.accounts || []).filter((account) => positions.some((position) => position.account_id === account.plaid_account_id)).map((account) => account.item_id));
     if ((store.items || []).some((item) => itemIds.has(item.id) && item.investment_history_state === 'preparing')) return {

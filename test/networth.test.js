@@ -70,10 +70,11 @@ test('scrubbing clamps to endpoints and selects the nearest data point', () => {
   assert.equal(scrubIndex({ ...base, clientX: 500 }), 4);
 });
 
-test('historical pricing resolves Vanguard target retirement display symbols', () => {
-  assert.equal(historicalTicker('VANGUARD.TARGET.2065', 'Vanguard Target 2065'), 'VLXVX');
+test('historical pricing preserves provider symbols without guessing a retirement fund share class', () => {
+  assert.equal(historicalTicker('VANGUARD.TARGET.2065', 'Vanguard Target 2065'), 'VANGUARD.TARGET.2065');
   assert.equal(historicalTicker('VTI', 'Vanguard Total Stock Market ETF'), 'VTI');
-  assert.deepEqual(historicalSecurity({ ticker: 'VANGUARD.TARGET.2065', name: 'Vanguard Target 2065', type: 'equity' }), { ticker: 'VLXVX', type: 'mutual fund' });
+  assert.equal(historicalTicker(null, 'Vanguard Target 2065'), '');
+  assert.deepEqual(historicalSecurity({ ticker: 'VANGUARD.TARGET.2065', name: 'Vanguard Target 2065', type: 'equity' }), { ticker: 'VANGUARD.TARGET.2065', type: 'equity' });
 });
 
 test('duplicate linked accounts with the same verified identity are hidden, not deleted', () => {

@@ -8,8 +8,9 @@ import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './lib/store.js';
 import { consumeRateLimit, databaseEnabled, databaseHealthy, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, recordDependencyEvent, recordLaunchEvent, writeDatabaseStore } from './lib/database.js';
 import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentSummary, monthlyReview, refreshReconstructedInvestmentSnapshots, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './lib/finance.js';
-import { plaidConfigured, plaidPost } from './lib/plaid.js';
+import { investmentLedgerPages, plaidConfigured, plaidPost } from './lib/plaid.js';
 import { loadHistoricalPrices } from './lib/market-data.js';
+import { historyStart, reconstructedNetWorth } from './lib/history.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
@@ -376,8 +377,18 @@ async function refreshAccountsForItem(store, item) {
 
   const types = new Set((data.accounts || []).map((a) => a.type));
   if (types.has('investment')) {
+    item.investment_holdings_sync_id = null;
     try {
       const holdingsData = await plaidPost('/investments/holdings/get', { access_token });
+      const syncId = crypto.randomUUID();
+      item.investment_holdings_sync_id = syncId;
+      for (const reported of holdingsData.accounts || []) {
+        const account = store.accounts.find((row) => row.plaid_account_id === reported.account_id);
+        if (!account) continue;
+        account.investment_balance_anchor = { date: new Date().toISOString().slice(0, 10), sync_id: syncId,
+          balance: reported.balances?.current, iso_currency_code: reported.balances?.iso_currency_code,
+          unofficial_currency_code: reported.balances?.unofficial_currency_code || null };
+      }
       const securities = new Map((holdingsData.securities || []).map((security) => [security.security_id, security]));
       store.positions = (store.positions || []).filter((position) => position.item_id !== item.id);
       for (const holding of holdingsData.holdings || []) {
@@ -388,8 +399,11 @@ async function refreshAccountsForItem(store, item) {
           id,
           item_id: item.id, account_id: holding.account_id, security_id: holding.security_id,
           name: security.name || holding.security_id, ticker: historical.ticker,
-          type: historical.type, asset_class_override: store.position_overrides?.[id] || null, quantity: Number(holding.quantity || 0),
-          price: Number(holding.institution_price || 0), value: Number(holding.institution_value || 0),
+          provider_ticker: String(security.ticker_symbol || '').trim().toUpperCase(),
+          iso_currency_code: holding.iso_currency_code, unofficial_currency_code: holding.unofficial_currency_code || null,
+          price_as_of: holding.institution_price_as_of || null,
+          type: historical.type, asset_class_override: store.position_overrides?.[id] || null, quantity: holding.quantity == null ? null : Number(holding.quantity),
+          price: holding.institution_price == null ? null : Number(holding.institution_price), value: holding.institution_value == null ? null : Number(holding.institution_value),
           cost_basis: holding.cost_basis == null ? null : Number(holding.cost_basis), updated_at: new Date().toISOString(), demo: false
         });
       }
@@ -523,8 +537,18 @@ async function requestPendingInvestmentHistory() {
       let changed = false;
       for (const item of store.items.filter((candidate) => !candidate.demo)) {
         const hasInvestmentAccount = store.accounts.some((account) => account.item_id === item.id && account.type === 'investment');
-        if (!hasInvestmentAccount) continue;
         try {
+          // Upgrade existing connections automatically. Mark the attempt first
+          // so an unavailable product cannot cause a full replay every poll.
+          const hasCashOrCredit = store.accounts.some((account) => account.item_id === item.id && ['depository', 'credit'].includes(account.type));
+          const needsEvidence = (hasCashOrCredit && item.transactions_history_version !== 1) || (hasInvestmentAccount && !item.investment_ledger);
+          const lastUpgrade = Date.parse(item.history_upgrade_attempted_at || '') || 0;
+          if (needsEvidence && Date.now() - lastUpgrade >= 24 * 60 * 60_000) {
+            item.history_upgrade_attempted_at = new Date().toISOString();
+            changed = true;
+            await syncItem(store, item);
+          }
+          if (!hasInvestmentAccount) continue;
           if (!item.investment_history_requested_at) {
             await syncRetirementContributionsForItem(store, item, { asyncUpdate: true });
             changed = true;
@@ -637,10 +661,18 @@ function backfillInvestmentContributionMetadata(store) {
 
 async function syncTransactionsForItem(store, item) {
   const access_token = decrypt(item.access_token_enc);
-  let cursor = item.cursor || undefined;
+  // Replay once to retain currency/balance evidence for previously linked
+  // accounts. User categorization is preserved by the normal upsert path.
+  let cursor = item.transactions_history_version === 1 ? item.cursor || undefined : undefined;
+  const originalStore = store;
+  store = { ...store, transactions: store.transactions.map((row) => ({ ...row })) };
+  const balances = new Map();
+  let historyComplete = false;
   let hasMore = true;
   while (hasMore) {
     const data = await plaidPost('/transactions/sync', { access_token, cursor, count: 500, options: { include_personal_finance_category: true } });
+    historyComplete ||= data.transactions_update_status === 'HISTORICAL_UPDATE_COMPLETE';
+    for (const account of data.accounts || []) balances.set(account.account_id, account.balances);
     const changes = [...(data.added || []), ...(data.modified || [])];
     for (const transaction of changes) {
       const existing = store.transactions.find((record) => record.plaid_transaction_id === transaction.transaction_id);
@@ -657,6 +689,7 @@ async function syncTransactionsForItem(store, item) {
         id: existing?.id || crypto.randomUUID(), item_id: item.id, plaid_transaction_id: transaction.transaction_id,
         account_id: transaction.account_id, merchant_name: transaction.merchant_name, name: transaction.name,
         amount: transaction.amount, date: transaction.date, bucket: existing?.category_overridden ? existing.bucket : (transferTarget?.bucket || baseBucket), investment_contribution_amount: contributionAmount, investment_contribution_account_id: sourceAccount?.type === 'investment' ? sourceAccount.plaid_account_id : transferTarget?.accountId || null, excluded: existing?.excluded || false,
+        iso_currency_code: transaction.iso_currency_code, unofficial_currency_code: transaction.unofficial_currency_code || null,
         pending: transaction.pending, pfc_primary: transaction.personal_finance_category?.primary || '',
         pfc_detailed: transaction.personal_finance_category?.detailed || '', demo: false
       };
@@ -667,6 +700,21 @@ async function syncTransactionsForItem(store, item) {
     cursor = data.next_cursor;
     hasMore = Boolean(data.has_more);
   }
+  originalStore.transactions = store.transactions;
+  item.transactions_history_version = 1;
+  item.transactions_history_complete = historyComplete || item.transactions_history_complete === true;
+  originalStore.account_balance_snapshots ||= [];
+  for (const account of originalStore.accounts.filter((row) => row.item_id === item.id && ['depository', 'credit'].includes(row.type))) {
+    const balance = balances.get(account.plaid_account_id);
+    if (balance?.current == null || !Number.isFinite(Number(balance.current))) continue;
+    const date = new Date().toISOString().slice(0, 10);
+    account.transaction_balance_anchor = { date, balance: Number(balance.current), iso_currency_code: balance.iso_currency_code, unofficial_currency_code: balance.unofficial_currency_code || null };
+    const row = { date, account_id: account.plaid_account_id, value: Number(balance.current), source: 'verified' };
+    const existing = originalStore.account_balance_snapshots.find((snapshot) => snapshot.date === date && snapshot.account_id === account.plaid_account_id);
+    if (existing) Object.assign(existing, row); else originalStore.account_balance_snapshots.push(row);
+  }
+  const cutoff = historyStart(new Date().toISOString().slice(0, 10), 2);
+  originalStore.account_balance_snapshots = originalStore.account_balance_snapshots.filter((row) => row.date >= cutoff);
   item.cursor = cursor || item.cursor || null;
 }
 
@@ -693,32 +741,34 @@ async function syncRetirementContributionsForItem(store, item, { asyncUpdate = f
   const start = new Date();
   start.setFullYear(start.getFullYear() - 2);
   const start_date = start.toISOString().slice(0, 10);
-  let offset = 0;
-  let total = Infinity;
   let imported = 0;
   const accounts = new Map(store.accounts.map((account) => [account.plaid_account_id, account]));
   const hasInvestmentAccount = [...accounts.values()].some((account) => account.item_id === item.id && account.type === 'investment');
   if (!hasInvestmentAccount) return { state: 'not_applicable', imported: 0 };
   store.investment_transactions ||= [];
   item.investment_history_last_checked_at = new Date().toISOString();
+  item.investment_ledger = { complete: false };
   try {
-    while (offset < total) {
-      const data = await plaidPost('/investments/transactions/get', {
+      const data = await investmentLedgerPages({
         access_token,
         start_date,
         end_date,
-        options: { count: 500, offset, ...(asyncUpdate && offset === 0 ? { async_update: true } : {}) }
+        options: { ...(asyncUpdate ? { async_update: true } : {}) }
       });
-      if (asyncUpdate && offset === 0) item.investment_history_requested_at = new Date().toISOString();
-      total = Number(data.total_investment_transactions || 0);
+      item.investment_history_requested_at ||= new Date().toISOString();
+      const canceled = new Set(data.investment_transactions.map((row) => row.cancel_transaction_id).filter(Boolean));
+      const active = data.investment_transactions.filter((row) => !row.cancel_transaction_id && !canceled.has(row.investment_transaction_id));
+      const activeIds = new Set(active.map((row) => `investment:${row.investment_transaction_id}`));
+      store.investment_transactions = store.investment_transactions.filter((row) => row.item_id !== item.id || (row.date < start_date && !canceled.has(row.id)));
+      store.transactions = store.transactions.filter((row) => row.item_id !== item.id || row.source !== 'investment_transaction' || (row.date < start_date && !canceled.has(row.plaid_transaction_id?.slice(11))) || activeIds.has(row.plaid_transaction_id));
       const securities = new Map((data.securities || []).map((security) => [security.security_id, security]));
-      for (const transaction of data.investment_transactions || []) {
+      for (const transaction of active) {
         imported += 1;
         const security = securities.get(transaction.security_id) || {};
         const historical = historicalSecurity({ ticker: security.ticker_symbol, name: security.name, type: security.type || null });
         const investmentId = transaction.investment_transaction_id;
         const existingInvestment = store.investment_transactions.find((record) => record.id === investmentId);
-        const recorded = { id: investmentId, item_id: item.id, account_id: transaction.account_id, security_id: transaction.security_id || null, ticker: historical.ticker || null, security_name: security.name || null, security_type: historical.type || null, date: transaction.date, quantity: Number(transaction.quantity || 0), price: Number(transaction.price || 0), amount: Number(transaction.amount || 0), type: transaction.type || null, subtype: transaction.subtype || null };
+        const recorded = { id: investmentId, item_id: item.id, account_id: transaction.account_id, security_id: transaction.security_id || null, ticker: historical.ticker || null, provider_ticker: String(security.ticker_symbol || '').trim().toUpperCase(), security_name: security.name || null, security_type: historical.type || null, date: transaction.date, quantity: transaction.quantity ?? null, price: transaction.price ?? null, amount: transaction.amount ?? null, fees: transaction.fees ?? null, iso_currency_code: transaction.iso_currency_code, unofficial_currency_code: transaction.unofficial_currency_code || null, type: transaction.type || null, subtype: transaction.subtype || null };
         if (existingInvestment) Object.assign(existingInvestment, recorded); else store.investment_transactions.push(recorded);
         const account = accounts.get(transaction.account_id);
         const name = String(transaction.name || '');
@@ -736,8 +786,6 @@ async function syncRetirementContributionsForItem(store, item, { asyncUpdate = f
         };
         if (existing) Object.assign(existing, normalized); else store.transactions.push(normalized);
       }
-      offset += 500;
-    }
   } catch (error) {
     if (isPlaidProductNotReady(error)) {
       item.investment_history_requested_at ||= new Date().toISOString();
@@ -748,6 +796,7 @@ async function syncRetirementContributionsForItem(store, item, { asyncUpdate = f
     throw error;
   }
   item.investment_history_state = 'ready';
+  item.investment_ledger = { complete: true, start_date, end_date, holdings_sync_id: item.investment_holdings_sync_id };
   item.investment_history_received_at = new Date().toISOString();
   delete item.investment_history_poll_attempts;
   return { state: 'ready', imported };
@@ -771,8 +820,10 @@ async function hydrateInvestmentPriceHistory(store, item) {
     securities.set(String(transaction.ticker).toUpperCase(), { ticker: String(transaction.ticker).toUpperCase(), type: transaction.security_type });
   }
   store.market_prices ||= {};
+  store.market_price_metadata ||= {};
   for (const security of securities.values()) {
-    const cached = store.market_prices[security.ticker] || {};
+    if (!['equity', 'etf', 'mutual fund'].includes(security.type) || !/^[A-Z][A-Z0-9.-]{0,14}$/.test(security.ticker)) continue;
+    const cached = store.market_price_metadata[security.ticker]?.basis === 'unadjusted' ? store.market_prices[security.ticker] || {} : {};
     const dates = Object.keys(cached).sort();
     const first = dates[0];
     const latest = dates.at(-1);
@@ -780,10 +831,20 @@ async function hydrateInvestmentPriceHistory(store, item) {
     // recent market sessions. This prevents routine syncs from re-buying a
     // year's worth of candles for every holding.
     const latestAge = latest ? Math.floor((Date.now() - new Date(`${latest}T12:00:00`).getTime()) / 86400000) : Infinity;
-    if (first && first <= start && latestAge <= 5) continue;
-    const from = first && first <= start && latest ? new Date(Math.max(new Date(`${latest}T12:00:00`).getTime() - 7 * 86400000, new Date(`${start}T12:00:00`).getTime())).toISOString().slice(0, 10) : start;
-    const prices = await loadHistoricalPrices({ symbol: security.ticker, securityType: security.type, from, to: end });
-    if (Object.keys(prices).length) store.market_prices[security.ticker] = { ...cached, ...prices };
+    const coveredStart = first && first <= new Date(Date.parse(`${start}T00:00:00Z`) + 7 * 86400000).toISOString().slice(0, 10);
+    if (coveredStart && latestAge <= 1) continue;
+    if (store.market_price_metadata[security.ticker]?.checked_date === end) continue;
+    const from = coveredStart && latest ? new Date(Math.max(new Date(`${latest}T12:00:00`).getTime() - 7 * 86400000, new Date(`${start}T12:00:00`).getTime())).toISOString().slice(0, 10) : start;
+    try {
+      const prices = await loadHistoricalPrices({ symbol: security.ticker, securityType: security.type, from, to: end });
+      if (Object.keys(prices).length) {
+        store.market_prices[security.ticker] = { ...cached, ...prices };
+        store.market_price_metadata[security.ticker] = { basis: 'unadjusted', provider: 'marketdata', checked_date: end };
+      }
+    } catch {
+      // One missing symbol must not prevent the other accounts from backfilling.
+      store.market_price_metadata[security.ticker] = { ...store.market_price_metadata[security.ticker], checked_date: end };
+    }
   }
   item.investment_price_history_checked_at = new Date().toISOString();
 }
@@ -934,7 +995,7 @@ app.get('/api/dashboard', async (req, res) => {
   await saveStore(req.user, store);
   const visibleStore = activeStore(store);
   const summary = summarizeRange(visibleStore);
-  const snapshots = visibleStore.snapshots.slice(-3650);
+  const snapshots = [...reconstructedNetWorth(visibleStore, { years: 2 }), ...visibleStore.snapshots].slice(-3650);
   const accounts = visibleStore.accounts.filter((account) => !account.hidden).sort((a, b) => Number(b.current_balance || 0) - Number(a.current_balance || 0));
   // A persistent Google session does not pass through OAuth again on every
   // visit. Record these minimal markers before replying so the private
@@ -968,7 +1029,9 @@ app.get('/api/spending', async (req, res) => {
 });
 
 app.get('/api/investments', async (req, res) => {
-  res.json(investmentSummary(activeStore(await loadStore(req.user))));
+  const store = activeStore(await loadStore(req.user));
+  refreshReconstructedInvestmentSnapshots(store, new Date().toISOString().slice(0, 10), Math.max(1, Math.min(2, Number(process.env.MARKETDATA_HISTORY_YEARS || 1))));
+  res.json(investmentSummary(store));
 });
 
 app.get('/api/investments/history', async (req, res) => {
@@ -976,7 +1039,7 @@ app.get('/api/investments/history', async (req, res) => {
   const ticker = String(req.query.ticker || '').trim().toUpperCase().slice(0, 24);
   if (!accountId && !ticker) return res.status(400).json({ error: 'Choose an investment account or holding.' });
   const store = activeStore(await loadStore(req.user));
-  res.json(investmentDetailHistory(store, { accountId: accountId || null, ticker: ticker || null, years: 1 }));
+  res.json(investmentDetailHistory(store, { accountId: accountId || null, ticker: ticker || null, years: Math.max(1, Math.min(2, Number(process.env.MARKETDATA_HISTORY_YEARS || 1))) }));
 });
 
 app.get('/api/demo-investments/history', demoLimiter, (req, res) => {
@@ -1246,6 +1309,7 @@ app.delete('/api/items/:id', async (req, res) => {
   store.positions = (store.positions || []).filter((position) => position.item_id !== item.id);
   const remainingAccountIds = new Set(store.accounts.map((account) => account.plaid_account_id));
   store.manual_holdings = (store.manual_holdings || []).filter((position) => remainingAccountIds.has(position.account_id));
+  store.account_balance_snapshots = (store.account_balance_snapshots || []).filter((row) => remainingAccountIds.has(row.account_id));
   for (const key of Object.keys(store.position_overrides || {})) if (key.startsWith(`${item.id}:`)) delete store.position_overrides[key];
   store.transactions = store.transactions.filter((transaction) => transaction.item_id !== item.id);
   snapshotNetWorth(store);
@@ -1304,7 +1368,7 @@ app.post('/api/plaid/create_link_token', plaidCostLimiter({ scope: 'plaid_link_t
       additional_consented_products: ['investments', 'liabilities'],
       country_codes: ['US'],
       language: 'en',
-      transactions: { days_requested: 365 }
+      transactions: { days_requested: 730 }
     };
     if (process.env.PLAID_WEBHOOK_URL) body.webhook = process.env.PLAID_WEBHOOK_URL;
     const data = await plaidPost('/link/token/create', body);
