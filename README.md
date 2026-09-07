@@ -1,21 +1,46 @@
 # Clarity
 
-A small, responsive Plaid-powered personal finance app for:
+Clarity is a calm, beginner-friendly personal-finance PWA. It gives someone a
+fast answer to three questions: **where do I stand, where is my money going,
+and what deserves attention next?**
 
-- Net worth tracking across cash, investments, credit cards, and loans
-- Monthly expense tracking
-- A configurable conscious spending plan
-- A Sankey-style income → spending flow visualization
-- Manual transaction recategorization and exclusion
-- Daily net-worth snapshots with a mouse/touch scrubbable history chart
-- Lean, Coast, and Fat FIRE estimates based on tracked living spend
-- Plaid Transactions sync with investment/liability consent
+It is intentionally a focused financial picture—not a dense spreadsheet or a
+household-budgeting suite. People can explore a full demo without signing in;
+personal accounts are private to each signed-in user.
 
-The UI is intentionally minimal and mobile-friendly. It can also be installed as a basic PWA from a supporting browser.
+## What it includes
 
-## Run it
+- **Net worth:** verified daily snapshots, scrubbable history, assets, and debt
+- **Cash flow:** take-home income, spending categories, saving, investing, and
+  interactive transactions without double-counting card payments or transfers
+- **Accounts:** cash, savings, investments, liabilities, duplicate detection,
+  nicknames, manual items, unlinking, and a calm optional debt-payoff plan
+- **Investments:** portfolio value history, allocation, holdings, account
+  context, and user corrections for incomplete provider classifications
+- **Retirement:** plain-language milestones, Coast independence, retirement
+  spending paths based on a person’s own activity, and live plan assumptions
+- **Goals and check-ins:** one useful next step, rather than another dashboard
+- **Public demo and installable PWA:** seven years of representative demo data,
+  dark mode, responsive layouts, and no app-store download required
 
-Requirements: Node.js 20+
+## Architecture
+
+Clarity is intentionally lean: Node.js/Express serves a dependency-light
+HTML/CSS/JavaScript PWA. Financial data stays server-side in per-user,
+encrypted stores backed by Postgres in production. Browser responses are
+private and non-cacheable; Plaid access tokens never reach the client.
+
+```text
+server.js / finance.js       API, Plaid orchestration, calculations
+database.js / store.js       Per-user encrypted financial persistence
+secure-payload.js            Payload encryption helpers
+public/                      Responsive PWA shell, interactions, charts
+test/                        Unit, integration, and Playwright UI journeys
+```
+
+## Run locally
+
+Requirements: Node.js 20 or newer.
 
 ```bash
 cp .env.example .env
@@ -23,84 +48,63 @@ npm install
 npm start
 ```
 
-Open http://localhost:3000
+Open [http://localhost:3000](http://localhost:3000). Local development uses a
+public demo by default; Plaid is optional until you configure it.
 
-By default, `DEMO_MODE=true`, so the dashboard opens with realistic sample data before Plaid is configured.
+### Local configuration
 
-## Connect Plaid Sandbox
-
-1. Create a Plaid developer account and get your Sandbox client ID and secret.
-2. Add them to `.env`:
+Use [`.env.example`](.env.example) as the canonical variable list. The values
+needed for a production-like deployment are:
 
 ```env
-PLAID_ENV=sandbox
-PLAID_CLIENT_ID=your_client_id
-PLAID_SECRET=your_sandbox_secret
-MARKETDATA_API_TOKEN=your_market_data_bearer_token
-ENCRYPTION_KEY=use-a-long-random-secret-here
+NODE_ENV=production
+DEMO_MODE=false
+DATABASE_URL=postgres-connection-url
+DATA_ENCRYPTION_KEY=unique-long-random-secret
+SESSION_SECRET=different-unique-long-random-secret
+GOOGLE_CLIENT_ID=google-oauth-web-client-id
+INVITE_CODE=private-beta-code
+SUPPORT_EMAIL=support@example.com
 ```
 
-3. Restart the server.
-4. Click **Connect account**.
-5. Use Plaid Sandbox credentials, such as `user_good` / `pass_good` where supported by the Sandbox institution.
+Add `PLAID_CLIENT_ID`, `PLAID_SECRET`, and `PLAID_ENV` only when connecting
+Plaid. Keep every secret in your host’s environment-variable manager, never in
+Git.
 
-The app initializes Link with `transactions`, requests consent for `investments` and `liabilities`, exchanges the public token server-side, refreshes accounts, and uses `/transactions/sync` for incremental transaction ingestion.
+## Tests and releases
 
-## Data behavior
+Run the full local release gate before a push:
 
-### Net worth
-
-- `depository` and `investment` accounts are counted as assets and displayed as positive/green balances.
-- `credit` and `loan` accounts are counted as liabilities and displayed as negative/red balances.
-- Accounts are grouped into Cash, Savings, Investments, Credit Cards, and Loans/Debt.
-- Net worth = assets − liabilities.
-- One current snapshot is stored per calendar day.
-
-### FIRE estimates
-
-The dashboard annualizes tracked **fixed + guilt-free** living expenses and compares the current net worth against three editable targets:
-
-- **Lean FIRE:** defaults to 70% of current living spend divided by a 4% withdrawal rate.
-- **Coast FIRE:** the amount needed today to grow to a standard FIRE target by retirement age, defaulting to age 65 and a 5% real return.
-- **Fat FIRE:** defaults to 150% of current living spend divided by a 4% withdrawal rate.
-
-These are planning estimates rather than universal FIRE definitions. Age, retirement age, withdrawal rate, real return, and Lean/Fat spending multipliers are editable in the UI.
-
-### Transaction signs
-
-Plaid transaction amounts are generally positive for money leaving an account and negative for money entering it. The app normalizes this into spending/income views.
-
-### Conscious spending buckets
-
-The default targets are:
-
-- Fixed costs: 50%
-- Savings: 10%
-- Investments: 10%
-- Guilt-free: 30%
-
-First-pass classification uses Plaid Personal Finance Categories and simple deterministic rules. Users can override any transaction bucket.
-
-Credit card payments and ordinary transfers are excluded from spending by default to avoid double-counting purchases.
-
-## Files
-
-```text
-server.js            Express routes + Plaid orchestration
-plaid.js             Thin Plaid API client
-finance.js           Net worth + transaction classification logic
-store.js             JSON persistence + AES-256-GCM token encryption
-public/index.html    App shell
-public/app.js         Dashboard interactions + charts
-public/styles.css    Responsive UI
+```bash
+npm run test:ci
 ```
 
-## Beta readiness
+This checks syntax, unit tests, integration/security contracts, and Playwright
+journeys at phone, tablet, laptop, and desktop breakpoints. A push runs the
+same verification in GitHub Actions, deploys to staging, verifies it, then
+promotes to production.
 
-Clarity supports a small, invite-only beta with per-user authorization, Postgres-backed encrypted financial stores, account unlink/export/deletion, secure browser headers, rate limits, daily sync, webhook handling, uptime monitoring, and a staging-gated release pipeline.
+See [`AGENTS.md`](AGENTS.md) for the product, accessibility, financial-data,
+testing, and UX standards that guide changes.
 
-See [the private beta launch checklist](docs/BETA_LAUNCH.md) for the production environment settings and external steps that still need an owner: Plaid Production approval, a monitored support inbox, OAuth domain configuration, backup policy, and applicable legal/privacy review before a broader public launch.
+## Documentation
 
-## Plaid notes
+- [PWA installation guide for beta users](docs/PWA_INSTALL.md)
+- [Private beta launch checklist](docs/BETA_LAUNCH.md)
+- [Operations and recovery notes](docs/operations.md)
 
-Plaid currently recommends `/transactions/sync` for new transaction integrations. For personal finance use cases combining Transactions with Investments/Liabilities, Plaid's current guidance is to initialize Transactions and collect consent for the additional products, then call the applicable product endpoints based on the connected account types.
+## Data principles
+
+- Net worth is assets minus liabilities; debt is always visually distinct.
+- Plaid transactions are categorized conservatively, and people can override
+  a category or a holding classification when a provider sends incomplete data.
+- Card payments and transfers are excluded from cash-flow spending to prevent
+  double counting.
+- Financial estimates state their assumptions and do not invent history or
+  performance when provider data is insufficient.
+
+## Install Clarity
+
+Clarity can be installed from a supporting browser without the App Store or
+Play Store. See the [visual installation guide](docs/PWA_INSTALL.md) for
+iPhone/iPad, Android, and desktop steps.
