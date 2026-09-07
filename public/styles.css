@@ -385,6 +385,11 @@ dialog::backdrop { background: rgba(10,15,10,.28); backdrop-filter: blur(3px); }
 @media (max-width: 460px) { .cashflow-sankey { height: 218px; }.cashflow-label { font-size: 10px; }.cashflow-value { font-size: 11px; } }
 .cashflow-sankey { height: 270px; display: flex; flex-direction: column; gap: 8px; overflow: visible; }
 .cashflow-sankey svg { height: auto; min-height: 0; flex: 1 1 auto; overflow: visible; }
+.cashflow-node-hit { fill: transparent; stroke: transparent; transition: fill .16s ease, stroke .16s ease; }
+.cashflow-node-bar { filter: saturate(1.05); }
+.cashflow-target:hover .cashflow-node-hit, .cashflow-target:focus-visible .cashflow-node-hit { fill: var(--cashflow-node); fill-opacity: .1; stroke: var(--cashflow-node); stroke-opacity: .38; }
+.cashflow-label, .cashflow-value { paint-order: stroke; stroke: var(--card); stroke-width: 4px; stroke-linejoin: round; }
+.cashflow-share { stroke-width: 3px; }
 .cashflow-more { display: flex; width: 100%; align-items: center; justify-content: space-between; min-height: 30px; padding: 7px 10px; border: 1px solid color-mix(in srgb, var(--save) 30%, var(--line)); border-radius: 9px; color: var(--save); background: color-mix(in srgb, var(--save) 8%, var(--card)); font: inherit; font-size: 11px; font-weight: 760; text-align: left; cursor: pointer; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
 .cashflow-more:hover { border-color: var(--save); background: color-mix(in srgb, var(--save) 14%, var(--card)); transform: translateY(-1px); }
 .cashflow-more:focus-visible { outline: 3px solid color-mix(in srgb, var(--save) 32%, transparent); outline-offset: 2px; }

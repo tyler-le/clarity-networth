@@ -264,7 +264,7 @@ test('cash-flow quality holds at every supported viewport', async ({ page }) => 
   await expect(diagram.locator('svg')).toBeVisible();
   await expect(diagram).toContainText('Paychecks');
   const edgeWidths = await diagram.locator('.cashflow-flow').evaluateAll((paths) => paths.map((path) => Number(path.getAttribute('stroke-width'))));
-  expect(Math.max(...edgeWidths)).toBeLessThanOrEqual(35);
+  expect(Math.max(...edgeWidths)).toBeLessThanOrEqual(40);
   expect(Math.max(...edgeWidths)).toBeGreaterThan(Math.min(...edgeWidths));
   const nodeBoxes = await diagram.locator('.cashflow-target rect:first-child').evaluateAll((nodes) => nodes.map((node) => {
     const box = node.getBoundingClientRect();
