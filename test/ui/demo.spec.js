@@ -303,6 +303,19 @@ test('cash-flow quality holds at every supported viewport @critical', async ({ p
   }));
   expect(nodeBoxes.every((box) => box.width > 0 && box.height > 0)).toBe(true);
   expect(nodeBoxes.every((box) => box.fill && box.fill !== 'transparent' && box.fillOpacity > 0 && box.stroke && box.stroke !== 'transparent')).toBe(true);
+  const nodeTextFits = await diagram.locator('.cashflow-target').evaluateAll((nodes) => nodes.every((node) => {
+    const surface = node.querySelector('[data-testid="cashflow-node-surface"]');
+    if (!(surface instanceof SVGRectElement)) return false;
+    const x = Number(surface.getAttribute('x'));
+    const y = Number(surface.getAttribute('y'));
+    const width = Number(surface.getAttribute('width'));
+    const height = Number(surface.getAttribute('height'));
+    return [...node.querySelectorAll('text')].every((text) => {
+      const box = text.getBBox();
+      return box.x >= x - .5 && box.x + box.width <= x + width + .5 && box.y >= y - .5 && box.y + box.height <= y + height + .5;
+    });
+  }));
+  expect(nodeTextFits).toBe(true);
   const categoryColors = await diagram.locator('[data-cashflow-category]').getByTestId('cashflow-node-accent').evaluateAll((stripes) => new Set(stripes.map((stripe) => stripe.getAttribute('fill'))).size);
   expect(categoryColors).toBeGreaterThan(2);
   await page.locator('#cashflowExpand').click();
@@ -389,7 +402,8 @@ test('holding details preserve account context without crowding the overview', a
   await page.locator('[data-holding-history]').first().click();
   const dialog = page.locator('#holdingHistoryDialog');
   await expect(dialog).toBeVisible();
-  await expect(dialog.locator('#holdingHistoryWhere')).toContainText('Holdings in this account');
+  await expect(dialog.locator('#holdingHistoryEyebrow')).toHaveText('Your position');
+  await expect(dialog.locator('#holdingHistoryWhere')).toContainText('Held in');
   await expect(page.locator('.holding-row').first()).not.toHaveAttribute('open', '');
 });
 
@@ -398,6 +412,8 @@ test('account detail names each holding instead of repeating the account name', 
   await goToView(page, 'investments');
   await page.getByRole('button', { name: /View 401\(k\) performance history/i }).click();
   const where = page.locator('#holdingHistoryWhere');
+  await expect(page.locator('#holdingHistoryEyebrow')).toHaveText('Your account');
+  await expect(page.locator('#holdingHistoryTitle')).toHaveText('401(k)');
   await expect(where).toContainText('Holdings in this account');
   await expect(where.locator('b').first()).toContainText(/FXAIX|FSPSX/);
   await expect(where.locator('small').first()).toContainText(/401\(k\).*Funds/);

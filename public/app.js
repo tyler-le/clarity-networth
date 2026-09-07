@@ -669,25 +669,29 @@ function renderSpendingTrend(data) {
 
 function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false) {
   const income = Number(data.income || 0), actualSpend = Number(data.actualSpend || 0), savings = Number(data.savings || 0), investments = Number(data.investments || 0);
-  if (!income && !actualSpend && !savings && !investments) { el.innerHTML = ''; return; }
+  // The interface rounds amounts to whole dollars. Do not render a node that
+  // would read as "$0" after that rounding; it adds visual noise and implies
+  // a meaningful flow where there is none.
+  const hasVisibleAmount = (value) => Math.abs(Number(value || 0)) >= .5;
+  if (![income, actualSpend, savings, investments].some(hasVisibleAmount)) { el.innerHTML = ''; return; }
   // Use the chart's actual container, not a device label. This survives
   // tablets, split-screen, zoom, sidebars, and window resizing.
   const availableWidth = el.clientWidth;
   const compact = availableWidth < 520;
   const tablet = !compact && availableWidth < 760;
-  const allSpendCategories = (data.actualSpendCategories || []).filter((row) => Number(row.amount || 0) > 0);
+  const allSpendCategories = (data.actualSpendCategories || []).filter((row) => hasVisibleAmount(row.amount));
   const incomeSources = (data.incomeSources?.length ? data.incomeSources : [{ key: 'income', label: 'Income received', amount: income }])
-    .filter((source) => Number(source.amount || 0) > 0);
+    .filter((source) => hasVisibleAmount(source.amount));
   const actualCategories = expanded ? allSpendCategories : allSpendCategories.slice(0, 4);
   const width = compact ? 390 : tablet ? 620 : 920;
   // Treat the blocks as compact labels for the flow, rather than cards that
   // compete with it. Phone labels get a little more vertical room to wrap.
-  const rowHeight = compact ? 42 : 38, rowStep = compact ? 49 : 46;
+  const rowHeight = compact ? 50 : 46, rowStep = compact ? 57 : 53;
   const middleNodes = [
     { key: 'actual_spend', label: 'Actual spend', value: actualSpend, color: 'var(--outflow)' },
     { key: 'savings', label: 'Save', value: savings, color: 'var(--save)' },
     { key: 'investments', label: 'Invest', value: investments, color: 'var(--invest)' }
-  ].filter((node) => node.value > 0);
+  ].filter((node) => hasVisibleAmount(node.value));
   const contentHeight = (rows) => rows.length ? (rows.length - 1) * rowStep + rowHeight : 0;
   const height = Math.max(224, contentHeight(incomeSources) + 16, contentHeight(middleNodes) + 16, contentHeight(actualCategories) + 16);
   // A node must visibly meet its flow. Fixed wide, transparent hit areas made
@@ -695,12 +699,12 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   // each column to its actual labels and render it as a quiet tinted block.
   const nodeWidth = (rows, minimum, maximum) => {
     const longest = Math.max(...rows.map((row) => String(row.label || '').length), 0);
-    const characterWidth = compact ? 5.1 : 5.7;
-    return Math.max(minimum, Math.min(maximum, Math.ceil(24 + longest * characterWidth)));
+    const characterWidth = compact ? 5.4 : 6.2;
+    return Math.max(minimum, Math.min(maximum, Math.ceil(25 + longest * characterWidth)));
   };
-  const sourceW = nodeWidth(incomeSources, compact ? 74 : 76, compact ? 102 : 112);
-  const middleW = nodeWidth(middleNodes, compact ? 78 : 82, compact ? 106 : 116);
-  const destinationW = nodeWidth(actualCategories.map((row) => ({ label: row.name })), compact ? 82 : 88, compact ? 112 : 124);
+  const sourceW = nodeWidth(incomeSources, compact ? 76 : 82, compact ? 108 : 142);
+  const middleW = nodeWidth(middleNodes, compact ? 80 : 86, compact ? 110 : 136);
+  const destinationW = nodeWidth(actualCategories.map((row) => ({ label: row.name })), compact ? 84 : 92, compact ? 106 : 142);
   const sourceX = compact ? 6 : tablet ? 8 : 20;
   const middleX = compact ? 143 : tablet ? 248 : 389;
   const destinationX = compact ? 280 : tablet ? 488 : 758;
@@ -710,10 +714,19 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     housing_bills: '#c87862', food_dining: '#c69656', shopping: '#9a78a2', transport: '#6996a7', health: '#6a9b88', insurance: '#728aac', services: '#8d87aa', entertainment: '#b47b92', travel: '#6499a0', education: '#8d9a5f', personal_care: '#b98675', home: '#739585', taxes: '#ab8066', civic: '#7d91a4', fees: '#9a8f81', uncategorized: '#9a8f81'
   }[key] || fallback);
   const block = (x, y, w, color, label, value, category = '', side = 'left') => {
-    const words = String(label).split(' ');
-    const mobileLines = compact && words.length > 1 ? [words.slice(0, Math.ceil(words.length / 2)).join(' '), words.slice(Math.ceil(words.length / 2)).join(' ')] : [label];
-    const labelMarkup = mobileLines.map((line, index) => `<tspan x="${x + 11}" dy="${index ? 10 : 0}">${escapeHtml(line)}</tspan>`).join('');
-    const valueY = y + (mobileLines.length > 1 ? 36 : 28);
+    const maxChars = Math.max(7, Math.floor((w - 19) / (compact ? 5.4 : 6.2)));
+    const words = String(label).trim().split(/\s+/).filter(Boolean);
+    const lines = [];
+    for (const word of words) {
+      const shortened = word.length > maxChars ? `${word.slice(0, Math.max(1, maxChars - 1))}…` : word;
+      const previous = lines.at(-1);
+      if (previous && `${previous} ${shortened}`.length <= maxChars) lines[lines.length - 1] = `${previous} ${shortened}`;
+      else if (lines.length < 2) lines.push(shortened);
+      else lines[1] = `${lines[1].slice(0, Math.max(1, maxChars - 1))}…`;
+    }
+    const displayLines = lines.length ? lines : ['Income'];
+    const labelMarkup = displayLines.map((line, index) => `<tspan x="${x + 11}" dy="${index ? 11 : 0}">${escapeHtml(line)}</tspan>`).join('');
+    const valueY = y + (displayLines.length > 1 ? 39 : 29);
     const accentX = side === 'right' ? x + w - 6 : x;
     return `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" data-cashflow-node="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><title>${escapeHtml(`${label}: ${fmt.format(value)}`)}</title><rect data-testid="cashflow-node-surface" x="${x}" y="${y}" width="${w}" height="${rowHeight}" rx="5" fill="${color}" fill-opacity=".10" stroke="${color}" stroke-opacity=".38"/><rect data-testid="cashflow-node-accent" x="${accentX}" y="${y}" width="6" height="${rowHeight}" rx="2" fill="${color}"/><text x="${x + 11}" y="${y + 14}" class="cashflow-label">${labelMarkup}</text><text x="${x + 11}" y="${valueY}" class="cashflow-value">${fmt.format(value)}</text></g>`;
   };
@@ -837,34 +850,19 @@ function portfolioSnapshots(data) {
   const snapshots = uniqueDailySnapshots(data.snapshots || []);
   if (state.investmentRange === 'all' || !snapshots.length) return snapshots;
   const latest = new Date(`${snapshots.at(-1).date}T12:00:00`);
-  const visible = filterSnapshots(snapshots, state.investmentRange, latest);
-  return visible.length ? visible : snapshots.slice(-1);
-}
-
-function portfolioRangeIsAvailable(snapshots, range) {
-  if (range === 'all') return true;
-  if (snapshots.length < 2) return false;
-  const first = new Date(`${snapshots[0].date}T12:00:00`).getTime();
-  const lastDate = snapshots.at(-1).date;
-  const last = new Date(`${lastDate}T12:00:00`).getTime();
-  // A few connection-day points can be truthful, but they do not make a
-  // useful month/year lens. Keep those controls unavailable until a person
-  // has a minimally meaningful tracked span.
-  if (!Number.isFinite(first) || !Number.isFinite(last) || last - first < 14 * 86400000) return false;
-  const { startDate } = netWorthRangeBounds(range, new Date(`${lastDate}T12:00:00`));
-  return Boolean(startDate) && first <= new Date(`${startDate}T12:00:00`).getTime() + 10 * 86400000;
+  return filterSnapshots(snapshots, state.investmentRange, latest);
 }
 
 function syncPortfolioRangeControls(snapshots) {
   if (!state.investmentRangeInitialized) {
-    state.investmentRange = portfolioRangeIsAvailable(snapshots, state.investmentRange) ? state.investmentRange : 'all';
     state.investmentRangeInitialized = true;
   }
-  if (!portfolioRangeIsAvailable(snapshots, state.investmentRange)) state.investmentRange = 'all';
   $$('[data-investment-range]').forEach((control) => {
-    const available = portfolioRangeIsAvailable(snapshots, control.dataset.investmentRange);
-    control.disabled = !available;
-    control.title = available ? '' : 'Available once more verified portfolio history has been tracked.';
+    // A person can always choose their preferred lens. When their verified
+    // history begins later than that lens, the chart shows a dotted lead-in
+    // rather than disabling the choice or pretending old data exists.
+    control.disabled = false;
+    control.title = '';
     control.classList.toggle('active', control.dataset.investmentRange === state.investmentRange);
   });
 }
@@ -899,21 +897,29 @@ function renderPortfolioChart(data) {
     return;
   }
   if (snapshots.length === 1) {
-    renderPortfolioTrackingStart(el, snapshots[0], data.total);
+    const latest = new Date(`${snapshots[0].date}T12:00:00`);
+    renderPortfolioTrackingStart(el, snapshots[0], data.total, netWorthRangeBounds(state.investmentRange, latest).startDate);
     return;
   }
   const width = Math.max(1, Math.round(el.clientWidth));
   const height = Math.max(1, Math.round(el.clientHeight));
   const plot = { left: 46, right: 6, top: 8, bottom: height - 23 };
+  const firstObservedTime = new Date(`${snapshots[0].date}T12:00:00`).getTime();
+  const lastObservedTime = new Date(`${snapshots.at(-1).date}T12:00:00`).getTime();
+  const selectedStartDate = netWorthRangeBounds(state.investmentRange, new Date(`${snapshots.at(-1).date}T12:00:00`)).startDate;
+  const requestedStartTime = selectedStartDate ? new Date(`${selectedStartDate}T12:00:00`).getTime() : firstObservedTime;
+  const domainStart = Math.min(firstObservedTime, requestedStartTime);
+  const domainEnd = Math.max(domainStart + 86_400_000, lastObservedTime);
   const values = snapshots.map((snapshot) => Number(snapshot.value || 0));
   let min = Math.min(...values), max = Math.max(...values);
   const spread = max - min || Math.max(Math.abs(max) * .12, 1);
   min -= spread * .1; max += spread * .1;
-  const points = values.map((value, index) => [plot.left + index / Math.max(values.length - 1, 1) * (width - plot.left - plot.right), plot.bottom - (value - min) / (max - min) * (plot.bottom - plot.top)]);
+  const xForDate = (date) => plot.left + ((new Date(`${date}T12:00:00`).getTime() - domainStart) / (domainEnd - domainStart)) * (width - plot.left - plot.right);
+  const points = values.map((value, index) => [xForDate(snapshots[index].date), plot.bottom - (value - min) / (max - min) * (plot.bottom - plot.top)]);
   const line = points.map(([x, y], index) => `${index ? 'L' : 'M'} ${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
   const area = `${line} L ${points.at(-1)[0]} ${plot.bottom} L ${points[0][0]} ${plot.bottom} Z`;
-  const firstDate = new Date(`${snapshots[0].date}T12:00:00`);
-  const lastDate = new Date(`${snapshots.at(-1).date}T12:00:00`);
+  const firstDate = new Date(firstObservedTime);
+  const lastDate = new Date(lastObservedTime);
   const sameMonth = firstDate.getFullYear() === lastDate.getFullYear() && firstDate.getMonth() === lastDate.getMonth();
   const shortRange = lastDate.getTime() - firstDate.getTime() <= 45 * 86400000;
   // Month/year is useful over a long history, but becomes repeated labels
@@ -924,7 +930,10 @@ function renderPortfolioChart(data) {
   const xIndices = [...new Set(width > 420 ? [0, Math.floor((snapshots.length - 1) / 2), snapshots.length - 1] : [0, snapshots.length - 1])];
   const grid = [max, (max + min) / 2, min].map((value) => { const y = plot.bottom - (value - min) / (max - min) * (plot.bottom - plot.top); return `<line x1="${plot.left}" y1="${y}" x2="${width - plot.right}" y2="${y}" class="chart-grid"/><text x="${plot.left - 6}" y="${y + 3}" text-anchor="end" class="chart-axis-label">${axisCurrency(value)}</text>`; }).join('');
   const xAxis = xIndices.map((index) => `<text x="${points[index][0]}" y="${height - 5}" text-anchor="${index === 0 ? 'start' : index === snapshots.length - 1 ? 'end' : 'middle'}" class="chart-axis-label chart-x-axis-label">${label(index)}</text>`).join('');
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Scrubbable portfolio value history"><defs><linearGradient id="portfolioFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".16"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs>${grid}${xAxis}<path d="${area}" fill="url(#portfolioFade)"/><path class="main-history-line" pathLength="1" d="${line}" fill="none" stroke="#287143" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>${points.length === 1 ? `<circle cx="${points[0][0]}" cy="${points[0][1]}" r="5" fill="#287143"/>` : ''}<line class="scrub-line" x1="0" y1="${plot.top}" x2="0" y2="${plot.bottom}"/><circle class="scrub-dot" cx="0" cy="0" r="5"/></svg><div class="chart-tooltip hidden"></div>`;
+  const unavailableLead = domainStart < firstObservedTime
+    ? `<path class="chart-unavailable-line" d="M ${plot.left} ${points[0][1].toFixed(1)} L ${points[0][0].toFixed(1)} ${points[0][1].toFixed(1)}"/><text x="${((plot.left + points[0][0]) / 2).toFixed(1)}" y="${Math.max(plot.top + 12, points[0][1] - 10).toFixed(1)}" text-anchor="middle" class="chart-unavailable-label">Tracking began ${firstDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</text>`
+    : '';
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Scrubbable portfolio value history${domainStart < firstObservedTime ? '; earlier time is not tracked' : ''}"><defs><linearGradient id="portfolioFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".16"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs>${grid}${xAxis}${unavailableLead}<path d="${area}" fill="url(#portfolioFade)"/><path class="main-history-line" pathLength="1" d="${line}" fill="none" stroke="#287143" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>${points.length === 1 ? `<circle cx="${points[0][0]}" cy="${points[0][1]}" r="5" fill="#287143"/>` : ''}<line class="scrub-line" x1="0" y1="${plot.top}" x2="0" y2="${plot.bottom}"/><circle class="scrub-dot" cx="0" cy="0" r="5"/></svg><div class="chart-tooltip hidden"></div>`;
   if (snapshots.length < 2) return;
   const scrubLine = el.querySelector('.scrub-line');
   const scrubDot = el.querySelector('.scrub-dot');
@@ -960,20 +969,24 @@ function renderPortfolioChart(data) {
   el.addEventListener('pointerleave', (event) => { if (event.pointerType === 'mouse' && !active) { scrubLine.classList.remove('visible'); scrubDot.classList.remove('visible'); tooltip.classList.add('hidden'); restore(); } });
 }
 
-function renderPortfolioTrackingStart(el, snapshot, total) {
+function renderPortfolioTrackingStart(el, snapshot, total, rangeStart = null) {
   const width = Math.max(1, Math.round(el.clientWidth || 700));
   const height = Math.max(1, Math.round(el.clientHeight || 150));
-  const baseline = Math.round(height * .58);
-  const pointX = width - 28;
-  const connectorStart = Math.max(18, pointX - 34);
+  const baseline = Math.round(height * .62);
   const value = Number(snapshot?.value ?? total ?? 0);
-  const label = new Date(`${snapshot.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const date = new Date(`${snapshot.date}T12:00:00`);
+  const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const rangeStartTime = rangeStart ? new Date(`${rangeStart}T12:00:00`).getTime() : date.getTime();
+  const rangeEndTime = Math.max(rangeStartTime + 86_400_000, date.getTime());
+  const naturalPoint = 24 + ((date.getTime() - rangeStartTime) / (rangeEndTime - rangeStartTime)) * (width - 48);
+  const pointX = Math.round(Math.max(width * .58, Math.min(width - 24, naturalPoint)));
+  const connectorStart = Math.max(18, pointX - 24);
   el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Portfolio tracking began ${label}; earlier time is not tracked">
     <line class="chart-unavailable-line" x1="18" y1="${baseline}" x2="${connectorStart}" y2="${baseline}"/>
     <line class="chart-start-line" x1="${connectorStart}" y1="${baseline}" x2="${pointX}" y2="${baseline}"/>
-    <circle class="chart-start-point" cx="${pointX}" cy="${baseline}" r="7"/>
-    <text x="${pointX}" y="${baseline - 15}" text-anchor="end" class="chart-start-value">${fmt.format(value)}</text>
-    <text x="${pointX}" y="${height - 10}" text-anchor="end" class="chart-start-detail">Tracking began ${label}</text>
+    <circle class="chart-start-point" cx="${pointX}" cy="${baseline}" r="8"/>
+    <text x="${pointX}" y="${baseline - 16}" text-anchor="middle" class="chart-start-value">${fmt.format(value)}</text>
+    <text x="${pointX}" y="${height - 10}" text-anchor="middle" class="chart-start-detail">Tracking began ${label}</text>
   </svg>`;
 }
 
@@ -1052,11 +1065,17 @@ function renderHoldingHistoryChart(history, kind, emptyMessage = null, historySt
 function renderHoldingHistoryDetail() {
   const data = state.holdingHistory;
   if (!data) return;
+  // Account and holding drill-ins answer different questions. Keep their
+  // identities explicit instead of allowing an account with one holding to
+  // accidentally inherit that holding's ticker as its title.
+  const isAccountDetail = Boolean(data.accountId);
   const isMarket = state.holdingHistoryMode === 'market';
   const history = isMarket ? data.market : data.history;
-  $('#holdingHistoryEyebrow').textContent = isMarket ? 'Market price' : 'Your position';
-  $('#holdingHistoryTitle').textContent = data.ticker || data.label || 'Investment detail';
-  $('#holdingHistorySubtitle').textContent = data.ticker && data.label !== data.ticker ? data.label : (isMarket ? 'Price history for this security' : 'Your value over time');
+  $('#holdingHistoryEyebrow').textContent = isMarket ? 'Market price' : (isAccountDetail ? 'Your account' : 'Your position');
+  $('#holdingHistoryTitle').textContent = isAccountDetail ? (data.label || 'Investment account') : (data.ticker || data.label || 'Investment detail');
+  $('#holdingHistorySubtitle').textContent = isAccountDetail
+    ? 'Your account value over time'
+    : (data.ticker && data.label !== data.ticker ? data.label : (isMarket ? 'Price history for this security' : 'Your value over time'));
   const gain = data.gain;
   $('#holdingHistoryMetrics').innerHTML = `<div><span>Current value</span><strong>${fmt.format(Number(data.value || 0))}</strong></div>${data.costBasis != null ? `<div><span>Market gain</span><strong class="${gain >= 0 ? 'positive' : 'negative'}">${gain >= 0 ? '+' : '−'}${fmt.format(Math.abs(gain || 0))}</strong><small>vs. reported cost basis</small></div>` : '<div><span>Cost basis</span><strong>Unavailable</strong><small>Your institution has not shared it</small></div>'}`;
   const hasMarket = (data.market || []).length > 1;
@@ -1083,11 +1102,13 @@ function renderHoldingHistoryDetail() {
     if (name && !accountLabels.has(name.toLowerCase())) return name;
     return `Unnamed ${assetClassLabel(position.type, position.asset_class_override).toLowerCase()} holding`;
   };
-  $('#holdingHistoryWhere').innerHTML = positions.length ? `<span>Holdings in this account</span>${positions.map((position) => {
+  $('#holdingHistoryWhere').innerHTML = positions.length ? `<span>${isAccountDetail ? 'Holdings in this account' : 'Held in'}</span>${positions.map((position) => {
     const account = accounts.get(position.account_id);
     const accountName = account?.name || 'Investment account';
     const assetClass = assetClassLabel(position.type, position.asset_class_override);
-    return `<div><b>${escapeHtml(holdingLabel(position, account))}</b><small>${escapeHtml(`${accountName} · ${assetClass}`)}</small><strong>${fmt.format(Number(position.value || 0))}</strong>${canEditClass ? holdingClassControl(position) : ''}</div>`;
+    const rowTitle = isAccountDetail ? holdingLabel(position, account) : accountName;
+    const rowDetail = isAccountDetail ? `${accountName} · ${assetClass}` : assetClass;
+    return `<div><b>${escapeHtml(rowTitle)}</b><small>${escapeHtml(rowDetail)}</small><strong>${fmt.format(Number(position.value || 0))}</strong>${canEditClass ? holdingClassControl(position) : ''}</div>`;
   }).join('')}` : '';
 }
 
@@ -2035,34 +2056,33 @@ $('#holdingHistoryClose').addEventListener('click', () => $('#holdingHistoryDial
   let startY = null;
   let dragging = false;
   let pointerId = null;
+  let touchId = null;
   const isPhoneDrawer = () => window.matchMedia('(max-width: 560px)').matches;
   const reset = () => { dialog.style.transform = ''; dialog.style.transition = ''; dialog.removeAttribute('data-dragging'); };
-  handle.addEventListener('pointerdown', (event) => {
-    if (!isPhoneDrawer()) return;
-    startY = event.clientY;
+  const startDrawerDrag = (clientY) => {
+    if (!isPhoneDrawer() || !Number.isFinite(clientY)) return false;
+    startY = clientY;
     dragging = true;
-    pointerId = event.pointerId;
     dialog.setAttribute('data-dragging', '');
     dialog.style.transition = 'none';
-    handle.setPointerCapture?.(event.pointerId);
-    event.preventDefault();
-  });
-  const moveDrawerDrag = (event) => {
-    if (!dragging || startY == null || event.pointerId !== pointerId) return;
-    const offset = Math.max(0, event.clientY - startY);
+    return true;
+  };
+  const moveDrawerDrag = (clientY) => {
+    if (!dragging || startY == null || !Number.isFinite(clientY)) return;
+    const offset = Math.max(0, clientY - startY);
     dialog.style.transform = `translateY(${offset}px)`;
   };
-  const finishDrawerDrag = (event) => {
-    if (!dragging || startY == null || event.pointerId !== pointerId) return;
-    const offset = Math.max(0, event.clientY - startY);
+  const finishDrawerDrag = (clientY) => {
+    if (!dragging || startY == null || !Number.isFinite(clientY)) return;
+    const offset = Math.max(0, clientY - startY);
     dragging = false;
     startY = null;
     pointerId = null;
-    handle.releasePointerCapture?.(event.pointerId);
+    touchId = null;
     // A purposeful downward swipe should feel effortless. Window listeners
     // below cover browsers that drop pointer capture when a finger leaves the
     // small handle before lifting.
-    if (offset >= Math.min(72, dialog.getBoundingClientRect().height * .15)) {
+    if (offset >= Math.min(52, dialog.getBoundingClientRect().height * .1)) {
       reset();
       dialog.close();
       return;
@@ -2071,12 +2091,46 @@ $('#holdingHistoryClose').addEventListener('click', () => $('#holdingHistoryDial
     dialog.style.transform = 'translateY(0)';
     window.setTimeout(reset, 190);
   };
-  handle.addEventListener('pointermove', moveDrawerDrag);
-  handle.addEventListener('pointerup', finishDrawerDrag);
-  handle.addEventListener('pointercancel', finishDrawerDrag);
-  window.addEventListener('pointermove', moveDrawerDrag);
-  window.addEventListener('pointerup', finishDrawerDrag);
-  window.addEventListener('pointercancel', finishDrawerDrag);
+  handle.addEventListener('pointerdown', (event) => {
+    if (!startDrawerDrag(event.clientY)) return;
+    pointerId = event.pointerId;
+    handle.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  });
+  const movePointerDrawerDrag = (event) => { if (event.pointerId === pointerId) moveDrawerDrag(event.clientY); };
+  const finishPointerDrawerDrag = (event) => {
+    if (event.pointerId !== pointerId) return;
+    // Synthetic events and some iOS hand-offs have no retained capture. A
+    // failed release must never prevent the sheet from completing its drag.
+    try { handle.releasePointerCapture?.(event.pointerId); } catch { /* no retained capture */ }
+    finishDrawerDrag(event.clientY);
+  };
+  handle.addEventListener('pointermove', movePointerDrawerDrag);
+  handle.addEventListener('pointerup', finishPointerDrawerDrag);
+  handle.addEventListener('pointercancel', finishPointerDrawerDrag);
+  window.addEventListener('pointermove', movePointerDrawerDrag);
+  window.addEventListener('pointerup', finishPointerDrawerDrag);
+  window.addEventListener('pointercancel', finishPointerDrawerDrag);
+  // iOS can dispatch Touch Events without preserving the pointer capture
+  // from a short handle. Support that native path directly as well.
+  const matchingTouch = (event) => [...event.changedTouches].find((touch) => touch.identifier === touchId);
+  handle.addEventListener('touchstart', (event) => {
+    const touch = event.changedTouches[0];
+    if (!touch || !startDrawerDrag(touch.clientY)) return;
+    touchId = touch.identifier;
+    event.preventDefault();
+  }, { passive: false });
+  window.addEventListener('touchmove', (event) => {
+    const touch = matchingTouch(event);
+    if (!touch) return;
+    moveDrawerDrag(touch.clientY);
+    event.preventDefault();
+  }, { passive: false });
+  window.addEventListener('touchend', (event) => {
+    const touch = matchingTouch(event);
+    if (touch) finishDrawerDrag(touch.clientY);
+  });
+  window.addEventListener('touchcancel', () => { if (touchId != null) finishDrawerDrag(startY || 0); });
   dialog.addEventListener('close', reset);
 }
 $('#manualHoldingForm').addEventListener('submit', async (event) => {
