@@ -833,7 +833,7 @@ function renderRetirement(data) {
   $('#retirementProjection').textContent = projectedBalance;
   $('#retirementProjectionContext').textContent = `On pace for ${projectedBalance} by age ${data.retirementAge}`;
   $('#retirementAgeChip').textContent = `${data.yearsToRetirement} years to go`;
-  $('#retirementSpendContext').textContent = data.monthsObserved ? `Needed by age ${data.retirementAge}, in today’s dollars · Based on ${data.monthsObserved} month${data.monthsObserved === 1 ? '' : 's'} of spending.` : `Needed by age ${data.retirementAge}, in today’s dollars.`;
+  $('#retirementSpendContext').textContent = data.monthsObserved ? `Needed by age ${data.retirementAge}, in today’s dollars · Based on your last ${data.monthsObserved} month${data.monthsObserved === 1 ? '' : 's'} of spending.` : `Needed by age ${data.retirementAge}, in today’s dollars.`;
   $('#retirementAssumption').textContent = `At retirement · ${data.withdrawalRate}% withdrawal`;
   const estimatedLabel = (months, complete) => {
     if (complete) return 'Reached';
