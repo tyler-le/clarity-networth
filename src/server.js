@@ -7,7 +7,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './lib/store.js';
 import { consumeRateLimit, databaseEnabled, databaseHealthy, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, recordDependencyEvent, recordLaunchEvent, writeDatabaseStore } from './lib/database.js';
-import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentSummary, monthlyReview, reconstructInvestmentHistory, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './lib/finance.js';
+import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentSummary, monthlyReview, refreshReconstructedInvestmentSnapshots, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './lib/finance.js';
 import { loadHistoricalPrices } from './lib/market-data.js';
 import { plaidConfigured, plaidPost } from './lib/plaid.js';
 
@@ -688,7 +688,7 @@ async function backfillInvestmentHistory(store) {
       unavailable.set(security.ticker, security.name);
     }
   }
-  const reconstructed = reconstructInvestmentHistory(store, endDate, historyYears);
+  const reconstructed = refreshReconstructedInvestmentSnapshots(store, endDate, historyYears);
   markInvestmentLinkCoverage(store);
   store.investment_history_status = {
     state: reconstructed.length ? 'ready' : unavailable.size ? 'unavailable' : 'tracking',
@@ -696,9 +696,6 @@ async function backfillInvestmentHistory(store) {
     checked_at: new Date().toISOString()
   };
   if (!reconstructed.length) return false;
-  const verified = (store.investment_snapshots || []).filter((snapshot) => snapshot.source === 'verified');
-  const verifiedDates = new Set(verified.map((snapshot) => snapshot.date));
-  store.investment_snapshots = [...reconstructed.filter((snapshot) => !verifiedDates.has(snapshot.date)), ...verified].sort((a, b) => a.date.localeCompare(b.date));
   return true;
 }
 
@@ -842,6 +839,7 @@ app.get('/api/dashboard', async (req, res) => {
   markInvestmentLinkCoverage(store);
   removeEstimatedNetWorthHistory(store);
   hideDuplicateAccounts(store);
+  refreshReconstructedInvestmentSnapshots(store, new Date().toISOString().slice(0, 10), Math.max(1, Math.min(2, Number(process.env.MARKETDATA_HISTORY_YEARS || 1))));
   snapshotNetWorth(store);
   snapshotInvestments(store);
   await saveStore(req.user, store);

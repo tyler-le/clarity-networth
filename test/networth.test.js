@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentDetailHistory, investmentLinkBalances, monthlyReview, reconstructInvestmentHistory, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
+import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentDetailHistory, investmentLinkBalances, monthlyReview, reconstructInvestmentHistory, refreshReconstructedInvestmentSnapshots, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
 import { normalizeCandles } from '../src/lib/market-data.js';
 import { filterSnapshots, scrubIndex } from '../public/chart-utils.js';
 
@@ -266,6 +266,69 @@ test('holding history never predates the first reported trade or linked-account 
   assert.equal(result.history[0].date, '2026-01-15');
   assert.equal(result.market[0].date, '2026-01-15');
   assert.match(result.detail, /2026-01-15/);
+});
+
+test('account history waits for the least-covered holding instead of mixing partial balances', () => {
+  const store = {
+    accounts: [{ plaid_account_id: '401k', type: 'investment', name: 'Work 401(k)', hidden: false }],
+    positions: [
+      { account_id: '401k', security_id: 'stock', ticker: 'VTI', name: 'Stock fund', type: 'etf', quantity: 5, value: 550 },
+      { account_id: '401k', security_id: 'bond', ticker: 'BND', name: 'Bond fund', type: 'etf', quantity: 4, value: 320 }
+    ],
+    investment_transactions: [
+      { account_id: '401k', security_id: 'stock', ticker: 'VTI', date: '2026-01-15', quantity: 5 },
+      { account_id: '401k', security_id: 'bond', ticker: 'BND', date: '2026-03-10', quantity: 4 }
+    ],
+    market_prices: { VTI: { '2026-01-15': 100, '2026-03-10': 110 }, BND: { '2026-03-10': 80 } }
+  };
+  const result = investmentDetailHistory(store, { accountId: '401k', years: 1 });
+  assert.equal(result.history[0].date, '2026-03-10');
+});
+
+test('same ticker in another account cannot leak into an account’s personal history', () => {
+  const store = {
+    accounts: [
+      { plaid_account_id: 'old-job', type: 'investment', name: 'Old job', hidden: false },
+      { plaid_account_id: 'new-job', type: 'investment', name: 'New job', hidden: false }
+    ],
+    positions: [
+      { account_id: 'old-job', security_id: 'old-vti', ticker: 'VTI', name: 'Fund', type: 'etf', quantity: 10, value: 1100 },
+      { account_id: 'new-job', security_id: 'new-vti', ticker: 'VTI', name: 'Fund', type: 'etf', quantity: 2, value: 220 }
+    ],
+    investment_transactions: [
+      { account_id: 'old-job', security_id: 'old-vti', ticker: 'VTI', date: '2025-01-15', quantity: 10 },
+      { account_id: 'new-job', security_id: 'new-vti', ticker: 'VTI', date: '2026-01-15', quantity: 2 }
+    ],
+    market_prices: { VTI: { '2025-01-15': 100, '2026-01-15': 100, '2026-09-01': 110 } }
+  };
+  const result = investmentDetailHistory(store, { accountId: 'new-job', years: 2 });
+  assert.equal(result.history[0].date, '2026-01-15');
+  assert.equal(result.history.at(-1).value, 220);
+});
+
+test('a holding without reported trades does not receive an inferred personal trend', () => {
+  const store = {
+    accounts: [{ plaid_account_id: 'linked', type: 'investment', name: 'Linked account', hidden: false }],
+    positions: [{ account_id: 'linked', security_id: 'fund', ticker: 'VTI', name: 'Fund', type: 'etf', quantity: 2, value: 220 }],
+    investment_transactions: [],
+    investment_link_events: [{ account_id: 'linked', date: '2026-09-01', amount: 220 }],
+    market_prices: { VTI: { '2025-09-01': 80, '2026-09-01': 110 } }
+  };
+  const result = investmentDetailHistory(store, { accountId: 'linked', years: 1 });
+  assert.deepEqual(result.history, []);
+  assert.equal(result.state, 'unavailable');
+});
+
+test('refreshing derived portfolio history removes an old overextended reconstruction', () => {
+  const store = {
+    positions: [{ account_id: '401k', security_id: 'fund', ticker: 'VTI', type: 'etf', quantity: 5 }],
+    investment_transactions: [{ account_id: '401k', security_id: 'fund', ticker: 'VTI', date: '2026-01-15', quantity: 5 }],
+    market_prices: { VTI: { '2025-12-31': 95, '2026-01-15': 100, '2026-09-01': 110 } },
+    investment_snapshots: [{ date: '2025-12-31', value: 475, source: 'reconstructed' }, { date: '2026-09-01', value: 550, source: 'verified' }]
+  };
+  refreshReconstructedInvestmentSnapshots(store, '2026-09-01', 1);
+  assert.equal(store.investment_snapshots.some((snapshot) => snapshot.date === '2025-12-31'), false);
+  assert.equal(store.investment_snapshots.find((snapshot) => snapshot.source === 'verified')?.value, 550);
 });
 
 test('manual holdings fill only an institution-reported position gap', () => {

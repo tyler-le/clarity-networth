@@ -202,7 +202,7 @@ function transactionMatchesPosition(transaction, position) {
   return Boolean(transactionTicker && positionTicker && transactionTicker === positionTicker);
 }
 
-function observedStartDate(positions, transactions, linkEvents = []) {
+function observedStartDate(positions, transactions, linkEvents = [], { requireReportedTrades = false } = {}) {
   const starts = positions.map((position) => {
     const firstTrade = transactions
       .filter((transaction) => transactionMatchesPosition(transaction, position) && Number.isFinite(Number(transaction.quantity)) && Number(transaction.quantity) !== 0)
@@ -211,8 +211,9 @@ function observedStartDate(positions, transactions, linkEvents = []) {
       .sort()[0];
     if (firstTrade) return firstTrade;
     // A connection-day balance can establish a current baseline, but it never
-    // proves that the balance existed before the connection. It therefore
-    // yields a single current point rather than invented earlier history.
+    // proves a position’s daily composition. Derived charts therefore require
+    // a reported trade; the baseline is retained for verified daily tracking.
+    if (requireReportedTrades) return null;
     return linkEvents.find((event) => event.account_id === position.account_id)?.date || null;
   });
   return starts.length && starts.every(Boolean) ? starts.sort().at(-1) : null;
@@ -242,7 +243,7 @@ export function reconstructInvestmentHistory(store, endDate = new Date().toISOSt
   let start = new Date(`${endDate}T12:00:00`);
   start.setFullYear(start.getFullYear() - years);
   start.setDate(1);
-  const observedStart = observedStartDate([...current.values()], transactions, store.investment_link_events || []);
+  const observedStart = observedStartDate([...current.values()], transactions, store.investment_link_events || [], { requireReportedTrades: true });
   if (!observedStart) return [];
   if (observedStart > start.toISOString().slice(0, 10)) start = new Date(`${observedStart}T12:00:00`);
   // Market prices are daily, so the reconstruction should be daily too. This
@@ -264,6 +265,19 @@ export function reconstructInvestmentHistory(store, endDate = new Date().toISOSt
     if (complete && Number.isFinite(value) && value >= 0) snapshots.push({ date, value: Math.round(value * 100) / 100, source: 'reconstructed' });
   }
   return snapshots;
+}
+
+// Rebuild only derived snapshots from the evidence we already hold. This is
+// safe to call while rendering: it makes no provider request, retains truly
+// observed daily balances, and removes a prior reconstruction when its
+// coverage is no longer supportable.
+export function refreshReconstructedInvestmentSnapshots(store, endDate = new Date().toISOString().slice(0, 10), years = 1) {
+  const reconstructed = reconstructInvestmentHistory(store, endDate, years);
+  const verified = (store.investment_snapshots || []).filter((snapshot) => snapshot.source === 'verified');
+  const verifiedDates = new Set(verified.map((snapshot) => snapshot.date));
+  store.investment_snapshots = [...reconstructed.filter((snapshot) => !verifiedDates.has(snapshot.date)), ...verified]
+    .sort((a, b) => a.date.localeCompare(b.date));
+  return reconstructed;
 }
 
 // A detail chart is intentionally more conservative than a ticker chart. It
@@ -296,9 +310,9 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
   for (const date = new Date(`${start.toISOString().slice(0, 10)}T12:00:00`); date <= new Date(`${endDate}T12:00:00`); date.setDate(date.getDate() + 1)) dates.push(new Date(date).toISOString().slice(0, 10));
   const relevantIds = new Set(positions.map((position) => position.security_id).filter(Boolean));
   const transactions = (store.investment_transactions || []).filter((transaction) => transaction.date <= endDate && (accountId ? transaction.account_id === accountId : (relevantIds.has(transaction.security_id) || (normalizedTicker && String(transaction.ticker || '').toUpperCase() === normalizedTicker))));
-  const observedStart = observedStartDate(positions, transactions, store.investment_link_events || []);
+  const observedStart = observedStartDate(positions, transactions, store.investment_link_events || [], { requireReportedTrades: true });
   if (!observedStart) {
-    return { state: 'unavailable', label, ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null, value, costBasis, gain: costBasis == null ? null : value - costBasis, reason: 'We need a reported trade or a connection-day baseline before we can show your personal history.', history: [], market: [] };
+    return { state: 'unavailable', label, ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null, value, costBasis, gain: costBasis == null ? null : value - costBasis, reason: 'We need reported trade history for every holding before we can show a trustworthy personal trend.', history: [], market: [] };
   }
   const requestedStart = start.toISOString().slice(0, 10);
   const firstDate = observedStart > requestedStart ? observedStart : requestedStart;
