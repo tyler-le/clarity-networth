@@ -454,6 +454,15 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
       reason: preparing ? 'Your institution is still preparing its reported investment activity.' : results.find((result) => result.state !== 'ready')?.reason
     };
   }
+  // Even for a connection without a reconstructable provider ledger, one
+  // captured position is a concrete starting point. Show that value rather
+  // than presenting a holding chart as unavailable.
+  if (providerHistory.length === 1) return {
+    state: 'tracking', label, ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null, value,
+    costBasis, gain: costBasis == null ? null : value - costBasis,
+    history: providerHistory, market: [],
+    detail: `Tracking from a verified institution update on ${providerHistory[0].date}.`
+  };
   if (providerHistory.length < 2) {
     const itemIds = new Set((store.accounts || []).filter((account) => positions.some((position) => position.account_id === account.plaid_account_id)).map((account) => account.item_id));
     if ((store.items || []).some((item) => itemIds.has(item.id) && item.investment_history_state === 'preparing')) return {

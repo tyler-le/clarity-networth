@@ -189,6 +189,23 @@ integrationTest('pre-link investment history survives saved updates and stays is
   assert.deepEqual(other.body.history, []);
 });
 
+integrationTest('opening a holding begins a verified daily-snapshot trend when no older ledger can be reconstructed', async () => {
+  const email = 'holding-snapshot@example.test';
+  const key = userStorageKey(email);
+  const today = new Date().toISOString().slice(0, 10);
+  writeStore({
+    items: [{ id: 'snapshot-item' }],
+    accounts: [{ plaid_account_id: 'hsa', item_id: 'snapshot-item', name: 'HSA', type: 'investment', current_balance: 1_250, hidden: false }],
+    positions: [{ id: 'hsa:vti', account_id: 'hsa', security_id: 'vti', ticker: 'VTI', name: 'Vanguard Total Stock Market ETF', value: 1_250 }],
+    investment_transactions: [], investment_position_snapshots: [], transactions: [], snapshots: []
+  }, key);
+  const detail = await request(app).get('/api/investments/history?ticker=VTI').set('Cookie', signedTestCookie(email));
+  assert.equal(detail.status, 200);
+  assert.equal(detail.body.state, 'tracking');
+  assert.deepEqual(detail.body.history, [{ date: today, value: 1_250 }]);
+  deleteStore(key);
+});
+
 integrationTest('net worth returns reconstructed history only when all visible accounts have coverage', async () => {
   const email = 'cash-history@example.test';
   const key = userStorageKey(email);

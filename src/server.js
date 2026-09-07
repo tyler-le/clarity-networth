@@ -1044,6 +1044,11 @@ app.get('/api/investments/history', async (req, res) => {
   const ticker = String(req.query.ticker || '').trim().toUpperCase().slice(0, 24);
   if (!accountId && !ticker) return res.status(400).json({ error: 'Choose an investment account or holding.' });
   const store = activeStore(await loadStore(req.user));
+  // Opening an account or holding is also a safe opportunity to persist its
+  // current provider-observed value. This guarantees a truthful baseline even
+  // when the member arrived here before the scheduled daily sync.
+  snapshotInvestments(store);
+  await saveStore(req.user, store);
   res.json(investmentDetailHistory(store, { accountId: accountId || null, ticker: ticker || null, years: Math.max(1, Math.min(2, Number(process.env.MARKETDATA_HISTORY_YEARS || 1))) }));
 });
 
