@@ -264,7 +264,7 @@ test('cash-flow quality holds at every supported viewport', async ({ page }) => 
   await expect(diagram.locator('svg')).toBeVisible();
   await expect(diagram).toContainText('Paychecks');
   const edgeWidths = await diagram.locator('.cashflow-flow').evaluateAll((paths) => paths.map((path) => Number(path.getAttribute('stroke-width'))));
-  expect(Math.max(...edgeWidths)).toBeLessThanOrEqual(40);
+  expect(Math.max(...edgeWidths)).toBeLessThanOrEqual(35);
   expect(Math.max(...edgeWidths)).toBeGreaterThan(Math.min(...edgeWidths));
   const nodeBoxes = await diagram.locator('.cashflow-target rect:first-child').evaluateAll((nodes) => nodes.map((node) => {
     const box = node.getBoundingClientRect();
@@ -405,6 +405,9 @@ test('investment detail cards stay readable without horizontal overflow on a pho
   await page.locator('[data-holding-history]').first().click();
   const dialog = page.locator('#holdingHistoryDialog');
   await expect(dialog).toBeVisible();
+  await expect(dialog.locator('.holding-history-drag-handle')).toBeVisible();
+  const [dialogBox, viewport] = await Promise.all([dialog.boundingBox(), page.evaluate(() => ({ width: innerWidth, height: innerHeight }))]);
+  expect(dialogBox && dialogBox.width === viewport.width && dialogBox.y > 0).toBe(true);
   expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
   for (const selector of ['#holdingHistoryMetrics', '#holdingHistoryRange', '#holdingHistoryWhere']) {
     expect(await page.locator(selector).evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);

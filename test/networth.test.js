@@ -207,7 +207,7 @@ test('portfolio history keeps one verified investment value for each day', () =>
 
 test('investment reconstruction reverses later purchases and uses historical closes', () => {
   const store = {
-    positions: [{ security_id: 'fund', ticker: 'VFINX', type: 'mutual fund', quantity: 10 }],
+    positions: [{ security_id: 'fund', ticker: 'VFINX', type: 'mutual fund', quantity: 10, value: 1100 }],
     investment_transactions: [{ security_id: 'fund', ticker: 'VFINX', security_type: 'mutual fund', date: '2026-09-03', quantity: 2 }],
     market_prices: { VFINX: { '2026-09-01': 100, '2026-09-05': 110 } }
   };
@@ -218,15 +218,13 @@ test('investment reconstruction reverses later purchases and uses historical clo
   assert.ok(history.every((snapshot) => snapshot.source === 'reconstructed'));
 });
 
-test('investment reconstruction retains ticker metadata for sold securities', () => {
+test('investment reconstruction refuses a sold security with no current provider position', () => {
   const history = reconstructInvestmentHistory({
     positions: [],
     investment_transactions: [{ security_id: 'sold-fund', ticker: 'VANGUARD.TARGET.2065', security_name: 'Vanguard Target 2065', security_type: 'equity', date: '2026-09-01', quantity: -10 }],
     market_prices: { VLXVX: { '2026-04-01': 100, '2026-09-06': 110 } }
   }, '2026-09-06', 1);
-  assert.equal(history[0].date, '2026-09-01');
-  assert.equal(history.some((snapshot) => snapshot.date < '2026-09-01'), false);
-  assert.equal(history[0].value, 0);
+  assert.deepEqual(history, []);
 });
 
 test('market candle parsing retains usable closes by session date', () => {
@@ -269,7 +267,7 @@ test('holding detail history uses only provider-observed snapshots', () => {
   assert.deepEqual(result.history, [{ date: '2026-01-15', value: 1000 }, { date: '2026-09-01', value: 1100 }]);
 });
 
-test('reported trades and market prices cannot create a personal history', () => {
+test('reported trades and prices create history only after it reconciles to the current institution value', () => {
   const store = {
     accounts: [{ plaid_account_id: '401k', type: 'investment', name: 'Work 401(k)', hidden: false }],
     positions: [{ account_id: '401k', security_id: 'fund', ticker: 'VTI', name: 'Fund', type: 'etf', quantity: 5, value: 550 }],
@@ -277,8 +275,35 @@ test('reported trades and market prices cannot create a personal history', () =>
     market_prices: { VTI: { '2025-12-31': 95, '2026-01-15': 100, '2026-09-01': 110 } }
   };
   const result = investmentDetailHistory(store, { accountId: '401k', years: 1 });
-  assert.deepEqual(result.history, []);
-  assert.match(result.reason, /do not estimate past balances/i);
+  assert.equal(result.state, 'ready');
+  assert.equal(result.reconstructed, true);
+  assert.equal(result.history.at(-1).value, 550);
+  assert.match(result.detail, /matches your latest institution value/i);
+});
+
+test('a reconstruction with a material current-value mismatch is withheld', () => {
+  const store = {
+    accounts: [{ plaid_account_id: 'brokerage', type: 'investment', name: 'Brokerage', hidden: false }],
+    positions: [{ account_id: 'brokerage', security_id: 'fund', ticker: 'VTI', name: 'Fund', type: 'etf', quantity: 5, value: 900 }],
+    investment_transactions: [{ account_id: 'brokerage', security_id: 'fund', ticker: 'VTI', date: '2026-01-15', quantity: 5 }],
+    market_prices: { VTI: { '2026-01-15': 100, '2026-09-01': 110 } }
+  };
+  const result = investmentDetailHistory(store, { accountId: 'brokerage', years: 1 });
+  assert.equal(result.state, 'unavailable');
+  assert.match(result.reason, /does not closely match/i);
+});
+
+test('portfolio history is reconstructed only when every visible investment account reconciles', () => {
+  const store = {
+    accounts: [{ plaid_account_id: 'ira', type: 'investment', current_balance: 1100, hidden: false }],
+    positions: [{ account_id: 'ira', security_id: 'fund', ticker: 'VFINX', type: 'mutual fund', quantity: 10, value: 1100 }],
+    investment_transactions: [{ account_id: 'ira', security_id: 'fund', ticker: 'VFINX', date: '2026-09-03', quantity: 2 }],
+    market_prices: { VFINX: { '2026-09-01': 100, '2026-09-05': 110 } },
+    investment_snapshots: []
+  };
+  const history = refreshReconstructedInvestmentSnapshots(store, '2026-09-05', 1);
+  assert.equal(history.at(-1).value, 1100);
+  assert.ok(store.investment_snapshots.every((snapshot) => snapshot.source === 'reconstructed'));
 });
 
 test('a holding without reported trades does not receive an inferred personal trend', () => {
@@ -305,7 +330,7 @@ test('a pending provider extraction never creates a personal investment history 
   const result = investmentDetailHistory(store, { accountId: '401k', years: 1 });
   assert.equal(result.state, 'unavailable');
   assert.deepEqual(result.history, []);
-  assert.match(result.reason, /do not estimate past balances/i);
+  assert.match(result.reason, /still preparing/i);
 });
 
 test('refreshing derived portfolio history removes an old overextended reconstruction', () => {

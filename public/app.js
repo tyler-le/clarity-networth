@@ -660,7 +660,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     .filter((source) => Number(source.amount || 0) > 0);
   const actualCategories = expanded ? allSpendCategories : allSpendCategories.slice(0, 4);
   const width = compact ? 390 : tablet ? 620 : 920;
-  const rowHeight = 40, rowStep = 48;
+  const rowHeight = 44, rowStep = 51;
   const sourceHeight = Math.max(224, incomeSources.length * rowStep + 16);
   const height = expanded ? Math.max(224, actualCategories.length * rowStep + 12, sourceHeight) : sourceHeight;
   // Equal-width nodes make the reading path steady on every screen. Labels
@@ -676,14 +676,12 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     actual_spend: 'var(--outflow)', savings: 'var(--save)', investments: 'var(--invest)',
     housing_bills: '#c87862', food_dining: '#c69656', shopping: '#9a78a2', transport: '#6996a7', health: '#6a9b88', insurance: '#728aac', services: '#8d87aa', entertainment: '#b47b92', travel: '#6499a0', education: '#8d9a5f', personal_care: '#b98675', home: '#739585', taxes: '#ab8066', civic: '#7d91a4', fees: '#9a8f81', uncategorized: '#9a8f81'
   }[key] || fallback);
-  const block = (x, y, w, color, label, value, category = '', isIncome = false, align = 'start') => {
+  const block = (x, y, w, color, label, value, category = '', isIncome = false) => {
     const words = String(label).split(' ');
     const mobileLines = compact && words.length > 1 ? [words.slice(0, Math.ceil(words.length / 2)).join(' '), words.slice(Math.ceil(words.length / 2)).join(' ')] : [label];
-    const textX = align === 'end' ? x + w - 9 : x + 11;
-    const labelMarkup = mobileLines.map((line, index) => `<tspan x="${textX}" dy="${index ? 10 : 0}">${escapeHtml(line)}</tspan>`).join('');
-    const valueY = y + (mobileLines.length > 1 ? 35 : 28);
-    const barX = align === 'end' ? x + w - 5 : x;
-    return `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''} style="--cashflow-node:${color}"><rect class="cashflow-node-hit" x="${x}" y="${y}" width="${w}" height="${rowHeight}" rx="7"/><rect class="cashflow-node-bar" x="${barX}" y="${y}" width="5" height="${rowHeight}" rx="2.5" fill="${color}"/><text x="${textX}" y="${y + 13}" text-anchor="${align}" class="cashflow-label">${labelMarkup}</text><text x="${textX}" y="${valueY}" text-anchor="${align}" class="cashflow-value">${fmt.format(value)}<tspan dx="3" class="cashflow-share">${displayShare(value, isIncome)}</tspan></text></g>`;
+    const labelMarkup = mobileLines.map((line, index) => `<tspan x="${x + 12}" dy="${index ? 10 : 0}">${escapeHtml(line)}</tspan>`).join('');
+    const valueY = y + (mobileLines.length > 1 ? 37 : 30);
+    return `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><rect x="${x}" y="${y}" width="${w}" height="${rowHeight}" rx="9" fill="var(--sankey-surface)" stroke="var(--sankey-border)"/><rect x="${x}" y="${y}" width="5" height="${rowHeight}" rx="3" fill="${color}"/><text x="${x + 12}" y="${y + 15}" class="cashflow-label">${labelMarkup}</text><text x="${x + 12}" y="${valueY}" class="cashflow-value">${fmt.format(value)}<tspan dx="3" class="cashflow-share">${displayShare(value, isIncome)}</tspan></text></g>`;
   };
   // Use perceptual (square-root) scaling. Exact dollars stay in each node,
   // while the flow still makes large categories visibly heavier without one
@@ -691,8 +689,8 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const largestFlow = Math.max(actualSpend, savings, investments, 1);
   const flow = (fromX, fromY, toX, toY, amount, color) => {
     const value = Math.max(0, Number(amount || 0));
-    const thickness = value ? 3 + Math.sqrt(value / largestFlow) * 35 : 0;
-    return `<path class="cashflow-flow" d="M ${fromX} ${fromY} C ${fromX + (toX - fromX) * .42} ${fromY}, ${toX - (toX - fromX) * .42} ${toY}, ${toX} ${toY}" fill="none" stroke="${color}" stroke-opacity=".29" stroke-width="${thickness}" stroke-linecap="round"/>`;
+    const thickness = value ? 3 + Math.sqrt(value / largestFlow) * 31 : 0;
+    return `<path class="cashflow-flow" d="M ${fromX} ${fromY} C ${fromX + (toX - fromX) * .42} ${fromY}, ${toX - (toX - fromX) * .42} ${toY}, ${toX} ${toY}" fill="none" stroke="${color}" stroke-opacity=".34" stroke-width="${thickness}" stroke-linecap="round"/>`;
   };
   const spendY = 13, saveY = 90, investY = 167;
   const sourceStart = incomeSources.length === 1 ? 90 : 8;
@@ -701,16 +699,16 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   incomeSources.forEach((source, index) => {
     const share = income ? Number(source.amount || 0) / income : 0;
     const y = sourceStart + index * sourceStep;
-    paths += flow(sourceX + 5, y + rowHeight / 2, middleX + 5, spendY + rowHeight / 2, actualSpend * share, 'var(--outflow)');
-    paths += flow(sourceX + 5, y + rowHeight / 2, middleX + 5, saveY + rowHeight / 2, savings * share, 'var(--save)');
-    paths += flow(sourceX + 5, y + rowHeight / 2, middleX + 5, investY + rowHeight / 2, investments * share, 'var(--invest)');
+    paths += flow(sourceX + sourceW, y + rowHeight / 2, middleX, spendY + rowHeight / 2, actualSpend * share, 'var(--outflow)');
+    paths += flow(sourceX + sourceW, y + rowHeight / 2, middleX, saveY + rowHeight / 2, savings * share, 'var(--save)');
+    paths += flow(sourceX + sourceW, y + rowHeight / 2, middleX, investY + rowHeight / 2, investments * share, 'var(--invest)');
   });
   let categories = '';
   actualCategories.forEach((row, index) => {
     const y = 8 + index * rowStep;
     const categoryColor = colorFor(row.key, 'var(--outflow-muted)');
-    paths += flow(middleX + 5, spendY + rowHeight / 2, destinationX + destinationW - 5, y + rowHeight / 2, Number(row.amount || 0), categoryColor);
-    categories += block(destinationX, y, destinationW, categoryColor, row.name, row.amount, row.key, false, 'end');
+    paths += flow(middleX + middleW, spendY + rowHeight / 2, destinationX, y + rowHeight / 2, Number(row.amount || 0), categoryColor);
+    categories += block(destinationX, y, destinationW, categoryColor, row.name, row.amount, row.key);
   });
   const hiddenCategoryCount = allSpendCategories.length - actualCategories.length;
   const more = !expanded && hiddenCategoryCount > 0 ? `<button type="button" class="cashflow-more" data-cashflow-expand aria-label="Show all ${hiddenCategoryCount + actualCategories.length} spending categories">View all ${allSpendCategories.length} spending categories <span>↗</span></button>` : '';
@@ -846,7 +844,7 @@ function renderPortfolioChart(data) {
     tooltip.style.left = `${Math.max(8, Math.min(rect.width - 8, x / width * rect.width))}px`;
     tooltip.textContent = fmt.format(Number(snapshot.value || 0));
     $('#investmentTotal').textContent = fmt.format(Number(snapshot.value || 0));
-    $('#investmentChartDate').textContent = `${new Date(`${snapshot.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${snapshot.source === 'reconstructed' ? ' · Estimated' : ''}`;
+    $('#investmentChartDate').textContent = `${new Date(`${snapshot.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${snapshot.source === 'reconstructed' ? ' · Reconstructed from reported activity' : ''}`;
     $('#investmentChartContext').classList.remove('hidden');
   };
   el.addEventListener('pointerdown', (event) => { active = true; el.setPointerCapture?.(event.pointerId); showPoint(event); });

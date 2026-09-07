@@ -9,6 +9,7 @@ import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readS
 import { consumeRateLimit, databaseEnabled, databaseHealthy, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, recordDependencyEvent, recordLaunchEvent, writeDatabaseStore } from './lib/database.js';
 import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentSummary, monthlyReview, refreshReconstructedInvestmentSnapshots, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './lib/finance.js';
 import { plaidConfigured, plaidPost } from './lib/plaid.js';
+import { loadHistoricalPrices } from './lib/market-data.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
@@ -445,6 +446,10 @@ async function syncItem(store, item) {
       asyncUpdate: hasInvestmentAccount && !item.investment_history_requested_at
     });
   } catch (error) { console.warn('Investment contribution sync unavailable:', error.message); }
+  if (hasInvestmentAccount) {
+    try { await hydrateInvestmentPriceHistory(store, item); }
+    catch (error) { console.warn('Investment price history unavailable:', error.message); }
+  }
   item.last_synced_at = new Date().toISOString();
   delete item.last_sync_error_at;
   delete item.last_sync_error_code;
@@ -511,12 +516,18 @@ async function requestPendingInvestmentHistory() {
       const persisted = databaseEnabled() ? await readDatabaseStore(storageKey) : null;
       const store = normalizeStore(persisted || readStore(storageKey));
       let changed = false;
-      for (const item of store.items.filter((candidate) => !candidate.demo && !candidate.investment_history_requested_at)) {
+      for (const item of store.items.filter((candidate) => !candidate.demo)) {
         const hasInvestmentAccount = store.accounts.some((account) => account.item_id === item.id && account.type === 'investment');
         if (!hasInvestmentAccount) continue;
         try {
-          await syncRetirementContributionsForItem(store, item, { asyncUpdate: true });
-          changed = true;
+          if (!item.investment_history_requested_at) {
+            await syncRetirementContributionsForItem(store, item, { asyncUpdate: true });
+            changed = true;
+          }
+          if (item.investment_history_state === 'ready') {
+            await hydrateInvestmentPriceHistory(store, item);
+            changed = true;
+          }
         } catch (error) {
           // A provider issue must not block startup or prevent other people
           // from receiving the request. The normal daily sync will retry it.
@@ -715,6 +726,41 @@ async function syncRetirementContributionsForItem(store, item, { asyncUpdate = f
   item.investment_history_state = 'ready';
   item.investment_history_received_at = new Date().toISOString();
   return { state: 'ready', imported };
+}
+
+// Prices are fetched only for securities in the institution-reported ledger,
+// then cached. The reconstruction layer independently verifies the resulting
+// timeline against the institution's current value before it can be shown.
+async function hydrateInvestmentPriceHistory(store, item) {
+  const end = new Date().toISOString().slice(0, 10);
+  const requestedStart = new Date();
+  requestedStart.setFullYear(requestedStart.getFullYear() - Math.max(1, Math.min(2, Number(process.env.MARKETDATA_HISTORY_YEARS || 1))));
+  const start = requestedStart.toISOString().slice(0, 10);
+  const securities = new Map();
+  for (const position of store.positions || []) {
+    if (position.item_id !== item.id || position.type === 'cash' || !position.ticker) continue;
+    securities.set(String(position.ticker).toUpperCase(), { ticker: String(position.ticker).toUpperCase(), type: position.type });
+  }
+  for (const transaction of store.investment_transactions || []) {
+    if (transaction.item_id !== item.id || transaction.security_type === 'cash' || !transaction.ticker) continue;
+    securities.set(String(transaction.ticker).toUpperCase(), { ticker: String(transaction.ticker).toUpperCase(), type: transaction.security_type });
+  }
+  store.market_prices ||= {};
+  for (const security of securities.values()) {
+    const cached = store.market_prices[security.ticker] || {};
+    const dates = Object.keys(cached).sort();
+    const first = dates[0];
+    const latest = dates.at(-1);
+    // A complete historical span only needs a short overlapping refresh for
+    // recent market sessions. This prevents routine syncs from re-buying a
+    // year's worth of candles for every holding.
+    const latestAge = latest ? Math.floor((Date.now() - new Date(`${latest}T12:00:00`).getTime()) / 86400000) : Infinity;
+    if (first && first <= start && latestAge <= 5) continue;
+    const from = first && first <= start && latest ? new Date(Math.max(new Date(`${latest}T12:00:00`).getTime() - 7 * 86400000, new Date(`${start}T12:00:00`).getTime())).toISOString().slice(0, 10) : start;
+    const prices = await loadHistoricalPrices({ symbol: security.ticker, securityType: security.type, from, to: end });
+    if (Object.keys(prices).length) store.market_prices[security.ticker] = { ...cached, ...prices };
+  }
+  item.investment_price_history_checked_at = new Date().toISOString();
 }
 
 async function hydrateInstitutionBrand(item) {
