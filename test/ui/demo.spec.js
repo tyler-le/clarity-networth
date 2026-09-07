@@ -131,6 +131,17 @@ test('a new visitor can explore the complete demo without signing in', async ({ 
   expect(pageErrors).toEqual([]);
 });
 
+test('a demo visitor can exit from Profile and return to sign-in', async ({ page }) => {
+  await openDemo(page);
+  await page.locator('#profileButton').click();
+  await expect(page.getByRole('heading', { name: 'Profile' })).toBeVisible();
+  await expect(page.locator('#demoToggle')).toHaveText('Exit demo');
+  await page.locator('#demoToggle').click();
+  await expect(page.locator('#authScreen')).toBeVisible();
+  await expect(page.locator('#appShell')).toBeHidden();
+  await expect(page.locator('#inviteCode')).toBeVisible();
+});
+
 test('accounts makes a simple debt payoff choice actionable without a separate dashboard', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'accounts');
@@ -338,7 +349,7 @@ test('holding and account drill-ins prioritize a person’s position before mark
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('tab', { name: 'Your position' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('#holdingHistoryChart svg')).toBeVisible();
-  await expect(page.locator('#holdingHistoryNote')).toContainText(/reported shares|history/i);
+  await expect(page.locator('#holdingHistoryNote')).toContainText(/reported shares|reported trades|history/i);
   await dialog.getByRole('tab', { name: 'Market price' }).click();
   await expect(dialog.getByRole('tab', { name: 'Market price' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('#holdingHistoryNote')).toContainText('does not include your purchases');

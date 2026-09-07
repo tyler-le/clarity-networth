@@ -1232,7 +1232,10 @@ $('#themeToggle').addEventListener('change', async (event) => {
   }
 });
 $('#demoToggle').addEventListener('click', async () => {
-  if (state.demoPreview) { showNotice('You are already viewing the demo. Sign in to save changes or connect accounts.'); return; }
+  // The public demo is not an authenticated session. Its profile still offers
+  // an obvious way back to the welcome screen, rather than leaving a button
+  // labelled “Exit demo” that cannot actually exit.
+  if (state.demoPreview) { await exitDemoPreview(); return; }
   const button = $('#demoToggle');
   button.disabled = true;
   try {
@@ -1867,6 +1870,19 @@ async function startDemoPreview() {
   }
 }
 
+async function exitDemoPreview() {
+  state.demoPreview = false;
+  state.demoGoal = null;
+  state.dashboard = null;
+  state.spending = null;
+  state.investments = null;
+  state.retirement = null;
+  $('#appShell').classList.add('hidden');
+  $('#authScreen').classList.remove('hidden');
+  $('#authMessage').textContent = '';
+  await startGoogleSignIn();
+}
+
 let googleSignInConfig = null;
 let accessCodeCheckVersion = 0;
 
@@ -1989,7 +2005,8 @@ $('#inviteCode').addEventListener('keydown', (event) => {
 });
 
 $('#signOutButton').addEventListener('click', async () => {
-  if (!state.demoPreview) await api('/api/auth/logout', { method: 'POST', body: '{}' });
+  if (state.demoPreview) { await exitDemoPreview(); return; }
+  await api('/api/auth/logout', { method: 'POST', body: '{}' });
   state.demoPreview = false;
   state.dashboard = null;
   state.spending = null;
