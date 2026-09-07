@@ -142,7 +142,8 @@ test('cash flow shows identifiable income inlets that highlight their flow', asy
   await expect(interest).toContainText('Interest');
   await paychecks.click();
   await expect(paychecks).toHaveClass(/is-selected/);
-  await expect(page.locator('#spendingTransactionsPanel')).not.toHaveAttribute('open', '');
+  await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
+  await expect(page.locator('#spendingCategoryFilter')).toHaveValue('income_paychecks');
 });
 
 test('a demo visitor can exit from Profile and return to sign-in', async ({ page }) => {
@@ -201,15 +202,19 @@ test('debt rates remain editable after a first entry', async ({ page }) => {
   await expect(card.locator('[data-debt-rate="demo-credit"]')).toHaveValue('18.5');
 });
 
-test('cash-flow taps keep the reader in the diagram and trace the selected flow', async ({ page }) => {
+test('cash-flow taps filter activity without moving the reader away from the diagram', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');
-  await expect(page.locator('#cashflowSankey [data-cashflow-category]').first()).toBeVisible();
+  const node = page.locator('#cashflowSankey [data-cashflow-category="income_paychecks"]');
+  await expect(node).toBeVisible();
+  const before = await page.evaluate(() => scrollY);
 
-  await page.locator('#cashflowSankey [data-cashflow-category]').first().click();
+  await node.click();
   await expect(page.locator('#cashflowSankey .cashflow-flow.is-connected')).not.toHaveCount(0);
   await expect(page.locator('#cashflowSankey .cashflow-flow.is-muted')).not.toHaveCount(0);
-  await expect(page.locator('#spendingTransactionsPanel')).not.toHaveAttribute('open', '');
+  await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
+  await expect(page.locator('#spendingCategoryFilter')).toHaveValue('income_paychecks');
+  expect(await page.evaluate(() => scrollY)).toBe(before);
 });
 
 test('cash-flow combines income before showing allocations instead of estimating paycheck destinations', async ({ page }) => {
@@ -378,7 +383,8 @@ test('the income source keeps its connected flow highlighted after a tap', async
   await goToView(page, 'spending');
   await page.locator('#cashflowSankey [data-cashflow-category="income_paychecks"]').click();
   await expect(page.locator('#cashflowSankey .cashflow-flow.is-connected')).not.toHaveCount(0);
-  await expect(page.locator('#spendingTransactionsPanel')).not.toHaveAttribute('open', '');
+  await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
+  await expect(page.locator('#spendingCategoryFilter')).toHaveValue('income_paychecks');
 });
 
 test('payroll contributions open their own cash-flow activity', async ({ page }) => {
@@ -462,7 +468,7 @@ test('holding and account drill-ins show only a person’s verified position his
   await expect(dialog.getByRole('tab', { name: 'Your position' })).toBeVisible();
 });
 
-test('investment detail distinguishes loading, preparing, and unavailable personal history @critical', async ({ page }) => {
+test('investment detail distinguishes loading, preparing, and first-snapshot tracking @critical', async ({ page }) => {
   let releaseHistory;
   const historyHeld = new Promise((resolve) => { releaseHistory = resolve; });
   await page.route('**/api/demo-investments/history**', async (route) => {
@@ -499,21 +505,21 @@ test('investment detail distinguishes loading, preparing, and unavailable person
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
-        state: 'unavailable',
+        state: 'tracking',
         label: 'Demo 401(k)',
         ticker: 'FXAIX',
         value: 12_345,
-        history: [],
+        history: [{ date: '2026-09-07', value: 12_345 }],
         market: [],
-        reason: 'We could not reconcile reported activity with this account’s current value.'
+        detail: 'Tracking from a verified institution update on 2026-09-07.'
       })
     });
   });
   await page.locator('[data-holding-history]').first().click();
-  await expect(chart.locator('[data-history-state="unavailable"]')).toBeVisible();
-  await expect(chart).toContainText(/personal history unavailable/i);
-  await expect(chart).toContainText(/could not reconcile reported activity/i);
-  await expect(chart.locator('svg')).toHaveCount(0);
+  await expect(chart.locator('[data-history-state="tracking"]')).toBeVisible();
+  await expect(chart).toContainText(/tracking began/i);
+  await expect(chart).not.toContainText(/personal history unavailable/i);
+  await expect(chart.locator('svg')).toBeVisible();
 });
 
 test('holding detail timeframes stay local to the drill-in chart', async ({ page }) => {
@@ -564,6 +570,7 @@ test('investment detail cards stay readable without horizontal overflow on a pho
   await expect(dialog).toBeVisible();
   await handle.dispatchEvent('pointerdown', { pointerType: 'touch', pointerId: 41, clientY: 100 });
   await handle.dispatchEvent('pointermove', { pointerType: 'touch', pointerId: 41, clientY: 190 });
+  await expect(dialog).toHaveCSS('transform', /matrix\(1, 0, 0, 1, 0, (?:[4-9]\d|[1-9]\d\d)\)/);
   await handle.dispatchEvent('pointerup', { pointerType: 'touch', pointerId: 41, clientY: 190 });
   await expect(dialog).toBeHidden();
 });

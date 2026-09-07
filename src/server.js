@@ -1030,7 +1030,12 @@ app.get('/api/spending', async (req, res) => {
 
 app.get('/api/investments', async (req, res) => {
   const store = activeStore(await loadStore(req.user));
+  // Capture the connection-day baseline even before a historical
+  // reconstruction is possible. Future successful daily syncs add one
+  // provider-observed account and holding value per calendar day.
+  snapshotInvestments(store);
   refreshReconstructedInvestmentSnapshots(store, new Date().toISOString().slice(0, 10), Math.max(1, Math.min(2, Number(process.env.MARKETDATA_HISTORY_YEARS || 1))));
+  await saveStore(req.user, store);
   res.json(investmentSummary(store));
 });
 

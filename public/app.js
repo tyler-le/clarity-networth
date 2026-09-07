@@ -1076,9 +1076,16 @@ function renderHoldingHistoryChart(history, kind, emptyMessage = null, historySt
     el.innerHTML = `<div class="holding-history-state" data-history-state="preparing" role="status"><b>Preparing your history</b><span>${escapeHtml(emptyMessage || 'Your institution is preparing reported activity. We will only show a trend once it can be verified.')}</span></div>`;
     return;
   }
+  if (history?.length === 1 || historyState === 'tracking') {
+    const snapshot = history?.[0];
+    if (snapshot) {
+      renderHoldingTrackingStart(el, snapshot, kind);
+      return;
+    }
+  }
   if (!history?.length || el.clientWidth < 80) {
-    const message = emptyMessage || 'Your institution has not provided enough reported activity to build a trustworthy personal history.';
-    el.innerHTML = `<div class="holding-history-empty holding-history-state" data-history-state="unavailable"><b>Personal history unavailable</b><span>${escapeHtml(message)}</span></div>`;
+    const message = emptyMessage || 'Your first verified update will start this chart. We will not invent earlier values.';
+    el.innerHTML = `<div class="holding-history-empty holding-history-state" data-history-state="tracking"><b>Tracking starts with your next update</b><span>${escapeHtml(message)}</span></div>`;
     return;
   }
   const pointsData = historyForRange(history, state.holdingHistoryRange);
@@ -1113,6 +1120,22 @@ function renderHoldingHistoryChart(history, kind, emptyMessage = null, historySt
   svg.addEventListener('pointermove', (event) => { if (active || event.pointerType === 'mouse') showPoint(event); });
   svg.addEventListener('pointerup', () => { active = false; });
   svg.addEventListener('pointerleave', () => { if (!active) { scrubLine.classList.remove('visible'); scrubDot.classList.remove('visible'); tooltip.classList.add('hidden'); } });
+}
+
+function renderHoldingTrackingStart(el, snapshot, kind) {
+  const width = Math.max(1, Math.round(el.clientWidth || 320));
+  const height = Math.max(1, Math.round(el.clientHeight || 196));
+  const baseline = Math.round(height * .58);
+  const pointX = Math.round(width * .72);
+  const date = new Date(`${snapshot.date}T12:00:00`);
+  const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  el.innerHTML = `<svg data-history-state="tracking" viewBox="0 0 ${width} ${height}" role="img" aria-label="${kind === 'market' ? 'Market price' : 'Your position'} tracking began ${label}">
+    <line class="chart-unavailable-line" x1="18" y1="${baseline}" x2="${pointX - 24}" y2="${baseline}"/>
+    <line class="chart-start-line" x1="${pointX - 24}" y1="${baseline}" x2="${pointX}" y2="${baseline}"/>
+    <circle class="chart-start-point" cx="${pointX}" cy="${baseline}" r="7"/>
+    <text x="${pointX}" y="${baseline - 15}" text-anchor="middle" class="chart-start-value">${fmt.format(Number(snapshot.value || 0))}</text>
+    <text x="${pointX}" y="${height - 10}" text-anchor="middle" class="chart-start-detail">Tracking began ${label}</text>
+  </svg>`;
 }
 
 function renderHoldingHistoryDetail() {
@@ -1863,18 +1886,34 @@ function openSpendingCategory(category) {
     panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 }
+function filterCashflowActivityInPlace(category, selected) {
+  // Bridge/status rails describe the diagram but do not map to individual
+  // transactions. Every real income, spending, save, or invest rail does.
+  const data = spendingForSelectedMonth(state.spending);
+  const transactionKeys = new Set((data.transactions || []).flatMap((transaction) => [transaction.flowKey, transaction.flowGroup]));
+  if (!transactionKeys.has(category)) return;
+  state.spendingCategory = selected ? category : 'all';
+  $('#spendingTransactionsPanel').open = true;
+  renderSpendingTransactions(data);
+  // Deliberately do not focus or scroll. The Sankey is the current reading
+  // context; the open drawer updates below it for later inspection.
+}
 $('#spendingLegend')?.addEventListener('click', (event) => openSpendingCategory(event.target.closest('[data-spending-category]')?.dataset.spendingCategory));
 $('#cashflowSankey').addEventListener('click', (event) => {
   if (event.target.closest('[data-cashflow-expand]')) { openCashflowDialog(); return; }
   const node = event.target.closest('[data-cashflow-node]');
-  if (node) toggleCashflowFlowSelection($('#cashflowSankey'), node.dataset.cashflowNode);
+  if (node) {
+    const selected = toggleCashflowFlowSelection($('#cashflowSankey'), node.dataset.cashflowNode);
+    filterCashflowActivityInPlace(node.dataset.cashflowNode, selected);
+  }
 });
 $('#cashflowSankey').addEventListener('keydown', (event) => {
   if (!['Enter', ' '].includes(event.key)) return;
   const target = event.target.closest('[data-cashflow-category]');
   if (!target) return;
   event.preventDefault();
-  toggleCashflowFlowSelection($('#cashflowSankey'), target.dataset.cashflowNode);
+  const selected = toggleCashflowFlowSelection($('#cashflowSankey'), target.dataset.cashflowNode);
+  filterCashflowActivityInPlace(target.dataset.cashflowNode, selected);
 });
 // Flows are deliberately not tap targets: once paths overlap, that interaction
 // becomes ambiguous. Instead, focusing or hovering a clear category block
@@ -1898,6 +1937,7 @@ function toggleCashflowFlowSelection(container, key) {
   if (next) container.dataset.cashflowSelection = next;
   else delete container.dataset.cashflowSelection;
   setCashflowFlowFocus(container, next);
+  return Boolean(next);
 }
 function wireCashflowFlowFocus(container) {
   container.addEventListener('pointerover', (event) => {

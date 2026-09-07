@@ -443,11 +443,14 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
     const preparing = realAccounts.some((account) => store.items?.some((item) => item.id === account.item_id && item.investment_history_state === 'preparing'));
     const currentValue = accountId ? Number(realAccounts[0].current_balance) : value;
     return {
-      state: history.length >= 2 ? 'ready' : preparing ? 'preparing' : 'unavailable',
+      // A single provider-observed snapshot is already a truthful beginning
+      // for Clarity tracking. Do not turn it into an "unavailable" dead end
+      // merely because a verified reconstruction cannot reach further back.
+      state: history.length >= 2 ? 'ready' : history.length === 1 ? 'tracking' : preparing ? 'preparing' : 'unavailable',
       label, ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null, value: currentValue,
       costBasis, gain: costBasis == null ? null : value - costBasis,
       history, market: [], reconstructed: estimated,
-      detail: estimated ? 'Earlier values are estimated from reported activity and historical prices. Saved balances take over when tracking begins.' : (history.length >= 2 ? `Based on ${providerHistory.length} verified updates from your connected institution.` : undefined),
+      detail: estimated ? 'Earlier values are estimated from reported activity and historical prices. Saved balances take over when tracking begins.' : (history.length >= 2 ? `Based on ${providerHistory.length} verified updates from your connected institution.` : history.length === 1 ? `Tracking from a verified institution update on ${history[0].date}.` : undefined),
       reason: preparing ? 'Your institution is still preparing its reported investment activity.' : results.find((result) => result.state !== 'ready')?.reason
     };
   }

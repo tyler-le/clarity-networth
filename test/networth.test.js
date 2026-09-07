@@ -219,6 +219,19 @@ test('portfolio history keeps one verified investment value for each day', () =>
   ]);
 });
 
+test('one verified account snapshot begins personal investment tracking without inventing earlier values', () => {
+  const store = {
+    accounts: [{ plaid_account_id: 'ira', item_id: 'item-1', type: 'investment', name: 'IRA', current_balance: 1_250, hidden: false }],
+    positions: [{ id: 'ira:vti', account_id: 'ira', security_id: 'vti', ticker: 'VTI', name: 'Vanguard Total Stock Market ETF', value: 1_250 }],
+    investment_transactions: [], market_prices: {}, items: [{ id: 'item-1' }], investment_position_snapshots: []
+  };
+  snapshotInvestments(store, '2026-09-07');
+  const detail = investmentDetailHistory(store, { accountId: 'ira' });
+  assert.equal(detail.state, 'tracking');
+  assert.deepEqual(detail.history, [{ date: '2026-09-07', value: 1_250 }]);
+  assert.match(detail.detail, /verified institution update/i);
+});
+
 test('investment reconstruction starts at a fully reported opening trade and uses historical closes', () => {
   const store = {
     positions: [{ security_id: 'fund', ticker: 'VFINX', type: 'mutual fund', quantity: 10, value: 1100 }],
