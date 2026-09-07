@@ -19,7 +19,7 @@ Do not combine these into an in-app analytics surface or grant the reporting ser
 
 ## What is collected
 
-One opaque account key and one allowlisted event name are retained at most once per account per event per day. A valid authenticated dashboard visit establishes a signed-in member, so people with an existing persistent session are counted without needing to sign out and back in. Demo opens are anonymous counts. Events contain no balances, transactions, merchant names, account names, financial inputs, routes, device fingerprinting, raw IP address, or click replay.
+One opaque account key and one allowlisted event name are retained in one aggregate row per account per event per day. That row has a positive interaction counter, so the owner can compare unique-member reach, active member-days, and total uses without retaining individual click records or event-level timestamps. A valid authenticated dashboard visit establishes a signed-in member, so people with an existing persistent session are counted without needing to sign out and back in. Demo opens are anonymous aggregate counts. Events contain no balances, transactions, merchant names, account names, financial inputs, routes, device fingerprinting, raw IP address, or click replay.
 
 Events are retained for 90 days and are removed when the corresponding account is deleted.
 
@@ -30,7 +30,7 @@ Events are retained for 90 days and are removed when the corresponding account i
 | Are people returning? | Daily dashboard opens; 7- and 28-day cohort retention |
 | Are people reaching value? | Account-link completion after sign-in; successful daily sync |
 | What needs work? | Sync failure rate; holding-reconciliation starts; debt-plan opens |
-| Which experiences earn attention? | Unique daily users opening tabs, seeing a core card, or taking a meaningful card action |
+| Which experiences earn attention? | Unique members, active member-days, total interactions, and repeat-use rate for tabs, core cards, and meaningful actions |
 | Is the public demo effective? | Anonymous demo-open count |
 
 Core-card views are recorded only after the card has been at least 50% visible for 750ms; they are distinct from actions such as filtering, expanding, or opening a card. Treat browser events as a conservative lower bound: they are intentionally non-blocking and may be lost if a browser closes or a connection drops. Server-recorded sign-in, dashboard, link, and sync events are the source of truth for activation and retention.
@@ -42,7 +42,7 @@ Review weekly during beta:
 1. Signed-in members and account-link activation rate.
 2. 7- and 28-day returning-member cohorts.
 3. Successful sync coverage in the last 26 hours and failure rate.
-4. Core-card views and meaningful card actions by unique member, not raw clicks. Compare a card's views with its action rate before deciding whether it earns its place.
+4. Core-card views and meaningful card actions by unique member, total interactions, and interactions per active member-day. Use reach to judge breadth and volume/repeat use to judge whether a card earns its place.
 5. Demo opens and demo-to-sign-in conversion where the same person later authenticates.
 
 Only add a third-party analytics product after a privacy, security, cost, and data-processing review. A separate read-only reporting service is preferable to giving any dashboard access to the Clarity application or its encrypted financial-store data.

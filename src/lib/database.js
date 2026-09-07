@@ -139,9 +139,10 @@ const launchEventNames = new Set([
 ]);
 
 // Launch telemetry intentionally records only a tiny set of product-health
-// events. It never accepts arbitrary properties or financial content. Events
-// are coalesced to one member/event/day by the database index and are retained
-// for 90 days, which is sufficient for a small beta retention check-in.
+// events. It never accepts arbitrary properties or financial content. Each
+// member/event/day has one aggregate row whose counter increments on repeated
+// use; that preserves both unique reach and overall interaction volume without
+// becoming a clickstream. Data is retained for 90 days.
 export async function recordLaunchEvent(userKey, eventName) {
   if (userKey != null && !/^[a-f0-9]{64}$/.test(userKey)) throw new Error('Invalid launch-event user key.');
   if (!launchEventNames.has(eventName)) throw new Error('Invalid launch event.');
@@ -149,9 +150,11 @@ export async function recordLaunchEvent(userKey, eventName) {
   const database = getPool();
   await database.query('DELETE FROM launch_events WHERE created_at < now() - interval \'90 days\'');
   await database.query(
-    `INSERT INTO launch_events (id, user_key, event_name)
-     VALUES ($1, $2, $3)
-     ON CONFLICT (user_key, event_name, event_date) WHERE user_key IS NOT NULL DO NOTHING`,
+    `INSERT INTO launch_events (id, user_key, event_name, interaction_count)
+     VALUES ($1, $2, $3, 1)
+     ON CONFLICT (user_key, event_name, event_date) WHERE user_key IS NOT NULL DO UPDATE
+       SET interaction_count = launch_events.interaction_count + 1,
+           created_at = now()`,
     [crypto.randomUUID(), userKey || null, eventName]
   );
 }
@@ -168,7 +171,7 @@ export async function launchMetrics() {
         COUNT(DISTINCT user_key) FILTER (WHERE event_name = 'account_link_completed')::int AS activated_members,
         COUNT(DISTINCT user_key) FILTER (WHERE event_name = 'dashboard_opened' AND created_at >= now() - interval '7 days')::int AS active_7d,
         COUNT(DISTINCT user_key) FILTER (WHERE event_name = 'dashboard_opened' AND created_at >= now() - interval '28 days')::int AS active_28d,
-        COUNT(*) FILTER (WHERE event_name = 'demo_opened' AND created_at >= now() - interval '7 days')::int AS demo_opens_7d,
+        COALESCE(SUM(interaction_count) FILTER (WHERE event_name = 'demo_opened' AND created_at >= now() - interval '7 days'), 0)::int AS demo_opens_7d,
         COUNT(DISTINCT user_key) FILTER (WHERE event_name = 'sync_succeeded' AND created_at >= now() - interval '26 hours')::int AS synced_26h,
         COUNT(DISTINCT user_key) FILTER (WHERE event_name = 'sync_failed' AND created_at >= now() - interval '26 hours')::int AS sync_failed_26h
       FROM launch_events
@@ -211,12 +214,17 @@ export async function launchMetrics() {
       FROM first_visits
     `),
     database.query(`
-      SELECT event_name, COUNT(DISTINCT user_key)::int AS members, COUNT(*)::int AS active_days
+      SELECT
+        event_name,
+        COUNT(DISTINCT user_key)::int AS members,
+        COUNT(*)::int AS active_member_days,
+        COALESCE(SUM(interaction_count), 0)::int AS interactions,
+        ROUND(COALESCE(SUM(interaction_count)::numeric / NULLIF(COUNT(*), 0), 0), 1) AS interactions_per_active_member_day
       FROM launch_events
       WHERE created_at >= now() - interval '28 days'
         AND event_name IN ('cash_flow_viewed', 'investments_viewed', 'retirement_viewed', 'accounts_viewed', 'net_worth_history_explored', 'cash_flow_drilldown', 'cash_flow_month_selected', 'cash_flow_expanded', 'investment_allocation_filtered', 'holding_reconciliation_started', 'account_group_opened', 'debt_plan_opened', 'debt_strategy_selected', 'retirement_milestone_opened', 'goal_created', 'net_worth_card_viewed', 'goal_card_viewed', 'cash_flow_overview_viewed', 'monthly_cash_flow_viewed', 'investment_holdings_viewed', 'investment_allocation_viewed', 'retirement_outlook_viewed', 'retirement_spending_targets_viewed', 'debt_payoff_viewed')
       GROUP BY event_name
-      ORDER BY count DESC, event_name ASC
+      ORDER BY interactions DESC, event_name ASC
     `)
   ]);
   return { ...summary.rows[0], returning_7d: returning.rows[0].returning_7d, ...cohorts.rows[0], featureEvents: features.rows };

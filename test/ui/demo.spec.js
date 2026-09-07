@@ -237,6 +237,18 @@ test('cash-flow diagram shows dollars and source shares of received income toget
   await expect(page.locator('#spendingContext')).toContainText('last 6 completed months');
 });
 
+test('monthly cash-flow values stay self-labeled instead of relying on a detached legend', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'Desktop-specific chart-header coverage.');
+  await openDemo(page);
+  await goToView(page, 'spending');
+  const detail = page.locator('#trendDetail');
+  await expect(detail).toContainText('Income');
+  await expect(detail).toContainText('Spent');
+  await expect(detail).toContainText(/Left|Over/);
+  const labelsStayWithValues = await detail.locator('strong').evaluateAll((items) => items.every((item) => /Income|Spent/.test(item.textContent || '') && item.getBoundingClientRect().width > 0));
+  expect(labelsStayWithValues).toBe(true);
+});
+
 test('cash-flow diagram stays readable on mobile and expands in-app', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');
@@ -406,8 +418,14 @@ test('investment detail cards stay readable without horizontal overflow on a pho
   const dialog = page.locator('#holdingHistoryDialog');
   await expect(dialog).toBeVisible();
   await expect(dialog.locator('.holding-history-drag-handle')).toBeVisible();
+  // Measure after the sheet has settled; transforms participate in bounding
+  // boxes while its entry animation is still running.
+  await page.waitForTimeout(350);
   const [dialogBox, viewport] = await Promise.all([dialog.boundingBox(), page.evaluate(() => ({ width: innerWidth, height: innerHeight }))]);
-  expect(dialogBox && dialogBox.width === viewport.width && dialogBox.y > 0).toBe(true);
+  // Native dialogs can measure one device pixel narrower than the visual
+  // viewport because browsers account for a scrollbar differently. Verify the
+  // actual mobile contract instead: an edge-to-edge, bottom-anchored sheet.
+  expect(dialogBox && dialogBox.x <= 1 && dialogBox.width >= viewport.width - 2 && dialogBox.y >= 0 && dialogBox.y + dialogBox.height <= viewport.height + 1, JSON.stringify({ dialogBox, viewport })).toBe(true);
   expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
   for (const selector of ['#holdingHistoryMetrics', '#holdingHistoryRange', '#holdingHistoryWhere']) {
     expect(await page.locator(selector).evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);

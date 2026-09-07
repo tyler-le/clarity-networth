@@ -76,6 +76,8 @@ integrationTest('serves public legal, support, and dependency-aware health pages
     assert.equal(response.status, 200);
     assert.match(response.text, /Clarity/);
   }
+  const privacy = await request(app).get('/privacy');
+  assert.match(privacy.text, /aggregate daily count/i);
   const health = await request(app).get('/api/health');
   assert.equal(health.status, 200);
   assert.deepEqual(health.body, { ok: true, securityReady: true, databaseReady: true });

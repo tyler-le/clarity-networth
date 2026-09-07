@@ -602,7 +602,7 @@ function renderSpendingTrend(data) {
   if (detail) {
     const label = new Date(`${detail.month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     const remaining = Number(detail.income || 0) - Number(detail.amount || 0);
-    $('#trendDetail').innerHTML = `<span>${state.spendingMonth ? label : `Latest · ${label}`}</span><strong><i class="income"></i>${fmt.format(detail.income || 0)}</strong><strong><i class="spend"></i>${fmt.format(detail.amount || 0)}</strong><b class="${remaining >= 0 ? 'positive' : 'negative'}">${remaining >= 0 ? 'Left' : 'Over'} ${fmt.format(Math.abs(remaining))}</b>`;
+    $('#trendDetail').innerHTML = `<span>${state.spendingMonth ? label : `Latest · ${label}`}</span><strong><i class="income"></i><small>Income</small>${fmt.format(detail.income || 0)}</strong><strong><i class="spend"></i><small>Spent</small>${fmt.format(detail.amount || 0)}</strong><b class="${remaining >= 0 ? 'positive' : 'negative'}">${remaining >= 0 ? 'Left' : 'Over'} ${fmt.format(Math.abs(remaining))}</b>`;
   } else $('#trendDetail').innerHTML = '';
   const chart = $('#spendingTrend');
   if (!months.length) { chart.innerHTML = '<p class="spending-empty">Monthly patterns will appear once transactions arrive.</p>'; return; }
