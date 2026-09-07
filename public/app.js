@@ -832,7 +832,7 @@ function renderRetirement(data) {
   $('#retirementProjection').textContent = fmt.format(data.projectedAtRetirement || 0);
   $('#retirementProjectionContext').textContent = `Projected at age ${data.retirementAge} if you keep saving ${fmt.format(data.annualContributions || 0)}/yr`;
   $('#retirementAgeChip').textContent = `${data.yearsToRetirement} years to go`;
-  $('#retirementSpendContext').textContent = data.monthsObserved ? `At retirement, in today’s dollars · Based on ${data.monthsObserved} month${data.monthsObserved === 1 ? '' : 's'} of spending.` : 'Connect spending accounts to personalize these targets.';
+  $('#retirementSpendContext').textContent = data.monthsObserved ? `Needed by age ${data.retirementAge}, in today’s dollars · Based on ${data.monthsObserved} month${data.monthsObserved === 1 ? '' : 's'} of spending.` : `Needed by age ${data.retirementAge}, in today’s dollars.`;
   $('#retirementAssumption').textContent = `At retirement · ${data.withdrawalRate}% withdrawal`;
   const estimatedLabel = (months, complete) => {
     if (complete) return 'Reached';
@@ -845,10 +845,13 @@ function renderRetirement(data) {
     const interactive = ['coast', 'standard'].includes(step.key);
     const tag = interactive ? 'button' : 'div';
     const action = interactive ? ` type="button" data-retirement-milestone="${step.key}" aria-label="Learn about ${escapeHtml(step.name)}"` : '';
-    return `<${tag} class="retirement-milestone ${step.complete ? 'complete' : ''}"${action}><span>${step.complete ? '✓ ' : ''}${escapeHtml(step.name)}</span><strong>${fmt.format(step.target || 0)}</strong><i><b style="width:${Math.min(100, Number(step.progress || 0)).toFixed(1)}%"></b></i><small>${escapeHtml(step.detail)}</small><em>${escapeHtml(estimatedLabel(step.estimatedMonths, step.complete))}</em></${tag}>`;
+    const detail = step.key === 'coast' ? `Invested today, could grow to FI by age ${data.retirementAge}`
+      : step.key === 'standard' ? `Portfolio needed by age ${data.retirementAge} for your current lifestyle`
+        : step.detail;
+    return `<${tag} class="retirement-milestone ${step.complete ? 'complete' : ''}"${action}><span class="retirement-milestone-name">${step.complete ? '✓ ' : ''}${escapeHtml(step.name)}</span><strong>${fmt.format(step.target || 0)}</strong><small class="retirement-milestone-detail">${escapeHtml(detail)}</small><i aria-label="${Math.round(Math.min(100, Number(step.progress || 0)))}% of target"><b style="width:${Math.min(100, Number(step.progress || 0)).toFixed(1)}%"></b></i><em>${escapeHtml(estimatedLabel(step.estimatedMonths, step.complete))}</em></${tag}>`;
   }).join('');
   $('#retirementPath').innerHTML = milestoneCards;
-  $('#retirementLifestylePaths').innerHTML = (data.lifestyles || []).map((path, index) => `<div class="retirement-lifestyle ${index === 1 ? 'featured' : ''}"><span>${escapeHtml(path.name)}</span><strong>${fmt.format(path.target || 0)}</strong><small>${escapeHtml(path.detail)}</small></div>`).join('');
+  $('#retirementLifestylePaths').innerHTML = (data.lifestyles || []).map((path, index) => `<div class="retirement-lifestyle ${index === 1 ? 'featured' : ''}"><span>${escapeHtml(path.name)}</span><strong>${fmt.format(path.target || 0)}</strong><small>${escapeHtml(path.detail)} · By age ${data.retirementAge}</small></div>`).join('');
   const form = $('#retirementForm');
   form.age.value = data.age;
   form.retirement_age.value = data.retirementAge;
@@ -1157,10 +1160,21 @@ function openRetirementMilestone(name) {
     }
   }[name];
   if (!details) return;
+  const milestone = (plan.ladder || []).find((step) => step.key === name);
+  const months = Number(milestone?.estimatedMonths);
+  let timing = 'Set a saving pace';
+  if (milestone?.complete) timing = 'Already reached';
+  else if (Number.isFinite(months)) {
+    const date = new Date();
+    date.setMonth(date.getMonth() + months);
+    timing = `Est. ${date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`;
+  }
   $('#retirementInfoLabel').textContent = details.label;
   $('#retirementInfoTitle').textContent = details.title;
   $('#retirementInfoDescription').textContent = details.description;
   $('#retirementInfoValue').textContent = fmt.format(details.value || 0);
+  $('#retirementInfoTargetLabel').textContent = name === 'coast' ? `Needed today · Coast FI by age ${plan.retirementAge}` : `Needed by age ${plan.retirementAge}`;
+  $('#retirementInfoTiming').textContent = timing;
   $('#retirementInfoDialog').showModal();
 }
 

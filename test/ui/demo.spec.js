@@ -262,7 +262,7 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await expect(page.locator('#retirementPath')).toContainText('Work-break runway');
   await expect(page.locator('#retirementPath .retirement-milestone')).toHaveCount(4);
   await expect(page.getByText('Retirement spending targets')).toBeVisible();
-  await expect(page.locator('#retirementSpendContext')).toContainText('At retirement, in today’s dollars');
+  await expect(page.locator('#retirementSpendContext')).toContainText('Needed by age 65, in today’s dollars');
   await page.locator('#retirementAdjust summary').click();
   const retirementAgeInput = page.locator('#retirementRetireAgeValue');
   await retirementAgeInput.fill('66');
@@ -282,6 +282,8 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await expect(page.locator('#retirementInfoDialog')).toHaveAttribute('open', '');
   await expect(page.locator('#retirementInfoTitle')).toHaveText('What is Coast FIRE?');
   await expect(page.locator('#retirementInfoDescription')).toContainText('without more retirement contributions');
+  await expect(page.locator('#retirementInfoTargetLabel')).toHaveText('Needed today · Coast FI by age 65');
+  await expect(page.locator('#retirementInfoTiming')).toHaveText(/Already reached|Est\. [A-Z][a-z]{2} \d{4}|Set a saving pace/);
 });
 
 test('the retirement ladder remains legible and usable on a phone', async ({ page }, testInfo) => {
