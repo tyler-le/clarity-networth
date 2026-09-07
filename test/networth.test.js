@@ -381,6 +381,8 @@ test('demo spending remains categorized across its historical ranges', () => {
   assert.ok(summary.actualSpendCategories.length >= 3);
   assert.equal(summary.actualSpendCategories.some((category) => category.key === 'uncategorized'), false);
   assert.equal(summary.transactions.some((transaction) => transaction.flowKey === 'uncategorized'), false);
+  assert.ok(summary.incomeSources.some((source) => source.key === 'income_paychecks'));
+  assert.ok(summary.incomeSources.some((source) => source.key === 'income_interest'));
 });
 
 test('pre-tax retirement contributions remain visible without distorting take-home cash flow', () => {

@@ -1074,6 +1074,7 @@ export function seedDemo(store) {
   store.investment_snapshots = Array.from({ length: 84 }, (_, index) => { const date = new Date(now.getFullYear(), now.getMonth() - (83 - index), 1); return { date: date.toISOString().slice(0, 10), value: Math.round(21000 + index * 760 + Math.sin(index * .7) * 1800), source: 'verified' }; });
   const rows = [
     ['payroll-1', 'Payroll', -3100, d(1), 'income'],
+    ['hysa-interest', 'Ally Savings interest', -42.65, d(1), 'income'],
     ['rent', 'Rent', 1650, d(1), 'fixed'],
     ['brokerage-transfer', 'Fidelity Brokerage', 350, d(2), 'investments'],
     ['hysa-transfer', 'Ally Savings', 250, d(2), 'savings'],
@@ -1093,9 +1094,10 @@ export function seedDemo(store) {
   ];
   const demoPfc = (merchant) => /Rent|Fiber|SDG|Gym/.test(merchant) ? 'RENT_AND_UTILITIES' : /Trader|Costco|Sushi|Coffee/.test(merchant) ? 'FOOD_AND_DRINK' : /Shell/.test(merchant) ? 'TRANSPORTATION' : /Uniqlo/.test(merchant) ? 'GENERAL_MERCHANDISE' : /Southwest/.test(merchant) ? 'TRAVEL' : '';
   store.transactions = rows.map(([id, merchant, amount, date, bucket]) => ({
-    id, plaid_transaction_id: id, account_id: amount < 0 ? 'demo-checking' : 'demo-credit',
+    id, plaid_transaction_id: id, account_id: /Ally Savings interest/.test(merchant) ? 'demo-hysa' : amount < 0 ? 'demo-checking' : 'demo-credit',
     merchant_name: merchant, name: merchant, amount, date, bucket, excluded: false, pending: false,
-    pfc_primary: demoPfc(merchant), pfc_detailed: '', demo: true
+    pfc_primary: /Ally Savings interest/.test(merchant) ? 'INCOME' : demoPfc(merchant),
+    pfc_detailed: /Ally Savings interest/.test(merchant) ? 'INCOME_INTEREST_EARNED' : '', demo: true
   }));
   store.transactions.push({
     id: 'demo-401k-contribution', plaid_transaction_id: 'demo-401k-contribution', account_id: 'demo-401k',
@@ -1170,6 +1172,7 @@ function addDemoHistory(store) {
     const variation = Math.round(Math.sin(monthsAgo * 1.7) * 110);
     const rows = [
       ['payroll', 'Payroll', -6200, 'income', 'demo-checking', 'INCOME'],
+      ['interest', 'Ally Savings interest', -(38 + monthsAgo % 6), 'income', 'demo-hysa', 'INCOME'],
       ['rent', 'Rent', 1650, 'fixed', 'demo-credit', 'RENT_AND_UTILITIES'],
       ['essentials', 'Groceries & utilities', 690 + variation, 'fixed', 'demo-credit', 'FOOD_AND_DRINK'],
       ['saving', 'Ally Savings', 250, 'savings', 'demo-credit', 'TRANSFER_IN'],

@@ -135,8 +135,11 @@ test('cash flow shows an identifiable income inlet that filters its activity', a
   await openDemo(page);
   await goToView(page, 'spending');
   const paychecks = page.locator('#cashflowSankey [data-cashflow-category="income_paychecks"]');
+  const interest = page.locator('#cashflowSankey [data-cashflow-category="income_interest"]');
   await expect(paychecks).toBeVisible();
   await expect(paychecks).toContainText('Paychecks');
+  await expect(interest).toBeVisible();
+  await expect(interest).toContainText('Interest');
   await paychecks.click();
   await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
   await expect(page.locator('#spendingTransactions')).toContainText('Payroll');
