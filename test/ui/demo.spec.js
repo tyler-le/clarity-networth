@@ -348,6 +348,17 @@ test('holding and account drill-ins prioritize a person’s position before mark
   await expect(dialog.getByRole('tab', { name: 'Your position' })).toBeVisible();
 });
 
+test('holding detail timeframes stay local to the drill-in chart', async ({ page }) => {
+  await openDemo(page);
+  await goToView(page, 'investments');
+  await expect(page.locator('[data-investment-range="1y"]')).toHaveClass(/active/);
+  await page.locator('[data-holding-history]').first().click();
+  await page.locator('[data-holding-history-range="1m"]').click();
+  await expect(page.locator('[data-holding-history-range="1m"]')).toHaveClass(/active/);
+  await expect(page.locator('[data-investment-range="1y"]')).toHaveClass(/active/);
+  await expect(page.locator('[data-investment-range="1m"]')).not.toHaveClass(/active/);
+});
+
 test('portfolio history can be scrubbed just like net worth', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'investments');

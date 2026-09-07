@@ -194,28 +194,57 @@ function nearestPrice(prices, date) {
   return Object.keys(prices || {}).filter((day) => day <= date).sort().at(-1) ? Number(prices[Object.keys(prices).filter((day) => day <= date).sort().at(-1)]) : null;
 }
 
+function transactionMatchesPosition(transaction, position) {
+  if (position.account_id && transaction.account_id && position.account_id !== transaction.account_id) return false;
+  if (position.security_id && transaction.security_id) return position.security_id === transaction.security_id;
+  const transactionTicker = String(transaction.ticker || '').trim().toUpperCase();
+  const positionTicker = String(position.ticker || '').trim().toUpperCase();
+  return Boolean(transactionTicker && positionTicker && transactionTicker === positionTicker);
+}
+
+function observedStartDate(positions, transactions, linkEvents = []) {
+  const starts = positions.map((position) => {
+    const firstTrade = transactions
+      .filter((transaction) => transactionMatchesPosition(transaction, position) && Number.isFinite(Number(transaction.quantity)) && Number(transaction.quantity) !== 0)
+      .map((transaction) => transaction.date)
+      .filter(Boolean)
+      .sort()[0];
+    if (firstTrade) return firstTrade;
+    // A connection-day balance can establish a current baseline, but it never
+    // proves that the balance existed before the connection. It therefore
+    // yields a single current point rather than invented earlier history.
+    return linkEvents.find((event) => event.account_id === position.account_id)?.date || null;
+  });
+  return starts.length && starts.every(Boolean) ? starts.sort().at(-1) : null;
+}
+
 export function reconstructInvestmentHistory(store, endDate = new Date().toISOString().slice(0, 10), years = 1) {
   const transactions = (store.investment_transactions || []).filter((transaction) => transaction.date <= endDate);
   const current = new Map();
   for (const position of store.positions || []) {
-    const entry = current.get(position.security_id) || { quantity: 0, ticker: position.ticker, type: position.type };
+    const key = `${position.account_id || ''}:${position.security_id || position.ticker || position.id || ''}`;
+    const entry = current.get(key) || { ...position, quantity: 0, ticker: position.ticker, type: position.type };
     entry.quantity += Number(position.quantity || 0);
     entry.ticker ||= position.ticker;
     entry.type ||= position.type;
-    current.set(position.security_id, entry);
+    current.set(key, entry);
   }
   for (const transaction of transactions) {
     if (!transaction.security_id) continue;
     const historical = historicalSecurity({ ticker: transaction.ticker, name: transaction.security_name, type: transaction.security_type });
-    const entry = current.get(transaction.security_id) || { quantity: 0, ticker: historical.ticker, type: historical.type };
+    const key = `${transaction.account_id || ''}:${transaction.security_id}`;
+    const entry = current.get(key) || { account_id: transaction.account_id, security_id: transaction.security_id, quantity: 0, ticker: historical.ticker, type: historical.type };
     entry.ticker ||= historical.ticker;
     entry.type ||= historical.type;
-    current.set(transaction.security_id, entry);
+    current.set(key, entry);
   }
   if (!current.size) return [];
-  const start = new Date(`${endDate}T12:00:00`);
+  let start = new Date(`${endDate}T12:00:00`);
   start.setFullYear(start.getFullYear() - years);
   start.setDate(1);
+  const observedStart = observedStartDate([...current.values()], transactions, store.investment_link_events || []);
+  if (!observedStart) return [];
+  if (observedStart > start.toISOString().slice(0, 10)) start = new Date(`${observedStart}T12:00:00`);
   // Market prices are daily, so the reconstruction should be daily too. This
   // gives the portfolio chart honest day-by-day scrubbing without inventing
   // values for full net worth, where cash and debt histories are incomplete.
@@ -225,8 +254,8 @@ export function reconstructInvestmentHistory(store, endDate = new Date().toISOSt
   for (const date of dates) {
     let value = 0;
     let complete = true;
-    for (const [securityId, holding] of current) {
-      const quantity = holding.quantity - transactions.filter((transaction) => transaction.security_id === securityId && transaction.date > date).reduce((sum, transaction) => sum + Number(transaction.quantity || 0), 0);
+    for (const holding of current.values()) {
+      const quantity = holding.quantity - transactions.filter((transaction) => transactionMatchesPosition(transaction, holding) && transaction.date > date).reduce((sum, transaction) => sum + Number(transaction.quantity || 0), 0);
       if (!quantity) continue;
       const price = holding.type === 'cash' ? 1 : nearestPrice(store.market_prices?.[holding.ticker], date);
       if (!Number.isFinite(price)) { complete = false; break; }
@@ -266,14 +295,20 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
   const dates = [];
   for (const date = new Date(`${start.toISOString().slice(0, 10)}T12:00:00`); date <= new Date(`${endDate}T12:00:00`); date.setDate(date.getDate() + 1)) dates.push(new Date(date).toISOString().slice(0, 10));
   const relevantIds = new Set(positions.map((position) => position.security_id).filter(Boolean));
-  const transactions = (store.investment_transactions || []).filter((transaction) => transaction.date <= endDate && (relevantIds.has(transaction.security_id) || (!accountId && normalizedTicker && String(transaction.ticker || '').toUpperCase() === normalizedTicker)));
+  const transactions = (store.investment_transactions || []).filter((transaction) => transaction.date <= endDate && (accountId ? transaction.account_id === accountId : (relevantIds.has(transaction.security_id) || (normalizedTicker && String(transaction.ticker || '').toUpperCase() === normalizedTicker))));
+  const observedStart = observedStartDate(positions, transactions, store.investment_link_events || []);
+  if (!observedStart) {
+    return { state: 'unavailable', label, ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null, value, costBasis, gain: costBasis == null ? null : value - costBasis, reason: 'We need a reported trade or a connection-day baseline before we can show your personal history.', history: [], market: [] };
+  }
+  const requestedStart = start.toISOString().slice(0, 10);
+  const firstDate = observedStart > requestedStart ? observedStart : requestedStart;
   const history = [];
-  for (const date of dates) {
+  for (const date of dates.filter((day) => day >= firstDate)) {
     let total = 0;
     let complete = true;
     for (const position of positions) {
       const tickerForPosition = String(position.ticker || '').toUpperCase();
-      const quantity = Number(position.quantity || 0) - transactions.filter((transaction) => (transaction.security_id && transaction.security_id === position.security_id) || (!transaction.security_id && String(transaction.ticker || '').toUpperCase() === tickerForPosition)).filter((transaction) => transaction.date > date).reduce((sum, transaction) => sum + Number(transaction.quantity || 0), 0);
+      const quantity = Number(position.quantity || 0) - transactions.filter((transaction) => transactionMatchesPosition(transaction, position) && transaction.date > date).reduce((sum, transaction) => sum + Number(transaction.quantity || 0), 0);
       if (!quantity) continue;
       const price = position.type === 'cash' ? 1 : nearestPrice(store.market_prices?.[tickerForPosition], date);
       if (!Number.isFinite(price)) { complete = false; break; }
@@ -283,7 +318,7 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
   }
   // Market comparison is meaningful only for a single identifiable security.
   const market = resolvedTickers.length === 1
-    ? Object.entries(store.market_prices?.[resolvedTickers[0]] || {}).filter(([date]) => date >= dates[0] && date <= endDate).map(([date, price]) => ({ date, value: Number(price) })).filter((entry) => Number.isFinite(entry.value))
+    ? Object.entries(store.market_prices?.[resolvedTickers[0]] || {}).filter(([date]) => date >= firstDate && date <= endDate).map(([date, price]) => ({ date, value: Number(price) })).filter((entry) => Number.isFinite(entry.value))
     : [];
   const state = history.length > 1 ? 'ready' : 'unavailable';
   return {
@@ -297,7 +332,7 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
     history,
     market,
     reason: state === 'ready' ? null : 'A personal history will appear after we have enough position and price history.',
-    detail: history.length ? 'Your position is reconstructed from reported shares, available trades, and historical prices.' : null
+    detail: history.length ? `Your position starts on ${observedStart}, the first date supported by reported trades or your linked-account baseline.` : null
   };
 }
 

@@ -23,6 +23,7 @@ const state = {
   investmentSort: 'value',
   holdingHistory: null,
   holdingHistoryMode: 'position',
+  holdingHistoryRange: '1y',
   expandedAccountGroups: new Set(),
   holdingsExpanded: false,
   demoGoal: null,
@@ -353,7 +354,7 @@ function renderLineChart(snapshots, summary) {
   const xAxis = tickTimes.map((time, index) => `<text x="${(plotLeft + ((time - domainStart) / (domainEnd - domainStart)) * (width - plotLeft - plotRight)).toFixed(1)}" y="${height - 5}" text-anchor="${index === 0 ? 'start' : index === tickTimes.length - 1 ? 'end' : 'middle'}" class="chart-axis-label chart-x-axis-label">${dateLabel(time)}</text>`).join('');
   el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img">
     <defs><linearGradient id="areaFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f6f4a" stop-opacity=".16"/><stop offset="1" stop-color="#1f6f4a" stop-opacity="0"/></linearGradient></defs>
-    ${yAxis}${xAxis}<path d="${area}" fill="url(#areaFade)"/><path d="${d}" fill="none" stroke="#1f6f4a" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>
+    ${yAxis}${xAxis}<path d="${area}" fill="url(#areaFade)"/><path class="main-history-line" pathLength="1" d="${d}" fill="none" stroke="#1f6f4a" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>
     <line class="scrub-line" x1="0" y1="${plotTop}" x2="0" y2="${plotBottom}"/>
     <circle class="scrub-dot" cx="0" cy="0" r="5"/>
   </svg>
@@ -799,7 +800,7 @@ function renderPortfolioChart(data) {
   const xIndices = [...new Set(width > 420 ? [0, Math.floor((snapshots.length - 1) / 2), snapshots.length - 1] : [0, snapshots.length - 1])];
   const grid = [max, (max + min) / 2, min].map((value) => { const y = plot.bottom - (value - min) / (max - min) * (plot.bottom - plot.top); return `<line x1="${plot.left}" y1="${y}" x2="${width - plot.right}" y2="${y}" class="chart-grid"/><text x="${plot.left - 6}" y="${y + 3}" text-anchor="end" class="chart-axis-label">${axisCurrency(value)}</text>`; }).join('');
   const xAxis = xIndices.map((index) => `<text x="${points[index][0]}" y="${height - 5}" text-anchor="${index === 0 ? 'start' : index === snapshots.length - 1 ? 'end' : 'middle'}" class="chart-axis-label">${label(index)}</text>`).join('');
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Scrubbable portfolio value history"><defs><linearGradient id="portfolioFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".16"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs>${grid}${xAxis}<path d="${area}" fill="url(#portfolioFade)"/><path d="${line}" fill="none" stroke="#287143" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>${points.length === 1 ? `<circle cx="${points[0][0]}" cy="${points[0][1]}" r="5" fill="#287143"/>` : ''}<line class="scrub-line" x1="0" y1="${plot.top}" x2="0" y2="${plot.bottom}"/><circle class="scrub-dot" cx="0" cy="0" r="5"/></svg><div class="chart-tooltip hidden"></div>`;
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Scrubbable portfolio value history"><defs><linearGradient id="portfolioFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".16"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs>${grid}${xAxis}<path d="${area}" fill="url(#portfolioFade)"/><path class="main-history-line" pathLength="1" d="${line}" fill="none" stroke="#287143" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>${points.length === 1 ? `<circle cx="${points[0][0]}" cy="${points[0][1]}" r="5" fill="#287143"/>` : ''}<line class="scrub-line" x1="0" y1="${plot.top}" x2="0" y2="${plot.bottom}"/><circle class="scrub-dot" cx="0" cy="0" r="5"/></svg><div class="chart-tooltip hidden"></div>`;
   if (snapshots.length < 2) return;
   const scrubLine = el.querySelector('.scrub-line');
   const scrubDot = el.querySelector('.scrub-dot');
@@ -853,9 +854,10 @@ function aggregateHoldings(positions) {
   });
 }
 
-function historyForRange(history) {
-  if (!history?.length || state.investmentRange === 'all') return history || [];
-  return filterSnapshots(history, state.investmentRange, new Date(`${history.at(-1).date}T12:00:00`));
+function historyForRange(history, range = state.holdingHistoryRange) {
+  if (!history?.length || range === 'all') return history || [];
+  const filtered = filterSnapshots(history, range, new Date(`${history.at(-1).date}T12:00:00`));
+  return filtered.length ? filtered : history.slice(-1);
 }
 
 function renderHoldingHistoryChart(history, kind) {
@@ -864,7 +866,7 @@ function renderHoldingHistoryChart(history, kind) {
     el.innerHTML = '<div class="holding-history-empty"><b>History is still building</b><span>We will show this once we have enough verified position and price data.</span></div>';
     return;
   }
-  const pointsData = historyForRange(history);
+  const pointsData = historyForRange(history, state.holdingHistoryRange);
   const width = Math.max(1, Math.round(el.clientWidth));
   const height = Math.max(1, Math.round(el.clientHeight));
   const plot = { left: 12, right: 12, top: 12, bottom: height - 28 };
@@ -909,6 +911,8 @@ function renderHoldingHistoryDetail() {
   $('#holdingHistoryMetrics').innerHTML = `<div><span>Current value</span><strong>${fmt.format(Number(data.value || 0))}</strong></div>${data.costBasis != null ? `<div><span>Market gain</span><strong class="${gain >= 0 ? 'positive' : 'negative'}">${gain >= 0 ? '+' : '−'}${fmt.format(Math.abs(gain || 0))}</strong><small>vs. reported cost basis</small></div>` : '<div><span>Cost basis</span><strong>Unavailable</strong><small>Your institution has not shared it</small></div>'}`;
   const hasMarket = (data.market || []).length > 1;
   $('#holdingHistoryTabs').innerHTML = `<button type="button" class="${!isMarket ? 'active' : ''}" data-holding-history-mode="position" role="tab" aria-selected="${!isMarket}">Your position</button>${hasMarket ? `<button type="button" class="${isMarket ? 'active' : ''}" data-holding-history-mode="market" role="tab" aria-selected="${isMarket}">Market price</button>` : ''}`;
+  const ranges = [['1m', '1M'], ['3m', '3M'], ['6m', '6M'], ['ytd', 'YTD'], ['1y', '1Y'], ['all', 'All']];
+  $('#holdingHistoryRange').innerHTML = ranges.map(([value, label]) => `<button type="button" class="${state.holdingHistoryRange === value ? 'active' : ''}" data-holding-history-range="${value}" aria-pressed="${state.holdingHistoryRange === value}">${label}</button>`).join('');
   $('#holdingHistoryNote').textContent = isMarket ? 'Market price does not include your purchases, sales, or contributions.' : (data.detail || data.reason || 'Your position history is unavailable.');
   // A dialog has no stable width until the browser has painted it. Defer chart
   // measurement one frame so mobile and desktop both receive a real canvas.
@@ -923,6 +927,9 @@ async function openHoldingHistory({ ticker = '', accountId = '' } = {}) {
   const dialog = $('#holdingHistoryDialog');
   state.holdingHistory = { label: 'Investment detail', ticker, value: 0, history: [], market: [], reason: 'Loading your history…' };
   state.holdingHistoryMode = 'position';
+  // This starts aligned with the page for continuity, then belongs only to
+  // this drill-in. Changing it never alters the Investments overview.
+  state.holdingHistoryRange = state.investmentRange;
   if (!dialog.open) dialog.showModal();
   renderHoldingHistoryDetail();
   try {
@@ -1019,7 +1026,7 @@ function assetClassLabel(type, override = null) {
 }
 
 const holdingClassOptions = [
-  ['', 'Use institution classification'],
+  ['', 'Automatic (from your institution)'],
   ['Equities', 'Equities'],
   ['Funds', 'Funds'],
   ['Fixed income', 'Fixed income'],
@@ -1736,7 +1743,7 @@ $('#investmentPositions').addEventListener('change', async (event) => {
     const response = await api(path, { method: 'PATCH', body: JSON.stringify({ asset_class: control.value }) });
     state.investments = select ? await api('/api/investments') : response;
     renderInvestments(state.investments);
-    showNotice(select ? (select.value ? 'Holding classification updated.' : 'Using the institution classification.') : 'Manual holding classification updated.', 'success');
+    showNotice(select ? (select.value ? 'Holding classification updated.' : 'Automatic classification restored.') : 'Manual holding classification updated.', 'success');
   } catch (error) { showNotice(error.message); control.disabled = false; }
 });
 $('#investmentPositions').addEventListener('click', async (event) => {
@@ -1775,6 +1782,12 @@ $('#holdingHistoryTabs').addEventListener('click', (event) => {
   state.holdingHistoryMode = tab.dataset.holdingHistoryMode;
   renderHoldingHistoryDetail();
 });
+$('#holdingHistoryRange').addEventListener('click', (event) => {
+  const range = event.target.closest('[data-holding-history-range]')?.dataset.holdingHistoryRange;
+  if (!range) return;
+  state.holdingHistoryRange = range;
+  renderHoldingHistoryDetail();
+});
 $('#holdingHistoryWhere').addEventListener('change', async (event) => {
   const select = event.target.closest('[data-history-position-class]');
   const manualSelect = event.target.closest('[data-history-manual-holding-class]');
@@ -1789,7 +1802,7 @@ $('#holdingHistoryWhere').addEventListener('change', async (event) => {
     state.investments = select ? await api('/api/investments') : response;
     renderInvestments(state.investments);
     renderHoldingHistoryDetail();
-    showNotice(control.value ? 'Holding classification updated.' : 'Using the institution classification.', 'success');
+    showNotice(control.value ? 'Holding classification updated.' : 'Automatic classification restored.', 'success');
   } catch (error) {
     showNotice(error.message);
     control.disabled = false;

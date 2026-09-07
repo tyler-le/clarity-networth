@@ -198,9 +198,9 @@ test('investment reconstruction reverses later purchases and uses historical clo
     market_prices: { VFINX: { '2026-09-01': 100, '2026-09-05': 110 } }
   };
   const history = reconstructInvestmentHistory(store, '2026-09-05');
-  assert.equal(history.find((snapshot) => snapshot.date === '2026-09-01').value, 800);
+  assert.equal(history.find((snapshot) => snapshot.date === '2026-09-03').value, 1000);
   assert.equal(history.at(-1).value, 1100);
-  assert.deepEqual(history.map((snapshot) => snapshot.date), ['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04', '2026-09-05']);
+  assert.deepEqual(history.map((snapshot) => snapshot.date), ['2026-09-03', '2026-09-04', '2026-09-05']);
   assert.ok(history.every((snapshot) => snapshot.source === 'reconstructed'));
 });
 
@@ -210,7 +210,9 @@ test('investment reconstruction retains ticker metadata for sold securities', ()
     investment_transactions: [{ security_id: 'sold-fund', ticker: 'VANGUARD.TARGET.2065', security_name: 'Vanguard Target 2065', security_type: 'equity', date: '2026-09-01', quantity: -10 }],
     market_prices: { VLXVX: { '2026-04-01': 100, '2026-09-06': 110 } }
   }, '2026-09-06', 1);
-  assert.ok(history.some((snapshot) => snapshot.date === '2026-04-01' && snapshot.value === 1000));
+  assert.equal(history[0].date, '2026-09-01');
+  assert.equal(history.some((snapshot) => snapshot.date < '2026-09-01'), false);
+  assert.equal(history[0].value, 0);
 });
 
 test('market candle parsing retains usable closes by session date', () => {
@@ -242,7 +244,7 @@ test('holding detail history keeps a person’s reconstructed position separate 
   const store = {
     accounts: [{ plaid_account_id: 'brokerage', type: 'investment', name: 'Brokerage', hidden: false }],
     positions: [{ account_id: 'brokerage', security_id: 'vti', ticker: 'VTI', name: 'Vanguard Total Stock Market ETF', type: 'etf', quantity: 10, value: 1100, cost_basis: 900 }],
-    investment_transactions: [],
+    investment_transactions: [{ account_id: 'brokerage', security_id: 'vti', ticker: 'VTI', date: prior, quantity: 10 }],
     market_prices: { VTI: { [prior]: 100, [today]: 110 } }
   };
   const result = investmentDetailHistory(store, { ticker: 'VTI', years: 1 });
@@ -251,6 +253,19 @@ test('holding detail history keeps a person’s reconstructed position separate 
   assert.equal(result.gain, 200);
   assert.deepEqual(result.market.slice(-2), [{ date: prior, value: 100 }, { date: today, value: 110 }]);
   assert.deepEqual(result.history.slice(-2), [{ date: prior, value: 1000 }, { date: today, value: 1100 }]);
+});
+
+test('holding history never predates the first reported trade or linked-account baseline', () => {
+  const store = {
+    accounts: [{ plaid_account_id: '401k', type: 'investment', name: 'Work 401(k)', hidden: false }],
+    positions: [{ account_id: '401k', security_id: 'fund', ticker: 'VTI', name: 'Fund', type: 'etf', quantity: 5, value: 550 }],
+    investment_transactions: [{ account_id: '401k', security_id: 'fund', ticker: 'VTI', date: '2026-01-15', quantity: 5 }],
+    market_prices: { VTI: { '2025-12-31': 95, '2026-01-15': 100, '2026-09-01': 110 } }
+  };
+  const result = investmentDetailHistory(store, { accountId: '401k', years: 1 });
+  assert.equal(result.history[0].date, '2026-01-15');
+  assert.equal(result.market[0].date, '2026-01-15');
+  assert.match(result.detail, /2026-01-15/);
 });
 
 test('manual holdings fill only an institution-reported position gap', () => {
