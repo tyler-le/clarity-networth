@@ -202,7 +202,17 @@ async function saveStoreByKey(storageKey, store) {
 
 function activeStore(store) {
   if (!store.settings?.demo_mode) return store;
-  const demo = { ...store, accounts: [], positions: [], manual_holdings: [], transactions: [], snapshots: [], items: [] };
+  // Demo mode must be a self-contained, representative scenario. Carrying a
+  // signed-in person's retirement assumptions into the seeded records can make
+  // the demo tell a contradictory story (for example, "Needs a savings pace")
+  // even though its own contributions reach Coast independence. Appearance is
+  // returned from the real store separately, so it remains personal while all
+  // financial inputs below are deliberately demo-only.
+  const demo = {
+    ...store,
+    accounts: [], positions: [], manual_holdings: [], transactions: [], snapshots: [], items: [],
+    settings: { targets: { fixed: 50, savings: 10, investments: 10, guilt_free: 30 }, demo_mode: true }
+  };
   seedDemo(demo);
   return demo;
 }

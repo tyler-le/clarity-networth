@@ -172,6 +172,26 @@ integrationTest('previews a retirement plan without changing the saved assumptio
   deleteStore(key);
 });
 
+integrationTest('signed-in demo mode uses its own consistent retirement scenario', async () => {
+  const email = 'demo-boundary@example.com';
+  const key = userStorageKey(email);
+  writeStore({
+    settings: { fire: { age: 42, retirement_age: 48, withdrawal_rate: 3, real_return: 1 } },
+    accounts: [{ id: 'personal-investment', type: 'investment', current_balance: 5000 }],
+    items: [], snapshots: [], transactions: []
+  }, key);
+  const cookie = signedTestCookie(email);
+  const enable = await request(app).post('/api/demo-mode').set('Cookie', cookie).send({ enabled: true });
+  assert.equal(enable.status, 200);
+  const retirement = await request(app).get('/api/retirement').set('Cookie', cookie);
+  assert.equal(retirement.status, 200);
+  assert.equal(retirement.body.age, 27, 'demo must not inherit a member’s age');
+  assert.equal(retirement.body.retirementAge, 65, 'demo must not inherit a member’s retirement target');
+  assert.equal(retirement.body.realReturn, 5, 'demo must not inherit a member’s return assumption');
+  assert.equal(retirement.body.ladder.find((step) => step.key === 'coast').estimatedMonths, 57);
+  deleteStore(key);
+});
+
 integrationTest('rejects unsigned Plaid webhooks before processing financial data', async () => {
   const response = await request(app).post('/api/plaid/webhook').send({ item_id: 'untrusted-item' });
   assert.equal(response.status, 401);
