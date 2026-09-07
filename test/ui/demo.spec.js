@@ -288,6 +288,7 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await expect(page.locator('#retirementPath')).toContainText('Emergency fund');
   await expect(page.locator('#retirementPath')).toContainText('Six-month buffer');
   await expect(page.locator('#retirementPath .retirement-milestone')).toHaveCount(4);
+  await expect(page.locator('#retirementProjectionContext')).toContainText(/On pace for \$[\d,]+ by age 65/);
   await expect(page.getByText('Retirement spending targets')).toBeVisible();
   await expect(page.locator('#retirementSpendContext')).toContainText('Needed by age 65, in today’s dollars');
   await page.locator('#retirementAdjust summary').click();

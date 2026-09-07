@@ -829,8 +829,9 @@ function assetClassLabel(type, override = null) {
 function renderRetirement(data) {
   if (!data) return;
   state.retirement = data;
-  $('#retirementProjection').textContent = fmt.format(data.projectedAtRetirement || 0);
-  $('#retirementProjectionContext').textContent = `Projected at age ${data.retirementAge} if you keep saving ${fmt.format(data.annualContributions || 0)}/yr`;
+  const projectedBalance = fmt.format(data.projectedAtRetirement || 0);
+  $('#retirementProjection').textContent = projectedBalance;
+  $('#retirementProjectionContext').textContent = `On pace for ${projectedBalance} by age ${data.retirementAge}`;
   $('#retirementAgeChip').textContent = `${data.yearsToRetirement} years to go`;
   $('#retirementSpendContext').textContent = data.monthsObserved ? `Needed by age ${data.retirementAge}, in today’s dollars · Based on ${data.monthsObserved} month${data.monthsObserved === 1 ? '' : 's'} of spending.` : `Needed by age ${data.retirementAge}, in today’s dollars.`;
   $('#retirementAssumption').textContent = `At retirement · ${data.withdrawalRate}% withdrawal`;
