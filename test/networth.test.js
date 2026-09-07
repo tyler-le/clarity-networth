@@ -101,9 +101,23 @@ test('monthly spending keeps income separate for comparison', () => {
   assert.equal(result.total, 900);
   assert.equal(result.income, 4200);
   assert.deepEqual(result.monthly, [{ month: '2026-09', amount: 900, income: 4200, pre_tax_retirement: 0 }]);
-  assert.deepEqual(result.transactions.find((transaction) => transaction.category === 'Income'), {
-    id: undefined, name: 'Payroll', date: '2026-09-01', amount: 4200, category: 'Income', bucket: 'income', flowKey: 'income', flowLabel: 'Net income', flowGroup: 'income'
+  assert.deepEqual(result.transactions.find((transaction) => transaction.category === 'Paychecks'), {
+    id: undefined, name: 'Payroll', date: '2026-09-01', amount: 4200, category: 'Paychecks', bucket: 'income', flowKey: 'income_paychecks', flowLabel: 'Paychecks', flowGroup: 'income'
   });
+  assert.deepEqual(result.incomeSources, [{ key: 'income_paychecks', label: 'Paychecks', amount: 4200 }]);
+});
+
+test('cash flow keeps HYSA interest distinct from paychecks without excluding either income source', () => {
+  const store = { transactions: [
+    { date: '2026-09-01', amount: -4200, bucket: 'income', merchant_name: 'Payroll' },
+    { date: '2026-09-02', amount: -18.42, bucket: 'income', merchant_name: 'Ally interest payment', pfc_primary: 'INCOME', pfc_detailed: 'INCOME_INTEREST_EARNED' }
+  ] };
+  const result = spendingSummary(store, '1m', new Date('2026-09-05T12:00:00'));
+  assert.equal(result.income, 4218.42);
+  assert.deepEqual(result.incomeSources, [
+    { key: 'income_paychecks', label: 'Paychecks', amount: 4200 },
+    { key: 'income_interest', label: 'Interest', amount: 18.42 }
+  ]);
 });
 
 test('multi-month cash flow excludes an incomplete current month', () => {

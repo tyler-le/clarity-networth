@@ -131,6 +131,17 @@ test('a new visitor can explore the complete demo without signing in', async ({ 
   expect(pageErrors).toEqual([]);
 });
 
+test('cash flow shows an identifiable income inlet that filters its activity', async ({ page }) => {
+  await openDemo(page);
+  await goToView(page, 'spending');
+  const paychecks = page.locator('#cashflowSankey [data-cashflow-category="income_paychecks"]');
+  await expect(paychecks).toBeVisible();
+  await expect(paychecks).toContainText('Paychecks');
+  await paychecks.click();
+  await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
+  await expect(page.locator('#spendingTransactions')).toContainText('Payroll');
+});
+
 test('a demo visitor can exit from Profile and return to sign-in', async ({ page }) => {
   await openDemo(page);
   await page.locator('#profileButton').click();

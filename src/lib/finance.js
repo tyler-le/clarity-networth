@@ -715,6 +715,22 @@ function cashFlowDetail(transaction) {
   return { key, label, group: 'actual_spend' };
 }
 
+// Plaid's income category is intentionally broad. Keep the main cash-flow
+// calculation broad too, but retain the source so a paycheck is not made to
+// look indistinguishable from HYSA interest, benefits, or self-employment.
+function incomeSource(transaction) {
+  const primary = String(transaction.pfc_primary || '').toUpperCase();
+  const detailed = String(transaction.pfc_detailed || '').toUpperCase();
+  const name = `${transaction.merchant_name || ''} ${transaction.name || ''}`.toUpperCase();
+  const context = `${primary} ${detailed} ${name}`;
+  if (/INTEREST/.test(context)) return { key: 'income_interest', label: 'Interest' };
+  if (/DIVIDEND/.test(context)) return { key: 'income_dividends', label: 'Dividends' };
+  if (/PAYROLL|SALARY|WAGE/.test(context)) return { key: 'income_paychecks', label: 'Paychecks' };
+  if (/BENEFIT|UNEMPLOYMENT|SOCIAL_SECURITY|PENSION/.test(context)) return { key: 'income_benefits', label: 'Benefits' };
+  if (/FREELANCE|CONTRACT|BUSINESS|GIG/.test(context)) return { key: 'income_business', label: 'Business & freelance' };
+  return { key: 'income_other', label: 'Other income' };
+}
+
 export function spendingSummary(store, range = '1m', anchor = new Date()) {
   const { startDate, endDate, completedMonths } = spendingPeriod(range, anchor);
   const categories = new Map();
@@ -722,6 +738,7 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
   const monthly = new Map();
   const monthlyIncome = new Map();
   const monthlyPreTaxRetirement = new Map();
+  const incomeSourceMap = new Map();
   const transactionRows = [];
   const actualSpendCategoryMap = new Map();
   let actualSpend = 0;
@@ -734,16 +751,19 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
   });
   for (const transaction of incomeTransactions) {
     const month = String(transaction.date).slice(0, 7);
-    monthlyIncome.set(month, (monthlyIncome.get(month) || 0) + Math.abs(Number(transaction.amount || 0)));
+    const amount = Math.abs(Number(transaction.amount || 0));
+    const source = incomeSource(transaction);
+    monthlyIncome.set(month, (monthlyIncome.get(month) || 0) + amount);
+    incomeSourceMap.set(source.key, { ...source, amount: (incomeSourceMap.get(source.key)?.amount || 0) + amount });
     transactionRows.push({
       id: transaction.id || transaction.plaid_transaction_id,
       name: transaction.merchant_name || transaction.name || 'Income',
       date: transaction.date,
-      amount: Math.abs(Number(transaction.amount || 0)),
-      category: 'Income',
+      amount,
+      category: source.label,
       bucket: 'income',
-      flowKey: 'income',
-      flowLabel: 'Net income',
+      flowKey: source.key,
+      flowLabel: source.label,
       flowGroup: 'income'
     });
   }
@@ -823,9 +843,10 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
     .map((month) => ({ month, amount: monthly.get(month) || 0, income: monthlyIncome.get(month) || 0, pre_tax_retirement: monthlyPreTaxRetirement.get(month) || 0 }))
     .sort((a, b) => a.month.localeCompare(b.month));
   const income = [...monthlyIncome.values()].reduce((sum, amount) => sum + amount, 0);
+  const incomeSources = [...incomeSourceMap.values()].sort((a, b) => b.amount - a.amount);
   const preTaxRetirement = [...monthlyPreTaxRetirement.values()].reduce((sum, amount) => sum + amount, 0);
   const actualSpendCategories = [...actualSpendCategoryMap.values()].sort((a, b) => b.amount - a.amount);
-  return { range, startDate, endDate, completedMonths, total, income, actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, preTaxRetirement, monthlyAverage: total / monthCount, categories: categoryRows, topMerchants, monthly: monthlyRows, transactions: transactionRows };
+  return { range, startDate, endDate, completedMonths, total, income, incomeSources, actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, preTaxRetirement, monthlyAverage: total / monthCount, categories: categoryRows, topMerchants, monthly: monthlyRows, transactions: transactionRows };
 }
 
 function monthId(dateString) {

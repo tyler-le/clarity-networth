@@ -574,13 +574,14 @@ function spendingForSelectedMonth(data) {
   const planTransactions = transactions.filter((transaction) => !['income', 'transfer', 'pre_tax_retirement'].includes(transaction.bucket));
   const total = planTransactions.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const income = transactions.filter((transaction) => transaction.bucket === 'income').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  const incomeSources = flowCategoryRows(transactions.filter((transaction) => transaction.flowGroup === 'income'));
   const actualSpend = planTransactions.filter((transaction) => !['savings', 'investments'].includes(transaction.bucket)).reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const savings = planTransactions.filter((transaction) => transaction.bucket === 'savings').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const investments = planTransactions.filter((transaction) => transaction.bucket === 'investments').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const savingsAndInvestments = planTransactions.filter((transaction) => ['savings', 'investments'].includes(transaction.bucket)).reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const actualSpendCategories = flowCategoryRows(planTransactions.filter((transaction) => transaction.flowGroup === 'actual_spend'));
   const preTaxRetirement = Number((data.monthly || []).find((row) => row.month === state.spendingMonth)?.pre_tax_retirement || 0);
-  return { ...data, total, income, actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, preTaxRetirement, monthlyAverage: total, categories: allocationRows(planTransactions), transactions };
+  return { ...data, total, income, incomeSources, actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, preTaxRetirement, monthlyAverage: total, categories: allocationRows(planTransactions), transactions };
 }
 
 function flowCategoryRows(transactions) {
@@ -655,8 +656,12 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const compact = availableWidth < 520;
   const tablet = !compact && availableWidth < 760;
   const allSpendCategories = data.actualSpendCategories || [];
+  const incomeSources = (data.incomeSources?.length ? data.incomeSources : [{ key: 'income', label: 'Income received', amount: income }])
+    .filter((source) => Number(source.amount || 0) > 0);
   const actualCategories = expanded ? allSpendCategories : allSpendCategories.slice(0, 4);
-  const width = compact ? 390 : tablet ? 620 : 920, height = expanded ? Math.max(260, actualCategories.length * 50 + 20) : 216;
+  const width = compact ? 390 : tablet ? 620 : 920;
+  const sourceHeight = Math.max(216, incomeSources.length * 50 + 16);
+  const height = expanded ? Math.max(260, actualCategories.length * 50 + 20, sourceHeight) : sourceHeight;
   // On phones, equal-width nodes create a steadier left-to-right reading
   // path. Longer labels wrap within their own node instead of making the
   // source feel visually less important.
@@ -665,7 +670,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const destinationX = compact ? 286 : tablet ? 340 : 548, destinationW = compact ? 96 : tablet ? 196 : 332;
   const displayShare = (value, isIncome = false) => !income ? '—' : `${Math.round((isIncome ? 1 : value / income) * 100)}%`;
   const block = (x, y, w, color, label, value, category = '', isIncome = false) => {
-    const mobileLines = compact ? ({ 'Take-home income': ['Take-home', 'income'], 'Actual spend': ['Actual', 'spend'], 'Housing & bills': ['Housing', '& bills'], 'Food & dining': ['Food', '& dining'] }[label] || [label]) : [label];
+    const mobileLines = compact ? ({ 'Income received': ['Income', 'received'], 'Other income': ['Other', 'income'], 'Business & freelance': ['Business', '& freelance'], 'Actual spend': ['Actual', 'spend'], 'Housing & bills': ['Housing', '& bills'], 'Food & dining': ['Food', '& dining'] }[label] || [label]) : [label];
     const wrapped = mobileLines.length > 1;
     const height = wrapped ? 48 : 36;
     const labelMarkup = mobileLines.map((line, index) => `<tspan x="${x + 11}" dy="${index ? 10 : 0}">${escapeHtml(line)}</tspan>`).join('');
@@ -681,10 +686,17 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     const thickness = value ? 3 + Math.sqrt(value / largestFlow) * 45 : 0;
     return `<path class="cashflow-flow" d="M ${fromX} ${fromY} C ${fromX + (toX - fromX) * .42} ${fromY}, ${toX - (toX - fromX) * .42} ${toY}, ${toX} ${toY}" fill="none" stroke="${color}" stroke-opacity=".34" stroke-width="${thickness}" stroke-linecap="round"/>`;
   };
-  const incomeY = 89, spendY = 18, saveY = 90, investY = 162;
-  let paths = flow(sourceX + sourceW, incomeY + 18, middleX, spendY + 18, actualSpend, 'var(--outflow)');
-  paths += flow(sourceX + sourceW, incomeY + 18, middleX, saveY + 18, savings, 'var(--save)');
-  paths += flow(sourceX + sourceW, incomeY + 18, middleX, investY + 18, investments, 'var(--invest)');
+  const spendY = 18, saveY = 90, investY = 162;
+  const sourceStart = incomeSources.length === 1 ? 89 : 8;
+  const sourceStep = incomeSources.length === 1 ? 0 : 50;
+  let paths = '';
+  incomeSources.forEach((source, index) => {
+    const share = income ? Number(source.amount || 0) / income : 0;
+    const y = sourceStart + index * sourceStep;
+    paths += flow(sourceX + sourceW, y + 18, middleX, spendY + 18, actualSpend * share, 'var(--outflow)');
+    paths += flow(sourceX + sourceW, y + 18, middleX, saveY + 18, savings * share, 'var(--save)');
+    paths += flow(sourceX + sourceW, y + 18, middleX, investY + 18, investments * share, 'var(--invest)');
+  });
   let categories = '';
   actualCategories.forEach((row, index) => {
     const y = 12 + index * (expanded || compact ? 50 : 47);
@@ -694,7 +706,8 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const hiddenCategoryCount = allSpendCategories.length - actualCategories.length;
   const moreLabel = compact ? `+${hiddenCategoryCount} more` : `${hiddenCategoryCount} more in expanded view`;
   const more = !expanded && hiddenCategoryCount > 0 ? `<text x="${destinationX + 4}" y="${height - 5}" class="cashflow-label cashflow-more">${moreLabel}</text>` : '';
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Take-home income split into spending, saving, and investing">${paths}${block(sourceX, incomeY, sourceW, 'var(--income)', 'Take-home income', income, 'income', true)}${block(middleX, spendY, middleW, 'var(--outflow)', 'Actual spend', actualSpend, 'actual_spend')}${block(middleX, saveY, middleW, 'var(--save)', 'Save', savings, 'savings')}${block(middleX, investY, middleW, 'var(--invest)', 'Invest', investments, 'investments')}${categories}${more}</svg>`;
+  const sourceBlocks = incomeSources.map((source, index) => block(sourceX, sourceStart + index * sourceStep, sourceW, 'var(--income)', source.label, source.amount, source.key, true)).join('');
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Income sources split into spending, saving, and investing">${paths}${sourceBlocks}${block(middleX, spendY, middleW, 'var(--outflow)', 'Actual spend', actualSpend, 'actual_spend')}${block(middleX, saveY, middleW, 'var(--save)', 'Save', savings, 'savings')}${block(middleX, investY, middleW, 'var(--invest)', 'Invest', investments, 'investments')}${categories}${more}</svg>`;
 }
 
 function renderSpending(data) {
