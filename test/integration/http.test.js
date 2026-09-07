@@ -106,7 +106,7 @@ integrationTest('serves a complete public demo without a session', async () => {
   assert.ok(response.body.retirement.standard > 0);
   assert.ok(response.body.retirement.projectedAtRetirement > 0);
   assert.equal(response.body.dashboard.debtPayoff.strategy, 'avalanche');
-  assert.equal(response.body.dashboard.debtPayoff.priority.name, 'Credit Card');
+  assert.equal(response.body.dashboard.debtPayoff.priority.name, 'Chase Sapphire Preferred');
 });
 
 integrationTest('falls back safely for unsupported public-demo timeframes', async () => {
