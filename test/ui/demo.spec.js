@@ -119,6 +119,18 @@ test('accounts makes a simple debt payoff choice actionable without a separate d
   await expect(card).toContainText('Credit Card, your smallest balance');
 });
 
+test('demo visitors can try a goal without creating personal data', async ({ page }) => {
+  await openDemo(page);
+  await page.locator('#goalAction').click();
+  await page.locator('#goalName').fill('Travel fund');
+  await page.locator('#goalSource').selectOption('cash');
+  await page.locator('#goalTarget').fill('20000');
+  await page.locator('#goalForm').getByRole('button', { name: 'Add goal' }).click();
+  await expect(page.locator('#goalTitle')).toHaveText('Travel fund');
+  await expect(page.locator('#goalDetail')).toContainText('Demo only');
+  await expect(page.locator('#goalAction')).toHaveText('Remove');
+});
+
 test('cash-flow interactions lead from visual category to the relevant activity', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');
@@ -301,7 +313,7 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await goToView(page, 'retirement');
   await expect(page.locator('#retirementPath')).toContainText('Emergency fund');
   await expect(page.locator('#retirementPath')).toContainText('Six-month buffer');
-  await expect(page.locator('#retirementPath')).toContainText('Amount needed today to fund retirement by your target age without further contributions');
+  await expect(page.locator('#retirementPath')).toContainText('Amount needed today to fund retirement by age 65 without further contributions');
   await expect(page.locator('#retirementPath .retirement-milestone')).toHaveCount(4);
   await expect(page.locator('#retirementProjectionContext')).toContainText(/On pace for \$[\d,]+ by age 65/);
   await expect(page.getByText('Retirement spending targets')).toBeVisible();

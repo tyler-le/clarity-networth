@@ -23,6 +23,7 @@ const state = {
   investmentSort: 'value',
   expandedAccountGroups: new Set(),
   holdingsExpanded: false,
+  demoGoal: null,
   view: 'overview',
   returnView: 'overview',
   demoPreview: false
@@ -174,12 +175,13 @@ function renderClarityLayer(data) {
     $('#clarityCheckinAction').textContent = checkin.actionLabel || 'View details';
     $('#clarityCheckinMark').textContent = checkin.tone === 'attention' ? '!' : checkin.tone === 'watch' ? '•' : '✦';
   }
-  const goals = data.goals || [];
+  const goals = state.demoPreview && state.demoGoal ? [state.demoGoal] : (data.goals || []);
   const goal = goals[0];
   $('#goalAction').textContent = goal ? 'Remove' : 'Add goal';
   if (goal) {
     $('#goalTitle').textContent = goal.name;
-    $('#goalDetail').textContent = goal.source === 'debt' ? `${fmt.format(goal.current)} remaining of ${fmt.format(goal.target)} starting debt` : `${fmt.format(goal.current)} of ${fmt.format(goal.target)}`;
+    const detail = goal.source === 'debt' ? `${fmt.format(goal.current)} remaining of ${fmt.format(goal.target)} starting debt` : `${fmt.format(goal.current)} of ${fmt.format(goal.target)}`;
+    $('#goalDetail').textContent = state.demoPreview ? `Demo only · ${detail}` : detail;
     $('#goalProgress').style.width = `${Math.round(goal.progress * 100)}%`;
   } else { $('#goalTitle').textContent = 'Set a goal'; $('#goalDetail').textContent = 'Track a cash, investment, net-worth, or debt goal from your real balances.'; $('#goalProgress').style.width = '0%'; }
   const attention = (data.connectionHealth || []).filter((item) => item.state !== 'healthy');
@@ -191,6 +193,17 @@ function renderClarityLayer(data) {
     $('#connectionAttentionTitle').textContent = stale.state === 'stale' ? `${stale.institution_name} update is delayed` : `${stale.institution_name} needs attention`;
     $('#connectionAttentionDetail').textContent = stale.state === 'stale' ? 'This connection has not updated recently. We will keep retrying automatically.' : 'This connection could not update. We will retry automatically.';
   }
+}
+
+function demoGoalProgress({ name, source, target }) {
+  const accounts = state.dashboard?.accounts || [];
+  const totalFor = (type) => accounts.filter((account) => account.type === type).reduce((sum, account) => sum + Math.max(0, Number(account.current_balance || 0)), 0);
+  const current = source === 'cash' ? totalFor('depository')
+    : source === 'investments' ? totalFor('investment')
+      : source === 'debt' ? accounts.filter(isDebt).reduce((sum, account) => sum + Math.max(0, Number(account.current_balance || 0)), 0)
+        : Number(state.dashboard?.summary?.netWorth || 0);
+  const debt = source === 'debt';
+  return { id: 'demo-goal', name, source, target, current, progress: target ? Math.min(1, debt ? Math.max(0, 1 - current / target) : Math.max(0, current / target)) : 0 };
 }
 
 function renderRecurringCharges(recurring = {}) {
@@ -870,7 +883,7 @@ function renderRetirement(data) {
     const interactive = ['coast', 'standard'].includes(step.key);
     const tag = interactive ? 'button' : 'div';
     const action = interactive ? ` type="button" data-retirement-milestone="${step.key}" aria-label="Learn about ${escapeHtml(step.name)}"` : '';
-    const detail = step.key === 'coast' ? 'Amount needed today to fund retirement by your target age without further contributions'
+    const detail = step.key === 'coast' ? `Amount needed today to fund retirement by age ${data.retirementAge} without further contributions`
       : step.key === 'standard' ? 'Enough invested to cover retirement spending'
         : step.detail;
     return `<${tag} class="retirement-milestone ${step.complete ? 'complete' : ''}"${action}><span class="retirement-milestone-name">${step.complete ? '✓ ' : ''}${escapeHtml(step.name)}</span><strong>${fmt.format(step.target || 0)}</strong><small class="retirement-milestone-detail">${escapeHtml(detail)}</small><i aria-label="${Math.round(Math.min(100, Number(step.progress || 0)))}% of target"><b style="width:${Math.min(100, Number(step.progress || 0)).toFixed(1)}%"></b></i><em>${escapeHtml(estimatedLabel(step.estimatedMonths, step.complete))}</em></${tag}>`;
@@ -1317,14 +1330,27 @@ $('#manualAccountDelete').addEventListener('click', async () => {
 });
 $('#goalAction').addEventListener('click', async () => {
   const goal = state.dashboard?.goals?.[0];
-  if (goal) { if (!window.confirm(`Remove “${goal.name}”?`)) return; try { await api(`/api/goals/${encodeURIComponent(goal.id)}`, { method: 'DELETE' }); await loadAll(); showNotice('Goal removed.', 'success'); } catch (error) { showNotice(error.message); } return; }
+  const activeGoal = state.demoPreview ? state.demoGoal : goal;
+  if (activeGoal) {
+    if (!window.confirm(`Remove “${activeGoal.name}”?`)) return;
+    if (state.demoPreview) { state.demoGoal = null; renderClarityLayer(state.dashboard); showNotice('Demo goal removed.', 'success'); return; }
+    try { await api(`/api/goals/${encodeURIComponent(activeGoal.id)}`, { method: 'DELETE' }); await loadAll(); showNotice('Goal removed.', 'success'); } catch (error) { showNotice(error.message); } return;
+  }
   $('#goalName').value = ''; $('#goalSource').value = 'cash'; $('#goalTarget').value = ''; $('#goalDialog').showModal(); $('#goalName').focus();
 });
 $('#goalClose').addEventListener('click', () => $('#goalDialog').close());
 $('#goalCancel').addEventListener('click', () => $('#goalDialog').close());
 $('#goalForm').addEventListener('submit', async (event) => {
   event.preventDefault();
-  try { await api('/api/goals', { method: 'POST', body: JSON.stringify({ name: $('#goalName').value, source: $('#goalSource').value, target: $('#goalTarget').value }) }); $('#goalDialog').close(); await loadAll(); showNotice('Goal added.', 'success'); } catch (error) { showNotice(error.message); }
+  const goal = { name: $('#goalName').value.trim(), source: $('#goalSource').value, target: Number($('#goalTarget').value) };
+  if (!goal.name || !Number.isFinite(goal.target) || goal.target <= 0) { showNotice('Enter a name and goal amount.'); return; }
+  try {
+    if (state.demoPreview) {
+      state.demoGoal = demoGoalProgress(goal);
+      $('#goalDialog').close(); renderClarityLayer(state.dashboard); showNotice('Demo goal added. It resets when you leave the demo.', 'success'); return;
+    }
+    await api('/api/goals', { method: 'POST', body: JSON.stringify(goal) }); $('#goalDialog').close(); await loadAll(); showNotice('Goal added.', 'success');
+  } catch (error) { showNotice(error.message); }
 });
 $('#connectionAttentionAction').addEventListener('click', () => setView('profile'));
 $('#clarityCheckinAction').addEventListener('click', () => setView($('#clarityCheckin').dataset.action || 'overview'));
