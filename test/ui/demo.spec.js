@@ -131,6 +131,17 @@ test('a new visitor can explore the complete demo without signing in @critical',
   expect(pageErrors).toEqual([]);
 });
 
+test('net worth opens as a concise financial briefing', async ({ page }) => {
+  await openDemo(page);
+  await expect(page.locator('#netWorthCard')).toBeVisible();
+  await expect(page.locator('#balanceSheetCard')).toContainText(/what you own|what you owe/i);
+  await expect(page.locator('#netWorthMovement')).toContainText(/net worth|tracking starts/i);
+  await expect(page.locator('#overviewGlance')).toContainText(/cash.*invested.*debt/is);
+  await expect(page.locator('#clarityCheckin')).toBeVisible();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
+  expect(overflow).toBe(false);
+});
+
 test('cash flow shows identifiable income inlets that highlight their flow', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');

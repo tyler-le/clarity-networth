@@ -80,19 +80,18 @@
             <div class="chart-context hidden" id="netWorthChartContext"><span id="netWorthChartDate"></span></div>
             <div class="line-chart" id="netWorthChart" aria-label="Scrubbable net worth history"></div>
           </article>
-          <article class="card split-card">
-            <div>
-              <div class="card-label">Assets</div>
-              <div class="metric" id="assets">—</div>
-            </div>
-            <div class="divider"></div>
-            <div>
-              <div class="card-label">Liabilities</div>
-              <div class="metric" id="liabilities">—</div>
-            </div>
+          <article class="card balance-sheet-card" id="balanceSheetCard">
+            <div class="card-label">Your position</div>
+            <div class="balance-sheet-row"><span>What you own</span><strong class="positive" id="assets">—</strong></div>
+            <div class="balance-sheet-row"><span>What you owe</span><strong class="negative" id="liabilities">—</strong></div>
+            <p id="balanceSheetContext">A clear view of your assets and debt.</p>
           </article>
         </div>
         <article class="card clarity-checkin hidden" id="clarityCheckin"><span class="checkin-mark" id="clarityCheckinMark" aria-hidden="true">✦</span><div><div class="card-label">Your next step</div><strong id="clarityCheckinTitle">—</strong><p id="clarityCheckinDetail"></p></div><button class="text-button" id="clarityCheckinAction">View your path</button></article>
+        <div class="overview-briefing-grid">
+          <article class="card overview-movement" id="netWorthMovement"><div class="card-label">What changed</div><strong id="netWorthMovementTitle">Tracking starts today</strong><p id="netWorthMovementDetail">We’ll show what moved your net worth as verified history builds.</p></article>
+          <article class="card overview-glance" id="overviewGlance"><div class="card-label">At a glance</div><div class="overview-glance-values"><div><span>Cash</span><strong id="overviewCash">—</strong></div><div><span>Invested</span><strong id="overviewInvested">—</strong></div><div><span>Debt</span><strong id="overviewDebt">—</strong></div></div></article>
+        </div>
         <div class="networth-insights">
           <article class="card connection-attention hidden" id="connectionAttention"><div><div class="card-label">Connection update</div><strong id="connectionAttentionTitle"></strong><p id="connectionAttentionDetail"></p></div><button class="text-button" id="connectionAttentionAction">View connections</button></article>
           <article class="card networth-insight goal-insight" id="goalInsight"><div><div class="card-label">Your focus</div><strong id="goalTitle">Set a goal</strong><p id="goalDetail">Track a cash, investment, net-worth, or debt goal from your real balances.</p><i class="goal-progress"><b id="goalProgress"></b></i></div><button class="text-button" id="goalAction">Add goal</button></article>

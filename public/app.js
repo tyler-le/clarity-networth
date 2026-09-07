@@ -245,6 +245,41 @@ function restoreNetWorthHero() {
   $('#netWorthDelta').textContent = `${delta >= 0 ? '+' : '−'}${fmt.format(Math.abs(delta))} since ${periodStart}${snaps.some((row) => row.source === 'reconstructed') ? ' · Includes estimated history' : ''}`;
 }
 
+function renderOverviewBriefing(data) {
+  const accounts = data.accounts || [];
+  const cash = accounts.filter((account) => account.type === 'depository').reduce((sum, account) => sum + Math.max(0, Number(account.current_balance || 0)), 0);
+  const invested = accounts.filter((account) => account.type === 'investment').reduce((sum, account) => sum + Math.max(0, Number(account.current_balance || 0)), 0);
+  const debt = accounts.filter(isDebt).reduce((sum, account) => sum + Math.max(0, Number(account.current_balance || 0)), 0);
+  $('#overviewCash').textContent = fmt.format(cash);
+  $('#overviewInvested').textContent = fmt.format(invested);
+  $('#overviewDebt').textContent = fmt.format(debt);
+
+  const runway = data.runway || {};
+  $('#balanceSheetContext').textContent = runway.runwayMonths != null
+    ? `${Math.min(99, Number(runway.runwayMonths)).toFixed(1)} months of essential costs in cash.`
+    : 'Your assets and debt, based on your connected accounts.';
+
+  const snapshots = visibleSnapshots(data.snapshots || []);
+  const movement = $('#netWorthMovement');
+  if (snapshots.length < 2) {
+    movement.dataset.tone = 'steady';
+    $('#netWorthMovementTitle').textContent = 'Tracking starts today';
+    $('#netWorthMovementDetail').textContent = 'Your connected balances are saved daily, so the story behind your net worth grows from here.';
+    return;
+  }
+  const baseline = snapshots[0];
+  const current = data.summary || {};
+  const netChange = Number(current.netWorth || 0) - Number(baseline.net_worth || 0);
+  const assetChange = Number(current.assets || 0) - Number(baseline.assets || 0);
+  const debtChange = Number(current.liabilities || 0) - Number(baseline.liabilities || 0);
+  movement.dataset.tone = netChange > 0 ? 'positive' : netChange < 0 ? 'watch' : 'steady';
+  $('#netWorthMovementTitle').textContent = netChange === 0 ? 'Net worth was steady' : `Net worth ${netChange > 0 ? 'rose' : 'fell'} ${fmt.format(Math.abs(netChange))}`;
+  const assetText = assetChange === 0 ? 'Assets were steady' : `Assets ${assetChange > 0 ? 'rose' : 'fell'} ${fmt.format(Math.abs(assetChange))}`;
+  const debtText = debtChange === 0 ? 'debt was steady' : `debt ${debtChange < 0 ? 'fell' : 'rose'} ${fmt.format(Math.abs(debtChange))}`;
+  const estimated = snapshots.some((snapshot) => ['estimated', 'reconstructed'].includes(snapshot.source));
+  $('#netWorthMovementDetail').textContent = `${assetText}; ${debtText}.${estimated ? ' Earlier history includes reconciled estimates.' : ''}`;
+}
+
 function renderClarityLayer(data) {
   const checkin = data.clarityCheckin || {};
   $('#clarityCheckin').classList.toggle('hidden', !checkin.available);
@@ -1368,6 +1403,7 @@ function renderDashboard() {
   $('#liabilities').textContent = `−${fmt.format(s.liabilities)}`;
   $('#assets').classList.add('positive');
   $('#liabilities').classList.add('negative');
+  renderOverviewBriefing(d);
   if (state.view === 'overview') renderNetWorthChartWhenVisible();
   renderAccounts(d.accounts || []);
   renderDebtPayoff(d.debtPayoff);
