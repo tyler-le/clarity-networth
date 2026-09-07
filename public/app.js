@@ -873,10 +873,11 @@ function historyForRange(history, range = state.holdingHistoryRange) {
   return filtered.length ? filtered : history.slice(-1);
 }
 
-function renderHoldingHistoryChart(history, kind) {
+function renderHoldingHistoryChart(history, kind, emptyMessage = null) {
   const el = $('#holdingHistoryChart');
   if (!history?.length || el.clientWidth < 80) {
-    el.innerHTML = '<div class="holding-history-empty"><b>History is still building</b><span>We will show this once we have enough verified position and price data.</span></div>';
+    const message = emptyMessage || 'Your institution has not provided enough reported activity to build a trustworthy personal history.';
+    el.innerHTML = `<div class="holding-history-empty"><b>Personal history unavailable</b><span>${escapeHtml(message)}</span></div>`;
     return;
   }
   const pointsData = historyForRange(history, state.holdingHistoryRange);
@@ -929,7 +930,7 @@ function renderHoldingHistoryDetail() {
   $('#holdingHistoryNote').textContent = isMarket ? 'Market price does not include your purchases, sales, or contributions.' : (data.detail || data.reason || 'Your position history is unavailable.');
   // A dialog has no stable width until the browser has painted it. Defer chart
   // measurement one frame so mobile and desktop both receive a real canvas.
-  requestAnimationFrame(() => renderHoldingHistoryChart(history, isMarket ? 'market' : 'position'));
+  requestAnimationFrame(() => renderHoldingHistoryChart(history, isMarket ? 'market' : 'position', data.reason));
   const positions = (state.investments?.positions || []).filter((position) => data.accountId ? position.account_id === data.accountId : data.ticker && String(position.ticker || '').toUpperCase() === data.ticker);
   const accounts = new Map((state.investments?.accounts || []).map((account) => [account.account_id, account]));
   const canEditClass = !state.demoPreview && !state.dashboard?.demoMode;

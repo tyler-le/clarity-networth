@@ -312,7 +312,16 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
   const transactions = (store.investment_transactions || []).filter((transaction) => transaction.date <= endDate && (accountId ? transaction.account_id === accountId : (relevantIds.has(transaction.security_id) || (normalizedTicker && String(transaction.ticker || '').toUpperCase() === normalizedTicker))));
   const observedStart = observedStartDate(positions, transactions, store.investment_link_events || [], { requireReportedTrades: true });
   if (!observedStart) {
-    return { state: 'unavailable', label, ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null, value, costBasis, gain: costBasis == null ? null : value - costBasis, reason: 'We need reported trade history for every holding before we can show a trustworthy personal trend.', history: [], market: [] };
+    const itemIds = new Set(store.accounts.filter((account) => positions.some((position) => position.account_id === account.plaid_account_id)).map((account) => account.item_id));
+    const extractionPending = (store.items || []).some((item) => itemIds.has(item.id) && item.investment_history_state === 'preparing');
+    return {
+      state: 'unavailable', label, ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null, value,
+      costBasis, gain: costBasis == null ? null : value - costBasis,
+      reason: extractionPending
+        ? 'We are retrieving up to one year of reported activity from your institution. Your chart will appear only if every current holding can be reconciled.'
+        : 'Your institution did not provide reported trade history for every current holding, so we cannot show a trustworthy personal trend.',
+      history: [], market: []
+    };
   }
   const requestedStart = start.toISOString().slice(0, 10);
   const firstDate = observedStart > requestedStart ? observedStart : requestedStart;
@@ -346,7 +355,7 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
     history,
     market,
     reason: state === 'ready' ? null : 'A personal history will appear after we have enough position and price history.',
-    detail: history.length ? `Your position starts on ${observedStart}, the first date supported by reported trades or your linked-account baseline.` : null
+    detail: history.length ? `Your position starts on ${observedStart}, the first date supported by reported trades for every current holding.` : null
   };
 }
 

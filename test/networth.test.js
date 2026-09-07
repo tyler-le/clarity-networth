@@ -333,6 +333,20 @@ test('a holding without reported trades does not receive an inferred personal tr
   assert.equal(result.state, 'unavailable');
 });
 
+test('a pending provider extraction never creates a personal investment history before reported trades arrive', () => {
+  const store = {
+    items: [{ id: 'item-401k', investment_history_state: 'preparing' }],
+    accounts: [{ item_id: 'item-401k', plaid_account_id: '401k', type: 'investment', name: 'New job 401(k)', hidden: false }],
+    positions: [{ account_id: '401k', security_id: 'fund', ticker: 'VTI', name: 'Fund', type: 'etf', quantity: 8, value: 960 }],
+    investment_transactions: [],
+    market_prices: { VTI: { '2025-09-01': 100, '2026-01-01': 105, '2026-09-01': 120 } }
+  };
+  const result = investmentDetailHistory(store, { accountId: '401k', years: 1 });
+  assert.equal(result.state, 'unavailable');
+  assert.deepEqual(result.history, []);
+  assert.match(result.reason, /retrieving up to one year/i);
+});
+
 test('refreshing derived portfolio history removes an old overextended reconstruction', () => {
   const store = {
     positions: [{ account_id: '401k', security_id: 'fund', ticker: 'VTI', type: 'etf', quantity: 5 }],

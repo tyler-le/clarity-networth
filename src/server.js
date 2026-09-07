@@ -435,7 +435,17 @@ async function syncItem(store, item) {
   // Transaction availability can lag a connection or institution update.
   // Keep a successful balance refresh instead of failing the entire item.
   try { await syncTransactionsForItem(store, item); } catch (error) { console.warn('Transactions sync failed:', error.message); }
-  try { await syncRetirementContributionsForItem(store, item); } catch (error) { console.warn('Investment contribution sync unavailable:', error.message); }
+  // Investments was historically consented in Link, then added on demand. Ask
+  // Plaid to prepare the initial extraction asynchronously once, rather than
+  // blocking a newly connected account for up to two minutes or silently
+  // settling for a connection-day balance. A HISTORICAL_UPDATE webhook will
+  // re-enter this sync once the provider has finished preparing its records.
+  const hasInvestmentAccount = store.accounts.some((account) => account.item_id === item.id && account.type === 'investment');
+  try {
+    await syncRetirementContributionsForItem(store, item, {
+      asyncUpdate: hasInvestmentAccount && !item.investment_history_requested_at
+    });
+  } catch (error) { console.warn('Investment contribution sync unavailable:', error.message); }
   item.last_synced_at = new Date().toISOString();
   delete item.last_sync_error_at;
   delete item.last_sync_error_code;
@@ -486,6 +496,36 @@ async function scheduledDailySync() {
         console.error('Daily sync failed for a financial store:', error.message);
         trackLaunchEvent({ storageKey }, 'sync_failed');
       }
+    });
+  }
+}
+
+// A person should not have to discover an investment-history setting after
+// they connect. On boot, request Plaid's one-time asynchronous extraction for
+// legacy Items that predate this behavior. This is deliberately narrower than
+// a full account sync: it only touches Items with an already-known investment
+// account and only once per Item.
+async function requestPendingInvestmentHistory() {
+  let storageKeys = listUserStorageKeys();
+  if (databaseEnabled()) storageKeys = [...new Set([...storageKeys, ...(await listDatabaseStoreKeys())])];
+  for (const storageKey of storageKeys) {
+    await queueUserSync(storageKey, async () => {
+      const persisted = databaseEnabled() ? await readDatabaseStore(storageKey) : null;
+      const store = normalizeStore(persisted || readStore(storageKey));
+      let changed = false;
+      for (const item of store.items.filter((candidate) => !candidate.demo && !candidate.investment_history_requested_at)) {
+        const hasInvestmentAccount = store.accounts.some((account) => account.item_id === item.id && account.type === 'investment');
+        if (!hasInvestmentAccount) continue;
+        try {
+          await syncRetirementContributionsForItem(store, item, { asyncUpdate: true });
+          changed = true;
+        } catch (error) {
+          // A provider issue must not block startup or prevent other people
+          // from receiving the request. The normal daily sync will retry it.
+          console.warn('Investment history request unavailable:', error.message);
+        }
+      }
+      if (changed) await saveStoreByKey(storageKey, store);
     });
   }
 }
@@ -612,7 +652,11 @@ function plannedTransferTarget(store, transaction, bucket) {
   return null;
 }
 
-async function syncRetirementContributionsForItem(store, item) {
+function isPlaidProductNotReady(error) {
+  return String(error?.plaid?.error_code || '') === 'PRODUCT_NOT_READY';
+}
+
+async function syncRetirementContributionsForItem(store, item, { asyncUpdate = false } = {}) {
   const access_token = decrypt(item.access_token_enc);
   const end_date = new Date().toISOString().slice(0, 10);
   const start = new Date();
@@ -620,37 +664,59 @@ async function syncRetirementContributionsForItem(store, item) {
   const start_date = start.toISOString().slice(0, 10);
   let offset = 0;
   let total = Infinity;
+  let imported = 0;
   const accounts = new Map(store.accounts.map((account) => [account.plaid_account_id, account]));
+  const hasInvestmentAccount = [...accounts.values()].some((account) => account.item_id === item.id && account.type === 'investment');
+  if (!hasInvestmentAccount) return { state: 'not_applicable', imported: 0 };
   store.investment_transactions ||= [];
-  while (offset < total) {
-    const data = await plaidPost('/investments/transactions/get', { access_token, start_date, end_date, options: { count: 500, offset } });
-    total = Number(data.total_investment_transactions || 0);
-    const securities = new Map((data.securities || []).map((security) => [security.security_id, security]));
-    for (const transaction of data.investment_transactions || []) {
-      const security = securities.get(transaction.security_id) || {};
-      const historical = historicalSecurity({ ticker: security.ticker_symbol, name: security.name, type: security.type || null });
-      const investmentId = transaction.investment_transaction_id;
-      const existingInvestment = store.investment_transactions.find((record) => record.id === investmentId);
-      const recorded = { id: investmentId, item_id: item.id, account_id: transaction.account_id, security_id: transaction.security_id || null, ticker: historical.ticker || null, security_name: security.name || null, security_type: historical.type || null, date: transaction.date, quantity: Number(transaction.quantity || 0), price: Number(transaction.price || 0), amount: Number(transaction.amount || 0), type: transaction.type || null, subtype: transaction.subtype || null };
-      if (existingInvestment) Object.assign(existingInvestment, recorded); else store.investment_transactions.push(recorded);
-      const account = accounts.get(transaction.account_id);
-      const name = String(transaction.name || '');
-      const payrollBenefitAccount = /401\(?k\)?|403\(?b\)?|457|retirement|roth|\bira\b|\bhsa\b|health savings/i.test(`${account?.subtype || ''} ${account?.name || ''}`);
-      // Do not treat trades, dividends, or price changes as plan contributions.
-      const contribution = /contribution|employee.*deferral|payroll.*deferral|401\(?k\)?.*deposit|ira.*deposit|hsa.*deposit|health savings.*deposit/i.test(name);
-      if (!payrollBenefitAccount || !contribution) continue;
-      const plaid_transaction_id = `investment:${transaction.investment_transaction_id}`;
-      const existing = store.transactions.find((record) => record.plaid_transaction_id === plaid_transaction_id);
-      const normalized = {
-        id: existing?.id || crypto.randomUUID(), item_id: item.id, plaid_transaction_id, account_id: transaction.account_id,
-        merchant_name: name, name, amount: Math.abs(Number(transaction.amount || 0)), date: transaction.date,
-        bucket: 'investments', excluded: existing?.excluded || false, pending: false,
-        pfc_primary: 'RETIREMENT_CONTRIBUTION', pfc_detailed: '', source: 'investment_transaction', demo: false
-      };
-      if (existing) Object.assign(existing, normalized); else store.transactions.push(normalized);
+  try {
+    while (offset < total) {
+      const data = await plaidPost('/investments/transactions/get', {
+        access_token,
+        start_date,
+        end_date,
+        options: { count: 500, offset, ...(asyncUpdate && offset === 0 ? { async_update: true } : {}) }
+      });
+      if (asyncUpdate && offset === 0) item.investment_history_requested_at = new Date().toISOString();
+      total = Number(data.total_investment_transactions || 0);
+      const securities = new Map((data.securities || []).map((security) => [security.security_id, security]));
+      for (const transaction of data.investment_transactions || []) {
+        imported += 1;
+        const security = securities.get(transaction.security_id) || {};
+        const historical = historicalSecurity({ ticker: security.ticker_symbol, name: security.name, type: security.type || null });
+        const investmentId = transaction.investment_transaction_id;
+        const existingInvestment = store.investment_transactions.find((record) => record.id === investmentId);
+        const recorded = { id: investmentId, item_id: item.id, account_id: transaction.account_id, security_id: transaction.security_id || null, ticker: historical.ticker || null, security_name: security.name || null, security_type: historical.type || null, date: transaction.date, quantity: Number(transaction.quantity || 0), price: Number(transaction.price || 0), amount: Number(transaction.amount || 0), type: transaction.type || null, subtype: transaction.subtype || null };
+        if (existingInvestment) Object.assign(existingInvestment, recorded); else store.investment_transactions.push(recorded);
+        const account = accounts.get(transaction.account_id);
+        const name = String(transaction.name || '');
+        const payrollBenefitAccount = /401\(?k\)?|403\(?b\)?|457|retirement|roth|\bira\b|\bhsa\b|health savings/i.test(`${account?.subtype || ''} ${account?.name || ''}`);
+        // Do not treat trades, dividends, or price changes as plan contributions.
+        const contribution = /contribution|employee.*deferral|payroll.*deferral|401\(?k\)?.*deposit|ira.*deposit|hsa.*deposit|health savings.*deposit/i.test(name);
+        if (!payrollBenefitAccount || !contribution) continue;
+        const plaid_transaction_id = `investment:${transaction.investment_transaction_id}`;
+        const existing = store.transactions.find((record) => record.plaid_transaction_id === plaid_transaction_id);
+        const normalized = {
+          id: existing?.id || crypto.randomUUID(), item_id: item.id, plaid_transaction_id, account_id: transaction.account_id,
+          merchant_name: name, name, amount: Math.abs(Number(transaction.amount || 0)), date: transaction.date,
+          bucket: 'investments', excluded: existing?.excluded || false, pending: false,
+          pfc_primary: 'RETIREMENT_CONTRIBUTION', pfc_detailed: '', source: 'investment_transaction', demo: false
+        };
+        if (existing) Object.assign(existing, normalized); else store.transactions.push(normalized);
+      }
+      offset += 500;
     }
-    offset += 500;
+  } catch (error) {
+    if (asyncUpdate && isPlaidProductNotReady(error)) {
+      item.investment_history_requested_at = new Date().toISOString();
+      item.investment_history_state = 'preparing';
+      return { state: 'preparing', imported: 0 };
+    }
+    throw error;
   }
+  item.investment_history_state = 'ready';
+  item.investment_history_received_at = new Date().toISOString();
+  return { state: 'ready', imported };
 }
 
 async function backfillInvestmentHistory(store) {
@@ -1345,6 +1411,7 @@ async function startServer() {
     console.log(`Plaid: ${plaidConfigured() ? `configured (${process.env.PLAID_ENV || 'sandbox'})` : 'not configured — demo mode available'}`);
   });
   scheduleDailySync();
+  requestPendingInvestmentHistory().catch((error) => console.error('Investment history request scheduler failed:', error.message));
 }
 
 if (process.env.CLARITY_LISTEN !== 'false') {
