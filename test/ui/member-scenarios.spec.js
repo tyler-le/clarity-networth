@@ -89,11 +89,47 @@ test('a recently connected member sees distinct portfolio dates, never repeated 
   await goToView(page, 'investments');
   await expect(page.locator('#investmentChart svg')).toBeVisible();
   await expect(page.locator('#investmentContext')).toContainText('since Sep 5');
+  await expect(page.locator('[data-investment-range="all"]')).toHaveClass(/active/);
+  await expect(page.locator('[data-investment-range="1m"]')).toBeDisabled();
   const labels = await page.locator('#investmentChart .chart-x-axis-label').allTextContents();
   expect(labels.length).toBeGreaterThanOrEqual(2);
   expect(labels[0]).toBe('Sep 5');
   expect(labels.at(-1)).toBe('Sep 7');
   expect(labels.every((label) => /^Sep \d+$/.test(label))).toBe(true);
+  expect(new Set(labels).size).toBe(labels.length);
+});
+
+test('a short portfolio window spanning months still uses distinct calendar dates', async ({ page }) => {
+  await openSignedInScenario(page, (preview) => {
+    preview.investments.snapshots = [
+      { date: '2026-08-30', value: 215_200, source: 'verified' },
+      { date: '2026-09-05', value: 216_450, source: 'verified' },
+      { date: '2026-09-07', value: 217_745, source: 'verified' }
+    ];
+  });
+
+  await goToView(page, 'investments');
+  await expect(page.locator('#investmentChart svg')).toBeVisible();
+  const labels = await page.locator('#investmentChart .chart-x-axis-label').allTextContents();
+  expect(labels.length).toBeGreaterThanOrEqual(2);
+  expect(labels[0]).toBe('Aug 30');
+  expect(labels.at(-1)).toBe('Sep 7');
+  expect(new Set(labels).size).toBe(labels.length);
+});
+
+test('a one-month net-worth view never repeats a calendar label @critical', async ({ page }) => {
+  await openSignedInScenario(page, (preview) => {
+    preview.dashboard.snapshots = [
+      { date: '2026-09-05', net_worth: 237_200, source: 'verified' },
+      { date: '2026-09-06', net_worth: 240_663, source: 'verified' },
+      { date: '2026-09-07', net_worth: 240_603, source: 'verified' }
+    ];
+  });
+
+  await page.locator('[data-networth-range="1m"]').click();
+  const labels = await page.locator('#netWorthChart .chart-x-axis-label').allTextContents();
+  expect(labels.length).toBeGreaterThanOrEqual(2);
+  expect(labels.every((label) => /^[A-Z][a-z]{2} \d+$/.test(label))).toBe(true);
   expect(new Set(labels).size).toBe(labels.length);
 });
 

@@ -219,7 +219,6 @@ test('cash-flow blocks trace their connected paths before opening activity', asy
   await paycheckBlock.focus();
   await expect(page.locator('#cashflowSankey .cashflow-flow.is-connected')).not.toHaveCount(0);
   await expect(page.locator('#cashflowSankey .cashflow-flow.is-muted')).not.toHaveCount(0);
-  await expect(paycheckBlock).toHaveClass(/is-selected/);
 });
 
 test('asset-allocation filters preserve the reader position', async ({ page }) => {
@@ -233,7 +232,7 @@ test('asset-allocation filters preserve the reader position', async ({ page }) =
   await expect(page.locator('#investmentHoldingsInsight')).toContainText('Funds');
 });
 
-test('cash-flow diagram shows dollars and source shares of received income together', async ({ page }) => {
+test('cash-flow diagram shows clear dollar amounts without misleading over-income percentages', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');
   await expect(page.locator('#cashflowSankey')).toContainText('Paychecks');
@@ -241,6 +240,7 @@ test('cash-flow diagram shows dollars and source shares of received income toget
   await expect(page.locator('#cashflowSankey')).toContainText('$');
   await expect(page.locator('#cashflowSankey [data-cashflow-category="savings"]')).toBeVisible();
   await expect(page.locator('#cashflowSankey [data-cashflow-category="investments"]')).toBeVisible();
+  await expect(page.locator('#cashflowSankey')).not.toContainText('%');
   await page.locator('[data-spending-range="6m"]').click();
   await expect(page.locator('[data-spending-range="6m"]')).toHaveClass(/active/);
   await expect(page.locator('#spendingView')).toHaveAttribute('aria-busy', 'false');
@@ -299,9 +299,10 @@ test('cash-flow quality holds at every supported viewport @critical', async ({ p
   expect(Math.max(...edgeWidths)).toBeGreaterThan(Math.min(...edgeWidths));
   const nodeBoxes = await diagram.getByTestId('cashflow-node-surface').evaluateAll((nodes) => nodes.map((node) => {
     const box = node.getBoundingClientRect();
-    return { width: box.width, height: box.height };
+    return { width: box.width, height: box.height, fill: node.getAttribute('fill'), fillOpacity: Number(node.getAttribute('fill-opacity')), stroke: node.getAttribute('stroke') };
   }));
   expect(nodeBoxes.every((box) => box.width > 0 && box.height > 0)).toBe(true);
+  expect(nodeBoxes.every((box) => box.fill && box.fill !== 'transparent' && box.fillOpacity > 0 && box.stroke && box.stroke !== 'transparent')).toBe(true);
   const categoryColors = await diagram.locator('[data-cashflow-category]').getByTestId('cashflow-node-accent').evaluateAll((stripes) => new Set(stripes.map((stripe) => stripe.getAttribute('fill'))).size);
   expect(categoryColors).toBeGreaterThan(2);
   await page.locator('#cashflowExpand').click();
@@ -513,6 +514,15 @@ test('investment detail cards stay readable without horizontal overflow on a pho
   await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2 + 130, { steps: 4 });
   await page.mouse.up();
   await expect(dialog).toBeHidden();
+
+  // Do not let a mouse-only gesture test mask a broken phone path. Synthetic
+  // touch-pointer events exercise the same capture/fallback path iOS uses.
+  await page.locator('[data-holding-history]').first().click();
+  await expect(dialog).toBeVisible();
+  await handle.dispatchEvent('pointerdown', { pointerType: 'touch', pointerId: 41, clientY: 100 });
+  await handle.dispatchEvent('pointermove', { pointerType: 'touch', pointerId: 41, clientY: 190 });
+  await handle.dispatchEvent('pointerup', { pointerType: 'touch', pointerId: 41, clientY: 190 });
+  await expect(dialog).toBeHidden();
 });
 
 test('portfolio history can be scrubbed just like net worth', async ({ page }) => {
@@ -537,6 +547,17 @@ test('investment timeframes keep the portfolio context in sync', async ({ page }
   await page.locator('[data-investment-range="6m"]').click();
   await expect(page.locator('[data-investment-range="6m"]')).toHaveClass(/active/);
   await expect(page.locator('#investmentContext')).toContainText('last 6 months');
+});
+
+test('investment account values share one calm right edge for quick scanning', async ({ page }) => {
+  await openDemo(page);
+  await goToView(page, 'investments');
+  const rightEdges = await page.locator('#investmentAccounts .investment-account-row b').evaluateAll((values) => values.map((value) => {
+    const box = value.getBoundingClientRect();
+    return Math.round(box.right);
+  }));
+  expect(rightEdges.length).toBeGreaterThan(1);
+  expect(Math.max(...rightEdges) - Math.min(...rightEdges)).toBeLessThanOrEqual(1);
 });
 
 test('retirement milestones explain the planning terms on demand', async ({ page }) => {

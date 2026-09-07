@@ -232,6 +232,20 @@ test('investment reconstruction starts at a fully reported opening trade and use
   assert.ok(history.every((snapshot) => snapshot.source === 'reconstructed'));
 });
 
+test('a fully reported $1 investment-cash ledger can be reconstructed without inventing a deposit balance', () => {
+  const store = {
+    accounts: [{ plaid_account_id: 'brokerage', type: 'investment', current_balance: 100 }],
+    positions: [{ account_id: 'brokerage', security_id: 'cash', ticker: 'CASH', type: 'cash', quantity: 100, price: 1, value: 100 }],
+    investment_transactions: [{ account_id: 'brokerage', security_id: 'cash', ticker: 'CASH', security_type: 'cash', date: '2026-01-15', quantity: 100 }],
+    market_prices: {}, investment_position_snapshots: []
+  };
+  const result = investmentDetailHistory(store, { accountId: 'brokerage', years: 1 });
+  assert.equal(result.state, 'ready');
+  assert.equal(result.reconstructed, true);
+  assert.equal(result.history[0].date, '2026-01-15');
+  assert.equal(result.history.at(-1).value, 100);
+});
+
 test('investment reconstruction withholds an unknown opening balance inside the requested period', () => {
   const history = reconstructInvestmentHistory({
     positions: [{ security_id: 'fund', ticker: 'VFINX', type: 'mutual fund', quantity: 10, value: 1100 }],

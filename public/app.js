@@ -20,6 +20,7 @@ const state = {
   spendingCategory: 'all',
   spendingSort: 'recent',
   investmentRange: '1y',
+  investmentRangeInitialized: false,
   investmentFilter: 'all',
   investmentSort: 'value',
   holdingHistory: null,
@@ -355,10 +356,11 @@ function renderLineChart(snapshots, summary, rangeStart = null) {
     return `<line x1="${plotLeft}" y1="${y}" x2="${width - plotRight}" y2="${y}" class="chart-grid"/><text x="${plotLeft - 6}" y="${y + 3}" text-anchor="end" class="chart-axis-label chart-y-axis-label">${axisCurrency(value)}</text>`;
   }).join('');
   // Repeating "Sep 2026" across a short range looks like a broken axis. Use
-  // days while every available point is in the same calendar month, then
-  // graduate to month/year as the selected range expands.
+  // days for any short window (including one that crosses a month boundary),
+  // then graduate to month/year as the selected range expands.
   const sameMonth = new Date(domainStart).getFullYear() === new Date(domainEnd).getFullYear() && new Date(domainStart).getMonth() === new Date(domainEnd).getMonth();
-  const dateLabel = (time) => new Date(time).toLocaleDateString('en-US', sameMonth ? { month: 'short', day: 'numeric' } : { month: 'short', year: 'numeric' });
+  const shortRange = domainEnd - domainStart <= 45 * 86400000;
+  const dateLabel = (time) => new Date(time).toLocaleDateString('en-US', sameMonth || shortRange ? { month: 'short', day: 'numeric' } : { month: 'short', year: 'numeric' });
   // Short spans need distinct days, not three calendar labels that round to
   // the same day. Longer spans retain a middle label for quick orientation.
   const tickTimes = sameMonth || width <= 420 ? [domainStart, domainEnd] : [domainStart, (domainStart + domainEnd) / 2, domainEnd];
@@ -688,25 +690,32 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   ].filter((node) => node.value > 0);
   const contentHeight = (rows) => rows.length ? (rows.length - 1) * rowStep + rowHeight : 0;
   const height = Math.max(224, contentHeight(incomeSources) + 16, contentHeight(middleNodes) + 16, contentHeight(actualCategories) + 16);
-  // Equal-width nodes make the reading path steady on every screen. Keeping
-  // them deliberately compact leaves the flows enough room to be legible.
-  const nodeW = compact ? 104 : tablet ? 124 : 142;
+  // A node must visibly meet its flow. Fixed wide, transparent hit areas made
+  // the bands appear to stop short of their labels on larger screens. Size
+  // each column to its actual labels and render it as a quiet tinted block.
+  const nodeWidth = (rows, minimum, maximum) => {
+    const longest = Math.max(...rows.map((row) => String(row.label || '').length), 0);
+    const characterWidth = compact ? 5.1 : 5.7;
+    return Math.max(minimum, Math.min(maximum, Math.ceil(24 + longest * characterWidth)));
+  };
+  const sourceW = nodeWidth(incomeSources, compact ? 74 : 76, compact ? 102 : 112);
+  const middleW = nodeWidth(middleNodes, compact ? 78 : 82, compact ? 106 : 116);
+  const destinationW = nodeWidth(actualCategories.map((row) => ({ label: row.name })), compact ? 82 : 88, compact ? 112 : 124);
   const sourceX = compact ? 6 : tablet ? 8 : 20;
   const middleX = compact ? 143 : tablet ? 248 : 389;
   const destinationX = compact ? 280 : tablet ? 488 : 758;
-  const sourceW = nodeW, middleW = nodeW, destinationW = nodeW;
-  const displayShare = (value, isIncome = false) => !income || isIncome ? '' : `${Math.round((value / income) * 100)}%`;
   const colorFor = (key, fallback) => ({
     income_paychecks: 'var(--income)', income_interest: '#b08a4a', income_dividends: '#8a71a5', income_benefits: '#5e91a2', income_business: '#5d9b81', income_other: '#7893a8',
     actual_spend: 'var(--outflow)', savings: 'var(--save)', investments: 'var(--invest)',
     housing_bills: '#c87862', food_dining: '#c69656', shopping: '#9a78a2', transport: '#6996a7', health: '#6a9b88', insurance: '#728aac', services: '#8d87aa', entertainment: '#b47b92', travel: '#6499a0', education: '#8d9a5f', personal_care: '#b98675', home: '#739585', taxes: '#ab8066', civic: '#7d91a4', fees: '#9a8f81', uncategorized: '#9a8f81'
   }[key] || fallback);
-  const block = (x, y, w, color, label, value, category = '', isIncome = false) => {
+  const block = (x, y, w, color, label, value, category = '', side = 'left') => {
     const words = String(label).split(' ');
     const mobileLines = compact && words.length > 1 ? [words.slice(0, Math.ceil(words.length / 2)).join(' '), words.slice(Math.ceil(words.length / 2)).join(' ')] : [label];
     const labelMarkup = mobileLines.map((line, index) => `<tspan x="${x + 11}" dy="${index ? 10 : 0}">${escapeHtml(line)}</tspan>`).join('');
     const valueY = y + (mobileLines.length > 1 ? 36 : 28);
-    return `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" data-cashflow-node="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><title>${escapeHtml(`${label}: ${fmt.format(value)}`)}</title><rect data-testid="cashflow-node-surface" x="${x - 4}" y="${y - 4}" width="${w + 8}" height="${rowHeight + 8}" rx="4" fill="transparent" stroke="transparent"/><rect data-testid="cashflow-node-accent" x="${x}" y="${y}" width="6" height="${rowHeight}" rx="1" fill="${color}"/><text x="${x + 11}" y="${y + 14}" class="cashflow-label">${labelMarkup}</text><text x="${x + 11}" y="${valueY}" class="cashflow-value">${fmt.format(value)}<tspan dx="3" class="cashflow-share">${displayShare(value, isIncome)}</tspan></text></g>`;
+    const accentX = side === 'right' ? x + w - 6 : x;
+    return `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" data-cashflow-node="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><title>${escapeHtml(`${label}: ${fmt.format(value)}`)}</title><rect data-testid="cashflow-node-surface" x="${x}" y="${y}" width="${w}" height="${rowHeight}" rx="5" fill="${color}" fill-opacity=".10" stroke="${color}" stroke-opacity=".38"/><rect data-testid="cashflow-node-accent" x="${accentX}" y="${y}" width="6" height="${rowHeight}" rx="2" fill="${color}"/><text x="${x + 11}" y="${y + 14}" class="cashflow-label">${labelMarkup}</text><text x="${x + 11}" y="${valueY}" class="cashflow-value">${fmt.format(value)}</text></g>`;
   };
   // Use perceptual (square-root) scaling. Exact dollars stay in each node,
   // while the flow still makes large categories visibly heavier without one
@@ -736,13 +745,19 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     const categoryColor = colorFor(row.key, 'var(--outflow-muted)');
     const spendY = middleY.get('actual_spend');
     if (spendY != null) paths += flow(middleX + middleW, spendY + rowHeight / 2, destinationX, y + rowHeight / 2, Number(row.amount || 0), categoryColor, ['actual_spend', row.key]);
-    categories += block(destinationX, y, destinationW, categoryColor, row.name, row.amount, row.key);
+    categories += block(destinationX, y, destinationW, categoryColor, row.name, row.amount, row.key, 'left');
   });
   const hiddenCategoryCount = allSpendCategories.length - actualCategories.length;
   const more = !expanded && hiddenCategoryCount > 0 ? `<button type="button" class="cashflow-more" data-cashflow-expand aria-label="Show all ${hiddenCategoryCount + actualCategories.length} spending categories">View all ${allSpendCategories.length} spending categories <span>↗</span></button>` : '';
-  const sourceBlocks = incomeSources.map((source, index) => block(sourceX, sourceStart + index * rowStep, sourceW, colorFor(source.key, 'var(--income)'), source.label, source.amount, source.key, true)).join('');
-  const middleBlocks = middleNodes.map((node) => block(middleX, middleY.get(node.key), middleW, node.color, node.label, node.value, node.key)).join('');
+  const sourceBlocks = incomeSources.map((source, index) => block(sourceX, sourceStart + index * rowStep, sourceW, colorFor(source.key, 'var(--income)'), source.label, source.amount, source.key, 'right')).join('');
+  const middleBlocks = middleNodes.map((node) => block(middleX, middleY.get(node.key), middleW, node.color, node.label, node.value, node.key, 'left')).join('');
   el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Income sources split into spending, saving, and investing">${paths}${sourceBlocks}${middleBlocks}${categories}</svg>${more}`;
+  // SVG focus delegation differs subtly across browsers. Bind directly as
+  // well so keyboard focus always traces the same connected flow as hover.
+  el.querySelectorAll('[data-cashflow-node]').forEach((node) => {
+    node.addEventListener('focus', () => setCashflowFlowFocus(el, node.dataset.cashflowNode));
+    node.addEventListener('pointerenter', () => setCashflowFlowFocus(el, node.dataset.cashflowNode));
+  });
 }
 
 function renderSpending(data) {
@@ -826,6 +841,34 @@ function portfolioSnapshots(data) {
   return visible.length ? visible : snapshots.slice(-1);
 }
 
+function portfolioRangeIsAvailable(snapshots, range) {
+  if (range === 'all') return true;
+  if (snapshots.length < 2) return false;
+  const first = new Date(`${snapshots[0].date}T12:00:00`).getTime();
+  const lastDate = snapshots.at(-1).date;
+  const last = new Date(`${lastDate}T12:00:00`).getTime();
+  // A few connection-day points can be truthful, but they do not make a
+  // useful month/year lens. Keep those controls unavailable until a person
+  // has a minimally meaningful tracked span.
+  if (!Number.isFinite(first) || !Number.isFinite(last) || last - first < 14 * 86400000) return false;
+  const { startDate } = netWorthRangeBounds(range, new Date(`${lastDate}T12:00:00`));
+  return Boolean(startDate) && first <= new Date(`${startDate}T12:00:00`).getTime() + 10 * 86400000;
+}
+
+function syncPortfolioRangeControls(snapshots) {
+  if (!state.investmentRangeInitialized) {
+    state.investmentRange = portfolioRangeIsAvailable(snapshots, state.investmentRange) ? state.investmentRange : 'all';
+    state.investmentRangeInitialized = true;
+  }
+  if (!portfolioRangeIsAvailable(snapshots, state.investmentRange)) state.investmentRange = 'all';
+  $$('[data-investment-range]').forEach((control) => {
+    const available = portfolioRangeIsAvailable(snapshots, control.dataset.investmentRange);
+    control.disabled = !available;
+    control.title = available ? '' : 'Available once more verified portfolio history has been tracked.';
+    control.classList.toggle('active', control.dataset.investmentRange === state.investmentRange);
+  });
+}
+
 function investmentRangeLabel(range) {
   return ({ '1m': 'last month', '3m': 'last 3 months', '6m': 'last 6 months', ytd: 'year to date', '1y': 'last year', all: 'all history' })[range] || 'last year';
 }
@@ -834,10 +877,10 @@ function portfolioChangeLabel(snapshots) {
   const first = snapshots[0];
   const last = snapshots.at(-1);
   if (!first || !last) return investmentRangeLabel(state.investmentRange);
-  if (state.investmentRange === 'all') return 'all history';
   const latest = new Date(`${last.date}T12:00:00`);
   const { startDate } = netWorthRangeBounds(state.investmentRange, latest);
   const start = new Date(`${first.date}T12:00:00`);
+  if (state.investmentRange === 'all' && latest.getTime() - start.getTime() >= 14 * 86400000) return 'all history';
   // A small allowance covers a connection just after a calendar edge. If it
   // is not met, the selected control is a viewing preference—not evidence of
   // a complete period—so name the real tracking start instead.
@@ -872,9 +915,10 @@ function renderPortfolioChart(data) {
   const firstDate = new Date(`${snapshots[0].date}T12:00:00`);
   const lastDate = new Date(`${snapshots.at(-1).date}T12:00:00`);
   const sameMonth = firstDate.getFullYear() === lastDate.getFullYear() && firstDate.getMonth() === lastDate.getMonth();
-  // Month/year is useful over a long history, but becomes three identical
-  // "Sep 26" labels for a new connection. Use distinct days in that case.
-  const label = (index) => new Date(`${snapshots[index].date}T12:00:00`).toLocaleDateString('en-US', sameMonth
+  const shortRange = lastDate.getTime() - firstDate.getTime() <= 45 * 86400000;
+  // Month/year is useful over a long history, but becomes repeated labels
+  // across a short Aug→Sep window. Use distinct days in either case.
+  const label = (index) => new Date(`${snapshots[index].date}T12:00:00`).toLocaleDateString('en-US', sameMonth || shortRange
     ? { month: 'short', day: 'numeric' }
     : { month: 'short', year: '2-digit' });
   const xIndices = [...new Set(width > 420 ? [0, Math.floor((snapshots.length - 1) / 2), snapshots.length - 1] : [0, snapshots.length - 1])];
@@ -1070,6 +1114,8 @@ async function openHoldingHistory({ ticker = '', accountId = '' } = {}) {
 function renderInvestments(data) {
   if (!data) return;
   const accounts = data.accounts || [];
+  const allSnapshots = uniqueDailySnapshots(data.snapshots || []);
+  syncPortfolioRangeControls(allSnapshots);
   const snapshots = portfolioSnapshots(data);
   const endSnapshot = snapshots.at(-1);
   const startSnapshot = snapshots[0];
@@ -1869,8 +1915,8 @@ $('#spendingTrend').addEventListener('keydown', (event) => {
   target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 });
 $$('[data-investment-range]').forEach((button) => button.addEventListener('click', () => {
+  if (button.disabled) return;
   state.investmentRange = button.dataset.investmentRange;
-  $$('[data-investment-range]').forEach((control) => control.classList.toggle('active', control === button));
   renderInvestments(state.investments);
 }));
 $('#investmentAllocation').addEventListener('click', (event) => {
@@ -1988,28 +2034,35 @@ $('#holdingHistoryClose').addEventListener('click', () => $('#holdingHistoryDial
   const handle = $('#holdingHistoryDragHandle');
   let startY = null;
   let dragging = false;
+  let pointerId = null;
   const isPhoneDrawer = () => window.matchMedia('(max-width: 560px)').matches;
-  const reset = () => { dialog.style.transform = ''; dialog.style.transition = ''; };
+  const reset = () => { dialog.style.transform = ''; dialog.style.transition = ''; dialog.removeAttribute('data-dragging'); };
   handle.addEventListener('pointerdown', (event) => {
     if (!isPhoneDrawer()) return;
     startY = event.clientY;
     dragging = true;
+    pointerId = event.pointerId;
+    dialog.setAttribute('data-dragging', '');
     dialog.style.transition = 'none';
     handle.setPointerCapture?.(event.pointerId);
     event.preventDefault();
   });
-  handle.addEventListener('pointermove', (event) => {
-    if (!dragging || startY == null) return;
+  const moveDrawerDrag = (event) => {
+    if (!dragging || startY == null || event.pointerId !== pointerId) return;
     const offset = Math.max(0, event.clientY - startY);
     dialog.style.transform = `translateY(${offset}px)`;
-  });
+  };
   const finishDrawerDrag = (event) => {
-    if (!dragging || startY == null) return;
+    if (!dragging || startY == null || event.pointerId !== pointerId) return;
     const offset = Math.max(0, event.clientY - startY);
     dragging = false;
     startY = null;
+    pointerId = null;
     handle.releasePointerCapture?.(event.pointerId);
-    if (offset >= Math.min(110, dialog.getBoundingClientRect().height * .2)) {
+    // A purposeful downward swipe should feel effortless. Window listeners
+    // below cover browsers that drop pointer capture when a finger leaves the
+    // small handle before lifting.
+    if (offset >= Math.min(72, dialog.getBoundingClientRect().height * .15)) {
       reset();
       dialog.close();
       return;
@@ -2018,8 +2071,12 @@ $('#holdingHistoryClose').addEventListener('click', () => $('#holdingHistoryDial
     dialog.style.transform = 'translateY(0)';
     window.setTimeout(reset, 190);
   };
+  handle.addEventListener('pointermove', moveDrawerDrag);
   handle.addEventListener('pointerup', finishDrawerDrag);
   handle.addEventListener('pointercancel', finishDrawerDrag);
+  window.addEventListener('pointermove', moveDrawerDrag);
+  window.addEventListener('pointerup', finishDrawerDrag);
+  window.addEventListener('pointercancel', finishDrawerDrag);
   dialog.addEventListener('close', reset);
 }
 $('#manualHoldingForm').addEventListener('submit', async (event) => {

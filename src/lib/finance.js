@@ -258,7 +258,14 @@ function transactionMatchesPosition(transaction, position) {
 function reportedHistoricalPositions(store, positions, accountId) {
   const historical = [...positions];
   const records = (store.investment_transactions || []).filter((transaction) => transaction.account_id === accountId && Number(transaction.quantity || 0) !== 0);
-  if (records.some((transaction) => !transaction.security_id || !transaction.ticker || String(transaction.security_type || '').toLowerCase() === 'cash')) {
+  // A current investment-cash position can be reconstructed only when its
+  // reported ledger identifies that exact security. Other unidentified or
+  // historical cash activity would leave an unknown portion of the account,
+  // so it remains a hard stop rather than quietly being dropped.
+  if (records.some((transaction) => {
+    const currentPosition = positions.find((position) => transactionMatchesPosition(transaction, position));
+    return !currentPosition && (!transaction.security_id || !transaction.ticker || String(transaction.security_type || '').toLowerCase() === 'cash');
+  })) {
     return { positions: historical, reason: 'Your institution did not provide enough priced security detail to verify this account history.' };
   }
   for (const transaction of records) {
@@ -305,8 +312,20 @@ function reconstructionTolerance(value) {
   return Math.max(25, Math.abs(Number(value || 0)) * .01);
 }
 
+function cashLedgerPrice(position) {
+  const quantity = Number(position.quantity || 0);
+  const value = Number(position.value || 0);
+  const institutionPrice = Number(position.price || 0);
+  // This is limited to genuine $1 investment cash (not a depository balance,
+  // money-market fund with an unknown NAV, or an inferred conversion rate).
+  // The ending reconciliation below independently checks the final value.
+  if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(value) || !Number.isFinite(institutionPrice)) return null;
+  if (Math.abs(institutionPrice - 1) > .01 || Math.abs(value / quantity - 1) > .01) return null;
+  return 1;
+}
+
 function reconstructReportedPositions(store, positions, { endDate = new Date().toISOString().slice(0, 10), years = 1, expectedValue = null } = {}) {
-  if (!positions.length || positions.some((position) => position.type === 'cash' || !position.security_id || !position.ticker || !Number.isFinite(Number(position.quantity)) || Number(position.quantity) < 0)) return { state: 'unavailable', reason: 'Your institution did not provide enough priced holding detail to verify a reconstruction.', history: [] };
+  if (!positions.length || positions.some((position) => !position.security_id || !position.ticker || !Number.isFinite(Number(position.quantity)) || Number(position.quantity) < 0 || (position.type === 'cash' && cashLedgerPrice(position) == null))) return { state: 'unavailable', reason: 'Your institution did not provide enough priced holding detail to verify a reconstruction.', history: [] };
   const relevant = (store.investment_transactions || []).filter((transaction) => transaction.date <= endDate && positions.some((position) => transactionMatchesPosition(transaction, position)));
   const tradesByPosition = positions.map((position) => relevant.filter((transaction) => transactionMatchesPosition(transaction, position) && Number.isFinite(Number(transaction.quantity)) && Number(transaction.quantity) !== 0));
   const firstTradeByPosition = tradesByPosition.map((trades) => trades.map((transaction) => transaction.date).filter(Boolean).sort()[0]);
@@ -343,7 +362,7 @@ function reconstructReportedPositions(store, positions, { endDate = new Date().t
       const quantity = Number(position.quantity || 0) - laterQuantity;
       if (!Number.isFinite(quantity) || quantity < -.000001) return { state: 'unavailable', reason: 'Reported activity does not reconcile to the current quantity.', history: [] };
       if (quantity <= .000001) continue;
-      const price = nearestPrice(store.market_prices?.[String(position.ticker).toUpperCase()], date);
+      const price = position.type === 'cash' ? cashLedgerPrice(position) : nearestPrice(store.market_prices?.[String(position.ticker).toUpperCase()], date);
       if (!Number.isFinite(price)) return { state: 'unavailable', reason: 'A historical price needed to verify this position is unavailable.', history: [] };
       value += quantity * price;
     }
