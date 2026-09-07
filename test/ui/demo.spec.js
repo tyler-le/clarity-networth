@@ -3,11 +3,21 @@ import { test, expect } from '@playwright/test';
 test.skip(Boolean(process.env.CODEX_SANDBOX_NETWORK_DISABLED), 'This workspace blocks browser loopback networking; GitHub CI runs the full browser suite.');
 
 async function openDemo(page) {
+  // The local browser server deliberately has no real OAuth credentials. Mock
+  // only the public configuration response so this test exercises the
+  // production access-code gate without contacting Google.
+  await page.route('**/api/auth/config', (route) => route.fulfill({ json: { configured: true, googleClientId: 'test-client-id.apps.googleusercontent.com' } }));
   await page.goto('/');
   await expect(page.getByRole('heading', { name: /see your money/i })).toBeVisible();
   await expect(page.locator('#inviteCode')).toBeVisible();
   await expect(page.locator('#inviteCode')).toHaveAttribute('type', 'password');
   await expect(page.locator('#inviteCode')).toHaveValue('');
+  await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
+  await expect(page.locator('#googleSignIn')).toBeHidden();
+  await expect(page.locator('.auth-intro')).toHaveText('A calm, clear view of your net worth, accounts, and path ahead.');
+  await page.getByRole('button', { name: 'Continue with Google' }).click();
+  await expect(page.locator('#authMessage')).toHaveText('Enter your access code to continue.');
+  await expect(page.locator('#googleSignIn')).toBeHidden();
   await expect(page.getByText(/By continuing, you agree to our/i)).toBeVisible();
   await expect(page.getByRole('link', { name: 'Terms' })).toHaveAttribute('href', '/terms');
   await expect(page.getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute('href', '/privacy');

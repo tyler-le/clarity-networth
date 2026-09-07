@@ -22,14 +22,14 @@
       <div class="brand auth-brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 17.5h14M6.5 14.5l3.1-3.1 2.7 2.2 5.1-5.2" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17.4" cy="8.4" r="1.45" fill="currentColor"/></svg></span><span>Clarity</span></div>
       <div class="auth-kicker"><i aria-hidden="true"></i> NET WORTH, SIMPLIFIED</div>
       <h1>See your money<br><em>more clearly.</em></h1>
-      <p class="auth-intro">A calm 30-second check-in for where you stand and what deserves attention.</p>
+      <p class="auth-intro">A calm, clear view of your net worth, accounts, and path ahead.</p>
       <div class="auth-preview" aria-hidden="true">
         <div><span>NET WORTH</span><strong>$184,240</strong><small>↑ 12.4% this year</small></div>
         <svg viewBox="0 0 240 62" preserveAspectRatio="none"><defs><linearGradient id="loginFill" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#1f6f4a" stop-opacity=".19"/><stop offset="1" stop-color="#1f6f4a" stop-opacity="0"/></linearGradient></defs><path d="M0 57L25 49 51 52 77 39 103 45 131 31 160 35 187 19 212 23 240 7V62H0Z" fill="url(#loginFill)"/><path d="M0 57L25 49 51 52 77 39 103 45 131 31 160 35 187 19 212 23 240 7" fill="none" stroke="#1f6f4a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
       <label class="auth-access-code" for="inviteCode"><span>Access code</span><input id="inviteCode" type="password" inputmode="text" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" placeholder="Enter your invite code" required /><small>This private beta requires an access code.</small></label>
-      <div class="auth-divider"><span>Continue with Google</span></div>
-      <div class="google-signin-wrap" id="googleSignIn"></div>
+      <button class="primary auth-google-gate" id="beginGoogleSignIn" type="button">Continue with Google</button>
+      <div class="google-signin-wrap hidden" id="googleSignIn"></div>
       <p class="auth-signup-note">New to Clarity? Your account is created securely the first time you continue.</p>
       <button class="demo-preview-button" id="demoPreviewButton" type="button">Explore the demo <span aria-hidden="true">→</span></button>
       <p class="auth-demo-note">No access code, sign-in, or bank connection required.</p>

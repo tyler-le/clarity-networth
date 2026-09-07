@@ -657,6 +657,15 @@ app.get('/api/auth/me', (req, res) => {
   res.json({ user: publicUser(user) });
 });
 
+// This is a convenience gate before opening Google’s account chooser. The
+// code is checked again after Google returns a verified identity; this endpoint
+// alone never creates a session or grants data access.
+app.post('/api/auth/access-code', authLimiter, (req, res) => {
+  if (!authConfigured()) return res.status(503).json({ error: 'Sign-in is not configured yet.' });
+  if (!inviteCodeMatches(req.body?.inviteCode)) return res.status(403).json({ error: 'This app is invite-only. Enter a valid access code to continue.' });
+  res.json({ ok: true });
+});
+
 app.post('/api/auth/google', authLimiter, async (req, res) => {
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
   const attempts = loginAttempts.get(ip) || [];

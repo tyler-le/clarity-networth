@@ -140,6 +140,12 @@ integrationTest('does not expose sign-in configuration secrets', async () => {
   assert.equal(response.body.googleClientId, null);
 });
 
+integrationTest('checks an invite code before beginning Google sign-in without creating a session', async () => {
+  const response = await request(app).post('/api/auth/access-code').send({ inviteCode: 'not-a-real-code' });
+  assert.equal(response.status, 503);
+  assert.equal(response.headers['set-cookie'], undefined);
+});
+
 integrationTest('previews a retirement plan without changing the saved assumptions', async () => {
   const email = 'retirement-preview@example.com';
   const key = userStorageKey(email);

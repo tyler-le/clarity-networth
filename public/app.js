@@ -1529,9 +1529,12 @@ async function startDemoPreview() {
   }
 }
 
-async function startGoogleSignIn() {
-  const config = await api('/api/auth/config');
+let googleSignInConfig = null;
+
+async function renderGoogleSignIn(config) {
+  $('#googleSignIn').innerHTML = '';
   if (!config.configured) {
+    $('#beginGoogleSignIn').classList.add('hidden');
     $('#googleSignIn').classList.add('hidden');
     $('#authMessage').textContent = 'Google sign-in is not configured. Add GOOGLE_CLIENT_ID and a strong ENCRYPTION_KEY to the server environment.';
     return;
@@ -1551,7 +1554,41 @@ async function startGoogleSignIn() {
       } catch (error) { $('#authMessage').textContent = error.message; }
     }
   });
+  $('#beginGoogleSignIn').classList.add('hidden');
+  $('#googleSignIn').classList.remove('hidden');
   window.google.accounts.id.renderButton($('#googleSignIn'), { theme: 'outline', size: 'large', width: Math.min(360, Math.floor($('#googleSignIn').clientWidth || 360)), text: 'continue_with' });
+}
+
+async function startGoogleSignIn() {
+  const config = await api('/api/auth/config');
+  googleSignInConfig = config;
+  $('#googleSignIn').innerHTML = '';
+  $('#googleSignIn').classList.add('hidden');
+  if (!config.configured) return renderGoogleSignIn(config);
+  $('#beginGoogleSignIn').classList.remove('hidden');
+  $('#beginGoogleSignIn').disabled = false;
+}
+
+async function beginGoogleSignIn() {
+  const inviteCode = $('#inviteCode').value.trim();
+  if (!inviteCode) {
+    $('#authMessage').textContent = 'Enter your access code to continue.';
+    $('#inviteCode').focus();
+    return;
+  }
+  const button = $('#beginGoogleSignIn');
+  button.disabled = true;
+  button.textContent = 'Checking access code…';
+  try {
+    await api('/api/auth/access-code', { method: 'POST', body: JSON.stringify({ inviteCode }) });
+    $('#authMessage').textContent = 'Access confirmed. Continue with Google.';
+    await renderGoogleSignIn(googleSignInConfig);
+  } catch (error) {
+    $('#authMessage').textContent = error.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Continue with Google';
+  }
 }
 
 async function initializeApp() {
@@ -1601,6 +1638,7 @@ window.addEventListener('online', async () => {
 });
 
 $('#demoPreviewButton').addEventListener('click', startDemoPreview);
+$('#beginGoogleSignIn').addEventListener('click', beginGoogleSignIn);
 
 $('#signOutButton').addEventListener('click', async () => {
   if (!state.demoPreview) await api('/api/auth/logout', { method: 'POST', body: '{}' });
