@@ -1813,14 +1813,15 @@ function openSpendingCategory(category) {
 $('#spendingLegend')?.addEventListener('click', (event) => openSpendingCategory(event.target.closest('[data-spending-category]')?.dataset.spendingCategory));
 $('#cashflowSankey').addEventListener('click', (event) => {
   if (event.target.closest('[data-cashflow-expand]')) { openCashflowDialog(); return; }
-  openSpendingCategory(event.target.closest('[data-cashflow-category]')?.dataset.cashflowCategory);
+  const node = event.target.closest('[data-cashflow-node]');
+  if (node) toggleCashflowFlowSelection($('#cashflowSankey'), node.dataset.cashflowNode);
 });
 $('#cashflowSankey').addEventListener('keydown', (event) => {
   if (!['Enter', ' '].includes(event.key)) return;
   const target = event.target.closest('[data-cashflow-category]');
   if (!target) return;
   event.preventDefault();
-  openSpendingCategory(target.dataset.cashflowCategory);
+  toggleCashflowFlowSelection($('#cashflowSankey'), target.dataset.cashflowNode);
 });
 // Flows are deliberately not tap targets: once paths overlap, that interaction
 // becomes ambiguous. Instead, focusing or hovering a clear category block
@@ -1836,40 +1837,45 @@ function setCashflowFlowFocus(container, key = '') {
     node.classList.toggle('is-selected', Boolean(key && node.dataset.cashflowNode === key));
   });
 }
+function selectedCashflowFlow(container) {
+  return container.dataset.cashflowSelection || '';
+}
+function toggleCashflowFlowSelection(container, key) {
+  const next = selectedCashflowFlow(container) === key ? '' : key;
+  if (next) container.dataset.cashflowSelection = next;
+  else delete container.dataset.cashflowSelection;
+  setCashflowFlowFocus(container, next);
+}
 function wireCashflowFlowFocus(container) {
   container.addEventListener('pointerover', (event) => {
     const node = event.target.closest('[data-cashflow-node]');
     if (node) setCashflowFlowFocus(container, node.dataset.cashflowNode);
   });
-  container.addEventListener('pointerleave', () => setCashflowFlowFocus(container));
+  container.addEventListener('pointerleave', () => setCashflowFlowFocus(container, selectedCashflowFlow(container)));
   container.addEventListener('focusin', (event) => {
     const node = event.target.closest('[data-cashflow-node]');
     if (node) setCashflowFlowFocus(container, node.dataset.cashflowNode);
   });
   container.addEventListener('focusout', () => {
     requestAnimationFrame(() => {
-      if (!container.contains(document.activeElement)) setCashflowFlowFocus(container);
+      if (!container.contains(document.activeElement)) setCashflowFlowFocus(container, selectedCashflowFlow(container));
     });
   });
 }
 wireCashflowFlowFocus($('#cashflowSankey'));
 wireCashflowFlowFocus($('#cashflowDialogContent'));
 // The expanded dialog renders into a separate DOM node, so it needs the same
-// category interaction as the inline Sankey. Close it before revealing the
-// filtered activity to make the result immediately visible on every device.
+// in-place flow selection as the inline Sankey.
 $('#cashflowDialogContent').addEventListener('click', (event) => {
-  const category = event.target.closest('[data-cashflow-category]')?.dataset.cashflowCategory;
-  if (!category) return;
-  $('#cashflowDialog').close();
-  openSpendingCategory(category);
+  const node = event.target.closest('[data-cashflow-node]');
+  if (node) toggleCashflowFlowSelection($('#cashflowDialogContent'), node.dataset.cashflowNode);
 });
 $('#cashflowDialogContent').addEventListener('keydown', (event) => {
   if (!['Enter', ' '].includes(event.key)) return;
-  const target = event.target.closest('[data-cashflow-category]');
+  const target = event.target.closest('[data-cashflow-node]');
   if (!target) return;
   event.preventDefault();
-  $('#cashflowDialog').close();
-  openSpendingCategory(target.dataset.cashflowCategory);
+  toggleCashflowFlowSelection($('#cashflowDialogContent'), target.dataset.cashflowNode);
 });
 $('#cashflowPreTax').addEventListener('click', () => openSpendingCategory('payroll_retirement'));
 function donutSelection(event, element, rows) {

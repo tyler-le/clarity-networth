@@ -201,15 +201,15 @@ test('debt rates remain editable after a first entry', async ({ page }) => {
   await expect(card.locator('[data-debt-rate="demo-credit"]')).toHaveValue('18.5');
 });
 
-test('cash-flow interactions lead from visual category to the relevant activity', async ({ page }) => {
+test('cash-flow taps keep the reader in the diagram and trace the selected flow', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');
   await expect(page.locator('#cashflowSankey [data-cashflow-category]').first()).toBeVisible();
 
   await page.locator('#cashflowSankey [data-cashflow-category]').first().click();
-  await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
-  await expect(page.locator('#spendingCategoryFilter')).not.toHaveValue('all');
-  await expect(page.locator('.spending-transaction-row').first()).toBeVisible();
+  await expect(page.locator('#cashflowSankey .cashflow-flow.is-connected')).not.toHaveCount(0);
+  await expect(page.locator('#cashflowSankey .cashflow-flow.is-muted')).not.toHaveCount(0);
+  await expect(page.locator('#spendingTransactionsPanel')).not.toHaveAttribute('open', '');
 });
 
 test('cash-flow blocks trace their connected paths before opening activity', async ({ page }) => {
@@ -284,8 +284,9 @@ test('cash-flow diagram stays readable on mobile and expands in-app', async ({ p
   await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
   await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
   await page.locator('#cashflowDialogContent [data-cashflow-category]').first().click();
-  await expect(page.locator('#cashflowDialog')).not.toHaveAttribute('open', '');
-  await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
+  await expect(page.locator('#cashflowDialogContent .cashflow-flow.is-connected')).not.toHaveCount(0);
+  await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
+  await page.locator('#cashflowDialogClose').click();
 });
 
 test('cash-flow quality holds at every supported viewport @critical', async ({ page }) => {
@@ -346,13 +347,12 @@ test('the complete app stays navigable and coherent at every supported viewport'
   await expect(page.locator('#appShell')).toBeVisible();
 });
 
-test('the income source opens income activity from the cash-flow diagram', async ({ page }) => {
+test('the income source keeps its connected flow highlighted after a tap', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');
   await page.locator('#cashflowSankey [data-cashflow-category="income_paychecks"]').click();
-  await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
-  await expect(page.locator('#spendingCategoryFilter')).toHaveValue('income_paychecks');
-  await expect(page.locator('.income-transaction').first()).toBeVisible();
+  await expect(page.locator('#cashflowSankey .cashflow-flow.is-connected')).not.toHaveCount(0);
+  await expect(page.locator('#spendingTransactionsPanel')).not.toHaveAttribute('open', '');
 });
 
 test('payroll contributions open their own cash-flow activity', async ({ page }) => {
