@@ -96,12 +96,11 @@ testing, and UX standards that guide changes.
 - [Private launch measurement](docs/LAUNCH_METRICS.md)
 - [Operations and recovery notes](docs/operations.md)
 
-## Private product dashboard
+## Private health dashboard
 
-These owner-only dashboards live in a separate, password-protected Metabase service—not in the Clarity customer app:
+This owner-only dashboard lives in a separate, password-protected Metabase service—not in the Clarity customer app:
 
-- [Product Health](https://clarity-insights-production.up.railway.app/dashboard/2): selectable reporting window for activation, return visits, tab usage, core-card views, meaningful actions, and sync health. It reads only the minimal 90-day product-event table, never encrypted financial stores or financial values.
-- [Operations & Dependencies](https://clarity-insights-production.up.railway.app/dashboard/3): the last 24 hours of grouped Clarity API, Plaid, Google sign-in, and market-data status and latency. It contains no customer identifier, financial value, credential, or request payload.
+- [Clarity Health](https://clarity-insights-production.up.railway.app/dashboard/2): product adoption and engagement appear first, followed by the last 24 hours of grouped Clarity API, Plaid, Google sign-in, and market-data status and latency. It reads only minimal operational and product-event tables—never encrypted financial stores or financial values.
 
 ## Data principles
 

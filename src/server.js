@@ -33,7 +33,7 @@ const reconnectSessions = new Map();
 // database.js, and failures are non-blocking so operational measurement can
 // never prevent a person from using their financial data.
 function trackLaunchEvent(user, eventName) {
-  recordLaunchEvent(user?.storageKey || null, eventName).catch((error) => {
+  return recordLaunchEvent(user?.storageKey || null, eventName).catch((error) => {
     console.warn('Launch telemetry unavailable:', error.message);
   });
 }
@@ -760,7 +760,7 @@ app.post('/api/auth/google', authLimiter, async (req, res) => {
     loginAttempts.delete(ip);
     const user = { email, name: String(payload.name || '') };
     setSession(res, user);
-    trackLaunchEvent({ storageKey: userStorageKey(email) }, 'sign_in_completed');
+    await trackLaunchEvent({ storageKey: userStorageKey(email) }, 'sign_in_completed');
     res.json({ ok: true, user: publicUser(user) });
   } catch {
     void recordDependencyEvent({ dependency: 'google_oauth', operation: 'verify_id_token', outcome: 'failure', durationMs: Date.now() - startedAt }).catch(() => {});
@@ -846,6 +846,11 @@ app.get('/api/dashboard', async (req, res) => {
   const summary = summarizeRange(visibleStore);
   const snapshots = visibleStore.snapshots.slice(-3650);
   const accounts = visibleStore.accounts.filter((account) => !account.hidden).sort((a, b) => Number(b.current_balance || 0) - Number(a.current_balance || 0));
+  // A persistent Google session does not pass through OAuth again on every
+  // visit. Record these minimal markers before replying so the private
+  // activation metric includes existing signed-in members.
+  await trackLaunchEvent(req.user, 'sign_in_completed');
+  await trackLaunchEvent(req.user, 'dashboard_opened');
   res.json({
     summary,
     runway: cashRunway(visibleStore),
@@ -864,12 +869,6 @@ app.get('/api/dashboard', async (req, res) => {
     demoMode: Boolean(store.settings?.demo_mode) || visibleStore.accounts.some((a) => a.demo),
     appearance: store.settings?.appearance || { theme: 'light' }
   });
-  // A person with a persistent Google session does not pass through the OAuth
-  // callback again on every visit. Mark the first authenticated dashboard
-  // visit as a member too, so product metrics do not exclude existing users
-  // merely because telemetry was introduced after they signed in.
-  trackLaunchEvent(req.user, 'sign_in_completed');
-  trackLaunchEvent(req.user, 'dashboard_opened');
 });
 
 app.get('/api/spending', async (req, res) => {

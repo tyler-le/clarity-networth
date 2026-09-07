@@ -1,0 +1,151 @@
+import { test, expect } from '@playwright/test';
+
+test.skip(Boolean(process.env.CODEX_SANDBOX_NETWORK_DISABLED), 'This workspace blocks browser loopback networking; GitHub CI runs the full browser suite.');
+
+let nextTestClient = 90;
+test.beforeEach(async ({ page }) => {
+  await page.setExtraHTTPHeaders({ 'X-Forwarded-For': `198.51.100.${nextTestClient++}` });
+});
+
+async function goToView(page, view) {
+  if (view === 'profile') return page.locator('#profileButton').click();
+  const mobile = page.locator(`.mobile-nav [data-view="${view}"]`);
+  if (await mobile.isVisible()) return mobile.click();
+  return page.locator(`.sidebar [data-view="${view}"]`).click();
+}
+
+// Uses the complete, realistic demo contract as a baseline, then makes one
+// meaningful change for a member situation. The UI is real; only the service
+// boundary is mocked. This catches rendering and interaction regressions
+// without requiring Plaid, Google, or market-data calls in browser tests.
+async function openSignedInScenario(page, transform = () => {}) {
+  const response = await page.request.get('/api/demo-preview?range=1m');
+  expect(response.ok()).toBe(true);
+  const preview = await response.json();
+  transform(preview);
+  preview.dashboard.demoMode = false;
+  preview.dashboard.appearance = { theme: 'light' };
+  preview.dashboard.plaidConfigured = true;
+
+  await page.route('**/api/auth/me', (route) => route.fulfill({ json: { user: { email: 'scenario@example.test', name: 'Scenario member' } } }));
+  await page.route('**/api/dashboard', (route) => route.fulfill({ json: preview.dashboard }));
+  await page.route(/\/api\/spending(?:\?.*)?$/, (route) => route.fulfill({ json: preview.spending }));
+  await page.route('**/api/investments', (route) => route.fulfill({ json: preview.investments }));
+  await page.route('**/api/retirement', (route) => route.fulfill({ json: preview.retirement }));
+  await page.route('**/api/launch-event', (route) => route.fulfill({ status: 204 }));
+  await page.route('**/api/settings/debt-strategy', (route) => route.fulfill({ json: preview.dashboard.debtPayoff || {} }));
+  await page.goto('/');
+  await expect(page.locator('#appShell')).toBeVisible();
+  await expect(page.locator('#appShell')).toHaveAttribute('aria-busy', 'false');
+}
+
+test('a newly signed-in member with no accounts gets a calm, truthful start', async ({ page }) => {
+  await openSignedInScenario(page, (preview) => {
+    preview.dashboard.accounts = [];
+    preview.dashboard.items = [];
+    preview.dashboard.snapshots = [];
+    preview.dashboard.connectionHealth = [];
+    preview.dashboard.debtPayoff = null;
+    preview.dashboard.goals = [];
+    preview.dashboard.summary = { ...preview.dashboard.summary, netWorth: 0, assets: 0, liabilities: 0 };
+    preview.investments = { ...preview.investments, total: 0, accounts: [], positions: [], allocation: [], snapshots: [], positionsAvailable: false, unclassifiedAccounts: [] };
+  });
+
+  await expect(page.locator('#netWorth')).toHaveText('—');
+  await expect(page.locator('#netWorthChart')).toContainText('$0');
+  await expect(page.locator('#debtPayoffCard')).toBeHidden();
+  await goToView(page, 'profile');
+  await expect(page.locator('#connectionsList')).toContainText('No connected institutions.');
+});
+
+test('a cash-first member sees what they have without being pushed into debt or investing features', async ({ page }) => {
+  await openSignedInScenario(page, (preview) => {
+    const cash = preview.dashboard.accounts.filter((account) => account.type === 'depository').slice(0, 2);
+    preview.dashboard.accounts = cash;
+    preview.dashboard.items = preview.dashboard.items.filter((item) => cash.some((account) => account.item_id === item.id));
+    preview.dashboard.debtPayoff = null;
+    preview.dashboard.summary = { ...preview.dashboard.summary, netWorth: 17700, assets: 17700, liabilities: 0 };
+  });
+
+  await expect(page.locator('#netWorth')).toHaveText('$17,700');
+  await goToView(page, 'accounts');
+  await expect(page.locator('#accountGrid')).toContainText('Cash');
+  await expect(page.locator('#debtPayoffCard')).toBeHidden();
+  await expect(page.locator('.account-collection')).toHaveCount(2);
+});
+
+test('a member with debt receives one optional next step, not an alarming wall of payoff controls', async ({ page }) => {
+  await openSignedInScenario(page, (preview) => {
+    const credit = preview.dashboard.accounts.find((account) => account.type === 'credit');
+    credit.name = 'Everyday card';
+    credit.current_balance = 3400;
+    credit.interest_rate = 24.99;
+    preview.dashboard.accounts = [credit];
+    preview.dashboard.summary = { ...preview.dashboard.summary, netWorth: -3400, assets: 0, liabilities: 3400 };
+    preview.dashboard.debtPayoff = {
+      accountCount: 1,
+      totalDebt: 3400,
+      strategy: 'avalanche',
+      missingRates: 0,
+      debts: [{ id: credit.id, name: 'Everyday card', balance: 3400, interestRate: 24.99 }],
+      priority: { id: credit.id, name: 'Everyday card', balance: 3400, interestRate: 24.99 }
+    };
+  });
+
+  await goToView(page, 'accounts');
+  const payoff = page.locator('#debtPayoffCard');
+  await expect(payoff).toBeVisible();
+  await expect(payoff.getByRole('button', { name: /view plan/i })).toBeVisible();
+  await expect(payoff.getByRole('button', { name: /save most interest/i })).toHaveCount(0);
+  await payoff.getByRole('button', { name: /view plan/i }).click();
+  await expect(payoff.getByRole('button', { name: /save most interest/i })).toBeVisible();
+  await expect(payoff).toContainText('Everyday card');
+});
+
+test('a provider holding gap stays actionable without inventing a classification', async ({ page }) => {
+  await openSignedInScenario(page, (preview) => {
+    const account = preview.dashboard.accounts.find((entry) => entry.type === 'investment');
+    preview.investments.positionsAvailable = true;
+    preview.investments.unclassifiedAccounts = [{ account_id: account.plaid_account_id, name: account.name, institution_name: account.institution_name, difference: 2400 }];
+    preview.investments.allocation = [...preview.investments.allocation, { name: 'Cash & unclassified', value: 2400, share: 0.05 }];
+  });
+
+  await goToView(page, 'investments');
+  await page.getByRole('button', { name: /cash & unclassified/i }).click();
+  await expect(page.locator('#investmentPositions')).toContainText('No matching holdings returned');
+  await page.getByRole('button', { name: 'Add holding' }).click();
+  await expect(page.locator('#manualHoldingDialog')).toBeVisible();
+  await expect(page.locator('#manualHoldingDialog')).toContainText('Add holding');
+});
+
+test('a delayed institution is explained and routed to connections without exposing provider errors', async ({ page }) => {
+  await openSignedInScenario(page, (preview) => {
+    const item = preview.dashboard.items[0];
+    item.demo = false;
+    preview.dashboard.connectionHealth = [{ id: item.id, state: 'stale', requires_reconnect: false }];
+  });
+
+  await expect(page.locator('#connectionAttention')).toBeVisible();
+  await expect(page.locator('#connectionAttention')).toContainText(/update delayed|retrying/i);
+  await page.locator('#connectionAttentionAction').click();
+  await expect(page.getByRole('heading', { name: 'Profile' })).toBeVisible();
+  await expect(page.locator('#connectionsList')).toContainText(/retrying automatically/i);
+  await expect(page.locator('body')).not.toContainText('502');
+});
+
+test('long merchant names and mixed cash-flow categories remain readable and drill into activity', async ({ page }) => {
+  await openSignedInScenario(page, (preview) => {
+    const transaction = preview.spending.transactions.find((entry) => entry.bucket !== 'income');
+    transaction.name = 'A very long merchant name that must never force a dollar amount off the screen';
+    transaction.merchant_name = transaction.name;
+  });
+
+  await goToView(page, 'spending');
+  await page.locator('#spendingTransactionsPanel > summary').click();
+  const row = page.locator('.spending-transaction-row').filter({ hasText: 'A very long merchant name' });
+  await expect(row).toBeVisible();
+  const staysWithinViewport = await row.evaluate((element) => element.getBoundingClientRect().right <= window.innerWidth + 1);
+  expect(staysWithinViewport).toBe(true);
+  await page.locator('#cashflowSankey [data-cashflow-category]').first().click();
+  await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
+});
