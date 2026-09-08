@@ -1228,6 +1228,15 @@ function refreshDemoAccountLabels(store) {
 }
 
 export function seedDemo(store) {
+  // Demo is a complete, representative plan rather than an empty shell. Keep
+  // this separate from a member's real settings: activeStore/demoPreviewStore
+  // create their own demo-mode settings object before calling this function.
+  if (store.settings?.demo_mode && !(store.settings.goals || []).length) {
+    store.settings.goals = [{
+      id: 'demo-emergency-fund', name: 'Emergency fund', source: 'cash',
+      target: 30_000, created_at: '2026-01-01T00:00:00.000Z', demo: true
+    }];
+  }
   if (store.accounts.length || store.transactions.length || store.snapshots.length) {
     if (store.accounts.length && store.accounts.every((account) => account.demo)) {
       refreshDemoAccountLabels(store);
@@ -1377,14 +1386,22 @@ function addDemoHistory(store) {
     const date = new Date(now.getFullYear(), now.getMonth() - monthsAgo, 1);
     const month = date.toISOString().slice(0, 7);
     const variation = Math.round(Math.sin(monthsAgo * 1.7) * 110);
+    // Groceries and dining are repeat spending categories, not subscriptions.
+    // Vary their merchants in the sample so the recurring card teaches the
+    // right mental model: bills and opt-in subscriptions.
+    const groceryMerchant = ['Trader Joe’s', 'Costco', 'Whole Foods'][monthsAgo % 3];
+    const leisureMerchant = ['Dinner with friends', 'Local weekend plans', 'Coffee & treats'][monthsAgo % 3];
     const rows = [
       ['payroll', 'Payroll', -6200, 'income', 'demo-checking', 'INCOME'],
       ['interest', 'Ally Savings interest', -(38 + monthsAgo % 6), 'income', 'demo-hysa', 'INCOME'],
       ['rent', 'Rent', 1650, 'fixed', 'demo-credit', 'RENT_AND_UTILITIES'],
-      ['essentials', 'Groceries & utilities', 690 + variation, 'fixed', 'demo-credit', 'FOOD_AND_DRINK'],
+      ['essentials', groceryMerchant, 690 + variation, 'fixed', 'demo-credit', 'FOOD_AND_DRINK'],
       ['saving', 'Ally Savings', 250, 'savings', 'demo-credit', 'TRANSFER_IN'],
       ['investing', 'Fidelity Brokerage', 350, 'investments', 'demo-credit', 'INVESTMENT'],
-      ['flex', 'Dining & leisure', 520 - variation, 'guilt_free', 'demo-credit', 'ENTERTAINMENT']
+      ['flex', leisureMerchant, 520 - variation, 'guilt_free', 'demo-credit', 'ENTERTAINMENT'],
+      ['netflix', 'Netflix', 22.99, 'guilt_free', 'demo-credit', 'ENTERTAINMENT'],
+      ['spotify', 'Spotify Premium', 11.99, 'guilt_free', 'demo-credit', 'ENTERTAINMENT'],
+      ['icloud', 'iCloud+', 2.99, 'fixed', 'demo-credit', 'GENERAL_SERVICES']
     ];
     for (const [kind, merchant, amount, bucket, accountId, pfcPrimary] of rows) {
       const id = `demo-history-${month}-${kind}`;

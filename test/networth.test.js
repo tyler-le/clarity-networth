@@ -503,7 +503,7 @@ test('manual holdings fill only an institution-reported position gap', () => {
 });
 
 test('demo mode provides seven years of usable account and spending history', () => {
-  const store = { accounts: [], transactions: [], snapshots: [] };
+  const store = { accounts: [], transactions: [], snapshots: [], settings: { demo_mode: true } };
   seedDemo(store);
   assert.ok(store.snapshots.length >= 84);
   assert.ok(new Set(store.transactions.map((transaction) => transaction.date.slice(0, 7))).size >= 84);
@@ -512,6 +512,10 @@ test('demo mode provides seven years of usable account and spending history', ()
   const portfolioChange = snapshots.at(-1).value - snapshots[0].value;
   const contributions = investmentContributions(store).reduce((sum, row) => sum + row.amount, 0);
   assert.ok(portfolioChange - contributions > 0, 'demo all-time investment growth should be positive');
+  assert.deepEqual(goalProgress(store).map((goal) => goal.name), ['Emergency fund']);
+  const recurringNames = recurringCharges(store).recurring.map((charge) => charge.name);
+  assert.ok(recurringNames.includes('Netflix'));
+  assert.equal(recurringNames.some((name) => /groceries|dining|leisure/i.test(name)), false);
 });
 
 test('demo spending remains categorized across its historical ranges', () => {

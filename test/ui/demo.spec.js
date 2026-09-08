@@ -120,6 +120,9 @@ test('a new visitor can explore the complete demo without signing in @critical',
   expect(positiveBarsStayAboveZero).toBe(true);
   await expect(page.locator('#cashflowSankey svg')).toBeVisible();
   await expect(page.locator('#recurringCharges')).toBeVisible();
+  await expect(page.locator('#recurringCharges')).toContainText('Netflix');
+  await expect(page.locator('#goalTitle')).toHaveText('Emergency fund');
+  await expect(page.locator('#goalDetail')).toContainText('Demo only');
 
   await goToView(page, 'investments');
   await expect(page.getByRole('heading', { name: 'Investments' })).toBeVisible();
@@ -204,6 +207,12 @@ test('accounts makes a simple debt payoff choice actionable without a separate d
 
 test('demo visitors can try a goal without creating personal data', async ({ page }) => {
   await openDemo(page);
+  await expect(page.locator('#goalTitle')).toHaveText('Emergency fund');
+  await expect(page.locator('#goalDetail')).toContainText('Demo only');
+  await page.locator('#goalAction').click();
+  await expect(page.locator('#goalRemoveDialog')).toContainText('Emergency fund');
+  await page.locator('#goalRemoveConfirm').click();
+  await expect(page.locator('#goalAction')).toHaveText('Add goal');
   await page.locator('#goalAction').click();
   await page.locator('#goalName').fill('Travel fund');
   await page.locator('#goalSource').selectOption('cash');

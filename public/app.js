@@ -32,6 +32,7 @@ const state = {
   expandedAccountGroups: new Set(),
   holdingsExpanded: false,
   demoGoal: null,
+  demoGoalInitialized: false,
   debtPlanExpanded: false,
   view: 'overview',
   returnView: 'overview',
@@ -291,13 +292,21 @@ function renderClarityLayer(data) {
     $('#clarityCheckinAction').textContent = checkin.actionLabel || 'View details';
     $('#clarityCheckinMark').textContent = checkin.tone === 'attention' ? '!' : checkin.tone === 'watch' ? '•' : '✦';
   }
-  const goals = state.demoPreview && state.demoGoal ? [state.demoGoal] : (data.goals || []);
+  const demoExperience = isDemoExperience();
+  // Initialize the throwaway goal once per demo entry. After someone removes
+  // or replaces it, their local demo action should remain visible instead of
+  // being resurrected from the original demo payload on every render.
+  if (demoExperience && !state.demoGoalInitialized) {
+    state.demoGoal = data.goals?.[0] || null;
+    state.demoGoalInitialized = true;
+  }
+  const goals = demoExperience ? (state.demoGoal ? [state.demoGoal] : []) : (data.goals || []);
   const goal = goals[0];
   $('#goalAction').textContent = goal ? 'Remove' : 'Add goal';
   if (goal) {
     $('#goalTitle').textContent = goal.name;
     const detail = goal.source === 'debt' ? `${fmt.format(goal.current)} remaining of ${fmt.format(goal.target)} starting debt` : `${fmt.format(goal.current)} of ${fmt.format(goal.target)}`;
-    $('#goalDetail').textContent = state.demoPreview ? `Demo only · ${detail}` : detail;
+    $('#goalDetail').textContent = demoExperience ? `Demo only · ${detail}` : detail;
     $('#goalProgress').style.width = `${Math.round(goal.progress * 100)}%`;
   } else { $('#goalTitle').textContent = 'Set a goal'; $('#goalDetail').textContent = 'Track a cash, investment, net-worth, or debt goal from your real balances.'; $('#goalProgress').style.width = '0%'; }
   const attention = (data.connectionHealth || []).filter((item) => item.state !== 'healthy');
@@ -608,6 +617,13 @@ function debtPlanForStrategy(plan, strategy) {
     ? [...debts].sort((a, b) => Number(a.balance) - Number(b.balance))[0] || null
     : [...debts].filter((a) => a.interestRate != null).sort((a, b) => Number(b.interestRate) - Number(a.interestRate) || Number(a.balance) - Number(b.balance))[0] || null;
   return { ...plan, strategy, priority };
+}
+
+// Public preview and signed-in demo mode must behave like the same safe,
+// throwaway scenario. The latter has a real session, so checking only
+// demoPreview accidentally attempted to save a real member setting.
+function isDemoExperience() {
+  return Boolean(state.demoPreview || state.dashboard?.demoMode);
 }
 
 function renderDebtPayoff(plan) {
@@ -1600,6 +1616,8 @@ $('#demoToggle').addEventListener('click', async () => {
   const button = $('#demoToggle');
   button.disabled = true;
   try {
+    state.demoGoal = null;
+    state.demoGoalInitialized = false;
     await api('/api/demo-mode', { method: 'POST', body: JSON.stringify({ enabled: !state.dashboard?.demoMode }) });
     await loadAll();
     showNotice(state.dashboard?.demoMode ? 'Demo mode is on. Your real data is safely hidden.' : 'Back to your real data.', 'success');
@@ -1812,7 +1830,7 @@ $('#debtPayoffCard').addEventListener('click', async (event) => {
     trackProductEvent('debt_strategy_selected');
     const strategy = strategyButton.dataset.debtStrategy;
     try {
-      if (state.demoPreview) {
+      if (isDemoExperience()) {
         state.dashboard.debtPayoff = debtPlanForStrategy(state.dashboard.debtPayoff, strategy);
       } else {
         state.dashboard.debtPayoff = await api('/api/settings/debt-strategy', { method: 'PATCH', body: JSON.stringify({ strategy }) });
@@ -1882,7 +1900,7 @@ $('#manualAccountDelete').addEventListener('click', async () => {
 });
 $('#goalAction').addEventListener('click', async () => {
   const goal = state.dashboard?.goals?.[0];
-  const activeGoal = state.demoPreview ? state.demoGoal : goal;
+  const activeGoal = isDemoExperience() ? state.demoGoal : goal;
   if (activeGoal) {
     $('#goalRemoveDetail').textContent = `Remove “${activeGoal.name}”? You can add it again whenever you want.`;
     $('#goalRemoveDialog').showModal();
@@ -1896,11 +1914,11 @@ $('#goalCancel').addEventListener('click', () => $('#goalDialog').close());
 $('#goalRemoveCancel').addEventListener('click', () => $('#goalRemoveDialog').close());
 $('#goalRemoveConfirm').addEventListener('click', async () => {
   const goal = state.dashboard?.goals?.[0];
-  const activeGoal = state.demoPreview ? state.demoGoal : goal;
+  const activeGoal = isDemoExperience() ? state.demoGoal : goal;
   if (!activeGoal) { $('#goalRemoveDialog').close(); return; }
   $('#goalRemoveConfirm').disabled = true;
   try {
-    if (state.demoPreview) { state.demoGoal = null; $('#goalRemoveDialog').close(); renderClarityLayer(state.dashboard); showNotice('Demo goal removed.', 'success'); return; }
+    if (isDemoExperience()) { state.demoGoal = null; $('#goalRemoveDialog').close(); renderClarityLayer(state.dashboard); showNotice('Demo goal removed.', 'success'); return; }
     await api(`/api/goals/${encodeURIComponent(activeGoal.id)}`, { method: 'DELETE' });
     $('#goalRemoveDialog').close(); await loadAll(); showNotice('Goal removed.', 'success');
   } catch (error) { showNotice(error.message); } finally { $('#goalRemoveConfirm').disabled = false; }
@@ -1910,7 +1928,7 @@ $('#goalForm').addEventListener('submit', async (event) => {
   const goal = { name: $('#goalName').value.trim(), source: $('#goalSource').value, target: Number($('#goalTarget').value) };
   if (!goal.name || !Number.isFinite(goal.target) || goal.target <= 0) { showNotice('Enter a name and goal amount.'); return; }
   try {
-    if (state.demoPreview) {
+    if (isDemoExperience()) {
       state.demoGoal = demoGoalProgress(goal);
       $('#goalDialog').close(); renderClarityLayer(state.dashboard); showNotice('Demo goal added. It resets when you leave the demo.', 'success'); return;
     }
@@ -2423,6 +2441,8 @@ async function startDemoPreview() {
   button.disabled = true;
   button.textContent = 'Opening demo…';
   state.demoPreview = true;
+  state.demoGoal = null;
+  state.demoGoalInitialized = false;
   state.spendingMonth = null;
   state.spendingCategory = 'all';
   state.view = 'overview';
@@ -2453,6 +2473,7 @@ async function startDemoPreview() {
 async function exitDemoPreview() {
   state.demoPreview = false;
   state.demoGoal = null;
+  state.demoGoalInitialized = false;
   state.dashboard = null;
   state.spending = null;
   state.investments = null;
