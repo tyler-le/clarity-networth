@@ -79,6 +79,7 @@
             <div class="delta" id="netWorthDelta">—</div>
             <div class="chart-context hidden" id="netWorthChartContext"><span id="netWorthChartDate"></span></div>
             <div class="line-chart" id="netWorthChart" aria-label="Scrubbable net worth history"></div>
+            <section class="networth-movement-inline" id="netWorthMovement" aria-live="polite"><div class="card-label">What changed</div><strong id="netWorthMovementTitle">Tracking starts today</strong><p id="netWorthMovementDetail">We’ll show what moved your net worth as verified history builds.</p></section>
           </article>
           <article class="card balance-sheet-card" id="balanceSheetCard">
             <div class="card-label">Your position</div>
@@ -87,15 +88,15 @@
             <p id="balanceSheetContext">A clear view of your assets and debt.</p>
           </article>
         </div>
-        <article class="card clarity-checkin hidden" id="clarityCheckin"><span class="checkin-mark" id="clarityCheckinMark" aria-hidden="true">✦</span><div><div class="card-label">Your next step</div><strong id="clarityCheckinTitle">—</strong><p id="clarityCheckinDetail"></p></div><button class="text-button" id="clarityCheckinAction">View your path</button></article>
-        <div class="overview-briefing-grid">
-          <article class="card overview-movement" id="netWorthMovement"><div class="card-label">What changed</div><strong id="netWorthMovementTitle">Tracking starts today</strong><p id="netWorthMovementDetail">We’ll show what moved your net worth as verified history builds.</p></article>
-          <article class="card overview-glance" id="overviewGlance"><div class="card-label">At a glance</div><div class="overview-glance-values"><div><span>Cash</span><strong id="overviewCash">—</strong></div><div><span>Invested</span><strong id="overviewInvested">—</strong></div><div><span>Debt</span><strong id="overviewDebt">—</strong></div></div></article>
-        </div>
-        <div class="networth-insights">
+        <section class="overview-guidance" aria-label="What deserves attention">
+          <article class="card clarity-checkin hidden" id="clarityCheckin"><span class="checkin-mark" id="clarityCheckinMark" aria-hidden="true">✦</span><div><div class="card-label">Your next step</div><strong id="clarityCheckinTitle">—</strong><p id="clarityCheckinDetail"></p></div><button class="text-button" id="clarityCheckinAction">View your path</button></article>
           <article class="card connection-attention hidden" id="connectionAttention"><div><div class="card-label">Connection update</div><strong id="connectionAttentionTitle"></strong><p id="connectionAttentionDetail"></p></div><button class="text-button" id="connectionAttentionAction">View connections</button></article>
-          <article class="card networth-insight goal-insight" id="goalInsight"><div><div class="card-label">Your focus</div><strong id="goalTitle">Set a goal</strong><p id="goalDetail">Track a cash, investment, net-worth, or debt goal from your real balances.</p><i class="goal-progress"><b id="goalProgress"></b></i></div><button class="text-button" id="goalAction">Add goal</button></article>
-        </div>
+        </section>
+        <article class="card overview-story" aria-label="Where your money is">
+          <div class="overview-story-heading"><div class="card-label">Where your money is</div><p>A quick split across cash, investments, and debt.</p></div>
+          <section class="overview-glance" id="overviewGlance"><div class="overview-glance-values"><div><span>Cash</span><strong id="overviewCash">—</strong></div><div><span>Invested</span><strong id="overviewInvested">—</strong></div><div><span>Debt</span><strong id="overviewDebt">—</strong></div></div></section>
+        </article>
+        <article class="card networth-insight goal-insight overview-goal" id="goalInsight"><div><div class="card-label">Your focus</div><strong id="goalTitle">Set a goal</strong><p id="goalDetail">Track a cash, investment, net-worth, or debt goal from your real balances.</p><i class="goal-progress"><b id="goalProgress"></b></i></div><button class="text-button" id="goalAction">Add goal</button></article>
         <!-- Temporary compatibility targets: an older no-cache client script
              may still be active while its service worker updates. They remain
              invisible and prevent that shell from stopping before data loads. -->
@@ -121,14 +122,15 @@
       </section>
 
       <section id="spendingView" class="view">
+        <div class="spending-period-selector" aria-label="Cash flow period controls"><div><div class="card-label">Cash flow period</div><p id="spendingPeriodSummary">This month to date</p></div><div class="spending-period-actions"><div class="range-control" aria-label="Cash flow timeframe"><button class="active" data-spending-range="1m">1M</button><button data-spending-range="3m">3M</button><button data-spending-range="6m">6M</button><button data-spending-range="ytd">YTD</button><button data-spending-range="1y">1Y</button></div><button class="text-button hidden" id="clearSpendingMonth" type="button">Show all months</button></div></div>
         <article class="card spending-hero-card" id="cashFlowOverviewCard">
-          <div class="card-top"><div><div class="card-label">Cash flow</div><div class="spending-total" id="spendingTotal">—</div><div class="cashflow-headline" id="cashflowHeadline">Left after spending</div></div><div class="range-control" aria-label="Cash flow timeframe"><button class="active" data-spending-range="1m">1M</button><button data-spending-range="3m">3M</button><button data-spending-range="6m">6M</button><button data-spending-range="ytd">YTD</button><button data-spending-range="1y">1Y</button></div></div>
+          <div class="card-top"><div><div class="card-label">Cash flow</div><div class="spending-total" id="spendingTotal">—</div><div class="cashflow-headline" id="cashflowHeadline">Left after spending</div></div></div>
           <p class="spending-context" id="spendingContext">Loading cash flow…</p>
           <div class="cashflow-visual-tools"><span>Where take-home income went</span><div class="cashflow-controls"><button class="diagram-expand" id="cashflowExpand" type="button" aria-label="Expand cash flow diagram" title="Expand diagram"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H4v4m12-4h4v4M4 16v4h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
           <div class="cashflow-sankey" id="cashflowSankey" aria-label="Cash flow diagram"></div>
           <button class="cashflow-payroll hidden" id="cashflowPreTax" type="button" aria-live="polite"></button>
         </article>
-        <article class="card spending-trend-card" id="monthlyCashFlowCard"><div class="card-top"><div><div class="card-label">Monthly cash flow</div></div></div><div class="trend-detail" id="trendDetail" aria-live="polite"></div><div class="trend-key" aria-label="Chart legend"><span><i class="income"></i>Money left</span><span><i class="spend"></i>Over income</span></div><div class="spending-trend" id="spendingTrend"></div></article>
+        <article class="card spending-trend-card" id="monthlyCashFlowCard"><div class="card-top"><div><div class="card-label">Monthly cash flow</div><p class="spending-period-note" id="monthlyCashFlowPeriod">This month to date</p></div></div><div class="trend-detail" id="trendDetail" aria-live="polite"></div><div class="trend-key" aria-label="Chart legend"><span><i class="income"></i>Money left</span><span><i class="spend"></i>Over income</span></div><div class="spending-trend" id="spendingTrend"></div></article>
         <details class="card spending-transactions" id="spendingTransactionsPanel">
           <summary><span>View cash flow activity</span><small id="spendingTransactionCount"></small></summary>
           <div class="spending-transaction-controls"><select id="spendingCategoryFilter" aria-label="Transaction category"></select><select id="spendingSort" aria-label="Transaction sort"><option value="recent">Most recent</option><option value="highest">Highest cost</option></select></div>

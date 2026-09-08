@@ -138,6 +138,9 @@ test('net worth opens as a concise financial briefing', async ({ page }) => {
   await expect(page.locator('#netWorthMovement')).toContainText(/net worth|tracking starts/i);
   await expect(page.locator('#overviewGlance')).toContainText(/cash.*invested.*debt/is);
   await expect(page.locator('#clarityCheckin')).toBeVisible();
+  // The chart's plain-English interpretation is part of the same decision,
+  // not a disconnected card farther down the dashboard.
+  expect(await page.locator('#netWorthMovement').evaluate((movement) => movement.closest('#netWorthCard') === movement.parentElement)).toBe(true);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
   expect(overflow).toBe(false);
 });
@@ -256,9 +259,18 @@ test('cash-flow blocks trace their connected paths before opening activity', asy
   await openDemo(page);
   await goToView(page, 'spending');
   const paycheckBlock = page.locator('#cashflowSankey [data-cashflow-category="income_paychecks"]');
-  await paycheckBlock.focus();
-  await expect(page.locator('#cashflowSankey .cashflow-flow.is-connected')).not.toHaveCount(0);
-  await expect(page.locator('#cashflowSankey .cashflow-flow.is-muted')).not.toHaveCount(0);
+  // The responsive observer may redraw after this test action. Check the
+  // focus handler synchronously, rather than letting that later redraw turn a
+  // valid interaction assertion into a timing failure.
+  const focused = await paycheckBlock.evaluate((node) => {
+    // The delegated production handler listens for the bubbling `focusin`
+    // event (not the non-bubbling `focus` event).
+    node.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    const diagram = node.closest('#cashflowSankey');
+    return { connected: diagram?.querySelectorAll('.cashflow-flow.is-connected').length || 0, muted: diagram?.querySelectorAll('.cashflow-flow.is-muted').length || 0 };
+  });
+  expect(focused.connected).toBeGreaterThan(0);
+  expect(focused.muted).toBeGreaterThan(0);
 });
 
 test('asset-allocation filters preserve the reader position', async ({ page }) => {
@@ -289,6 +301,24 @@ test('cash-flow diagram pairs dollar amounts with meaningful secondary percentag
   await expect(page.locator('#spendingContext')).toContainText('last 6 completed months');
 });
 
+test('one cash-flow period control keeps the overview and monthly chart in sync', async ({ page }) => {
+  await openDemo(page);
+  await goToView(page, 'spending');
+  await page.locator('[data-spending-range="3m"]').click();
+  await expect(page.locator('[data-spending-range="3m"]')).toHaveClass(/active/);
+  await expect(page.locator('#monthlyCashFlowPeriod')).toContainText('last 3 completed months');
+  const month = page.locator('#spendingTrend [data-spending-month]').last();
+  // The semantic SVG group is the target; dispatch directly so browser SVG
+  // hit-testing cannot make this synchronization test viewport-dependent.
+  await month.evaluate((node) => node.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  await expect(page.locator('#clearSpendingMonth')).toBeVisible();
+  await expect(page.locator('#spendingPeriodSummary')).toContainText(/selected/i);
+  await expect(page.locator('[data-spending-range="3m"]')).toHaveClass(/active/);
+  await page.locator('#clearSpendingMonth').click();
+  await expect(page.locator('#clearSpendingMonth')).toBeHidden();
+  await expect(page.locator('#monthlyCashFlowPeriod')).toContainText('last 3 completed months');
+});
+
 test('cash-flow diagram omits zero-dollar cells and flows', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');
@@ -310,10 +340,18 @@ test('monthly cash-flow values stay self-labeled instead of relying on a detache
   expect(labelsStayWithValues).toBe(true);
 });
 
-test('cash-flow diagram stays readable on mobile and expands in-app', async ({ page }) => {
+test('cash-flow diagram stays readable on mobile and expands in-app', async ({ page }, testInfo) => {
   await openDemo(page);
   await goToView(page, 'spending');
   await expect(page.locator('#cashflowSankey')).toContainText('Paychecks');
+  const compactDiagram = await page.locator('#cashflowSankey').evaluate((diagram) => ({
+    hasHorizontalOverflow: diagram.scrollWidth > diagram.clientWidth + 1,
+    categoryNodes: diagram.querySelectorAll('[data-cashflow-category^="housing_"]').length
+  }));
+  // A phone keeps the primary flow to three columns, without sideways panning;
+  // category detail belongs in the explicit expanded view.
+  expect(compactDiagram.hasHorizontalOverflow).toBe(false);
+  if (testInfo.project.name === 'phone') expect(compactDiagram.categoryNodes).toBe(0);
   const moreLabel = page.locator('#cashflowSankey .cashflow-more');
   if (await moreLabel.count()) {
     const [labelBox, diagramBox] = await Promise.all([moreLabel.boundingBox(), page.locator('#cashflowSankey').boundingBox()]);
@@ -586,6 +624,9 @@ test('investment detail cards stay readable without horizontal overflow on a pho
   }
   const handleBox = await handle.boundingBox();
   expect(handleBox).not.toBeNull();
+  // The quiet visual pill has a full-width, 44px touch region behind it.
+  expect(handleBox.width).toBeGreaterThanOrEqual(dialogBox.width * .8);
+  expect(handleBox.height).toBeGreaterThanOrEqual(40);
   await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
   await page.mouse.down();
   await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2 + 130, { steps: 4 });

@@ -40,6 +40,7 @@ delete process.env.INVITE_CODE;
 process.env.DOTENV_CONFIG_PATH = path.join(dataDir, 'no-provider-credentials.env');
 const { app } = await import(`../../src/server.js?integration=${Date.now()}`);
 const { deleteStore, readStore, userStorageKey, writeStore } = await import('../../src/lib/store.js');
+const { decryptPayload } = await import('../../src/lib/secure-payload.js');
 const integrationTest = process.env.CODEX_SANDBOX_NETWORK_DISABLED ? test.skip : test;
 
 function signedTestCookie(email = 'rate-limit@example.com') {
@@ -85,11 +86,13 @@ integrationTest('serves public legal, support, and dependency-aware health pages
 
 integrationTest('keeps a bounded encrypted recovery snapshot and removes it on deletion', () => {
   const key = 'a'.repeat(64);
+  writeStore({ items: [{ id: 'before' }], accounts: [{ id: 'before' }], transactions: [] }, key);
   writeStore({ items: [], accounts: [], transactions: [] }, key);
   const backup = path.join(dataDir, 'backups', key, `${new Date().toISOString().slice(0, 10)}.json`);
   assert.equal(fs.existsSync(backup), true);
   const stored = JSON.parse(fs.readFileSync(backup, 'utf8'));
   assert.match(stored.payload_enc, /^v1\./);
+  assert.equal(JSON.parse(decryptPayload(stored.payload_enc)).accounts[0].id, 'before');
   deleteStore(key);
   assert.equal(fs.existsSync(path.join(dataDir, 'backups', key)), false);
 });

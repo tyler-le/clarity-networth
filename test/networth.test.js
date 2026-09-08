@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentDetailHistory, investmentLinkBalances, monthlyReview, reconstructInvestmentHistory, refreshReconstructedInvestmentSnapshots, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
+import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentDetailHistory, investmentLinkBalances, monthlyReview, reconstructInvestmentHistory, refreshReconstructedInvestmentSnapshots, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, repairTransferClassifications, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
 import { normalizeCandles } from '../src/lib/market-data.js';
 import { filterSnapshots, preferredNetWorthRange, scrubIndex, uniqueDailySnapshots } from '../public/chart-utils.js';
 
@@ -536,6 +536,20 @@ test('fixed costs stay limited to essential obligations', () => {
   assert.equal(classifyTransaction({ amount: 75, personal_finance_category: { primary: 'TRANSPORTATION', detailed: 'TRANSPORTATION_GAS' } }), 'fixed');
   assert.equal(classifyTransaction({ amount: 400, personal_finance_category: { primary: 'TRAVEL', detailed: 'TRAVEL_FLIGHTS' } }), 'guilt_free');
   assert.equal(classifyTransaction({ amount: 500, name: 'Payment Thank You', personal_finance_category: { primary: 'LOAN_PAYMENTS', detailed: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT' } }), 'transfer');
+});
+
+test('card payments and generic withdrawals cannot be inferred as investing from a shared institution name', () => {
+  const cardPayment = { amount: 875, name: 'Fidelity credit card payment', pfc_primary: 'LOAN_PAYMENTS', pfc_detailed: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT', bucket: 'investments', investment_contribution_amount: 875 };
+  const withdrawal = { amount: 600, name: 'Fidelity withdrawal', pfc_primary: 'TRANSFER_OUT', pfc_detailed: 'TRANSFER_OUT_WITHDRAWAL', bucket: 'investments', investment_contribution_amount: 600 };
+  const explicitInvestment = { amount: 400, pfc_primary: 'TRANSFER_OUT', pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS', bucket: 'investments' };
+  const memberChoice = { amount: 300, pfc_primary: 'LOAN_PAYMENTS', pfc_detailed: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT', bucket: 'investments', category_overridden: true };
+  assert.equal(classifyTransaction({ amount: cardPayment.amount, name: cardPayment.name, personal_finance_category: { primary: cardPayment.pfc_primary, detailed: cardPayment.pfc_detailed } }), 'transfer');
+  assert.equal(repairTransferClassifications({ transactions: [cardPayment, withdrawal, explicitInvestment, memberChoice] }), 2);
+  assert.equal(cardPayment.bucket, 'transfer');
+  assert.equal(withdrawal.bucket, 'transfer');
+  assert.equal(explicitInvestment.bucket, 'investments');
+  assert.equal(memberChoice.bucket, 'investments');
+  assert.equal('investment_contribution_amount' in cardPayment, false);
 });
 
 test('cash runway uses cash and savings against recent complete-month fixed costs', () => {

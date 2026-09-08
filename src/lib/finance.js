@@ -1,5 +1,23 @@
 import { combinedHistory, mergeReportedHistory, reconstructInvestmentAccount } from './history.js';
 
+function providerTransferDestinationBucket(tx) {
+  const detailed = (tx.personal_finance_category?.detailed || tx.pfc_detailed || '').toUpperCase();
+  // A card payment settles purchases which are already present on the card;
+  // it must never become an investment merely because its description shares
+  // an institution name with a brokerage account.
+  if (detailed.includes('CREDIT_CARD_PAYMENT')) return null;
+  if (detailed.includes('INVESTMENT') || detailed.includes('RETIREMENT')) return 'investments';
+  if (detailed.includes('SAVINGS')) return 'savings';
+  return null;
+}
+
+function isProviderTransfer(tx) {
+  const primary = (tx.personal_finance_category?.primary || tx.pfc_primary || '').toUpperCase();
+  const detailed = (tx.personal_finance_category?.detailed || tx.pfc_detailed || '').toUpperCase();
+  const name = `${tx.merchant_name || ''} ${tx.name || ''}`.toUpperCase();
+  return primary.includes('TRANSFER') || detailed.includes('TRANSFER') || detailed.includes('CREDIT_CARD_PAYMENT') || name.includes('PAYMENT THANK YOU') || name.includes('AUTOPAY PAYMENT');
+}
+
 export function classifyTransaction(tx) {
   const primary = (tx.personal_finance_category?.primary || '').toUpperCase();
   const detailed = (tx.personal_finance_category?.detailed || '').toUpperCase();
@@ -9,16 +27,13 @@ export function classifyTransaction(tx) {
     return 'income';
   }
 
+  // The sync layer may later promote an explicitly identified investment or
+  // savings transfer. Classification itself remains a transfer so a card
+  // payment or generic withdrawal is never promoted from a name match.
+  if (isProviderTransfer(tx)) return 'transfer';
+
   if (detailed.includes('INVESTMENT') || detailed.includes('RETIREMENT')) return 'investments';
   if (detailed.includes('SAVINGS')) return 'savings';
-
-  if (
-    primary.includes('TRANSFER') ||
-    detailed.includes('TRANSFER') ||
-    detailed.includes('CREDIT_CARD_PAYMENT') ||
-    name.includes('PAYMENT THANK YOU') ||
-    name.includes('AUTOPAY PAYMENT')
-  ) return 'transfer';
 
   // Vacation travel is discretionary by default. It is intentionally checked
   // before everyday transport essentials such as gas and public transit.
@@ -41,6 +56,28 @@ export function classifyTransaction(tx) {
   if (fixedHints.some((hint) => primary.includes(hint) || detailed.includes(hint)) || fixedMerchantHints.some((hint) => name.includes(hint))) return 'fixed';
 
   return 'guilt_free';
+}
+
+// Earlier versions inferred a transfer destination from institution words in
+// its description. That is unsafe: a card issuer and brokerage can share a
+// brand, and a card payment would then be counted a second time as investing.
+// Repair only records with no member override and only when Plaid's explicit
+// transfer category proves the saved bucket cannot be right.
+export function repairTransferClassifications(store) {
+  let repaired = 0;
+  for (const transaction of store.transactions || []) {
+    if (transaction.category_overridden || transaction.source === 'investment_transaction' || !isProviderTransfer(transaction)) continue;
+    const destination = providerTransferDestinationBucket(transaction);
+    const expectedBucket = destination || 'transfer';
+    if (!['investments', 'savings', 'transfer'].includes(transaction.bucket) || transaction.bucket === expectedBucket) continue;
+    transaction.bucket = expectedBucket;
+    if (expectedBucket === 'transfer') {
+      delete transaction.investment_contribution_amount;
+      delete transaction.investment_contribution_account_id;
+    }
+    repaired += 1;
+  }
+  return repaired;
 }
 
 export function accountSide(type) {

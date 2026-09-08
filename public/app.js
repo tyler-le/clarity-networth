@@ -732,13 +732,15 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   // Use the chart's actual container, not a device label. This survives
   // tablets, split-screen, zoom, sidebars, and window resizing.
   const availableWidth = el.clientWidth;
-  const compact = availableWidth < 520;
+  const compact = availableWidth < 600;
   const tablet = !compact && availableWidth < 760;
   const allSpendCategories = (data.actualSpendCategories || []).filter((row) => hasVisibleAmount(row.amount));
   const incomeSources = (data.incomeSources?.length ? data.incomeSources : [{ key: 'income', label: 'Income received', amount: income }])
     .map((source) => ({ ...source, label: source.label || source.name || 'Income received' }))
     .filter((source) => hasVisibleAmount(source.amount));
-  const actualCategories = expanded ? allSpendCategories : allSpendCategories.slice(0, 4);
+  // On a phone, keep the primary story to three readable columns. Spending
+  // categories are secondary detail, revealed below in the expanded view.
+  const actualCategories = compact ? [] : (expanded ? allSpendCategories : allSpendCategories.slice(0, 4));
   const width = compact ? 390 : tablet ? 620 : 920;
   // Treat the blocks as compact labels for the flow, rather than cards that
   // compete with it. Phone labels get a little more vertical room to wrap.
@@ -769,7 +771,10 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     ? [...middleNodes, { key: 'money_left', label: 'Money left', value: unallocated, color: 'var(--income)' }]
     : middleNodes;
   const incomeNodes = withShare(fundingRows, bridgeTotal);
-  const allocationNodes = withShare(allocationRows, bridgeTotal, 'value');
+  // Percentages describe the allocation stack itself. During a timing or
+  // funding gap, outflows can legitimately exceed Plaid-categorized income;
+  // dividing those rows by income would misleadingly produce 125%+ labels.
+  const allocationNodes = withShare(allocationRows, Math.max(bridgeTotal, knownAllocation), 'value');
   const categoryNodes = withShare(actualCategories, actualSpend);
   const bridgeNode = { key: 'period_funds', label: 'Money in', value: bridgeTotal, color: 'var(--income)' };
   const contentHeight = (rows) => rows.length ? (rows.length - 1) * rowStep + rowHeight : 0;
@@ -785,14 +790,14 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   // Four columns still need breathing room on a phone. Keep the labels
   // compact there rather than letting the allocation column collide with the
   // spending-category column.
-  const sourceW = nodeWidth(incomeNodes, compact ? 80 : 82, compact ? 80 : 132);
-  const bridgeW = nodeWidth([bridgeNode], compact ? 64 : 88, compact ? 72 : 120);
-  const middleW = nodeWidth(allocationNodes, compact ? 68 : 86, compact ? 78 : 128);
-  const destinationW = nodeWidth(categoryNodes.map((row) => ({ label: row.name })), compact ? 84 : 92, compact ? 106 : 142);
-  const sourceX = compact ? 4 : tablet ? 8 : 20;
-  const bridgeX = compact ? 88 : tablet ? 166 : 230;
-  const middleX = compact ? 166 : tablet ? 330 : 482;
-  const destinationX = compact ? 280 : tablet ? 488 : 758;
+  const sourceW = nodeWidth(incomeNodes, compact ? 96 : 82, compact ? 104 : 132);
+  const bridgeW = nodeWidth([bridgeNode], compact ? 72 : 88, compact ? 84 : 120);
+  const middleW = nodeWidth(allocationNodes, compact ? 100 : 86, compact ? 116 : 128);
+  const destinationW = nodeWidth(categoryNodes.map((row) => ({ label: row.name })), 92, 142);
+  const sourceX = compact ? 5 : tablet ? 8 : 20;
+  const bridgeX = compact ? 124 : tablet ? 166 : 230;
+  const middleX = compact ? 230 : tablet ? 330 : 482;
+  const destinationX = compact ? 0 : tablet ? 488 : 758;
   const colorFor = (key, fallback) => ({
     income_paychecks: 'var(--income)', income_interest: '#b08a4a', income_dividends: '#8a71a5', income_benefits: '#5e91a2', income_business: '#5d9b81', income_other: '#7893a8',
     actual_spend: 'var(--outflow)', savings: 'var(--save)', investments: 'var(--invest)',
@@ -850,13 +855,16 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   });
   const hiddenCategoryCount = allSpendCategories.length - actualCategories.length;
   const more = !expanded && hiddenCategoryCount > 0 ? `<button type="button" class="cashflow-more" data-cashflow-expand aria-label="Show all ${hiddenCategoryCount + actualCategories.length} spending categories">View all ${allSpendCategories.length} spending categories <span>↗</span></button>` : '';
+  const categoryList = compact && expanded && allSpendCategories.length
+    ? `<div class="cashflow-category-list" aria-label="Spending categories">${withShare(allSpendCategories, actualSpend).map((row) => `<button type="button" data-cashflow-category="${escapeHtml(row.key)}"><span><i style="background:${colorFor(row.key, 'var(--outflow-muted)')}"></i>${escapeHtml(row.name)}</span><strong>${fmt.format(row.amount)} <small>${row.share}%</small></strong></button>`).join('')}</div>`
+    : '';
   const sourceBlocks = incomeNodes.map((source, index) => block(sourceX, sourceStart + index * rowStep, sourceW, source.color || colorFor(source.key, 'var(--income)'), source.label, source.amount, source.share, source.key, 'right')).join('');
   const bridgeBlock = sourceTotal >= .5 ? block(bridgeX, bridgeY, bridgeW, bridgeNode.color, bridgeNode.label, bridgeNode.value, null, bridgeNode.key, 'left') : '';
   const middleBlocks = allocationNodes.map((node) => block(middleX, middleY.get(node.key), middleW, node.color, node.label, node.value, node.share, node.key, 'left')).join('');
   const reconciliationNote = unmatchedOutflow >= .5
     ? `<p class="cashflow-reconciliation-note">${fmt.format(unmatchedOutflow)} more went out than Plaid categorized as income in this period. This is a timing or funding gap, not a transaction category.</p>`
     : '';
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Plaid-categorized income sources flow into money in, then spending, saving, and investing">${paths}${sourceBlocks}${bridgeBlock}${middleBlocks}${categories}</svg>${reconciliationNote}${more}`;
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Plaid-categorized income sources flow into money in, then spending, saving, and investing">${paths}${sourceBlocks}${bridgeBlock}${middleBlocks}${categories}</svg>${categoryList}${reconciliationNote}${more}`;
   // SVG focus delegation differs subtly across browsers. Bind directly as
   // well so keyboard focus always traces the same connected flow as hover.
   el.querySelectorAll('[data-cashflow-node]').forEach((node) => {
@@ -867,9 +875,10 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
 
 function renderSpending(data) {
   if (!data) return;
-  // The range is the browsing context until a person chooses one exact month.
-  // In that state the range control intentionally has no active choice.
-  $$('[data-spending-range]').forEach((control) => control.classList.toggle('active', !state.spendingMonth && control.dataset.spendingRange === state.spendingRange));
+  // The selected range remains visible when a person drills into one month;
+  // it explains where that month belongs and keeps both cash-flow visuals in
+  // one shared context.
+  $$('[data-spending-range]').forEach((control) => control.classList.toggle('active', control.dataset.spendingRange === state.spendingRange));
   renderSpendingTrend(data);
   const selected = spendingForSelectedMonth(data);
   const total = Number(selected.total || 0);
@@ -888,6 +897,9 @@ function renderSpending(data) {
   const completedThrough = data.completedMonths ? new Date(`${data.endDate}T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '';
   const rangeLabel = ({ '1m': 'this month to date', '3m': 'last 3 completed months', '6m': 'last 6 completed months', ytd: `year to date through ${completedThrough}`, '1y': 'last 12 completed months' })[data.range] || 'this month to date';
   const selectedMonthLabel = state.spendingMonth && new Date(`${state.spendingMonth}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  $('#spendingPeriodSummary').textContent = selectedMonthLabel ? `${selectedMonthLabel} selected · ${rangeLabel}` : rangeLabel;
+  $('#monthlyCashFlowPeriod').textContent = selectedMonthLabel ? `Selected: ${selectedMonthLabel}` : `Showing ${rangeLabel}`;
+  $('#clearSpendingMonth').classList.toggle('hidden', !selectedMonthLabel);
   $('#spendingContext').textContent = total || income ? (selectedMonthLabel || rangeLabel) : `No posted cash flow for ${selectedMonthLabel || rangeLabel}. It can take a little time to arrive after connecting.`;
   renderCashFlowSankey(selected);
   renderRecurringCharges(state.dashboard?.recurring);
@@ -1197,7 +1209,9 @@ function renderHoldingHistoryDetail() {
     ? 'Your account value over time'
     : (data.ticker && data.label !== data.ticker ? data.label : (isMarket ? 'Price history for this security' : 'Your value over time'));
   const gain = data.gain;
-  $('#holdingHistoryMetrics').innerHTML = `<div><span>Current value</span><strong>${fmt.format(Number(data.value || 0))}</strong></div>${data.costBasis != null ? `<div><span>Market gain</span><strong class="${gain >= 0 ? 'positive' : 'negative'}">${gain >= 0 ? '+' : '−'}${fmt.format(Math.abs(gain || 0))}</strong><small>vs. reported cost basis</small></div>` : '<div><span>Cost basis</span><strong>Unavailable</strong><small>Your institution has not shared it</small></div>'}`;
+  const metrics = $('#holdingHistoryMetrics');
+  metrics.classList.toggle('single', data.costBasis == null);
+  metrics.innerHTML = `<div><span>Current value</span><strong>${fmt.format(Number(data.value || 0))}</strong></div>${data.costBasis != null ? `<div><span>${gain >= 0 ? 'Investment gain' : 'Investment loss'}</span><strong class="${gain >= 0 ? 'positive' : 'negative'}">${gain >= 0 ? '+' : '−'}${fmt.format(Math.abs(gain || 0))}</strong><small>Based on reported purchase cost</small></div>` : ''}`;
   const hasMarket = (data.market || []).length > 1;
   $('#holdingHistoryTabs').innerHTML = `<button type="button" class="${!isMarket ? 'active' : ''}" data-holding-history-mode="position" role="tab" aria-selected="${!isMarket}">Your position</button>${hasMarket ? `<button type="button" class="${isMarket ? 'active' : ''}" data-holding-history-mode="market" role="tab" aria-selected="${isMarket}">Market price</button>` : ''}`;
   const ranges = [['1m', '1M'], ['3m', '3M'], ['6m', '6M'], ['ytd', 'YTD'], ['1y', '1Y'], ['all', 'All']];
@@ -2067,10 +2081,13 @@ $('#spendingTrend').addEventListener('click', (event) => {
   const row = state.spending?.monthly?.find((entry) => entry.month === month);
   if (!row) return;
   trackProductEvent('cash_flow_month_selected');
-  state.spendingMonth = month;
-  $$('[data-spending-range]').forEach((control) => control.classList.remove('active'));
+  state.spendingMonth = state.spendingMonth === month ? null : month;
   renderSpending(state.spending);
   $('#spendingTransactionsPanel').open = true;
+});
+$('#clearSpendingMonth').addEventListener('click', () => {
+  state.spendingMonth = null;
+  renderSpending(state.spending);
 });
 $('#spendingTrend').addEventListener('keydown', (event) => {
   if (!['Enter', ' '].includes(event.key)) return;

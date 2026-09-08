@@ -6,8 +6,9 @@ import { fileURLToPath } from 'node:url';
 import { OAuth2Client } from 'google-auth-library';
 import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './lib/store.js';
+import { assertSafeFinancialStoreWrite, chooseSaferStore, hasConnectedFinancialData } from './lib/store-safety.js';
 import { consumeRateLimit, databaseEnabled, databaseHealthy, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, recordDependencyEvent, recordLaunchEvent, writeDatabaseStore } from './lib/database.js';
-import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentSummary, monthlyReview, refreshReconstructedInvestmentSnapshots, recurringCharges, removeEstimatedNetWorthHistory, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './lib/finance.js';
+import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentSummary, monthlyReview, refreshReconstructedInvestmentSnapshots, recurringCharges, removeEstimatedNetWorthHistory, repairTransferClassifications, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './lib/finance.js';
 import { investmentLedgerPages, plaidConfigured, plaidPost } from './lib/plaid.js';
 import { loadHistoricalPrices } from './lib/market-data.js';
 import { historyStart, reconstructedNetWorth } from './lib/history.js';
@@ -223,11 +224,8 @@ app.get('/support', (_req, res) => {
 async function loadStore(user) {
   const key = user?.storageKey;
   if (!key) throw new Error('Authenticated user storage is required.');
-  let store = null;
-  if (databaseEnabled()) {
-    try { store = await readDatabaseStore(key); } catch (error) { console.error('Database store read failed:', error.message); throw new Error('Your secure financial store is temporarily unavailable.'); }
-  }
-  store = normalizeStore(store || readStore(key));
+  let store = await loadStoreByKey(key);
+  if (repairTransferClassifications(store)) await saveStore(user, store);
   const ownerEmail = String(process.env.OWNER_EMAIL || '').trim().toLowerCase();
   if (!store.accounts.length && !store.items.length && ownerEmail && user.email === ownerEmail && hasLegacyStore()) {
     store = readStore();
@@ -242,11 +240,33 @@ async function loadStore(user) {
   return store;
 }
 
-async function saveStore(user, store) {
-  await saveStoreByKey(user.storageKey, store);
+async function loadStoreByKey(key) {
+  const mirror = normalizeStore(readStore(key));
+  let primary = null;
+  if (databaseEnabled()) {
+    try { primary = await readDatabaseStore(key); } catch (error) { console.error('Database store read failed:', error.message); throw new Error('Your secure financial store is temporarily unavailable.'); }
+  }
+  const primaryStore = normalizeStore(primary || mirror);
+  // A valid but empty database row must never outrank the encrypted volume
+  // mirror that still has linked data. Heal the primary before returning it.
+  const chosen = chooseSaferStore(primaryStore, mirror);
+  if (chosen === mirror && primaryStore !== mirror) {
+    if (databaseEnabled()) await writeDatabaseStore(key, mirror);
+    return mirror;
+  }
+  return chosen;
 }
 
-async function saveStoreByKey(storageKey, store) {
+async function saveStore(user, store, options = {}) {
+  await saveStoreByKey(user.storageKey, store, options);
+}
+
+async function saveStoreByKey(storageKey, store, options = {}) {
+  // Guard the shared persistence boundary, rather than relying on every
+  // caller to notice when a fallback store is empty. This is intentionally
+  // checked against the primary encrypted store before any write occurs.
+  const previous = await loadStoreByKey(storageKey);
+  assertSafeFinancialStoreWrite(previous, store, options);
   if (databaseEnabled()) await writeDatabaseStore(storageKey, store);
   // Retain an encrypted recovery mirror while PostgreSQL is the primary store.
   writeStore(store, storageKey);
@@ -506,8 +526,7 @@ async function scheduledDailySync() {
   for (const storageKey of storageKeys) {
     await queueUserSync(storageKey, async () => {
       try {
-        const persisted = databaseEnabled() ? await readDatabaseStore(storageKey) : null;
-        const store = normalizeStore(persisted || readStore(storageKey));
+        const store = await loadStoreByKey(storageKey);
         if (!store.items.some((item) => !item.demo)) return;
         const results = await syncStoreItems(store);
         await saveStoreByKey(storageKey, store);
@@ -532,8 +551,7 @@ async function requestPendingInvestmentHistory() {
   if (databaseEnabled()) storageKeys = [...new Set([...storageKeys, ...(await listDatabaseStoreKeys())])];
   for (const storageKey of storageKeys) {
     await queueUserSync(storageKey, async () => {
-      const persisted = databaseEnabled() ? await readDatabaseStore(storageKey) : null;
-      const store = normalizeStore(persisted || readStore(storageKey));
+      const store = await loadStoreByKey(storageKey);
       let changed = false;
       for (const item of store.items.filter((candidate) => !candidate.demo)) {
         const hasInvestmentAccount = store.accounts.some((account) => account.item_id === item.id && account.type === 'investment');
@@ -720,15 +738,22 @@ async function syncTransactionsForItem(store, item) {
 
 function plannedTransferTarget(store, transaction, bucket) {
   if (bucket !== 'transfer' || Number(transaction.amount || 0) <= 0) return null;
+  const detailed = String(transaction.personal_finance_category?.detailed || transaction.pfc_detailed || '').toUpperCase();
+  const destinationBucket = detailed.includes('CREDIT_CARD_PAYMENT') ? null
+    : detailed.includes('INVESTMENT') || detailed.includes('RETIREMENT') ? 'investments'
+      : detailed.includes('SAVINGS') ? 'savings' : null;
+  // Do not guess a destination from a shared brand name. Plaid must identify
+  // an investing/savings destination before a transfer can be an allocation.
+  if (!destinationBucket) return null;
   const description = `${transaction.merchant_name || ''} ${transaction.name || ''}`.toLowerCase();
-  const targets = store.accounts.filter((account) => !account.hidden && (account.type === 'investment' || (account.type === 'depository' && /savings/i.test(account.subtype || account.name || ''))));
+  const targets = store.accounts.filter((account) => !account.hidden && (destinationBucket === 'investments' ? account.type === 'investment' : account.type === 'depository' && /savings/i.test(account.subtype || account.name || '')));
   for (const target of targets) {
     const institutionWords = String(target.institution_name || '').toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length >= 4);
     const nameWords = String(target.name || '').toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length >= 5);
     if (![...institutionWords, ...nameWords].some((word) => description.includes(word))) continue;
-    return { bucket: target.type === 'investment' ? 'investments' : 'savings', accountId: target.plaid_account_id };
+    return { bucket: destinationBucket, accountId: target.plaid_account_id };
   }
-  return null;
+  return { bucket: destinationBucket, accountId: null };
 }
 
 function isPlaidProductNotReady(error) {
@@ -1323,7 +1348,7 @@ app.delete('/api/items/:id', async (req, res) => {
   for (const key of Object.keys(store.position_overrides || {})) if (key.startsWith(`${item.id}:`)) delete store.position_overrides[key];
   store.transactions = store.transactions.filter((transaction) => transaction.item_id !== item.id);
   snapshotNetWorth(store);
-  await saveStore(req.user, store);
+  await saveStore(req.user, store, { allowEmptyConnectedStore: !store.items.some((candidate) => !candidate.demo) });
   res.json({ ok: true });
 });
 
@@ -1456,8 +1481,7 @@ app.post('/api/plaid/webhook', webhookLimiter, async (req, res) => {
     if (databaseEnabled()) storageKeys = [...new Set([...storageKeys, ...(await listDatabaseStoreKeys())])];
     for (const storageKey of storageKeys) {
       const found = await queueUserSync(storageKey, async () => {
-        const persisted = databaseEnabled() ? await readDatabaseStore(storageKey) : null;
-        const store = normalizeStore(persisted || readStore(storageKey));
+        const store = await loadStoreByKey(storageKey);
         const item = store.items.find((candidate) => candidate.plaid_item_id === itemId);
         if (!item) return false;
         await syncItem(store, item);

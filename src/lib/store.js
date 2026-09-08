@@ -103,10 +103,12 @@ export function writeStore(store, userKey) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const currentStorePath = storePath(userKey);
   fs.mkdirSync(path.dirname(currentStorePath), { recursive: true });
+  // Preserve the last known-good encrypted payload before replacing it. A
+  // recovery snapshot taken after rename can only preserve the bad write.
+  if (fs.existsSync(currentStorePath)) snapshotStoreBackup(userKey, currentStorePath);
   const tmp = `${currentStorePath}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify({ version: 1, payload_enc: encryptPayload(JSON.stringify(store)) }));
   fs.renameSync(tmp, currentStorePath);
-  snapshotStoreBackup(userKey, currentStorePath);
 }
 
 export function removeDemoData(store) {

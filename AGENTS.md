@@ -56,6 +56,16 @@ clarity in existing core flows over adding a marginal feature.
 ## Product and UI
 
 - Preserve the visual hierarchy: a quick check-in first, details on demand.
+- Give every primary tab the same scan path: one dominant answer, one
+  plain-English interpretation or next step, then grouped supporting detail.
+  Use proximity, contrast, and restrained scale to lead the eye; do not make a
+  page feel like a uniform grid of unrelated white cards.
+- Keep controls with the answer they change. A shared period/range control
+  should visibly govern every affected chart; avoid orphaned controls or
+  duplicate selectors that can drift out of sync.
+- On a phone, show the high-level relationship first and disclose dense
+  diagrams, category lists, and settings on request. Never solve a cramped
+  layout with mandatory horizontal scrolling in a primary flow.
 - Do not introduce a new tab or permanent card unless it delivers distinct,
   recurring value. Use progressive disclosure for potentially stressful or
   dense topics such as debt, retirement assumptions, and transactions.
