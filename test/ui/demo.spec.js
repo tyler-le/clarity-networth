@@ -138,6 +138,13 @@ test('net worth opens as a concise financial briefing', async ({ page }) => {
   await expect(page.locator('#netWorthMovement')).toContainText(/net worth|tracking starts/i);
   await expect(page.locator('#overviewGlance')).toContainText(/cash.*invested.*debt/is);
   await expect(page.locator('#clarityCheckin')).toBeVisible();
+  // The secondary composition summary uses full, aligned amounts rather than
+  // squeezing three large values into narrow columns.
+  const compositionFits = await page.locator('#balanceSheetCard').evaluate((card) => {
+    const values = [...card.querySelectorAll('.overview-glance-values strong')];
+    return values.length === 3 && values.every((value) => value.scrollWidth <= value.clientWidth + 1);
+  });
+  expect(compositionFits).toBe(true);
   // The chart's plain-English interpretation is part of the same decision,
   // not a disconnected card farther down the dashboard.
   expect(await page.locator('#netWorthMovement').evaluate((movement) => movement.closest('#netWorthCard') === movement.parentElement)).toBe(true);
