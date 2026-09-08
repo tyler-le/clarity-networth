@@ -82,20 +82,15 @@
             <section class="networth-movement-inline" id="netWorthMovement" aria-live="polite"><div class="card-label">What changed</div><strong id="netWorthMovementTitle">Tracking starts today</strong><p id="netWorthMovementDetail">We’ll show what moved your net worth as verified history builds.</p></section>
           </article>
           <article class="card balance-sheet-card" id="balanceSheetCard">
-            <div class="card-label">Your position</div>
-            <div class="balance-sheet-row"><span>What you own</span><strong class="positive" id="assets">—</strong></div>
-            <div class="balance-sheet-row"><span>What you owe</span><strong class="negative" id="liabilities">—</strong></div>
-            <p id="balanceSheetContext">A clear view of your assets and debt.</p>
+            <div class="card-label">Where your money is</div>
+            <section class="overview-glance" id="overviewGlance"><div class="overview-glance-values"><div><span>Cash</span><strong id="overviewCash">—</strong></div><div><span>Invested</span><strong id="overviewInvested">—</strong></div><div><span>Debt</span><strong class="negative" id="overviewDebt">—</strong></div></div></section>
+            <p id="balanceSheetContext">A clear view of your cash, investments, and debt.</p>
           </article>
         </div>
         <section class="overview-guidance" aria-label="What deserves attention">
           <article class="card clarity-checkin hidden" id="clarityCheckin"><span class="checkin-mark" id="clarityCheckinMark" aria-hidden="true">✦</span><div><div class="card-label">Your next step</div><strong id="clarityCheckinTitle">—</strong><p id="clarityCheckinDetail"></p></div><button class="text-button" id="clarityCheckinAction">View your path</button></article>
           <article class="card connection-attention hidden" id="connectionAttention"><div><div class="card-label">Connection update</div><strong id="connectionAttentionTitle"></strong><p id="connectionAttentionDetail"></p></div><button class="text-button" id="connectionAttentionAction">View connections</button></article>
         </section>
-        <article class="card overview-story" aria-label="Where your money is">
-          <div class="overview-story-heading"><div class="card-label">Where your money is</div><p>A quick split across cash, investments, and debt.</p></div>
-          <section class="overview-glance" id="overviewGlance"><div class="overview-glance-values"><div><span>Cash</span><strong id="overviewCash">—</strong></div><div><span>Invested</span><strong id="overviewInvested">—</strong></div><div><span>Debt</span><strong id="overviewDebt">—</strong></div></div></section>
-        </article>
         <article class="card networth-insight goal-insight overview-goal" id="goalInsight"><div><div class="card-label">Your focus</div><strong id="goalTitle">Set a goal</strong><p id="goalDetail">Track a cash, investment, net-worth, or debt goal from your real balances.</p><i class="goal-progress"><b id="goalProgress"></b></i></div><button class="text-button" id="goalAction">Add goal</button></article>
         <!-- Temporary compatibility targets: an older no-cache client script
              may still be active while its service worker updates. They remain
@@ -142,8 +137,8 @@
       <section id="accountsView" class="view">
         <div class="accounts-summary" id="accountsSummary"></div>
         <article class="card debt-payoff-card hidden" id="debtPayoffCard" aria-live="polite"></article>
-        <div class="account-actions"><button class="secondary" id="addManualAccount">+ Add asset or debt</button><span>For things your institution can’t connect</span></div>
         <div id="accountGrid" class="account-groups"></div>
+        <article class="card manual-account-prompt"><div><div class="card-label">Something not connected?</div><strong>Add an asset or debt</strong><p>Include a home, vehicle, private investment, or personal loan in your net worth.</p></div><button class="secondary" id="addManualAccount">Add item</button></article>
         <article class="card setup-card" id="setupCard">
           <h3>Plaid setup</h3>
           <p>Use Sandbox while developing. Your Plaid access tokens are encrypted before being written to the local data store.</p>

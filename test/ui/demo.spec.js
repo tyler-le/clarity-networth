@@ -134,7 +134,7 @@ test('a new visitor can explore the complete demo without signing in @critical',
 test('net worth opens as a concise financial briefing', async ({ page }) => {
   await openDemo(page);
   await expect(page.locator('#netWorthCard')).toBeVisible();
-  await expect(page.locator('#balanceSheetCard')).toContainText(/what you own|what you owe/i);
+  await expect(page.locator('#balanceSheetCard')).toContainText(/where your money is/i);
   await expect(page.locator('#netWorthMovement')).toContainText(/net worth|tracking starts/i);
   await expect(page.locator('#overviewGlance')).toContainText(/cash.*invested.*debt/is);
   await expect(page.locator('#clarityCheckin')).toBeVisible();
@@ -187,6 +187,11 @@ test('accounts makes a simple debt payoff choice actionable without a separate d
   await expect(card.getByRole('button', { name: /small wins first/i })).toHaveClass(/active/);
   await expect(card).toContainText('Capital One Venture, your smallest balance');
   await expect(page.locator('#accountGrid')).toContainText('••4821');
+  const manualPrompt = page.locator('.manual-account-prompt');
+  await expect(manualPrompt).toContainText('Something not connected?');
+  await expect(manualPrompt.getByRole('button', { name: 'Add item' })).toBeVisible();
+  const [gridBox, promptBox] = await Promise.all([page.locator('#accountGrid').boundingBox(), manualPrompt.boundingBox()]);
+  expect(gridBox && promptBox && promptBox.y >= gridBox.y + gridBox.height).toBe(true);
 });
 
 test('demo visitors can try a goal without creating personal data', async ({ page }) => {

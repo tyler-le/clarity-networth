@@ -1417,10 +1417,6 @@ function renderDashboard() {
   const s = d.summary;
   setInitialNetWorthRange(d.snapshots || []);
   if (state.view === 'overview') restoreNetWorthHero();
-  $('#assets').textContent = `+${fmt.format(s.assets)}`;
-  $('#liabilities').textContent = `−${fmt.format(s.liabilities)}`;
-  $('#assets').classList.add('positive');
-  $('#liabilities').classList.add('negative');
   renderOverviewBriefing(d);
   if (state.view === 'overview') renderNetWorthChartWhenVisible();
   renderAccounts(d.accounts || []);
