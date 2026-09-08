@@ -1851,14 +1851,27 @@ $('#goalAction').addEventListener('click', async () => {
   const goal = state.dashboard?.goals?.[0];
   const activeGoal = state.demoPreview ? state.demoGoal : goal;
   if (activeGoal) {
-    if (!window.confirm(`Remove “${activeGoal.name}”?`)) return;
-    if (state.demoPreview) { state.demoGoal = null; renderClarityLayer(state.dashboard); showNotice('Demo goal removed.', 'success'); return; }
-    try { await api(`/api/goals/${encodeURIComponent(activeGoal.id)}`, { method: 'DELETE' }); await loadAll(); showNotice('Goal removed.', 'success'); } catch (error) { showNotice(error.message); } return;
+    $('#goalRemoveDetail').textContent = `Remove “${activeGoal.name}”? You can add it again whenever you want.`;
+    $('#goalRemoveDialog').showModal();
+    $('#goalRemoveCancel').focus();
+    return;
   }
   $('#goalName').value = ''; $('#goalSource').value = 'cash'; $('#goalTarget').value = ''; $('#goalDialog').showModal(); $('#goalName').focus();
 });
 $('#goalClose').addEventListener('click', () => $('#goalDialog').close());
 $('#goalCancel').addEventListener('click', () => $('#goalDialog').close());
+$('#goalRemoveCancel').addEventListener('click', () => $('#goalRemoveDialog').close());
+$('#goalRemoveConfirm').addEventListener('click', async () => {
+  const goal = state.dashboard?.goals?.[0];
+  const activeGoal = state.demoPreview ? state.demoGoal : goal;
+  if (!activeGoal) { $('#goalRemoveDialog').close(); return; }
+  $('#goalRemoveConfirm').disabled = true;
+  try {
+    if (state.demoPreview) { state.demoGoal = null; $('#goalRemoveDialog').close(); renderClarityLayer(state.dashboard); showNotice('Demo goal removed.', 'success'); return; }
+    await api(`/api/goals/${encodeURIComponent(activeGoal.id)}`, { method: 'DELETE' });
+    $('#goalRemoveDialog').close(); await loadAll(); showNotice('Goal removed.', 'success');
+  } catch (error) { showNotice(error.message); } finally { $('#goalRemoveConfirm').disabled = false; }
+});
 $('#goalForm').addEventListener('submit', async (event) => {
   event.preventDefault();
   const goal = { name: $('#goalName').value.trim(), source: $('#goalSource').value, target: Number($('#goalTarget').value) };

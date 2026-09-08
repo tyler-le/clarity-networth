@@ -212,6 +212,14 @@ test('demo visitors can try a goal without creating personal data', async ({ pag
   await expect(page.locator('#goalTitle')).toHaveText('Travel fund');
   await expect(page.locator('#goalDetail')).toContainText('Demo only');
   await expect(page.locator('#goalAction')).toHaveText('Remove');
+  await page.locator('#goalAction').click();
+  await expect(page.locator('#goalRemoveDialog')).toBeVisible();
+  await expect(page.locator('#goalRemoveDialog')).toContainText('Travel fund');
+  await page.locator('#goalRemoveCancel').click();
+  await expect(page.locator('#goalTitle')).toHaveText('Travel fund');
+  await page.locator('#goalAction').click();
+  await page.locator('#goalRemoveConfirm').click();
+  await expect(page.locator('#goalAction')).toHaveText('Add goal');
 });
 
 test('debt rates remain editable after a first entry', async ({ page }) => {
