@@ -2265,8 +2265,24 @@ $('#holdingHistoryClose').addEventListener('click', () => $('#holdingHistoryDial
   let pointerId = null;
   let touchId = null;
   let settleTimer = null;
+  let dragFrame = null;
+  let pendingDragOffset = 0;
   const isPhoneDrawer = () => window.matchMedia('(max-width: 560px)').matches;
-  const reset = () => { window.clearTimeout(settleTimer); settleTimer = null; dialog.style.transform = ''; dialog.style.transition = ''; dialog.removeAttribute('data-dragging'); };
+  const flushDrawerPosition = () => {
+    if (dragFrame != null) window.cancelAnimationFrame(dragFrame);
+    dragFrame = null;
+    dialog.style.transform = `translate3d(0, ${pendingDragOffset}px, 0)`;
+  };
+  const reset = () => {
+    window.clearTimeout(settleTimer);
+    if (dragFrame != null) window.cancelAnimationFrame(dragFrame);
+    settleTimer = null;
+    dragFrame = null;
+    pendingDragOffset = 0;
+    dialog.style.transform = '';
+    dialog.style.transition = '';
+    dialog.removeAttribute('data-dragging');
+  };
   const startDrawerDrag = (clientY) => {
     // Safari may emit both Pointer and Touch events for one gesture. Accept
     // the first stream only—two competing start positions make the sheet
@@ -2275,24 +2291,35 @@ $('#holdingHistoryClose').addEventListener('click', () => $('#holdingHistoryDial
     window.clearTimeout(settleTimer);
     startY = clientY;
     dragging = true;
+    pendingDragOffset = 0;
     dialog.setAttribute('data-dragging', '');
     dialog.style.transition = 'none';
     return true;
   };
   const moveDrawerDrag = (clientY) => {
     if (!dragging || startY == null || !Number.isFinite(clientY)) return;
-    const offset = Math.max(0, clientY - startY);
-    dialog.style.transform = `translateY(${offset}px)`;
+    pendingDragOffset = Math.max(0, clientY - startY);
+    // Draw once per frame. Pointer events can arrive more than once during a
+    // frame (and used to be handled by both the handle and window), which
+    // makes a sheet visibly stutter under a thumb.
+    if (dragFrame == null) {
+      dragFrame = window.requestAnimationFrame(() => {
+        dragFrame = null;
+        dialog.style.transform = `translate3d(0, ${pendingDragOffset}px, 0)`;
+      });
+    }
   };
   const settleAndCloseDrawer = () => {
     dialog.removeAttribute('data-dragging');
     dialog.style.transition = 'transform .2s cubic-bezier(.2,.75,.25,1)';
-    dialog.style.transform = `translateY(${Math.ceil(dialog.getBoundingClientRect().height)}px)`;
+    dialog.style.transform = `translate3d(0, ${Math.ceil(dialog.getBoundingClientRect().height)}px, 0)`;
     settleTimer = window.setTimeout(() => { dialog.close(); reset(); }, 210);
   };
   const finishDrawerDrag = (clientY) => {
     if (!dragging || startY == null || !Number.isFinite(clientY)) return;
     const offset = Math.max(0, clientY - startY);
+    pendingDragOffset = offset;
+    flushDrawerPosition();
     dragging = false;
     startY = null;
     pointerId = null;
@@ -2306,7 +2333,7 @@ $('#holdingHistoryClose').addEventListener('click', () => $('#holdingHistoryDial
     }
     dialog.removeAttribute('data-dragging');
     dialog.style.transition = 'transform .18s ease-out';
-    dialog.style.transform = 'translateY(0)';
+    dialog.style.transform = 'translate3d(0, 0, 0)';
     settleTimer = window.setTimeout(reset, 190);
   };
   handle.addEventListener('pointerdown', (event) => {
@@ -2323,9 +2350,9 @@ $('#holdingHistoryClose').addEventListener('click', () => $('#holdingHistoryDial
     try { handle.releasePointerCapture?.(event.pointerId); } catch { /* no retained capture */ }
     finishDrawerDrag(event.clientY);
   };
-  handle.addEventListener('pointermove', movePointerDrawerDrag);
-  handle.addEventListener('pointerup', finishPointerDrawerDrag);
-  handle.addEventListener('pointercancel', finishPointerDrawerDrag);
+  // One global pointer stream is intentional. Events dispatched on the
+  // handle bubble to window, so registering both targets applied every move
+  // twice and caused the visible jitter reported on phones.
   window.addEventListener('pointermove', movePointerDrawerDrag);
   window.addEventListener('pointerup', finishPointerDrawerDrag);
   window.addEventListener('pointercancel', finishPointerDrawerDrag);
