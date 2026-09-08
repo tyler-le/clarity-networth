@@ -2246,10 +2246,15 @@ $('#holdingHistoryClose').addEventListener('click', () => $('#holdingHistoryDial
   let dragging = false;
   let pointerId = null;
   let touchId = null;
+  let settleTimer = null;
   const isPhoneDrawer = () => window.matchMedia('(max-width: 560px)').matches;
-  const reset = () => { dialog.style.transform = ''; dialog.style.transition = ''; dialog.removeAttribute('data-dragging'); };
+  const reset = () => { window.clearTimeout(settleTimer); settleTimer = null; dialog.style.transform = ''; dialog.style.transition = ''; dialog.removeAttribute('data-dragging'); };
   const startDrawerDrag = (clientY) => {
-    if (!isPhoneDrawer() || !Number.isFinite(clientY)) return false;
+    // Safari may emit both Pointer and Touch events for one gesture. Accept
+    // the first stream only—two competing start positions make the sheet
+    // visibly jitter under a thumb.
+    if (dragging || !isPhoneDrawer() || !Number.isFinite(clientY)) return false;
+    window.clearTimeout(settleTimer);
     startY = clientY;
     dragging = true;
     dialog.setAttribute('data-dragging', '');
@@ -2260,6 +2265,12 @@ $('#holdingHistoryClose').addEventListener('click', () => $('#holdingHistoryDial
     if (!dragging || startY == null || !Number.isFinite(clientY)) return;
     const offset = Math.max(0, clientY - startY);
     dialog.style.transform = `translateY(${offset}px)`;
+  };
+  const settleAndCloseDrawer = () => {
+    dialog.removeAttribute('data-dragging');
+    dialog.style.transition = 'transform .2s cubic-bezier(.2,.75,.25,1)';
+    dialog.style.transform = `translateY(${Math.ceil(dialog.getBoundingClientRect().height)}px)`;
+    settleTimer = window.setTimeout(() => { dialog.close(); reset(); }, 210);
   };
   const finishDrawerDrag = (clientY) => {
     if (!dragging || startY == null || !Number.isFinite(clientY)) return;
@@ -2272,13 +2283,13 @@ $('#holdingHistoryClose').addEventListener('click', () => $('#holdingHistoryDial
     // below cover browsers that drop pointer capture when a finger leaves the
     // small handle before lifting.
     if (offset >= Math.min(52, dialog.getBoundingClientRect().height * .1)) {
-      reset();
-      dialog.close();
+      settleAndCloseDrawer();
       return;
     }
+    dialog.removeAttribute('data-dragging');
     dialog.style.transition = 'transform .18s ease-out';
     dialog.style.transform = 'translateY(0)';
-    window.setTimeout(reset, 190);
+    settleTimer = window.setTimeout(reset, 190);
   };
   handle.addEventListener('pointerdown', (event) => {
     if (!startDrawerDrag(event.clientY)) return;
@@ -2303,31 +2314,35 @@ $('#holdingHistoryClose').addEventListener('click', () => $('#holdingHistoryDial
   // iOS can dispatch Touch Events without preserving the pointer capture
   // from a short handle. Support that native path directly as well.
   const matchingTouch = (event) => [...event.changedTouches].find((touch) => touch.identifier === touchId);
-  handle.addEventListener('touchstart', (event) => {
-    const touch = event.changedTouches[0];
-    if (!touch || !startDrawerDrag(touch.clientY)) return;
-    touchId = touch.identifier;
-    event.preventDefault();
-  }, { passive: false });
-  window.addEventListener('touchmove', (event) => {
-    const touch = matchingTouch(event);
-    if (!touch) return;
-    moveDrawerDrag(touch.clientY);
-    event.preventDefault();
-  }, { passive: false });
-  window.addEventListener('touchend', (event) => {
-    const touch = matchingTouch(event);
-    if (touch) finishDrawerDrag(touch.clientY);
-  });
-  window.addEventListener('touchcancel', () => { if (touchId != null) finishDrawerDrag(startY || 0); });
+  // Pointer Events cover supported iOS and every current mobile browser.
+  // Keep Touch Events solely as a fallback for legacy browsers so the two
+  // event models can never fight over the same gesture.
+  if (!window.PointerEvent) {
+    handle.addEventListener('touchstart', (event) => {
+      const touch = event.changedTouches[0];
+      if (!touch || !startDrawerDrag(touch.clientY)) return;
+      touchId = touch.identifier;
+      event.preventDefault();
+    }, { passive: false });
+    window.addEventListener('touchmove', (event) => {
+      const touch = matchingTouch(event);
+      if (!touch) return;
+      moveDrawerDrag(touch.clientY);
+      event.preventDefault();
+    }, { passive: false });
+    window.addEventListener('touchend', (event) => {
+      const touch = matchingTouch(event);
+      if (touch) finishDrawerDrag(touch.clientY);
+    });
+    window.addEventListener('touchcancel', () => { if (touchId != null) finishDrawerDrag(startY || 0); });
+  }
   // On a phone this dialog is a bottom sheet, not a blocking desktop modal.
   // A tap on its dimmed backdrop should dismiss it using the same calm exit
   // as a completed downward drag. Events from the sheet's contents never
   // match the dialog element, so chart and control taps remain unaffected.
   dialog.addEventListener('click', (event) => {
     if (isPhoneDrawer() && event.target === dialog) {
-      reset();
-      dialog.close();
+      settleAndCloseDrawer();
     }
   });
   dialog.addEventListener('close', reset);

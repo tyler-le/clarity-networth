@@ -631,6 +631,10 @@ test('investment detail cards stay readable without horizontal overflow on a pho
   const handle = dialog.locator('.holding-history-drag-handle');
   await expect(handle).toBeVisible();
   await expect(page.locator('#holdingHistoryClose')).toBeHidden();
+  expect(await dialog.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return style.borderTopWidth === '0px' && style.borderRightWidth === '0px' && style.outlineStyle === 'none';
+  })).toBe(true);
   // Measure after the sheet has settled; transforms participate in bounding
   // boxes while its entry animation is still running.
   await page.waitForTimeout(350);
