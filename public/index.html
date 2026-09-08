@@ -81,17 +81,19 @@
             <div class="line-chart" id="netWorthChart" aria-label="Scrubbable net worth history"></div>
             <section class="networth-movement-inline" id="netWorthMovement" aria-live="polite"><div class="card-label">What changed</div><strong id="netWorthMovementTitle">Tracking starts today</strong><p id="netWorthMovementDetail">We’ll show what moved your net worth as verified history builds.</p></section>
           </article>
-          <article class="card balance-sheet-card" id="balanceSheetCard">
-            <div class="card-label">Where your money is</div>
-            <section class="overview-glance" id="overviewGlance"><div class="overview-glance-values"><div><span>Cash</span><strong id="overviewCash">—</strong></div><div><span>Invested</span><strong id="overviewInvested">—</strong></div><div><span>Debt</span><strong class="negative" id="overviewDebt">—</strong></div></div></section>
-            <p id="balanceSheetContext">A clear view of your cash, investments, and debt.</p>
-          </article>
+          <div class="overview-side-rail">
+            <article class="card balance-sheet-card" id="balanceSheetCard">
+              <div class="card-label">Where your money is</div>
+              <section class="overview-glance" id="overviewGlance"><div class="overview-glance-values"><div><span>Cash</span><strong id="overviewCash">—</strong></div><div><span>Invested</span><strong id="overviewInvested">—</strong></div><div><span>Debt</span><strong class="negative" id="overviewDebt">—</strong></div></div></section>
+              <p id="balanceSheetContext">A clear view of your cash, investments, and debt.</p>
+            </article>
+            <article class="card networth-insight goal-insight overview-goal" id="goalInsight"><div><div class="card-label">Your focus</div><strong id="goalTitle">Set a goal</strong><p id="goalDetail">Track a cash, investment, net-worth, or debt goal from your real balances.</p><i class="goal-progress"><b id="goalProgress"></b></i></div><button class="text-button" id="goalAction">Add goal</button></article>
+          </div>
         </div>
         <section class="overview-guidance" aria-label="What deserves attention">
           <article class="card clarity-checkin hidden" id="clarityCheckin"><span class="checkin-mark" id="clarityCheckinMark" aria-hidden="true">✦</span><div><div class="card-label">Your next step</div><strong id="clarityCheckinTitle">—</strong><p id="clarityCheckinDetail"></p></div><button class="text-button" id="clarityCheckinAction">View your path</button></article>
           <article class="card connection-attention hidden" id="connectionAttention"><div><div class="card-label">Connection update</div><strong id="connectionAttentionTitle"></strong><p id="connectionAttentionDetail"></p></div><button class="text-button" id="connectionAttentionAction">View connections</button></article>
         </section>
-        <article class="card networth-insight goal-insight overview-goal" id="goalInsight"><div><div class="card-label">Your focus</div><strong id="goalTitle">Set a goal</strong><p id="goalDetail">Track a cash, investment, net-worth, or debt goal from your real balances.</p><i class="goal-progress"><b id="goalProgress"></b></i></div><button class="text-button" id="goalAction">Add goal</button></article>
         <!-- Temporary compatibility targets: an older no-cache client script
              may still be active while its service worker updates. They remain
              invisible and prevent that shell from stopping before data loads. -->

@@ -135,6 +135,7 @@ test('net worth opens as a concise financial briefing', async ({ page }) => {
   await openDemo(page);
   await expect(page.locator('#netWorthCard')).toBeVisible();
   await expect(page.locator('#balanceSheetCard')).toContainText(/where your money is/i);
+  await expect(page.locator('.overview-side-rail #goalInsight')).toContainText(/your focus/i);
   await expect(page.locator('#netWorthMovement')).toContainText(/net worth|tracking starts/i);
   await expect(page.locator('#overviewGlance')).toContainText(/cash.*invested.*debt/is);
   await expect(page.locator('#clarityCheckin')).toBeVisible();
