@@ -412,9 +412,10 @@ function renderLineChart(snapshots, summary, rangeStart = null) {
   // the same day. Longer spans retain a middle label for quick orientation.
   const tickTimes = sameMonth || width <= 420 ? [domainStart, domainEnd] : [domainStart, (domainStart + domainEnd) / 2, domainEnd];
   const hasUntrackedLead = domainStart < firstObserved;
-  // The tracking annotation already supplies the meaningful date. Showing
-  // endpoints as well creates duplicate, colliding labels in narrow cards.
-  const xAxis = hasUntrackedLead ? '' : tickTimes.map((time, index) => `<text x="${(plotLeft + ((time - domainStart) / (domainEnd - domainStart)) * (width - plotLeft - plotRight)).toFixed(1)}" y="${height - 5}" text-anchor="${index === 0 ? 'start' : index === tickTimes.length - 1 ? 'end' : 'middle'}" class="chart-axis-label chart-x-axis-label">${dateLabel(time)}</text>`).join('');
+  // The dashed lead-in explains the unavailable part of a selected range;
+  // retain the first verified date and the latest date for orientation.
+  const visibleTickTimes = hasUntrackedLead ? [firstObserved, domainEnd] : tickTimes;
+  const xAxis = [...new Set(visibleTickTimes)].map((time, index, times) => `<text x="${(plotLeft + ((time - domainStart) / (domainEnd - domainStart)) * (width - plotLeft - plotRight)).toFixed(1)}" y="${height - 5}" text-anchor="${index === 0 ? 'start' : index === times.length - 1 ? 'end' : 'middle'}" class="chart-axis-label chart-x-axis-label">${dateLabel(time)}</text>`).join('');
   const trackingDate = new Date(`${snapshots[0].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   const unavailableLead = hasUntrackedLead
     ? `<path class="chart-unavailable-line" d="M ${plotLeft} ${points[0][1].toFixed(1)} L ${points[0][0].toFixed(1)} ${points[0][1].toFixed(1)}"/><text x="${((plotLeft + points[0][0]) / 2).toFixed(1)}" y="${Math.max(plotTop + 12, points[0][1] - 10).toFixed(1)}" text-anchor="middle" class="chart-unavailable-label">${width < 360 ? 'Since' : 'Tracking began'} ${trackingDate}</text>`
@@ -1036,7 +1037,10 @@ function renderPortfolioChart(data) {
   const xIndices = [...new Set(width > 420 ? [0, Math.floor((snapshots.length - 1) / 2), snapshots.length - 1] : [0, snapshots.length - 1])];
   const grid = [max, (max + min) / 2, min].map((value) => { const y = plot.bottom - (value - min) / (max - min) * (plot.bottom - plot.top); return `<line x1="${plot.left}" y1="${y}" x2="${width - plot.right}" y2="${y}" class="chart-grid"/><text x="${plot.left - 6}" y="${y + 3}" text-anchor="end" class="chart-axis-label">${axisCurrency(value)}</text>`; }).join('');
   const hasUntrackedLead = domainStart < firstObservedTime;
-  const xAxis = hasUntrackedLead ? '' : xIndices.map((index) => `<text x="${points[index][0]}" y="${height - 5}" text-anchor="${index === 0 ? 'start' : index === snapshots.length - 1 ? 'end' : 'middle'}" class="chart-axis-label chart-x-axis-label">${label(index)}</text>`).join('');
+  // The dashed lead-in explains the unavailable part of a selected range;
+  // it should not make the verified part lose its dates.
+  const xAxisIndices = hasUntrackedLead ? [0, snapshots.length - 1] : xIndices;
+  const xAxis = [...new Set(xAxisIndices)].map((index, position, indices) => `<text x="${points[index][0]}" y="${height - 5}" text-anchor="${position === 0 ? 'start' : position === indices.length - 1 ? 'end' : 'middle'}" class="chart-axis-label chart-x-axis-label">${label(index)}</text>`).join('');
   const trackingDate = firstDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   const unavailableLead = hasUntrackedLead
     ? `<path class="chart-unavailable-line" d="M ${plot.left} ${points[0][1].toFixed(1)} L ${points[0][0]} ${points[0][1]}"/><text x="${((plot.left + points[0][0]) / 2).toFixed(1)}" y="${Math.max(plot.top + 12, points[0][1] - 10).toFixed(1)}" text-anchor="middle" class="chart-unavailable-label">${width < 360 ? 'Since' : 'Tracking began'} ${trackingDate}</text>`
@@ -2292,6 +2296,16 @@ $('#holdingHistoryClose').addEventListener('click', () => $('#holdingHistoryDial
     if (touch) finishDrawerDrag(touch.clientY);
   });
   window.addEventListener('touchcancel', () => { if (touchId != null) finishDrawerDrag(startY || 0); });
+  // On a phone this dialog is a bottom sheet, not a blocking desktop modal.
+  // A tap on its dimmed backdrop should dismiss it using the same calm exit
+  // as a completed downward drag. Events from the sheet's contents never
+  // match the dialog element, so chart and control taps remain unaffected.
+  dialog.addEventListener('click', (event) => {
+    if (isPhoneDrawer() && event.target === dialog) {
+      reset();
+      dialog.close();
+    }
+  });
   dialog.addEventListener('close', reset);
 }
 $('#manualHoldingForm').addEventListener('submit', async (event) => {

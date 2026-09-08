@@ -642,6 +642,14 @@ test('investment detail cards stay readable without horizontal overflow on a pho
   await expect(dialog).toHaveCSS('transform', /matrix\(1, 0, 0, 1, 0, (?:[4-9]\d|[1-9]\d\d)\)/);
   await handle.dispatchEvent('pointerup', { pointerType: 'touch', pointerId: 41, clientY: 190 });
   await expect(dialog).toBeHidden();
+
+  // A bottom sheet also dismisses from its dimmed backdrop. Dispatch on the
+  // native dialog itself, which is the browser's event target for that area.
+  await page.locator('[data-holding-history]').first().click();
+  await expect(dialog).toBeVisible();
+  expect(await dialog.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe('none');
+  await dialog.evaluate((element) => element.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  await expect(dialog).toBeHidden();
 });
 
 test('portfolio history can be scrubbed just like net worth', async ({ page }) => {

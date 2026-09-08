@@ -169,15 +169,24 @@ test('a one-month net-worth view never repeats a calendar label @critical', asyn
 
   await page.locator('[data-networth-range="1m"]').click();
   const labels = await page.locator('#netWorthChart .chart-x-axis-label').allTextContents();
-  if (labels.length) {
-    expect(labels.length).toBeGreaterThanOrEqual(2);
-    expect(labels.every((label) => /^[A-Z][a-z]{2} \d+$/.test(label))).toBe(true);
-    expect(new Set(labels).size).toBe(labels.length);
-  } else {
-    // A selected range that starts before tracking has one compact, explicit
-    // annotation instead of redundant axis labels that can collide on phone.
-    await expect(page.locator('#netWorthChart .chart-unavailable-label')).toHaveText(/Since|Tracking began/);
-  }
+  expect(labels.length).toBeGreaterThanOrEqual(2);
+  expect(labels.every((label) => /^[A-Z][a-z]{2} \d+$/.test(label))).toBe(true);
+  expect(new Set(labels).size).toBe(labels.length);
+  await expect(page.locator('#netWorthChart .chart-unavailable-label')).toHaveText(/Since|Tracking began/);
+});
+
+test('an incomplete portfolio timeframe retains its verified endpoint dates', async ({ page }) => {
+  await openSignedInScenario(page, (preview) => {
+    preview.investments.snapshots = [
+      { date: '2026-09-05', value: 215_200, source: 'verified' },
+      { date: '2026-09-07', value: 217_745, source: 'verified' }
+    ];
+  });
+  await goToView(page, 'investments');
+  await page.locator('[data-investment-range="1y"]').click();
+  const labels = await page.locator('#investmentChart .chart-x-axis-label').allTextContents();
+  expect(labels).toEqual(['Sep 5', 'Sep 7']);
+  await expect(page.locator('#investmentChart .chart-unavailable-label')).toHaveText(/Since|Tracking began/);
 });
 
 test('a member with debt receives one optional next step, not an alarming wall of payoff controls', async ({ page }) => {
