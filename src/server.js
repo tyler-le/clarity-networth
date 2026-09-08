@@ -1054,13 +1054,18 @@ app.get('/api/spending', async (req, res) => {
 });
 
 app.get('/api/investments', async (req, res) => {
-  const store = activeStore(await loadStore(req.user));
+  const persistedStore = await loadStore(req.user);
+  const isDemoMode = Boolean(persistedStore.settings?.demo_mode);
+  const store = activeStore(persistedStore);
   // Capture the connection-day baseline even before a historical
   // reconstruction is possible. Future successful daily syncs add one
   // provider-observed account and holding value per calendar day.
   snapshotInvestments(store);
   refreshReconstructedInvestmentSnapshots(store, new Date().toISOString().slice(0, 10), Math.max(1, Math.min(2, Number(process.env.MARKETDATA_HISTORY_YEARS || 1))));
-  await saveStore(req.user, store);
+  // Signed-in demo is an in-memory view. Never persist its seeded accounts
+  // over a member's real store; the safety boundary would block it anyway,
+  // but an error here made demo mode appear as a failed data load.
+  if (!isDemoMode) await saveStore(req.user, store);
   res.json(investmentSummary(store));
 });
 
@@ -1068,12 +1073,14 @@ app.get('/api/investments/history', async (req, res) => {
   const accountId = String(req.query.account_id || '').trim().slice(0, 180);
   const ticker = String(req.query.ticker || '').trim().toUpperCase().slice(0, 24);
   if (!accountId && !ticker) return res.status(400).json({ error: 'Choose an investment account or holding.' });
-  const store = activeStore(await loadStore(req.user));
+  const persistedStore = await loadStore(req.user);
+  const isDemoMode = Boolean(persistedStore.settings?.demo_mode);
+  const store = activeStore(persistedStore);
   // Opening an account or holding is also a safe opportunity to persist its
   // current provider-observed value. This guarantees a truthful baseline even
   // when the member arrived here before the scheduled daily sync.
   snapshotInvestments(store);
-  await saveStore(req.user, store);
+  if (!isDemoMode) await saveStore(req.user, store);
   res.json(investmentDetailHistory(store, { accountId: accountId || null, ticker: ticker || null, years: Math.max(1, Math.min(2, Number(process.env.MARKETDATA_HISTORY_YEARS || 1))) }));
 });
 
