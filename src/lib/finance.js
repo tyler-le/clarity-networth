@@ -452,6 +452,9 @@ export function refreshReconstructedInvestmentSnapshots(store, endDate = new Dat
 // reconstructs the person's currently reported quantity from available trades
 // and historical prices, but never labels a missing trade record as a gain.
 export function investmentDetailHistory(store, { accountId = null, ticker = null, years = 1 } = {}) {
+  const selectedAccount = accountId
+    ? store.accounts.find((account) => account.plaid_account_id === accountId && !account.hidden && account.type === 'investment')
+    : null;
   const visibleAccounts = new Set(store.accounts.filter((account) => !account.hidden && account.type === 'investment').map((account) => account.plaid_account_id));
   const normalizedTicker = String(ticker || '').trim().toUpperCase();
   const positions = (store.positions || []).filter((position) => {
@@ -459,13 +462,22 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
     if (accountId) return position.account_id === accountId;
     return normalizedTicker && String(position.ticker || '').trim().toUpperCase() === normalizedTicker;
   });
-  if (!positions.length) return { state: 'unavailable', reason: 'This holding is not available from your latest connection.', history: [], market: [] };
+  // Keep the account identity visible even if its provider has not supplied
+  // positions in this response. A generic "$0 Investment account" is both
+  // misleading and needlessly discards the nickname the person gave it.
+  if (!positions.length) return {
+    state: 'unavailable',
+    label: selectedAccount?.nickname || selectedAccount?.name || (accountId ? 'Investment account' : normalizedTicker),
+    ticker: accountId ? null : normalizedTicker || null,
+    value: selectedAccount ? Math.abs(Number(selectedAccount.current_balance || 0)) : 0,
+    reason: 'This holding is not available from your latest connection.', history: [], market: []
+  };
   const resolvedTickers = [...new Set(positions.map((position) => String(position.ticker || '').trim().toUpperCase()).filter(Boolean))];
   const value = positions.reduce((sum, position) => sum + Math.abs(Number(position.value || 0)), 0);
   const completeCostBasis = positions.every((position) => position.cost_basis != null);
   const costBasis = completeCostBasis ? positions.reduce((sum, position) => sum + Number(position.cost_basis || 0), 0) : null;
   const label = accountId
-    ? (store.accounts.find((account) => account.plaid_account_id === accountId)?.nickname || store.accounts.find((account) => account.plaid_account_id === accountId)?.name || 'Investment account')
+    ? (selectedAccount?.nickname || selectedAccount?.name || 'Investment account')
     : (positions[0].name || normalizedTicker);
   const providerHistory = providerPositionHistory(store, { accountId, ticker: normalizedTicker });
   // Real accounts use the complete ledger, cash movements and exact security

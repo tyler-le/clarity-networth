@@ -1267,7 +1267,10 @@ function renderHoldingHistoryDetail() {
 
 async function openHoldingHistory({ ticker = '', accountId = '' } = {}) {
   const dialog = $('#holdingHistoryDialog');
-  state.holdingHistory = { state: 'loading', label: 'Investment detail', ticker, value: 0, history: [], market: [], reason: 'Loading your history…' };
+  const selectedAccount = accountId ? (state.investments?.accounts || []).find((account) => account.account_id === accountId) : null;
+  const accountLabel = selectedAccount?.name || 'Investment account';
+  const accountValue = selectedAccount ? Number(selectedAccount.value || selectedAccount.balance || 0) : 0;
+  state.holdingHistory = { state: 'loading', label: accountId ? accountLabel : 'Investment detail', ticker, value: accountValue, history: [], market: [], reason: 'Loading your history…' };
   state.holdingHistoryMode = 'position';
   // This starts aligned with the page for continuity, then belongs only to
   // this drill-in. Changing it never alters the Investments overview.
@@ -1277,7 +1280,15 @@ async function openHoldingHistory({ ticker = '', accountId = '' } = {}) {
   try {
     const base = state.demoPreview || state.dashboard?.demoMode ? '/api/demo-investments/history' : '/api/investments/history';
     const query = accountId ? `account_id=${encodeURIComponent(accountId)}` : `ticker=${encodeURIComponent(ticker)}`;
-    state.holdingHistory = { ...(await api(`${base}?${query}`)), accountId: accountId || null };
+    const response = await api(`${base}?${query}`);
+    state.holdingHistory = {
+      ...response,
+      // The API normally supplies these fields. Retain the selected account
+      // as a final UI safeguard for an incomplete provider response.
+      label: response.label || (accountId ? accountLabel : response.ticker || 'Investment detail'),
+      value: response.value == null && accountId ? accountValue : response.value,
+      accountId: accountId || null
+    };
     renderHoldingHistoryDetail();
   } catch (error) {
     state.holdingHistory = { state: 'unavailable', label: 'Investment detail', ticker, value: 0, history: [], market: [], reason: error.message || 'We could not load this history right now.' };

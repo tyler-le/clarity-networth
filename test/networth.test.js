@@ -232,6 +232,17 @@ test('one verified account snapshot begins personal investment tracking without 
   assert.match(detail.detail, /verified institution update/i);
 });
 
+test('an unavailable account detail preserves its nickname and reported balance', () => {
+  const store = {
+    accounts: [{ plaid_account_id: 'hsa', type: 'investment', name: 'Institution HSA', nickname: 'Udemy HSA', current_balance: 2_089, hidden: false }],
+    positions: [], investment_transactions: [], investment_position_snapshots: [], items: []
+  };
+  const detail = investmentDetailHistory(store, { accountId: 'hsa' });
+  assert.equal(detail.state, 'unavailable');
+  assert.equal(detail.label, 'Udemy HSA');
+  assert.equal(detail.value, 2_089);
+});
+
 test('investment reconstruction starts at a fully reported opening trade and uses historical closes', () => {
   const store = {
     positions: [{ security_id: 'fund', ticker: 'VFINX', type: 'mutual fund', quantity: 10, value: 1100 }],
@@ -401,6 +412,8 @@ test('account and portfolio history are withheld when a sold security cannot be 
 
   const detail = investmentDetailHistory(store, { accountId: '401k', years: 1 });
   assert.equal(detail.state, 'unavailable');
+  assert.equal(detail.label, 'Work 401(k)');
+  assert.equal(detail.value, 550);
   assert.match(detail.reason, /enough priced security detail/i);
   assert.deepEqual(detail.history, []);
 
