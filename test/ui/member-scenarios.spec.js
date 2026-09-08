@@ -169,9 +169,24 @@ test('a one-month net-worth view never repeats a calendar label @critical', asyn
 
   await page.locator('[data-networth-range="1m"]').click();
   const labels = await page.locator('#netWorthChart .chart-x-axis-label').allTextContents();
-  expect(labels.length).toBeGreaterThanOrEqual(2);
+  expect(labels.length).toBeGreaterThanOrEqual(1);
   expect(labels.every((label) => /^[A-Z][a-z]{2} \d+$/.test(label))).toBe(true);
   expect(new Set(labels).size).toBe(labels.length);
+  await expect(page.locator('#netWorthChart .chart-unavailable-label')).toHaveText(/Since|Tracking began/);
+});
+
+test('a long net-worth range with only recent history does not overlap right-edge dates @critical', async ({ page }) => {
+  await openSignedInScenario(page, (preview) => {
+    preview.dashboard.snapshots = [
+      { date: '2026-09-05', net_worth: 237_200, source: 'verified' },
+      { date: '2026-09-06', net_worth: 240_663, source: 'verified' },
+      { date: '2026-09-07', net_worth: 240_603, source: 'verified' }
+    ];
+  });
+
+  await page.locator('[data-networth-range="1y"]').click();
+  const labels = await page.locator('#netWorthChart .chart-x-axis-label').allTextContents();
+  expect(labels).toEqual(['Sep 7']);
   await expect(page.locator('#netWorthChart .chart-unavailable-label')).toHaveText(/Since|Tracking began/);
 });
 

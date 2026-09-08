@@ -407,15 +407,26 @@ function renderLineChart(snapshots, summary, rangeStart = null) {
   // then graduate to month/year as the selected range expands.
   const sameMonth = new Date(domainStart).getFullYear() === new Date(domainEnd).getFullYear() && new Date(domainStart).getMonth() === new Date(domainEnd).getMonth();
   const shortRange = domainEnd - domainStart <= 45 * 86400000;
-  const dateLabel = (time) => new Date(time).toLocaleDateString('en-US', sameMonth || shortRange ? { month: 'short', day: 'numeric' } : { month: 'short', year: 'numeric' });
+  const hasUntrackedLead = domainStart < firstObserved;
+  // A long selected range can still contain only a few very recent verified
+  // points. Those endpoints need day labels, not two indistinguishable
+  // "Sep 2026" labels at the right edge.
+  const verifiedSpanIsShort = domainEnd - firstObserved <= 45 * 86400000;
+  const dateLabel = (time) => new Date(time).toLocaleDateString('en-US', sameMonth || shortRange || (hasUntrackedLead && verifiedSpanIsShort) ? { month: 'short', day: 'numeric' } : { month: 'short', year: 'numeric' });
   // Short spans need distinct days, not three calendar labels that round to
   // the same day. Longer spans retain a middle label for quick orientation.
   const tickTimes = sameMonth || width <= 420 ? [domainStart, domainEnd] : [domainStart, (domainStart + domainEnd) / 2, domainEnd];
-  const hasUntrackedLead = domainStart < firstObserved;
   // The dashed lead-in explains the unavailable part of a selected range;
   // retain the first verified date and the latest date for orientation.
-  const visibleTickTimes = hasUntrackedLead ? [firstObserved, domainEnd] : tickTimes;
-  const xAxis = [...new Set(visibleTickTimes)].map((time, index, times) => `<text x="${(plotLeft + ((time - domainStart) / (domainEnd - domainStart)) * (width - plotLeft - plotRight)).toFixed(1)}" y="${height - 5}" text-anchor="${index === 0 ? 'start' : index === times.length - 1 ? 'end' : 'middle'}" class="chart-axis-label chart-x-axis-label">${dateLabel(time)}</text>`).join('');
+  const endpointTicks = [...new Set(hasUntrackedLead ? [firstObserved, domainEnd] : tickTimes)];
+  // If two endpoint labels would occupy the same few pixels, showing both
+  // harms legibility. The tracking annotation already identifies the start;
+  // keep one unambiguous latest-date label instead.
+  const visibleTickTimes = endpointTicks.length === 2
+    && Math.abs(xForDate(new Date(endpointTicks[1]).toISOString().slice(0, 10)) - xForDate(new Date(endpointTicks[0]).toISOString().slice(0, 10))) < 72
+    ? [endpointTicks[1]]
+    : endpointTicks;
+  const xAxis = visibleTickTimes.map((time, index, times) => `<text x="${(plotLeft + ((time - domainStart) / (domainEnd - domainStart)) * (width - plotLeft - plotRight)).toFixed(1)}" y="${height - 5}" text-anchor="${times.length === 1 || index === times.length - 1 ? 'end' : index === 0 ? 'start' : 'middle'}" class="chart-axis-label chart-x-axis-label">${dateLabel(time)}</text>`).join('');
   const trackingDate = new Date(`${snapshots[0].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   const unavailableLead = hasUntrackedLead
     ? `<path class="chart-unavailable-line" d="M ${plotLeft} ${points[0][1].toFixed(1)} L ${points[0][0].toFixed(1)} ${points[0][1].toFixed(1)}"/><text x="${((plotLeft + points[0][0]) / 2).toFixed(1)}" y="${Math.max(plotTop + 12, points[0][1] - 10).toFixed(1)}" text-anchor="middle" class="chart-unavailable-label">${width < 360 ? 'Since' : 'Tracking began'} ${trackingDate}</text>`
@@ -1031,16 +1042,20 @@ function renderPortfolioChart(data) {
   const shortRange = lastDate.getTime() - firstDate.getTime() <= 45 * 86400000;
   // Month/year is useful over a long history, but becomes repeated labels
   // across a short Aug→Sep window. Use distinct days in either case.
-  const label = (index) => new Date(`${snapshots[index].date}T12:00:00`).toLocaleDateString('en-US', sameMonth || shortRange
+  const hasUntrackedLead = domainStart < firstObservedTime;
+  const verifiedSpanIsShort = lastObservedTime - firstObservedTime <= 45 * 86400000;
+  const label = (index) => new Date(`${snapshots[index].date}T12:00:00`).toLocaleDateString('en-US', sameMonth || shortRange || (hasUntrackedLead && verifiedSpanIsShort)
     ? { month: 'short', day: 'numeric' }
     : { month: 'short', year: '2-digit' });
   const xIndices = [...new Set(width > 420 ? [0, Math.floor((snapshots.length - 1) / 2), snapshots.length - 1] : [0, snapshots.length - 1])];
   const grid = [max, (max + min) / 2, min].map((value) => { const y = plot.bottom - (value - min) / (max - min) * (plot.bottom - plot.top); return `<line x1="${plot.left}" y1="${y}" x2="${width - plot.right}" y2="${y}" class="chart-grid"/><text x="${plot.left - 6}" y="${y + 3}" text-anchor="end" class="chart-axis-label">${axisCurrency(value)}</text>`; }).join('');
-  const hasUntrackedLead = domainStart < firstObservedTime;
   // The dashed lead-in explains the unavailable part of a selected range;
   // it should not make the verified part lose its dates.
-  const xAxisIndices = hasUntrackedLead ? [0, snapshots.length - 1] : xIndices;
-  const xAxis = [...new Set(xAxisIndices)].map((index, position, indices) => `<text x="${points[index][0]}" y="${height - 5}" text-anchor="${position === 0 ? 'start' : position === indices.length - 1 ? 'end' : 'middle'}" class="chart-axis-label chart-x-axis-label">${label(index)}</text>`).join('');
+  const endpointIndices = [...new Set(hasUntrackedLead ? [0, snapshots.length - 1] : xIndices)];
+  const xAxisIndices = endpointIndices.length === 2 && Math.abs(points[endpointIndices[1]][0] - points[endpointIndices[0]][0]) < 72
+    ? [endpointIndices[1]]
+    : endpointIndices;
+  const xAxis = xAxisIndices.map((index, position, indices) => `<text x="${points[index][0]}" y="${height - 5}" text-anchor="${indices.length === 1 || position === indices.length - 1 ? 'end' : position === 0 ? 'start' : 'middle'}" class="chart-axis-label chart-x-axis-label">${label(index)}</text>`).join('');
   const trackingDate = firstDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   const unavailableLead = hasUntrackedLead
     ? `<path class="chart-unavailable-line" d="M ${plot.left} ${points[0][1].toFixed(1)} L ${points[0][0]} ${points[0][1]}"/><text x="${((plot.left + points[0][0]) / 2).toFixed(1)}" y="${Math.max(plot.top + 12, points[0][1] - 10).toFixed(1)}" text-anchor="middle" class="chart-unavailable-label">${width < 360 ? 'Since' : 'Tracking began'} ${trackingDate}</text>`
