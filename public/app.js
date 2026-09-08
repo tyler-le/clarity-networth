@@ -1275,7 +1275,14 @@ async function openHoldingHistory({ ticker = '', accountId = '' } = {}) {
   // This starts aligned with the page for continuity, then belongs only to
   // this drill-in. Changing it never alters the Investments overview.
   state.holdingHistoryRange = state.investmentRange;
-  if (!dialog.open) dialog.showModal();
+  if (!dialog.open) {
+    dialog.showModal();
+    // A dialog normally auto-focuses its first button. On the phone that is
+    // the full-width drag target, so its keyboard ring looks like a colored
+    // border around the new sheet. Keep initial focus on the dialog instead;
+    // Tab still reaches the handle and shows its focus indicator as expected.
+    dialog.focus({ preventScroll: true });
+  }
   renderHoldingHistoryDetail();
   try {
     const base = state.demoPreview || state.dashboard?.demoMode ? '/api/demo-investments/history' : '/api/investments/history';

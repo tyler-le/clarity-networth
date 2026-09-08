@@ -536,6 +536,7 @@ test('holding and account drill-ins show only a person’s verified position his
   await page.locator('[data-investment-account-history]').first().click();
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('tab', { name: 'Your position' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe('holdingHistoryDialog');
 });
 
 test('investment detail distinguishes loading, preparing, and first-snapshot tracking @critical', async ({ page }) => {
