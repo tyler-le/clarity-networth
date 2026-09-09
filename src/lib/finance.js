@@ -1305,7 +1305,7 @@ function demoInvestmentBalance(store) {
 // Creates fixture records once, before any view range is selected. The small
 // independent variations are deliberately stored in the records, rather than
 // drawn by a chart, and the final observation reconciles to the account value.
-function seededGrowthSeries({ count, start, end, seed }) {
+function seededGrowthSeries({ count, start, end, seed, intervalsPerMonth = 1 }) {
   let state = seed;
   let value = start;
   const raw = Array.from({ length: count }, (_, index) => {
@@ -1313,8 +1313,11 @@ function seededGrowthSeries({ count, start, end, seed }) {
     const variation = state / 2_147_483_647 - .5;
     // Contributions keep a diversified household's long-horizon balance from
     // performing like a price-only ticker while avoiding synthetic waves.
-    const contribution = 320 + variation * 110;
-    value = value * (1 + .0038 + variation * .004) + contribution;
+    const contribution = (320 + variation * 110) / intervalsPerMonth;
+    // A daily fixture has smaller per-observation movement than a monthly
+    // fixture. That produces a plausible recorded path without a synthetic
+    // sawtooth or a chart-side interpolation.
+    value = value * (1 + .0038 / intervalsPerMonth + variation * .004 / Math.sqrt(intervalsPerMonth)) + contribution;
     return value;
   });
   const span = Math.max(.01, raw.at(-1) - raw[0]);
@@ -1376,12 +1379,6 @@ export function seedDemo(store) {
     ['demo-401k', 'BND', 'Vanguard Total Bond Market ETF', 'etf', 110, 73, 8030]
   ].map(([account_id, ticker, name, type, quantity, price, value]) => ({ id: `demo-position-${ticker}-${account_id}`, item_id: 'demo-fidelity', account_id, security_id: `demo-security-${ticker}`, ticker, name, type, quantity, price, value, cost_basis: Math.round(value * .9), demo: true }));
   ensureDemoMarketHistory(store);
-  const portfolioValue = demoInvestmentBalance(store);
-  const portfolioHistory = seededGrowthSeries({ count: 84, start: 20_500, end: portfolioValue, seed: 87_321 });
-  store.investment_snapshots = Array.from({ length: 84 }, (_, index) => {
-    const date = new Date(now.getFullYear(), now.getMonth() - (83 - index), 1);
-    return { date: date.toISOString().slice(0, 10), value: portfolioHistory[index], source: 'verified', demo: true };
-  });
   const rows = [
     ['payroll-1', 'Payroll', -3100, d(1), 'income'],
     ['hysa-interest', 'Ally Savings interest', -42.65, d(1), 'income'],
@@ -1418,33 +1415,19 @@ export function seedDemo(store) {
     pfc_detailed: '', source: 'investment_transaction', demo: true
   });
 
-  const dailyStart = 91_900;
-  const dailyEnd = demoNetWorthFromAccounts(store);
-  let dailySeed = 24_681;
-  let dailyValue = dailyStart;
-  const dailyRaw = Array.from({ length: 90 }, (_, i) => {
-    dailySeed = (dailySeed * 16_807) % 2_147_483_647;
-    const routineMove = (dailySeed / 2_147_483_647 - .5) * .0038;
-    dailyValue *= 1 + .00038 + routineMove;
-    return dailyValue;
-  });
-  const normalization = (dailyEnd - dailyStart) / Math.max(.01, dailyRaw.at(-1) - dailyStart);
-  store.snapshots = Array.from({ length: 90 }, (_, i) => {
-    const dt = new Date(now);
-    dt.setDate(now.getDate() - (89 - i));
-    const netWorth = Math.round(dailyStart + (dailyRaw[i] - dailyStart) * normalization);
-    const liabilities = Math.round(11_350 - i * 2.25);
-    return { date: dt.toISOString().slice(0, 10), assets: netWorth + liabilities, liabilities, net_worth: netWorth, source: 'verified', demo: true };
-  });
   addDemoHistory(store);
   return store;
 }
 
 function ensureDemoMarketHistory(store) {
   store.market_prices ||= {};
-  store.investment_position_snapshots ||= [];
+  // Rebuild the isolated demo fixture whenever its coverage changes. These
+  // rows never coexist with a member's encrypted financial records.
+  store.investment_position_snapshots = (store.investment_position_snapshots || []).filter((record) => !record.demo);
+  const snapshotKeys = new Set(store.investment_position_snapshots.map((record) => `${record.date}|${record.kind}|${record.key}`));
   store.investment_transactions ||= [];
   const today = new Date();
+  const demoHistoryDays = 84 * 30;
   // Reconcile account totals to holdings before recording history. This avoids
   // presenting a made-up "Cash & unclassified" allocation residual.
   for (const account of store.accounts || []) {
@@ -1458,22 +1441,23 @@ function ensureDemoMarketHistory(store) {
     byTicker.set(position.ticker, Number(position.price || (Number(position.value || 0) / Math.max(1, Number(position.quantity || 1)))));
   }
   for (const [ticker, currentPrice] of byTicker) {
-    if (Object.keys(store.market_prices[ticker] || {}).length >= 300) continue;
     const prices = store.market_prices[ticker] ||= {};
+    if (Object.keys(prices).length >= demoHistoryDays) continue;
+    for (const date of Object.keys(prices)) delete prices[date];
     let priceSeed = [...ticker].reduce((sum, character) => sum * 31 + character.charCodeAt(0), 19) % 2_147_483_647;
-    let simulatedPrice = currentPrice * .89;
+    let simulatedPrice = currentPrice * .48;
     const simulated = [];
-    for (let index = 0; index <= 365; index += 1) {
+    for (let index = 0; index <= demoHistoryDays; index += 1) {
       priceSeed = (priceSeed * 16_807) % 2_147_483_647;
       const variation = priceSeed / 2_147_483_647 - .5;
-      simulatedPrice *= 1 + .00027 + variation * .009;
+      simulatedPrice *= 1 + .00028 + variation * .005;
       simulated.push(simulatedPrice);
     }
     const normalize = currentPrice / simulated.at(-1);
-    for (let day = 365; day >= 0; day -= 1) {
+    for (let day = demoHistoryDays; day >= 0; day -= 1) {
       const date = new Date(today);
       date.setDate(today.getDate() - day);
-      const index = 365 - day;
+      const index = demoHistoryDays - day;
       prices[date.toISOString().slice(0, 10)] = Math.round(simulated[index] * normalize * 100) / 100;
     }
   }
@@ -1484,7 +1468,7 @@ function ensureDemoMarketHistory(store) {
     const id = `demo-trade-${position.account_id}-${position.ticker}`;
     if (store.investment_transactions.some((transaction) => transaction.id === id)) continue;
     const date = new Date(today);
-    date.setFullYear(date.getFullYear() - 1);
+    date.setFullYear(date.getFullYear() - 7);
     store.investment_transactions.push({ id, account_id: position.account_id, security_id: position.security_id || null, ticker: position.ticker, security_type: position.type, date: date.toISOString().slice(0, 10), quantity: Number(position.quantity || 0), price: Number(position.price || 0), amount: Number(position.value || 0), type: 'buy', subtype: 'buy', demo: true });
   }
   // The public preview is explicitly synthetic. Give it a consistent personal
@@ -1493,46 +1477,70 @@ function ensureDemoMarketHistory(store) {
     if (!position.ticker || position.type === 'cash') continue;
     for (const [date, price] of Object.entries(store.market_prices[position.ticker] || {})) {
       const key = position.id || `${position.account_id}:${position.ticker}`;
-      if (store.investment_position_snapshots.some((record) => record.date === date && record.kind === 'holding' && record.key === key)) continue;
+      const snapshotKey = `${date}|holding|${key}`;
+      if (snapshotKeys.has(snapshotKey)) continue;
       store.investment_position_snapshots.push({ date, kind: 'holding', key, account_id: position.account_id, security_id: position.security_id || null, ticker: position.ticker, quantity: Number(position.quantity || 0), price: Number(price || 0), value: Math.round(Number(position.quantity || 0) * Number(price || 0) * 100) / 100, source: 'verified', demo: true });
+      snapshotKeys.add(snapshotKey);
     }
   }
   // Account detail charts use the exact same daily holding observations as the
   // holdings list. Cash is a $1 holding, so no balancing multiplier is needed.
   for (const account of (store.accounts || []).filter((entry) => entry.demo && entry.type === 'investment')) {
     const holdings = (store.positions || []).filter((position) => position.account_id === account.plaid_account_id);
-    for (let day = 365; day >= 0; day -= 1) {
+    for (let day = demoHistoryDays; day >= 0; day -= 1) {
       const date = new Date(today); date.setDate(today.getDate() - day);
       const dayKey = date.toISOString().slice(0, 10);
-      if (store.investment_position_snapshots.some((record) => record.date === dayKey && record.kind === 'account' && record.key === account.plaid_account_id)) continue;
+      const snapshotKey = `${dayKey}|account|${account.plaid_account_id}`;
+      if (snapshotKeys.has(snapshotKey)) continue;
       const value = holdings.reduce((sum, position) => {
         const price = position.type === 'cash' ? Number(position.price || 1) : Number(store.market_prices?.[position.ticker]?.[dayKey] || position.price || 0);
         return sum + Math.abs(Number(position.quantity || 0) * price);
       }, 0);
       store.investment_position_snapshots.push({ date: dayKey, kind: 'account', key: account.plaid_account_id, account_id: account.plaid_account_id, value: Math.round(value * 100) / 100, source: 'verified', demo: true });
+      snapshotKeys.add(snapshotKey);
     }
   }
   store.investment_position_snapshots.sort((a, b) => a.date.localeCompare(b.date));
+  // The overview must use exactly the same daily account observations as its
+  // account drill-downs. A monthly synthetic aggregate made a scrub appear to
+  // skip days even though the demo already had daily reported values.
+  const investmentAccountIds = new Set((store.accounts || [])
+    .filter((account) => account.demo && account.type === 'investment')
+    .map((account) => account.plaid_account_id));
+  const portfolioByDate = new Map();
+  for (const record of store.investment_position_snapshots) {
+    if (!record.demo || record.source !== 'verified' || record.kind !== 'account' || !investmentAccountIds.has(record.account_id)) continue;
+    portfolioByDate.set(record.date, (portfolioByDate.get(record.date) || 0) + Math.abs(Number(record.value || 0)));
+  }
+  store.investment_snapshots = [...portfolioByDate.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([date, value]) => ({ date, value: Math.round(value * 100) / 100, source: 'verified', demo: true }));
 }
 
 function addDemoHistory(store) {
   const now = new Date();
   const existingTransactionIds = new Set(store.transactions.map((transaction) => transaction.id));
-  const existingSnapshotDates = new Set(store.snapshots.map((snapshot) => snapshot.date));
-
-  // Seven years of monthly records make the demo useful across every chart
-  // range, while the detailed current month keeps the drill-down believable.
+  // The demo is an internally consistent data fixture. Keep one stored point
+  // per day so chart scrubbing has the same fidelity as a long-running member
+  // account; the UI never invents values between these records.
   const historyMonths = 84;
+  const historyDays = historyMonths * 30;
   const demoStartingNetWorth = 26000;
-  const dailyRecords = store.snapshots.filter((snapshot) => snapshot.demo && snapshot.source === 'verified');
-  const firstDaily = dailyRecords.slice().sort((a, b) => a.date.localeCompare(b.date))[0];
-  const snapshotMonths = Array.from({ length: historyMonths }, (_, index) => historyMonths - index).filter((monthsAgo) => {
-    const date = new Date(now.getFullYear(), now.getMonth() - monthsAgo, 28).toISOString().slice(0, 10);
-    return !firstDaily || date < firstDaily.date;
+  const historyEnd = Number(demoNetWorthFromAccounts(store));
+  const values = seededGrowthSeries({ count: historyDays, start: demoStartingNetWorth, end: historyEnd, seed: 55_319, intervalsPerMonth: 30 });
+  const endingLiabilities = 11_350;
+  const startingLiabilities = 16_500;
+  const demoSnapshots = values.map((netWorth, index) => {
+    const date = new Date(now);
+    date.setDate(now.getDate() - (values.length - 1 - index));
+    const progress = values.length <= 1 ? 1 : index / (values.length - 1);
+    const liabilities = Math.round(startingLiabilities - progress * (startingLiabilities - endingLiabilities));
+    const roundedNetWorth = Math.round(netWorth);
+    return { date: date.toISOString().slice(0, 10), assets: roundedNetWorth + liabilities, liabilities, net_worth: roundedNetWorth, source: 'verified', demo: true };
   });
-  const historyEnd = Number(firstDaily?.net_worth || demoNetWorthFromAccounts(store));
-  const values = seededGrowthSeries({ count: Math.max(1, snapshotMonths.length), start: demoStartingNetWorth, end: historyEnd, seed: 55_319 });
-  const historyByMonthsAgo = new Map(snapshotMonths.map((monthsAgo, index) => [monthsAgo, values[index]]));
+  // Demo is an isolated store, but preserve the invariant if this helper is
+  // ever reused with non-demo records present.
+  store.snapshots = [...store.snapshots.filter((snapshot) => !snapshot.demo), ...demoSnapshots];
   for (let monthsAgo = 1; monthsAgo <= historyMonths; monthsAgo += 1) {
     const date = new Date(now.getFullYear(), now.getMonth() - monthsAgo, 1);
     const month = date.toISOString().slice(0, 7);
@@ -1572,19 +1580,6 @@ function addDemoHistory(store) {
         pfc_primary: 'RETIREMENT_CONTRIBUTION', pfc_detailed: '', source: 'investment_transaction', demo: true
       });
     }
-
-    const snapshotDate = `${month}-28`;
-    if (!historyByMonthsAgo.has(monthsAgo)) continue;
-    const index = snapshotMonths.indexOf(monthsAgo);
-    const progress = snapshotMonths.length <= 1 ? 1 : index / (snapshotMonths.length - 1);
-    const netWorth = historyByMonthsAgo.get(monthsAgo);
-    const liabilities = Math.round(16_500 - progress * (16_500 - Number(firstDaily?.liabilities || 11_350)));
-    const record = { date: snapshotDate, assets: netWorth + liabilities, liabilities, net_worth: netWorth, source: 'verified', demo: true };
-    const existing = store.snapshots.find((snapshot) => snapshot.date === snapshotDate);
-    // It is safe to migrate old demo fixture rows; real member snapshots are
-    // never touched by demo seeding.
-    if (existing?.demo) Object.assign(existing, record);
-    else if (!existingSnapshotDates.has(snapshotDate)) store.snapshots.push(record);
   }
   store.transactions.sort((a, b) => a.date.localeCompare(b.date));
   store.snapshots.sort((a, b) => a.date.localeCompare(b.date));

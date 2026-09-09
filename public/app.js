@@ -1133,6 +1133,31 @@ function renderPortfolioTrackingStart(el, snapshot, total, rangeStart = null) {
   </svg>`;
 }
 
+function aggregateHoldingRangeProgress(positions) {
+  const progress = positions.map((position) => position.rangeProgress).filter(Boolean);
+  // A grouped ticker is only performance-ready when every displayed position
+  // has the same complete observed window. Never combine one account's dollar
+  // movement with another account's percentage or silently fill a gap.
+  if (!progress.length || progress.length !== positions.length || progress.some((entry) => entry.state !== 'ready')) return null;
+  const first = progress[0];
+  if (progress.some((entry) => entry.range !== first.range || entry.startDate !== first.startDate || entry.endDate !== first.endDate)) return null;
+  const startValue = progress.reduce((sum, entry) => sum + Number(entry.startValue || 0), 0);
+  const endValue = progress.reduce((sum, entry) => sum + Number(entry.endValue || 0), 0);
+  const valueChange = progress.reduce((sum, entry) => sum + Number(entry.valueChange || 0), 0);
+  const hasMarketChange = progress.every((entry) => entry.marketChange != null && Number.isFinite(Number(entry.marketChange)));
+  const marketChange = hasMarketChange ? progress.reduce((sum, entry) => sum + Number(entry.marketChange), 0) : null;
+  return {
+    ...first,
+    startValue,
+    endValue,
+    valueChange,
+    marketChange,
+    marketChangePct: marketChange != null && startValue > 0 ? marketChange / startValue : null,
+    changeKind: marketChange != null ? 'market' : 'balance',
+    points: Math.min(...progress.map((entry) => Number(entry.points || 0)))
+  };
+}
+
 function aggregateHoldings(positions) {
   const groups = new Map();
   for (const position of positions) {
@@ -1147,7 +1172,7 @@ function aggregateHoldings(positions) {
       ? group.positions.reduce((sum, position) => sum + Number(position.cost_basis || 0), 0) : null;
     const classifications = [...new Set(group.positions.map((position) => assetClassLabel(position.type, position.asset_class_override)))];
     const classification = classifications.length === 1 ? classifications[0] : 'Mixed';
-    return { ...group, value, costBasis, classification, gain: costBasis == null ? null : value - costBasis, gain_pct: costBasis ? (value - costBasis) / costBasis : null, rangeProgress: group.positions.find((position) => position.rangeProgress)?.rangeProgress || null };
+    return { ...group, value, costBasis, classification, gain: costBasis == null ? null : value - costBasis, gain_pct: costBasis ? (value - costBasis) / costBasis : null, rangeProgress: aggregateHoldingRangeProgress(group.positions) };
   });
 }
 

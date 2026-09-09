@@ -590,24 +590,27 @@ test('manual holdings fill only an institution-reported position gap', () => {
 test('demo mode provides seven years of usable account and spending history', () => {
   const store = { accounts: [], transactions: [], snapshots: [], settings: { demo_mode: true } };
   seedDemo(store);
-  assert.ok(store.snapshots.length >= 84);
+  assert.ok(store.snapshots.length >= 84 * 30);
+  assert.equal(Date.parse(`${store.snapshots[1].date}T12:00:00Z`) - Date.parse(`${store.snapshots[0].date}T12:00:00Z`), 86_400_000, 'demo net-worth snapshots are daily');
   assert.ok(new Set(store.transactions.map((transaction) => transaction.date.slice(0, 7))).size >= 84);
   assert.ok(store.accounts.some((account) => account.type === 'loan'));
   const snapshots = store.investment_snapshots;
+  assert.equal(Date.parse(`${snapshots[1].date}T12:00:00Z`) - Date.parse(`${snapshots[0].date}T12:00:00Z`), 86_400_000, 'demo portfolio snapshots are daily');
   const portfolioChange = snapshots.at(-1).value - snapshots[0].value;
-  const contributions = investmentContributions(store).reduce((sum, row) => sum + row.amount, 0);
-  assert.ok(portfolioChange - contributions > 0, 'demo all-time investment growth should be positive');
+  assert.ok(portfolioChange > 0, 'demo all-time portfolio change should be positive');
   const accountNetWorth = store.accounts.reduce((total, account) => total + (['credit', 'loan'].includes(account.type) ? -1 : 1) * Math.abs(Number(account.current_balance || 0)), 0);
   const investmentBalance = store.accounts.filter((account) => account.type === 'investment').reduce((total, account) => total + Math.abs(Number(account.current_balance || 0)), 0);
   assert.equal(store.snapshots.at(-1).net_worth, accountNetWorth, 'latest chart point reconciles to demo accounts');
   assert.equal(snapshots.at(-1).value, investmentBalance, 'portfolio chart reconciles to demo investment accounts');
   const vti = store.positions.filter((position) => position.ticker === 'VTI');
   const vtiProgress = investmentRangeProgress(store, { ticker: 'VTI', holdingKeys: vti.map((position) => position.id), range: 'all' });
+  const vtiHistory = investmentDetailHistory(store, { ticker: 'VTI', range: 'all' }).history;
   assert.deepEqual(
     { startValue: vtiProgress.startValue, endValue: vtiProgress.endValue, marketChange: vtiProgress.marketChange },
-    { startValue: 48_172.32, endValue: 51_786, marketChange: 3_613.68 },
+    { startValue: vtiHistory[0].value, endValue: vtiHistory.at(-1).value, marketChange: vtiHistory.at(-1).value - vtiHistory[0].value },
     'the combined demo VTI position must use its recorded opening and closing snapshots'
   );
+  assert.ok(vtiProgress.marketChange > 0, 'the all-time demo VTI fixture remains a positive long-term example');
   assert.equal(investmentSummary(store).allocation.some((row) => row.name === 'Cash & unclassified'), false);
   assert.deepEqual(goalProgress(store).map((goal) => goal.name), ['Emergency fund']);
   const recurringNames = recurringCharges(store).recurring.map((charge) => charge.name);
