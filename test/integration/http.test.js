@@ -164,7 +164,7 @@ integrationTest('serves an authenticated dashboard for an existing member sessio
   deleteStore(key);
 });
 
-integrationTest('pre-link investment history survives saved updates and stays isolated by session', async () => {
+integrationTest('investment history uses observed daily snapshots and stays isolated by session', async () => {
   const email = 'history-owner@example.test';
   const key = userStorageKey(email);
   const today = new Date().toISOString().slice(0, 10);
@@ -181,13 +181,11 @@ integrationTest('pre-link investment history survives saved updates and stays is
   }, key);
   const detail = await request(app).get('/api/investments/history?account_id=ira').set('Cookie', signedTestCookie(email));
   assert.equal(detail.status, 200);
-  assert.equal(detail.body.history[0].date, ago(100));
-  assert.equal(detail.body.reconstructed, true);
-  assert.match(detail.body.detail, /estimated/);
-  assert.equal(detail.body.history.some((row) => row.date === ago(6)), false);
+  assert.equal(detail.body.history[0].date, ago(7));
+  assert.equal(detail.body.reconstructed, false);
+  assert.match(detail.body.detail, /verified daily update/);
   const portfolio = await request(app).get('/api/investments').set('Cookie', signedTestCookie(email));
-  assert.equal(portfolio.body.snapshots[0].source, 'reconstructed');
-  assert.equal(portfolio.body.snapshots.at(-1).source, 'verified');
+  assert.ok(portfolio.body.snapshots.every((snapshot) => snapshot.source === 'verified'));
   const other = await request(app).get('/api/investments/history?account_id=ira').set('Cookie', signedTestCookie('other-history@example.test'));
   assert.deepEqual(other.body.history, []);
 });
@@ -242,7 +240,7 @@ integrationTest('investment history exposes range-safe verified progress without
   deleteStore(key);
 });
 
-integrationTest('net worth returns reconstructed history only when all visible accounts have coverage', async () => {
+integrationTest('net worth returns only observed daily snapshots', async () => {
   const email = 'cash-history@example.test';
   const key = userStorageKey(email);
   const today = new Date().toISOString().slice(0, 10);
@@ -254,11 +252,10 @@ integrationTest('net worth returns reconstructed history only when all visible a
   }, key);
   const response = await request(app).get('/api/dashboard').set('Cookie', signedTestCookie(email));
   assert.equal(response.status, 200);
-  assert.equal(response.body.snapshots[0].date, earlier);
-  assert.equal(response.body.snapshots[0].source, 'reconstructed');
+  assert.equal(response.body.snapshots.length, 1);
+  assert.equal(response.body.snapshots[0].source, 'verified');
   assert.equal(response.body.snapshots[0].net_worth, 500);
-  assert.equal(response.body.snapshots.at(-1).source, 'verified');
-  // Derived values are recalculated; they never become saved provider facts.
+  // The dashboard persists only the observed current-day baseline.
   const stored = readStore(key);
   assert.ok(stored.snapshots.every((row) => row.source === 'verified'));
   stored.accounts.push({ id: 'loan', type: 'loan', current_balance: 1000, name: 'Loan' });

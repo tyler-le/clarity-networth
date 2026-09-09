@@ -1,4 +1,3 @@
-import { combinedHistory, mergeReportedHistory, reconstructInvestmentAccount } from './history.js';
 
 function providerTransferDestinationBucket(tx) {
   const detailed = (tx.personal_finance_category?.detailed || tx.pfc_detailed || '').toUpperCase();
@@ -139,7 +138,7 @@ function investmentHistoryStatus(store, accounts) {
   if ((store.items || []).some((item) => itemIds.has(item.id) && item.investment_history_state === 'preparing')) {
     return { state: 'preparing' };
   }
-  if ((store.investment_snapshots || []).filter((snapshot) => ['verified', 'reconstructed'].includes(snapshot.source)).length >= 2) {
+  if ((store.investment_snapshots || []).filter((snapshot) => snapshot.source === 'verified').length >= 2) {
     return { state: 'ready' };
   }
   return { state: 'tracking' };
@@ -196,7 +195,7 @@ export function investmentSummary(store, { range = 'all' } = {}) {
     allocation: allocationRows,
     unclassifiedAccounts,
     positions: positions.map((position) => ({ ...position, gain: position.cost_basis == null ? null : Number(position.value || 0) - Number(position.cost_basis), gain_pct: position.cost_basis ? (Number(position.value || 0) - Number(position.cost_basis)) / Number(position.cost_basis) : null, rangeProgress: position.manual || !position.ticker ? null : investmentRangeProgress(store, { ticker: position.ticker, holdingKeys: [positionSnapshotKey(position)], range }) })).sort((a, b) => Number(b.value || 0) - Number(a.value || 0)),
-    snapshots: (store.investment_snapshots || []).slice(-3650),
+    snapshots: (store.investment_snapshots || []).filter((snapshot) => snapshot.source === 'verified').slice(-3650),
     historyStatus: investmentHistoryStatus(store, accounts),
     positionsAvailable: positions.length > 0
   };
@@ -220,10 +219,9 @@ export function investmentLinkBalances(store) {
 export function snapshotInvestments(store, snapshotDate = new Date().toISOString().slice(0, 10)) {
   const accounts = store.accounts.filter((account) => !account.hidden && account.type === 'investment');
   const value = accounts.reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
-  // A reconciled reconstruction is retained until a provider-observed value
-  // supersedes it for the same day. Nothing inferred without reconciliation
-  // is allowed into this timeline.
-  store.investment_snapshots = (store.investment_snapshots || []).filter((snapshot) => ['verified', 'reconstructed'].includes(snapshot.source));
+  // Historical presentation uses only observed daily snapshots. Discard any
+  // legacy reconstructed rows rather than mixing inferred data into a chart.
+  store.investment_snapshots = (store.investment_snapshots || []).filter((snapshot) => snapshot.source === 'verified');
   const existing = store.investment_snapshots.find((snapshot) => snapshot.date === snapshotDate);
   const snapshot = { date: snapshotDate, value, source: 'verified' };
   if (existing) Object.assign(existing, snapshot); else store.investment_snapshots.push(snapshot);
@@ -537,45 +535,16 @@ function reconstructReportedPositions(store, positions, { endDate = new Date().t
   return { state: 'ready', history: visibleHistory, startDate: visibleHistory[0].date, difference };
 }
 
-// Rebuild only derived snapshots from the evidence we already hold. This is
-// safe to call while rendering: it makes no provider request, retains truly
-// observed daily balances, and removes a prior reconstruction when its
-// coverage is no longer supportable.
+// Remove legacy inferred rows. The product presents only snapshots directly
+// observed from a connected institution.
 export function refreshReconstructedInvestmentSnapshots(store, endDate = new Date().toISOString().slice(0, 10), years = 1) {
-  // A prior reconstruction is never allowed to outlive the evidence that
-  // justified it. Re-add it below only after every visible account passes.
   store.investment_snapshots = (store.investment_snapshots || []).filter((snapshot) => snapshot.source === 'verified');
-  const accounts = (store.accounts || []).filter((account) => account.type === 'investment' && !account.hidden);
-  const reconstructed = [];
-  for (const account of accounts) {
-    if (account.item_id && !account.demo) {
-      const result = reconstructInvestmentAccount(store, account, { years, today: endDate });
-      if (result.state !== 'ready') return [];
-      reconstructed.push(result.history);
-      continue;
-    }
-    const currentPositions = (store.positions || []).filter((position) => position.account_id === account.plaid_account_id && !position.hidden);
-    const coverage = reportedHistoricalPositions(store, currentPositions, account.plaid_account_id);
-    if (coverage.reason) return [];
-    const positions = coverage.positions;
-    const positionValue = currentPositions.reduce((sum, position) => sum + Math.abs(Number(position.value || 0)), 0);
-    if (Math.abs(positionValue - Math.abs(Number(account.current_balance || 0))) > reconstructionTolerance(account.current_balance)) return [];
-    const result = reconstructReportedPositions(store, positions, { endDate, years, expectedValue: positionValue });
-    if (result.state !== 'ready') return [];
-    reconstructed.push(result.history);
-  }
-  if (!reconstructed.length) return [];
-  const sharedDates = reconstructed.map((history) => new Set(history.map((row) => row.date))).reduce((common, dates) => new Set([...common].filter((date) => dates.has(date))));
-  const combined = [...sharedDates].sort().map((date) => ({ date, value: Math.round(reconstructed.reduce((sum, history) => sum + Number(history.find((row) => row.date === date)?.value || 0), 0) * 100) / 100, source: 'reconstructed' }));
-  if (combined.length < 2) return [];
-  const verified = store.investment_snapshots;
-  store.investment_snapshots = mergeReportedHistory(combined, verified);
-  return combined;
+  return store.investment_snapshots;
 }
 
-// A detail chart is intentionally more conservative than a ticker chart. It
-// reconstructs the person's currently reported quantity from available trades
-// and historical prices, but never labels a missing trade record as a gain.
+// Detail charts represent only directly observed personal snapshots. We never
+// manufacture a past position from transactions, historical prices, or a
+// current balance.
 export function investmentDetailHistory(store, { accountId = null, ticker = null, years = 1, range = 'all' } = {}) {
   const selectedAccount = accountId
     ? store.accounts.find((account) => account.plaid_account_id === accountId && !account.hidden && account.type === 'investment')
@@ -592,89 +561,49 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
   // Keep the account identity visible even if its provider has not supplied
   // positions in this response. A generic "$0 Investment account" is both
   // misleading and needlessly discards the nickname the person gave it.
-  if (!positions.length) return {
+  if (!positions.length && !accountId) return {
     state: 'unavailable',
     label: selectedAccount?.nickname || selectedAccount?.name || (accountId ? 'Investment account' : normalizedTicker),
     ticker: accountId ? null : normalizedTicker || null,
     value: selectedAccount ? Math.abs(Number(selectedAccount.current_balance || 0)) : 0,
     reason: 'This holding is not available from your latest connection.', history: [], market: [], progress: rangeProgress
   };
-  const resolvedTickers = [...new Set(positions.map((position) => String(position.ticker || '').trim().toUpperCase()).filter(Boolean))];
   const value = positions.reduce((sum, position) => sum + Math.abs(Number(position.value || 0)), 0);
-  const completeCostBasis = positions.every((position) => position.cost_basis != null);
-  const costBasis = completeCostBasis ? positions.reduce((sum, position) => sum + Number(position.cost_basis || 0), 0) : null;
   const label = accountId
     ? (selectedAccount?.nickname || selectedAccount?.name || 'Investment account')
     : (positions[0].name || normalizedTicker);
   const providerHistory = providerPositionHistory(store, { accountId, ticker: normalizedTicker, holdingKeys });
-  // Real accounts use the complete ledger, cash movements and exact security
-  // identities. Demo fixtures retain their explicitly synthetic timeline.
-  const realAccounts = store.accounts.filter((account) => visibleAccounts.has(account.plaid_account_id)
-    && account.item_id && !account.demo && positions.some((position) => position.account_id === account.plaid_account_id));
-  if (realAccounts.length) {
-    const results = realAccounts.map((account) => reconstructInvestmentAccount(store, account, { years, ticker: accountId ? null : normalizedTicker }));
-    const reconstructed = results.every((result) => result.state === 'ready') ? combinedHistory(results.map((result) => result.history)) : [];
-    const history = mergeReportedHistory(reconstructed, providerHistory);
-    const estimated = history.some((row) => row.source === 'reconstructed');
-    const preparing = realAccounts.some((account) => store.items?.some((item) => item.id === account.item_id && item.investment_history_state === 'preparing'));
-    const currentValue = accountId ? Number(realAccounts[0].current_balance) : value;
+  // An account drawer represents a person's tracked account balance. Its
+  // history is therefore the daily account snapshots we captured from the
+  // institution—not a trade/price reconstruction.
+  if (accountId && selectedAccount) {
+    const preparing = selectedAccount.item_id && (store.items || []).some((item) => item.id === selectedAccount.item_id && item.investment_history_state === 'preparing');
+    const state = providerHistory.length >= 2 ? 'ready' : providerHistory.length === 1 ? 'tracking' : preparing ? 'preparing' : 'unavailable';
     return {
-      // A single provider-observed snapshot is already a truthful beginning
-      // for Clarity tracking. Do not turn it into an "unavailable" dead end
-      // merely because a verified reconstruction cannot reach further back.
-      state: history.length >= 2 ? 'ready' : history.length === 1 ? 'tracking' : preparing ? 'preparing' : 'unavailable',
-      label, ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null, value: currentValue,
-      costBasis, gain: costBasis == null ? null : value - costBasis,
-      history, market: [], reconstructed: estimated,
+      state,
+      label,
+      ticker: null,
+      value: Math.abs(Number(selectedAccount.current_balance || 0)),
+      costBasis: null,
+      gain: null,
+      history: providerHistory,
+      market: [],
+      reconstructed: false,
       progress: rangeProgress,
-      detail: estimated ? 'Earlier values are estimated from reported activity and historical prices. Saved balances take over when tracking begins.' : (history.length >= 2 ? `Based on ${providerHistory.length} verified updates from your connected institution.` : history.length === 1 ? `Tracking from a verified institution update on ${history[0].date}.` : undefined),
-      reason: preparing ? 'Your institution is still preparing its reported investment activity.' : results.find((result) => result.state !== 'ready')?.reason
+      detail: providerHistory.length ? `Based on ${providerHistory.length} verified daily update${providerHistory.length === 1 ? '' : 's'} from your connected institution.` : undefined,
+      reason: preparing ? 'Your institution is still preparing its reported investment activity.' : 'Daily account tracking will begin with your next verified update.'
     };
   }
-  // Even for a connection without a reconstructable provider ledger, one
-  // captured position is a concrete starting point. Show that value rather
-  // than presenting a holding chart as unavailable.
-  if (providerHistory.length === 1) return {
-    state: 'tracking', label, ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null, value,
-    costBasis, gain: costBasis == null ? null : value - costBasis,
-    history: providerHistory, market: [],
-    progress: rangeProgress,
-    detail: `Tracking from a verified institution update on ${providerHistory[0].date}.`
-  };
-  if (providerHistory.length < 2) {
-    const itemIds = new Set((store.accounts || []).filter((account) => positions.some((position) => position.account_id === account.plaid_account_id)).map((account) => account.item_id));
-    if ((store.items || []).some((item) => itemIds.has(item.id) && item.investment_history_state === 'preparing')) return {
-      state: 'preparing', label, ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null, value,
-      costBasis, gain: costBasis == null ? null : value - costBasis, history: [], market: [],
-      progress: rangeProgress,
-      reason: 'Your institution is still preparing its reported investment activity. We will only build a chart after the complete activity is available.'
-    };
-    const coverage = accountId ? reportedHistoricalPositions(store, positions, accountId) : { positions, reason: null };
-    const reconstructed = coverage.reason
-      ? { state: 'unavailable', reason: coverage.reason, history: [] }
-      : reconstructReportedPositions(store, coverage.positions, { years, expectedValue: value });
-    if (reconstructed.state === 'ready') return {
-      state: 'ready', label, ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null, value,
-      costBasis, gain: costBasis == null ? null : value - costBasis,
-      gainPct: costBasis ? (value - costBasis) / costBasis : null,
-      history: reconstructed.history, market: [], reconstructed: true,
-      progress: rangeProgress,
-      detail: `Reconstructed from reported institution activity beginning ${reconstructed.startDate}; it matches your latest institution value.`
-    };
-    return {
-      state: 'unavailable', label, ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null, value,
-      costBasis, gain: costBasis == null ? null : value - costBasis, history: [], market: [],
-      progress: rangeProgress,
-      reason: reconstructed.reason
-    };
-  }
+  const itemIds = new Set((store.accounts || []).filter((account) => positions.some((position) => position.account_id === account.plaid_account_id)).map((account) => account.item_id));
+  const preparing = (store.items || []).some((item) => itemIds.has(item.id) && item.investment_history_state === 'preparing');
   return {
-    state: 'ready', label, ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null, value,
-    costBasis, gain: costBasis == null ? null : value - costBasis,
-    gainPct: costBasis ? (value - costBasis) / costBasis : null,
+    state: providerHistory.length >= 2 ? 'ready' : providerHistory.length === 1 ? 'tracking' : preparing ? 'preparing' : 'unavailable',
+    label, ticker: normalizedTicker || null, value,
+    costBasis: null, gain: null,
     history: providerHistory, market: [],
     progress: rangeProgress,
-    detail: `Based on ${providerHistory.length} verified updates from your connected institution.`
+    detail: providerHistory.length ? `Based on ${providerHistory.length} verified daily update${providerHistory.length === 1 ? '' : 's'} from your connected institution.` : undefined,
+    reason: preparing ? 'Your institution is still preparing its reported investment activity.' : 'Daily holding tracking will begin with your next verified update.'
   };
 
 }
@@ -1341,7 +1270,7 @@ export function snapshotNetWorth(store, snapshotDate = new Date().toISOString().
 
 export function removeEstimatedNetWorthHistory(store) {
   const before = store.snapshots.length;
-  store.snapshots = store.snapshots.filter((snapshot) => snapshot.source !== 'estimated');
+  store.snapshots = store.snapshots.filter((snapshot) => snapshot.source === 'verified');
   return store.snapshots.length !== before;
 }
 

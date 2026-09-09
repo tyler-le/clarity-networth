@@ -74,10 +74,10 @@ test('a cash-first member sees what they have without being pushed into debt or 
   await expect(page.locator('.account-collection')).toHaveCount(2);
 });
 
-test('reconstructed history is labeled on net worth, portfolio and account charts @critical', async ({ page }) => {
+test('historical charts use only observed snapshots @critical', async ({ page }) => {
   const today = new Date().toISOString().slice(0, 10);
   const ago = (days) => new Date(Date.parse(`${today}T00:00:00Z`) - days * 86400000).toISOString().slice(0, 10);
-  const history = [100, 30, 2, 0].map((days, index) => ({ date: ago(days), value: 1000 + index * 100, source: days > 2 ? 'reconstructed' : 'verified' }));
+  const history = [100, 30, 2, 0].map((days, index) => ({ date: ago(days), value: 1000 + index * 100, source: 'verified' }));
   await openSignedInScenario(page, (preview) => {
     preview.dashboard.snapshots = history.map((row) => ({ ...row, net_worth: row.value, assets: row.value, liabilities: 0 }));
     preview.dashboard.summary = { ...preview.dashboard.summary, netWorth: 1300, assets: 1300, liabilities: 0 };
@@ -85,22 +85,22 @@ test('reconstructed history is labeled on net worth, portfolio and account chart
     preview.investments.total = 1300;
   });
   await page.locator('[data-networth-range="all"]').click();
-  await expect(page.locator('#netWorthDelta')).toContainText('Includes estimated history');
+  await expect(page.locator('#netWorthDelta')).not.toContainText(/estimated/i);
   const netChart = page.locator('#netWorthChart');
   const netBox = await netChart.boundingBox();
   await netChart.dispatchEvent('pointerdown', { clientX: netBox.x + 48, clientY: netBox.y + netBox.height / 2, pointerId: 1 });
-  await expect(page.locator('#netWorthChartDate')).toContainText('Estimated from activity');
+  await expect(page.locator('#netWorthChartDate')).not.toContainText(/estimated/i);
   await netChart.dispatchEvent('pointerup');
   await goToView(page, 'investments');
   await page.locator('[data-investment-range="all"]').click();
-  await expect(page.locator('#investmentContext')).toContainText('Includes estimated history');
+  await expect(page.locator('#investmentContext')).not.toContainText(/estimated/i);
   await page.route('**/api/investments/history**', (route) => route.fulfill({ json: {
-    state: 'ready', label: 'Investment account', value: 1300, reconstructed: true, history, market: [],
-    detail: 'Earlier values are estimated from reported activity and historical prices. Saved balances take over when tracking begins.'
+    state: 'ready', label: 'Investment account', value: 1300, reconstructed: false, history, market: [],
+    detail: 'Based on 4 verified daily updates from your connected institution.'
   } }));
   await page.getByRole('button', { name: /View .+ performance history/ }).first().click();
   await expect(page.locator('#holdingHistoryDialog')).toBeVisible();
-  await expect(page.locator('#holdingHistoryNote')).toContainText('Earlier values are estimated');
+  await expect(page.locator('#holdingHistoryNote')).toContainText('verified daily updates');
   await page.getByRole('button', { name: 'All', exact: true }).last().click();
   await expect(page.locator('#holdingHistoryChart svg')).toBeVisible();
   const fits = await page.evaluate(() => {

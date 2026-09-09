@@ -8,10 +8,10 @@ import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './lib/store.js';
 import { assertSafeFinancialStoreWrite, chooseSaferStore, hasConnectedFinancialData } from './lib/store-safety.js';
 import { consumeRateLimit, databaseEnabled, databaseHealthy, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, recordDependencyEvent, recordLaunchEvent, writeDatabaseStore } from './lib/database.js';
-import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentSummary, monthlyReview, refreshReconstructedInvestmentSnapshots, recurringCharges, removeEstimatedNetWorthHistory, repairTransferClassifications, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './lib/finance.js';
+import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentSummary, monthlyReview, recurringCharges, removeEstimatedNetWorthHistory, repairTransferClassifications, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './lib/finance.js';
 import { investmentLedgerPages, plaidConfigured, plaidPost } from './lib/plaid.js';
 import { loadHistoricalPrices } from './lib/market-data.js';
-import { historyStart, reconstructedNetWorth } from './lib/history.js';
+import { historyStart } from './lib/history.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
@@ -1040,14 +1040,13 @@ app.get('/api/dashboard', async (req, res) => {
     markInvestmentLinkCoverage(store);
     removeEstimatedNetWorthHistory(store);
     hideDuplicateAccounts(store);
-    refreshReconstructedInvestmentSnapshots(store, new Date().toISOString().slice(0, 10), Math.max(1, Math.min(2, Number(process.env.MARKETDATA_HISTORY_YEARS || 1))));
     snapshotNetWorth(store);
     snapshotInvestments(store);
     await saveStore(req.user, store);
   }
   const visibleStore = activeStore(store);
   const summary = summarizeRange(visibleStore);
-  const snapshots = [...reconstructedNetWorth(visibleStore, { years: 2 }), ...visibleStore.snapshots].slice(-3650);
+  const snapshots = (visibleStore.snapshots || []).filter((snapshot) => snapshot.source === 'verified').slice(-3650);
   const accounts = visibleStore.accounts.filter((account) => !account.hidden).sort((a, b) => Number(b.current_balance || 0) - Number(a.current_balance || 0));
   // A persistent Google session does not pass through OAuth again on every
   // visit. Record these minimal markers before replying so the private
@@ -1085,11 +1084,9 @@ app.get('/api/investments', async (req, res) => {
   const persistedStore = await loadStore(req.user);
   const isDemoMode = Boolean(persistedStore.settings?.demo_mode);
   const store = activeStore(persistedStore);
-  // Capture the connection-day baseline even before a historical
-  // reconstruction is possible. Future successful daily syncs add one
-  // provider-observed account and holding value per calendar day.
+  // Capture the connection-day baseline. Future successful daily syncs add
+  // provider-observed account and holding values—no history is inferred.
   snapshotInvestments(store);
-  refreshReconstructedInvestmentSnapshots(store, new Date().toISOString().slice(0, 10), Math.max(1, Math.min(2, Number(process.env.MARKETDATA_HISTORY_YEARS || 1))));
   // Signed-in demo is an in-memory view. Never persist its seeded accounts
   // over a member's real store; the safety boundary would block it anyway,
   // but an error here made demo mode appear as a failed data load.

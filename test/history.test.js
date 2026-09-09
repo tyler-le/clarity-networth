@@ -141,13 +141,13 @@ test('saved balances keep priority and their gaps; two updates no longer erase p
   store.investment_position_snapshots = [7, 0].map((days) => ({ account_id: 'ira', kind: 'account', date: daysAgo(days), value: 100, source: 'verified' }));
   const detail = investmentDetailHistory(store, { accountId: 'ira' });
   assert.equal(detail.state, 'ready');
-  assert.equal(detail.reconstructed, true);
-  assert.equal(detail.history[0].date, daysAgo(30));
+  assert.equal(detail.reconstructed, false);
+  assert.equal(detail.history[0].date, daysAgo(7));
   assert.equal(detail.history.some((row) => row.date === daysAgo(6)), false);
-  assert.match(detail.detail, /estimated/);
+  assert.match(detail.detail, /verified daily update/);
   store.investment_snapshots = store.investment_position_snapshots.map(({ date, value, source }) => ({ date, value, source }));
   refreshReconstructedInvestmentSnapshots(store, now);
-  assert.equal(store.investment_snapshots[0].date, daysAgo(30));
+  assert.equal(store.investment_snapshots[0].date, daysAgo(7));
   assert.equal(store.investment_snapshots.at(-1).source, 'verified');
 });
 

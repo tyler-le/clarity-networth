@@ -243,7 +243,7 @@ function restoreNetWorthHero() {
   const delta = s.netWorth - old;
   const startDate = snaps[0]?.date ? new Date(`${snaps[0].date}T12:00:00`) : null;
   const periodStart = startDate?.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) || 'start';
-  $('#netWorthDelta').textContent = `${delta >= 0 ? '+' : '−'}${fmt.format(Math.abs(delta))} since ${periodStart}${snaps.some((row) => row.source === 'reconstructed') ? ' · Includes estimated history' : ''}`;
+  $('#netWorthDelta').textContent = `${delta >= 0 ? '+' : '−'}${fmt.format(Math.abs(delta))} since ${periodStart}`;
 }
 
 function renderOverviewBriefing(data) {
@@ -278,8 +278,7 @@ function renderOverviewBriefing(data) {
   $('#netWorthMovementTitle').textContent = netChange === 0 ? 'Net worth was steady' : `Net worth ${netChange > 0 ? 'rose' : 'fell'} ${fmt.format(Math.abs(netChange))}`;
   const assetText = assetChange === 0 ? 'Assets were steady' : `Assets ${assetChange > 0 ? 'rose' : 'fell'} ${fmt.format(Math.abs(assetChange))}`;
   const debtText = debtChange === 0 ? 'debt was steady' : `debt ${debtChange < 0 ? 'fell' : 'rose'} ${fmt.format(Math.abs(debtChange))}`;
-  const estimated = snapshots.some((snapshot) => ['estimated', 'reconstructed'].includes(snapshot.source));
-  $('#netWorthMovementDetail').textContent = `${assetText}; ${debtText}.${estimated ? ' Earlier history includes reconciled estimates.' : ''}`;
+  $('#netWorthMovementDetail').textContent = `${assetText}; ${debtText}.`;
 }
 
 function renderClarityLayer(data) {
@@ -477,7 +476,7 @@ function renderLineChart(snapshots, summary, rangeStart = null) {
     const date = new Date(`${snap.date}T12:00:00`);
     $('#netWorth').textContent = fmt.format(Number(snap.net_worth));
     $('#netWorthDelta').innerHTML = `<span class="positive">Assets ${fmt.format(Number(snap.assets || 0))}</span><span class="networth-separator"> · </span><span class="negative">Debt ${fmt.format(Number(snap.liabilities || 0))}</span>`;
-    $('#netWorthChartDate').textContent = `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${['estimated', 'reconstructed'].includes(snap.source) ? ' · Estimated from activity' : ''}`;
+    $('#netWorthChartDate').textContent = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     $('#netWorthChartContext').classList.remove('hidden');
   };
 
@@ -1102,7 +1101,7 @@ function renderPortfolioChart(data) {
     tooltip.textContent = fmt.format(Number(snapshot.value || 0));
     placeChartTooltip(tooltip, x / width * rect.width, rect.width);
     $('#investmentTotal').textContent = fmt.format(Number(snapshot.value || 0));
-    $('#investmentChartDate').textContent = `${new Date(`${snapshot.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${snapshot.source === 'reconstructed' ? ' · Estimated from activity and prices' : ''}`;
+    $('#investmentChartDate').textContent = new Date(`${snapshot.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     $('#investmentChartContext').classList.remove('hidden');
   };
   el.addEventListener('pointerdown', (event) => { active = true; el.setPointerCapture?.(event.pointerId); showPoint(event); });
@@ -1277,12 +1276,10 @@ function renderHoldingHistoryDetail() {
   $('#holdingHistorySubtitle').textContent = isAccountDetail
     ? 'Your account value over time'
     : (data.ticker && data.label !== data.ticker ? data.label : (isMarket ? 'Price history for this security' : 'Your value over time'));
-  const gain = data.gain;
   const rangeMetric = holdingRangeMetric(data.progress);
   const metrics = $('#holdingHistoryMetrics');
-  const hasCostBasisChange = data.costBasis != null && Math.round(Math.abs(Number(gain || 0)) * 100) > 0;
-  metrics.classList.toggle('single', !rangeMetric && !hasCostBasisChange);
-  metrics.innerHTML = `<div><span>Current value</span><strong>${fmt.format(Number(data.value || 0))}</strong></div>${rangeMetric ? `<div><span>${rangeMetric.label}</span><strong class="${rangeMetric.tone}">${rangeMetric.value}</strong><small>${rangeMetric.detail}</small></div>` : hasCostBasisChange ? `<div><span>Value vs reported cost</span><strong class="${gain >= 0 ? 'positive' : 'negative'}">${gain >= 0 ? '+' : '−'}${fmt.format(Math.abs(gain || 0))}</strong><small>All available cost-basis data</small></div>` : ''}`;
+  metrics.classList.toggle('single', !rangeMetric);
+  metrics.innerHTML = `<div><span>Current value</span><strong>${fmt.format(Number(data.value || 0))}</strong></div>${rangeMetric ? `<div><span>${rangeMetric.label}</span><strong class="${rangeMetric.tone}">${rangeMetric.value}</strong><small>${rangeMetric.detail}</small></div>` : ''}`;
   const hasMarket = (data.market || []).length > 1;
   $('#holdingHistoryTabs').innerHTML = `<button type="button" class="${!isMarket ? 'active' : ''}" data-holding-history-mode="position" role="tab" aria-selected="${!isMarket}">Your position</button>${hasMarket ? `<button type="button" class="${isMarket ? 'active' : ''}" data-holding-history-mode="market" role="tab" aria-selected="${isMarket}">Market price</button>` : ''}`;
   const ranges = [['1m', '1M'], ['3m', '3M'], ['6m', '6M'], ['ytd', 'YTD'], ['1y', '1Y'], ['all', 'All']];
@@ -1370,9 +1367,8 @@ function renderInvestments(data) {
   const changePeriodLabel = portfolioChangeLabel(snapshots);
   $('#investmentTotal').textContent = fmt.format(displayedTotal);
   const started = snapshots[0]?.date ? new Date(`${snapshots[0].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : null;
-  const reconstructed = snapshots.some((snapshot) => snapshot.source === 'reconstructed');
   const changeCopy = periodChange == null ? (started ? `Tracking since ${started}` : 'Sync to begin tracking') : `${periodChange >= 0 ? '+' : '−'}${fmt.format(Math.abs(periodChange))} ${changePeriodLabel}`;
-  $('#investmentContext').textContent = accounts.length ? `${changeCopy}${reconstructed ? ' · Includes estimated history' : ''}` : 'Connect an investment account to begin.';
+  $('#investmentContext').textContent = accounts.length ? changeCopy : 'Connect an investment account to begin.';
   $('#investmentChartDate').textContent = '';
   $('#investmentChartContext').classList.add('hidden');
   renderPortfolioChart(data);
@@ -1398,7 +1394,7 @@ function renderInvestments(data) {
   $('#investmentAccounts').innerHTML = accounts.length ? accounts.map((account) => {
     const change = account.rangeProgress?.state === 'ready' ? Number(account.rangeProgress.valueChange) : null;
     const showChange = change != null && Number.isFinite(change) && Math.round(Math.abs(change) * 100) > 0;
-    const changeLine = showChange ? `<small class="${change >= 0 ? 'positive' : 'negative'}">${change >= 0 ? '+' : '−'}${fmt.format(Math.abs(change))} value change · ${investmentRangeLabel(account.rangeProgress.range)}</small>` : '';
+    const changeLine = showChange ? `<small class="${change >= 0 ? 'positive' : 'negative'}">${change >= 0 ? '+' : '−'}${fmt.format(Math.abs(change))} · ${investmentRangeLabel(account.rangeProgress.range)}</small>` : '';
     return `<button type="button" class="investment-account-row" data-investment-account-history="${escapeHtml(account.account_id)}" aria-label="View ${escapeHtml(account.name)} performance history"><div><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || '')} · View history</span></div><div class="investment-account-value"><b>${fmt.format(account.value)}</b>${changeLine}</div><i aria-hidden="true">›</i></button>`;
   }).join('') : '<p class="spending-empty">No investment accounts connected.</p>';
   const names = new Map(accounts.map((account) => [account.account_id, account.name]));
