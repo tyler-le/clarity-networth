@@ -145,7 +145,7 @@ function investmentHistoryStatus(store, accounts) {
   return { state: 'tracking' };
 }
 
-export function investmentSummary(store) {
+export function investmentSummary(store, { range = 'all' } = {}) {
   const accounts = store.accounts.filter((account) => !account.hidden && account.type === 'investment');
   const accountIds = new Set(accounts.map((account) => account.plaid_account_id));
   const providerPositions = (store.positions || []).filter((position) => !position.hidden && accountIds.has(position.account_id));
@@ -190,12 +190,23 @@ export function investmentSummary(store) {
   const remaining = Math.max(0, total - holdingsValue);
   if (remaining > 1) allocation.set('Cash & unclassified', (allocation.get('Cash & unclassified') || 0) + remaining);
   const allocationRows = [...allocation.entries()].map(([name, value]) => ({ name, value, share: total ? value / total : 0 })).sort((a, b) => b.value - a.value);
+  const selectedRange = investmentRanges.has(range) ? range : 'all';
   return {
     total,
-    accounts: accounts.map((account) => ({ id: account.id, account_id: account.plaid_account_id, name: account.nickname || account.name, institution_name: account.institution_name, subtype: account.subtype, value: Math.abs(Number(account.current_balance || 0)) })),
+    accounts: accounts.map((account) => ({
+      id: account.id, account_id: account.plaid_account_id, name: account.nickname || account.name,
+      institution_name: account.institution_name, subtype: account.subtype,
+      value: Math.abs(Number(account.current_balance || 0)),
+      rangeProgress: investmentRangeProgress(store, { accountId: account.plaid_account_id, range: selectedRange })
+    })),
     allocation: allocationRows,
     unclassifiedAccounts,
-    positions: positions.map((position) => ({ ...position, gain: position.cost_basis == null ? null : Number(position.value || 0) - Number(position.cost_basis), gain_pct: position.cost_basis ? (Number(position.value || 0) - Number(position.cost_basis)) / Number(position.cost_basis) : null })).sort((a, b) => Number(b.value || 0) - Number(a.value || 0)),
+    positions: positions.map((position) => ({
+      ...position,
+      gain: position.cost_basis == null ? null : Number(position.value || 0) - Number(position.cost_basis),
+      gain_pct: position.cost_basis ? (Number(position.value || 0) - Number(position.cost_basis)) / Number(position.cost_basis) : null,
+      rangeProgress: position.manual || !position.ticker ? null : investmentRangeProgress(store, { ticker: position.ticker, range: selectedRange })
+    })).sort((a, b) => Number(b.value || 0) - Number(a.value || 0)),
     snapshots: (store.investment_snapshots || []).slice(-3650),
     historyStatus: investmentHistoryStatus(store, accounts),
     positionsAvailable: positions.length > 0
@@ -1266,6 +1277,16 @@ export function calculateFire(store, netWorth) {
   const coast = standard > 0 ? standard / Math.pow(1 + realReturn, yearsToRetirement) : 0;
   const futureValueFactor = realReturn === 0 ? yearsToRetirement : (Math.pow(1 + realReturn, yearsToRetirement) - 1) / realReturn;
   const projectedAtRetirement = freedomBalance * Math.pow(1 + realReturn, yearsToRetirement) + contributions.annualContributions * futureValueFactor;
+  // This is an assumption-led planning path, not an extrapolation of daily
+  // balances. It intentionally projects investable assets only: predicting
+  // future cash reserves or debt paydown from a transaction feed would make
+  // a net-worth promise we cannot support.
+  const projection = [];
+  let projectedBalance = freedomBalance;
+  for (let year = 0; year <= yearsToRetirement; year += 1) {
+    projection.push({ age: age + year, value: Math.max(0, projectedBalance), target: standard });
+    projectedBalance = projectedBalance * (1 + realReturn) + contributions.annualContributions;
+  }
   const progress = (target, balance = freedomBalance) => target > 0 ? Math.max(0, balance) / target * 100 : 0;
   const emergencyFund = spend.essentialMonthlySpend * 3;
   const runway = spend.essentialMonthlySpend * 6;
@@ -1291,6 +1312,7 @@ export function calculateFire(store, netWorth) {
     freedomBalance,
     yearsToRetirement,
     projectedAtRetirement,
+    projection,
     standard,
     lean,
     coast,
@@ -1389,15 +1411,33 @@ export function seedDemo(store) {
     { id: 'demo-auto', item_id: 'demo-capital-one', plaid_account_id: 'demo-auto', institution_name: 'Capital One', name: 'Auto loan', type: 'loan', subtype: 'auto', current_balance: 9350, interest_rate: 5.9, interest_rate_source: 'institution', updated_at: new Date().toISOString(), demo: true }
   ];
   store.positions = [
-    ['demo-brokerage', 'VTI', 'Vanguard Total Stock Market ETF', 'etf', 92, 274, 25208],
-    ['demo-brokerage', 'BND', 'Vanguard Total Bond Market ETF', 'etf', 62, 73, 4526],
-    ['demo-roth', 'FSKAX', 'Fidelity Total Market Index Fund', 'mutual fund', 133, 151, 20083],
-    ['demo-roth', 'SPAXX', 'Fidelity Government Money Market Fund', 'cash', 1791, 1, 1791],
-    ['demo-401k', 'FXAIX', 'Fidelity 500 Index Fund', 'mutual fund', 183, 191, 34953],
-    ['demo-401k', 'FSPSX', 'Fidelity International Index Fund', 'mutual fund', 123, 72, 8856]
-  ].map(([account_id, ticker, name, type, quantity, price, value]) => ({ id: `demo-position-${ticker}-${account_id}`, item_id: 'demo-fidelity', account_id, ticker, name, type, quantity, price, value, cost_basis: Math.round(value * .9), demo: true }));
+    // A simple three-fund portfolio: total U.S. stocks, international
+    // stocks, and U.S. bonds. Repeating the same three funds across account
+    // types keeps the demo understandable while showing aggregation.
+    ['demo-brokerage', 'VTI', 'Vanguard Total Stock Market ETF', 'etf', 34, 274, 9316],
+    ['demo-brokerage', 'VXUS', 'Vanguard Total International Stock ETF', 'etf', 50, 65, 3250],
+    ['demo-brokerage', 'BND', 'Vanguard Total Bond Market ETF', 'etf', 50, 73, 3650],
+    ['demo-brokerage', 'SPAXX', 'Fidelity Government Money Market Fund', 'cash', 1984, 1, 1984],
+    ['demo-roth', 'VTI', 'Vanguard Total Stock Market ETF', 'etf', 60, 274, 16440],
+    ['demo-roth', 'VXUS', 'Vanguard Total International Stock ETF', 'etf', 90, 65, 5850],
+    ['demo-roth', 'BND', 'Vanguard Total Bond Market ETF', 'etf', 56, 73, 4088],
+    ['demo-401k', 'VTI', 'Vanguard Total Stock Market ETF', 'etf', 95, 274, 26030],
+    ['demo-401k', 'VXUS', 'Vanguard Total International Stock ETF', 'etf', 150, 65, 9750],
+    ['demo-401k', 'BND', 'Vanguard Total Bond Market ETF', 'etf', 110, 73, 8030]
+  ].map(([account_id, ticker, name, type, quantity, price, value]) => ({ id: `demo-position-${ticker}-${account_id}`, item_id: 'demo-fidelity', account_id, security_id: `demo-security-${ticker}`, ticker, name, type, quantity, price, value, cost_basis: Math.round(value * .9), demo: true }));
   ensureDemoMarketHistory(store);
-  store.investment_snapshots = Array.from({ length: 84 }, (_, index) => { const date = new Date(now.getFullYear(), now.getMonth() - (83 - index), 1); return { date: date.toISOString().slice(0, 10), value: Math.round(21000 + index * 760 + Math.sin(index * .7) * 1800), source: 'verified' }; });
+  // Deliberately irregular contribution and market steps make the public
+  // sample legible without the decorative sine-wave pattern that looked fake.
+  let demoPortfolioValue = 21000;
+  store.investment_snapshots = Array.from({ length: 84 }, (_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - (83 - index), 1);
+    // A deterministic but non-repeating sequence supplies restrained monthly
+    // market variation; the regular contribution makes the overall journey
+    // feel like a real long-term investing habit rather than a sine wave.
+    const marketReturn = (((index * 73 + 19) % 101) - 50) / 2200;
+    demoPortfolioValue = demoPortfolioValue * (1 + marketReturn) + 760;
+    return { date: date.toISOString().slice(0, 10), value: Math.round(demoPortfolioValue), source: 'verified' };
+  });
   const rows = [
     ['payroll-1', 'Payroll', -3100, d(1), 'income'],
     ['hysa-interest', 'Ally Savings interest', -42.65, d(1), 'income'],
@@ -1438,7 +1478,11 @@ export function seedDemo(store) {
   store.snapshots = Array.from({ length: 90 }, (_, i) => {
     const dt = new Date(now);
     dt.setDate(now.getDate() - (89 - i));
-    const drift = i * 110 + Math.sin(i / 4.2) * 1100 + Math.sin(i / 12) * 650;
+    // A daily chart should show small, uneven balance movement and periodic
+    // income/investment steps—not a smooth mathematical oscillation.
+    const dayMove = ((i * 37 + 11) % 29 - 14) * 46;
+    const paycheckSteps = Math.floor(i / 14) * 690;
+    const drift = i * 42 + paycheckSteps + dayMove;
     const liabilities = Math.max(10450, 11500 - i * 11);
     return { date: dt.toISOString().slice(0, 10), assets: base + drift + liabilities, liabilities, net_worth: base + drift };
   });
@@ -1467,7 +1511,8 @@ function ensureDemoMarketHistory(store) {
       // Demonstration-only market history: varied but restrained, so the
       // public preview teaches the chart interaction without implying a real
       // past return for a visitor.
-      const multiplier = 0.88 + progress * 0.12 + Math.sin(progress * 17 + phase) * 0.018 + Math.sin(progress * 43 + phase) * 0.008;
+      const dailyMove = (((day * 37 + Math.round(phase * 10)) % 31) - 15) / 1400;
+      const multiplier = 0.88 + progress * 0.12 + dailyMove;
       prices[date.toISOString().slice(0, 10)] = Math.round(currentPrice * multiplier * 100) / 100;
     }
   }
@@ -1488,9 +1533,30 @@ function ensureDemoMarketHistory(store) {
     for (const [date, price] of Object.entries(store.market_prices[position.ticker] || {})) {
       const key = position.id || `${position.account_id}:${position.ticker}`;
       if (store.investment_position_snapshots.some((record) => record.date === date && record.kind === 'holding' && record.key === key)) continue;
-      store.investment_position_snapshots.push({ date, kind: 'holding', key, account_id: position.account_id, ticker: position.ticker, value: Math.round(Number(position.quantity || 0) * Number(price || 0) * 100) / 100, source: 'verified', demo: true });
+      store.investment_position_snapshots.push({ date, kind: 'holding', key, account_id: position.account_id, security_id: position.security_id, ticker: position.ticker, quantity: Number(position.quantity || 0), price: Number(price || 0), value: Math.round(Number(position.quantity || 0) * Number(price || 0) * 100) / 100, source: 'verified', demo: true });
     }
   }
+  // The demo represents a member who has tracked their investments for a
+  // while. Account drill-ins therefore need the same verified daily coverage
+  // as holdings, anchored to each account's displayed current balance.
+  const investmentAccounts = (store.accounts || []).filter((account) => account.type === 'investment' && account.demo);
+  for (const account of investmentAccounts) {
+    const holdings = (store.positions || []).filter((position) => position.account_id === account.plaid_account_id);
+    const currentHoldingValue = holdings.reduce((sum, position) => sum + Math.abs(Number(position.value || 0)), 0);
+    const scale = currentHoldingValue > 0 ? Math.abs(Number(account.current_balance || 0)) / currentHoldingValue : 1;
+    for (let day = 365; day >= 0; day -= 1) {
+      const date = new Date(today); date.setDate(today.getDate() - day);
+      const dayKey = date.toISOString().slice(0, 10);
+      const key = account.plaid_account_id;
+      if (store.investment_position_snapshots.some((record) => record.date === dayKey && record.kind === 'account' && record.key === key)) continue;
+      const observed = holdings.reduce((sum, position) => {
+        const price = position.type === 'cash' ? Number(position.price || 1) : Number(store.market_prices?.[position.ticker]?.[dayKey] || position.price || 0);
+        return sum + Math.abs(Number(position.quantity || 0) * price);
+      }, 0);
+      store.investment_position_snapshots.push({ date: dayKey, kind: 'account', key, account_id: key, value: Math.round(observed * scale * 100) / 100, source: 'verified', demo: true });
+    }
+  }
+  store.investment_position_snapshots.sort((a, b) => a.date.localeCompare(b.date));
 }
 
 function addDemoHistory(store) {
@@ -1546,7 +1612,8 @@ function addDemoHistory(store) {
     const snapshotDate = `${month}-28`;
     if (!existingSnapshotDates.has(snapshotDate)) {
       const progress = (historyMonths - monthsAgo) / historyMonths;
-      const netWorth = Math.round(demoStartingNetWorth + (demoCurrentNetWorth - demoStartingNetWorth) * progress + Math.sin(progress * 16) * 1800);
+      const monthlyMove = [0, 640, -310, 920, 270, -520, 740, 180, 1060, -390, 480, 820][monthsAgo % 12];
+      const netWorth = Math.round(demoStartingNetWorth + (demoCurrentNetWorth - demoStartingNetWorth) * progress + monthlyMove);
       const liabilities = Math.round(16500 - progress * 7150);
       store.snapshots.push({
         date: snapshotDate,

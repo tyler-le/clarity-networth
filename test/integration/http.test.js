@@ -376,9 +376,11 @@ integrationTest('signed-in demo mode uses its own consistent retirement scenario
   assert.ok(Number.isFinite(retirement.body.ladder.find((step) => step.key === 'coast').estimatedMonths));
   const investments = await request(app).get('/api/investments').set('Cookie', cookie);
   assert.equal(investments.status, 200, 'signed-in demo must load investment data without saving its seeded view');
+  assert.deepEqual([...new Set(investments.body.positions.map((position) => position.ticker))].sort(), ['BND', 'SPAXX', 'VTI', 'VXUS'], 'demo should teach a simple three-fund portfolio with a small cash position');
   const demoAccount = investments.body.accounts[0];
   const history = await request(app).get(`/api/investments/history?account_id=${encodeURIComponent(demoAccount.id)}`).set('Cookie', cookie);
   assert.equal(history.status, 200, 'signed-in demo investment detail must not attempt to overwrite real data');
+  assert.ok(history.body.history.length >= 2, 'demo investment accounts should have long-running verified history');
   const changeDebt = await request(app).patch('/api/settings/debt-strategy').set('Cookie', cookie).send({ strategy: 'snowball' });
   const createGoal = await request(app).post('/api/goals').set('Cookie', cookie).send({ name: 'Should not persist', source: 'cash', target: 1000 });
   assert.equal(changeDebt.status, 409, 'demo must reject real settings changes');

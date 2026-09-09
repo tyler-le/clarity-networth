@@ -269,10 +269,18 @@ function renderOverviewBriefing(data) {
     return;
   }
   const baseline = snapshots[0];
-  const current = data.summary || {};
-  const netChange = Number(current.netWorth || 0) - Number(baseline.net_worth || 0);
-  const assetChange = Number(current.assets || 0) - Number(baseline.assets || 0);
-  const debtChange = Number(current.liabilities || 0) - Number(baseline.liabilities || 0);
+  // The briefing must use the same bounded evidence as the chart. Using the
+  // all-time dashboard summary here made the copy remain unchanged when a
+  // person changed the range (most visible in demo mode).
+  const latest = snapshots.at(-1);
+  const current = {
+    netWorth: Number(latest.net_worth ?? data.summary?.netWorth ?? 0),
+    assets: Number(latest.assets ?? data.summary?.assets ?? 0),
+    liabilities: Number(latest.liabilities ?? data.summary?.liabilities ?? 0)
+  };
+  const netChange = current.netWorth - Number(baseline.net_worth || 0);
+  const assetChange = current.assets - Number(baseline.assets || 0);
+  const debtChange = current.liabilities - Number(baseline.liabilities || 0);
   movement.dataset.tone = netChange > 0 ? 'positive' : netChange < 0 ? 'watch' : 'steady';
   $('#netWorthMovementTitle').textContent = netChange === 0 ? 'Net worth was steady' : `Net worth ${netChange > 0 ? 'rose' : 'fell'} ${fmt.format(Math.abs(netChange))}`;
   const assetText = assetChange === 0 ? 'Assets were steady' : `Assets ${assetChange > 0 ? 'rose' : 'fell'} ${fmt.format(Math.abs(assetChange))}`;
@@ -438,7 +446,9 @@ function renderLineChart(snapshots, summary, rangeStart = null) {
   const xAxis = visibleTickTimes.map((time, index, times) => `<text x="${(plotLeft + ((time - domainStart) / (domainEnd - domainStart)) * (width - plotLeft - plotRight)).toFixed(1)}" y="${height - 5}" text-anchor="${times.length === 1 || index === times.length - 1 ? 'end' : index === 0 ? 'start' : 'middle'}" class="chart-axis-label chart-x-axis-label">${dateLabel(time)}</text>`).join('');
   const trackingDate = new Date(`${snapshots[0].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   const unavailableLead = hasUntrackedLead
-    ? `<path class="chart-unavailable-line" d="M ${plotLeft} ${points[0][1].toFixed(1)} L ${points[0][0].toFixed(1)} ${points[0][1].toFixed(1)}"/><text x="${((plotLeft + points[0][0]) / 2).toFixed(1)}" y="${Math.max(plotTop + 12, points[0][1] - 10).toFixed(1)}" text-anchor="middle" class="chart-unavailable-label">${width < 360 ? 'Since' : 'Tracking began'} ${trackingDate}</text>`
+    // Keep this cue in the dedicated top margin. Centering it above a short
+    // dashed lead lets long text collide with a y-axis tick or the line.
+    ? `<path class="chart-unavailable-line" d="M ${plotLeft} ${points[0][1].toFixed(1)} L ${points[0][0].toFixed(1)} ${points[0][1].toFixed(1)}"/><text x="${plotLeft + 8}" y="${plotTop + 13}" text-anchor="start" class="chart-unavailable-label">Tracking since ${trackingDate}</text>`
     : '';
   el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Net worth history${domainStart < firstObserved ? '; earlier time is not tracked' : ''}">
     <defs><linearGradient id="areaFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f6f4a" stop-opacity=".16"/><stop offset="1" stop-color="#1f6f4a" stop-opacity="0"/></linearGradient></defs>
@@ -1074,7 +1084,7 @@ function renderPortfolioChart(data) {
   const xAxis = xAxisIndices.map((index, position, indices) => `<text x="${points[index][0]}" y="${height - 5}" text-anchor="${indices.length === 1 || position === indices.length - 1 ? 'end' : position === 0 ? 'start' : 'middle'}" class="chart-axis-label chart-x-axis-label">${label(index)}</text>`).join('');
   const trackingDate = firstDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   const unavailableLead = hasUntrackedLead
-    ? `<path class="chart-unavailable-line" d="M ${plot.left} ${points[0][1].toFixed(1)} L ${points[0][0]} ${points[0][1]}"/><text x="${((plot.left + points[0][0]) / 2).toFixed(1)}" y="${Math.max(plot.top + 12, points[0][1] - 10).toFixed(1)}" text-anchor="middle" class="chart-unavailable-label">${width < 360 ? 'Since' : 'Tracking began'} ${trackingDate}</text>`
+    ? `<path class="chart-unavailable-line" d="M ${plot.left} ${points[0][1].toFixed(1)} L ${points[0][0]} ${points[0][1]}"/><text x="${plot.left + 8}" y="${plot.top + 13}" text-anchor="start" class="chart-unavailable-label">Tracking since ${trackingDate}</text>`
     : '';
   el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Scrubbable portfolio value history${domainStart < firstObservedTime ? '; earlier time is not tracked' : ''}"><defs><linearGradient id="portfolioFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".16"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs>${grid}${xAxis}${unavailableLead}<path d="${area}" fill="url(#portfolioFade)"/><path class="main-history-line" pathLength="1" d="${line}" fill="none" stroke="#287143" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>${points.length === 1 ? `<circle cx="${points[0][0]}" cy="${points[0][1]}" r="5" fill="#287143"/>` : ''}<line class="scrub-line" x1="0" y1="${plot.top}" x2="0" y2="${plot.bottom}"/><circle class="scrub-dot" cx="0" cy="0" r="5"/></svg><div class="chart-tooltip hidden"></div>`;
   if (snapshots.length < 2) return;
@@ -1491,10 +1501,14 @@ function holdingClassControl(position) {
 function renderRetirement(data) {
   if (!data) return;
   state.retirement = data;
+  if (!$('#retirementProjectionCard')) {
+    $('#retirementOutlookCard').insertAdjacentHTML('afterend', '<article class="card retirement-projection-card" id="retirementProjectionCard"><div class="card-top"><div><div class="card-label">Your path to financial independence</div><p class="spending-context" id="retirementPathContext">A planning estimate based on your current plan.</p></div><span class="retirement-projection-chip" id="retirementPathChip">—</span></div><div class="retirement-projection-chart" id="retirementPathChart" aria-label="Projected investment balance to retirement"></div><p class="retirement-projection-note">Projected investment balance in today’s dollars. It includes your current investments, planned contributions, and selected return assumption—not future cash or debt changes.</p></article>');
+  }
   const projectedBalance = fmt.format(data.projectedAtRetirement || 0);
   $('#retirementProjection').textContent = projectedBalance;
   $('#retirementProjectionContext').textContent = `On pace for ${projectedBalance} by age ${data.retirementAge}`;
   $('#retirementAgeChip').textContent = `${data.yearsToRetirement} years to go`;
+  renderRetirementProjection(data);
   $('#retirementSpendContext').textContent = data.monthsObserved ? `Needed by age ${data.retirementAge}, in today’s dollars · Based on your last ${data.monthsObserved} month${data.monthsObserved === 1 ? '' : 's'} of spending.` : `Needed by age ${data.retirementAge}, in today’s dollars.`;
   $('#retirementAssumption').textContent = `At retirement · ${data.withdrawalRate}% withdrawal`;
   const estimatedLabel = (months, complete) => {
@@ -1526,6 +1540,30 @@ function renderRetirement(data) {
   $('#retirementReturnValue').value = data.realReturn;
   form.retirement_age.min = String(Math.min(80, Number(data.age) + 1));
   $('#retirementRetireAgeValue').min = form.retirement_age.min;
+}
+
+function renderRetirementProjection(data) {
+  const chart = $('#retirementPathChart');
+  const points = data.projection || [];
+  if (!chart || points.length < 2) return;
+  const width = Math.max(280, Math.round(chart.clientWidth || 600));
+  const height = 210;
+  const pad = { left: 12, right: 12, top: 20, bottom: 28 };
+  const values = points.map((point) => Number(point.value || 0));
+  const target = Number(data.standard || 0);
+  const high = Math.max(...values, target, 1);
+  const x = (index) => pad.left + index / Math.max(points.length - 1, 1) * (width - pad.left - pad.right);
+  const y = (value) => height - pad.bottom - Math.max(0, value) / high * (height - pad.top - pad.bottom);
+  const path = points.map((point, index) => `${index ? 'L' : 'M'} ${x(index).toFixed(1)} ${y(point.value).toFixed(1)}`).join(' ');
+  const area = `${path} L ${x(points.length - 1).toFixed(1)} ${height - pad.bottom} L ${x(0).toFixed(1)} ${height - pad.bottom} Z`;
+  const targetY = y(target);
+  const last = points.at(-1);
+  const reaches = Number(last.value || 0) >= target && target > 0;
+  $('#retirementPathChip').textContent = reaches ? 'On track for FI' : `${fmt.format(Math.max(0, target - Number(last.value || 0)))} to FI`;
+  $('#retirementPathContext').textContent = reaches
+    ? `Your current plan reaches your financial-independence target by age ${data.retirementAge}.`
+    : `Your plan projects ${fmt.format(Number(last.value || 0))} by age ${data.retirementAge}, against a ${fmt.format(target)} FI target.`;
+  chart.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Projected investment balance rises from age ${data.age} to ${data.retirementAge}; financial independence target ${fmt.format(target)}"><defs><linearGradient id="retirementProjectionFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".24"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs><line class="retirement-projection-target" x1="${pad.left}" x2="${width - pad.right}" y1="${targetY.toFixed(1)}" y2="${targetY.toFixed(1)}"/><text class="retirement-projection-target-label" x="${width - pad.right}" y="${Math.max(13, targetY - 7).toFixed(1)}" text-anchor="end">FI target · ${fmt.format(target)}</text><path d="${area}" fill="url(#retirementProjectionFill)"/><path class="retirement-projection-line" pathLength="1" d="${path}"/><circle class="retirement-projection-start" cx="${x(0)}" cy="${y(points[0].value)}" r="4"/><circle class="retirement-projection-end" cx="${x(points.length - 1)}" cy="${y(last.value)}" r="5"/><text class="retirement-projection-axis" x="${pad.left}" y="${height - 7}">Age ${points[0].age}</text><text class="retirement-projection-axis" x="${width - pad.right}" y="${height - 7}" text-anchor="end">Age ${last.age}</text></svg>`;
 }
 
 function renderDashboard() {
@@ -2035,6 +2073,7 @@ $('#connectionsList').addEventListener('click', async (event) => {
 $$('[data-networth-range]').forEach((button) => button.addEventListener('click', () => {
   state.networthRange = button.dataset.networthRange;
   $$('[data-networth-range]').forEach((control) => control.classList.toggle('active', control === button));
+  renderOverviewBriefing(state.dashboard);
   renderNetWorthChartWhenVisible();
 }));
 $$('[data-spending-range]').forEach((button) => button.addEventListener('click', async () => {

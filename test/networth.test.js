@@ -772,6 +772,10 @@ test('retirement presets calculate coast, lean, standard, fat, and a projected r
   assert.equal(plan.ladder[2].estimatedMonths, null, 'a Coast FI date is not shown when this saving pace cannot catch the moving target before retirement');
   assert.ok(plan.coast < plan.standard);
   assert.ok(plan.projectedAtRetirement > 100000);
+  assert.equal(plan.projection[0].age, 35);
+  assert.equal(plan.projection.at(-1).age, 65);
+  assert.ok(Math.abs(plan.projection.at(-1).value - plan.projectedAtRetirement) < 0.01, 'the visual retirement path must end at the displayed projection');
+  assert.equal(plan.projection.at(-1).target, plan.standard, 'the projection carries the same FI target shown in the plan');
   assert.equal(plan.progress.standard, 100000 / 1200000 * 100);
 
   const laterRetirement = calculateFire({ ...store, settings: { fire: { ...store.settings.fire, retirement_age: 70 } } }, 100000);
