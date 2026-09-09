@@ -293,6 +293,27 @@ test('investment summaries attach the requested observed range to holdings', () 
   assert.equal(result.positions[0].rangeProgress.marketChange, 100);
 });
 
+test('a holding never borrows a same-ticker snapshot from another account', () => {
+  const store = {
+    accounts: [
+      { plaid_account_id: 'hsa', name: 'HSA', type: 'investment', current_balance: 5_711, hidden: false },
+      { plaid_account_id: 'old-401k', name: 'Old 401(k)', type: 'investment', current_balance: 39_042, hidden: false }
+    ],
+    // The current position belongs only to the HSA. A shared fund ticker is
+    // not enough to assign the old 401(k)'s history to this position.
+    positions: [{ id: 'hsa:vx', account_id: 'hsa', security_id: 'vx', ticker: 'VXLVX', name: 'Target Fund', type: 'mutual fund', quantity: 10, price: 571.1, value: 5_711 }],
+    investment_position_snapshots: [
+      { date: '2026-08-10', kind: 'holding', key: 'hsa:vx', account_id: 'hsa', security_id: 'vx', ticker: 'VXLVX', quantity: 10, price: 500, value: 5_000, source: 'verified' },
+      { date: '2026-08-20', kind: 'holding', key: 'old-401k:vx', account_id: 'old-401k', security_id: 'vx', ticker: 'VXLVX', quantity: 70, price: 557.74, value: 39_042, source: 'verified' },
+      { date: '2026-09-07', kind: 'holding', key: 'hsa:vx', account_id: 'hsa', security_id: 'vx', ticker: 'VXLVX', quantity: 10, price: 571.1, value: 5_711, source: 'verified' }
+    ]
+  };
+  const detail = investmentDetailHistory(store, { ticker: 'VXLVX', range: '1m' });
+  assert.deepEqual(detail.history, [{ date: '2026-08-10', value: 5_000 }, { date: '2026-09-07', value: 5_711 }]);
+  assert.equal(detail.progress.marketChange, 711);
+  assert.equal(investmentSummary(store, { range: '1m' }).positions[0].rangeProgress.marketChange, 711);
+});
+
 test('one verified account snapshot begins personal investment tracking without inventing earlier values', () => {
   const store = {
     accounts: [{ plaid_account_id: 'ira', item_id: 'item-1', type: 'investment', name: 'IRA', current_balance: 1_250, hidden: false }],
@@ -392,8 +413,8 @@ test('holding detail history uses only provider-observed snapshots', () => {
     accounts: [{ plaid_account_id: 'brokerage', type: 'investment', name: 'Brokerage', hidden: false }],
     positions: [{ account_id: 'brokerage', security_id: 'vti', ticker: 'VTI', name: 'Vanguard Total Stock Market ETF', type: 'etf', quantity: 10, value: 1100, cost_basis: 900 }],
     investment_position_snapshots: [
-      { date: '2026-01-15', kind: 'holding', key: 'vti', account_id: 'brokerage', ticker: 'VTI', value: 1000, source: 'verified' },
-      { date: '2026-09-01', kind: 'holding', key: 'vti', account_id: 'brokerage', ticker: 'VTI', value: 1100, source: 'verified' }
+      { date: '2026-01-15', kind: 'holding', key: 'brokerage:vti', account_id: 'brokerage', ticker: 'VTI', value: 1000, source: 'verified' },
+      { date: '2026-09-01', kind: 'holding', key: 'brokerage:vti', account_id: 'brokerage', ticker: 'VTI', value: 1100, source: 'verified' }
     ]
   };
   const result = investmentDetailHistory(store, { ticker: 'VTI', years: 1 });

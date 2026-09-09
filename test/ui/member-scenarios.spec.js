@@ -71,7 +71,7 @@ test('a cash-first member sees what they have without being pushed into debt or 
   await goToView(page, 'accounts');
   await expect(page.locator('#accountGrid')).toContainText('Cash');
   await expect(page.locator('#debtPayoffCard')).toBeHidden();
-  await expect(page.locator('.account-ledger-section')).toHaveCount(2);
+  await expect(page.locator('.account-collection')).toHaveCount(2);
 });
 
 test('reconstructed history is labeled on net worth, portfolio and account charts @critical', async ({ page }) => {

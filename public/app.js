@@ -597,19 +597,19 @@ function renderAccounts(accounts) {
   const invested = accounts.filter((account) => accountGroup(account) === 'Investments').reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
   const totalDebt = accounts.filter(isDebt).reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
   $('#accountsSummary').innerHTML = `<div><span>Cash & savings</span><strong>${fmt.format(cashAndSavings)}</strong></div><div><span>Invested</span><strong class="positive">${fmt.format(invested)}</strong></div><div><span>Debt owed</span><strong class="negative">${fmt.format(totalDebt)}</strong></div>`;
-  $('#accountGrid').innerHTML = `<section class="account-ledger" aria-label="Connected accounts">${grouped.map(([name, items]) => {
+  $('#accountGrid').innerHTML = grouped.map(([name, items]) => {
     const debt = items.every(isDebt);
     const total = items.reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
     const sorted = [...items].sort((a, b) => Math.abs(Number(b.current_balance || 0)) - Math.abs(Number(a.current_balance || 0)));
     const expanded = state.expandedAccountGroups.has(name);
     const previewCount = 2;
-    return `<section class="account-ledger-section ${debt ? 'debt' : 'asset'}">
-      <header class="account-ledger-head"><span class="account-collection-icon" aria-hidden="true">${accountGroupIcons[name] || '◇'}</span><div><h2>${name}</h2><p>${items.length} account${items.length === 1 ? '' : 's'}</p></div><div class="account-collection-total ${debt ? 'negative' : 'positive'}"><span>${debt ? 'Total owed' : 'Total held'}</span><strong>${fmt.format(total)}</strong></div></header>
-      <div class="account-ledger-items">${sorted.map((account, index) => `<article class="account-item ${debt ? 'debt' : 'asset'} ${index >= previewCount && !expanded ? 'hidden' : ''}">
-        ${institutionMark(account)}<div class="account-copy"><div class="account-name">${escapeHtml(account.nickname || account.name)}</div><div class="account-inst">${escapeHtml(accountSubtitle(account))}</div></div><strong class="account-item-balance ${debt ? 'negative' : ''}">${displayBalance(account)}</strong>${account.manual ? `<button class="account-rename" data-manual-account="${escapeHtml(account.id)}" data-manual-name="${escapeHtml(account.name)}" data-manual-subtype="${escapeHtml(account.subtype || '')}" data-manual-value="${escapeHtml(account.current_balance)}" data-manual-kind="${debt ? 'liability' : 'asset'}" aria-label="Edit ${escapeHtml(account.name)}">✎</button>` : `<button class="account-rename" data-account-rename="${escapeHtml(account.id)}" data-account-name="${escapeHtml(account.nickname || account.name)}" aria-label="Rename ${escapeHtml(account.nickname || account.name)}">✎</button>`}
+    return `<section class="account-collection ${debt ? 'debt' : 'asset'}">
+      <div class="account-collection-head"><span class="account-collection-icon" aria-hidden="true">${accountGroupIcons[name] || '◇'}</span><div><h2>${name}</h2><p>${items.length} account${items.length === 1 ? '' : 's'}</p></div><div class="account-collection-total ${debt ? 'negative' : 'positive'}"><span>${debt ? 'Owed' : 'Held'}</span><strong>${fmt.format(total)}</strong></div></div>
+      <div class="account-collection-items">${sorted.map((account, index) => `<article class="account-item ${debt ? 'debt' : 'asset'} ${index >= previewCount && !expanded ? 'hidden' : ''}">
+        ${institutionMark(account)}<div class="account-copy"><div class="account-name">${escapeHtml(account.nickname || account.name)}</div><div class="account-inst">${escapeHtml(accountSubtitle(account))}</div><div class="account-inline-balance ${debt ? 'negative' : 'positive'}">${displayBalance(account)}</div></div>${account.manual ? `<button class="account-rename" data-manual-account="${escapeHtml(account.id)}" data-manual-name="${escapeHtml(account.name)}" data-manual-subtype="${escapeHtml(account.subtype || '')}" data-manual-value="${escapeHtml(account.current_balance)}" data-manual-kind="${debt ? 'liability' : 'asset'}" aria-label="Edit ${escapeHtml(account.name)}">✎</button>` : `<button class="account-rename" data-account-rename="${escapeHtml(account.id)}" data-account-name="${escapeHtml(account.nickname || account.name)}" aria-label="Rename ${escapeHtml(account.nickname || account.name)}">✎</button>`}
       </article>`).join('')}</div>${items.length > previewCount ? `<button class="account-group-more" data-account-group="${escapeHtml(name)}">${expanded ? 'Show less' : `View ${items.length - previewCount} more`}</button>` : ''}
     </section>`;
-  }).join('')}</section>`;
+  }).join('');
 }
 
 function debtPlanForStrategy(plan, strategy) {
@@ -1192,9 +1192,22 @@ function renderHoldingHistoryChart(history, kind, emptyMessage = null, historySt
   const points = values.map((value, index) => [plot.left + (times[index] - times[0]) / Math.max(times.at(-1) - times[0], 1) * (width - plot.left - plot.right), plot.bottom - (value - min) / (max - min) * (plot.bottom - plot.top)]);
   const line = points.map(([x, y], index) => `${index ? 'L' : 'M'} ${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
   const area = `${line} L ${points.at(-1)[0]} ${plot.bottom} L ${points[0][0]} ${plot.bottom} Z`;
-  const label = (entry) => new Date(`${entry.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-  const endpoints = [0, pointsData.length - 1];
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${kind === 'market' ? 'Market price' : 'Your position value'} history"><defs><linearGradient id="holdingHistoryFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".18"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs><path d="${area}" fill="url(#holdingHistoryFade)"/><path class="holding-history-line" pathLength="1" d="${line}" fill="none" stroke="#287143" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><line class="holding-scrub-line" x1="0" y1="${plot.top}" x2="0" y2="${plot.bottom}"/><circle class="holding-scrub-dot" cx="0" cy="0" r="4"/></svg><span class="holding-history-axis start">${label(pointsData[endpoints[0]])}</span><span class="holding-history-axis end">${label(pointsData[endpoints[1]])}</span><div class="chart-tooltip hidden"></div>`;
+  const firstTime = times[0];
+  const lastTime = times.at(-1);
+  const shortSpan = lastTime - firstTime <= 45 * 86400000;
+  // Two-digit years ("Sep 26") read like a day of the month. For longer
+  // windows use the full year; reserve day labels for genuinely short spans.
+  const label = (entry) => new Date(`${entry.date}T12:00:00`).toLocaleDateString('en-US', shortSpan
+    ? { month: 'short', day: 'numeric' }
+    : { month: 'short', year: 'numeric' });
+  const startLabel = label(pointsData[0]);
+  const endLabel = label(pointsData.at(-1));
+  // A flat or same-day history has one calendar period, not two endpoints.
+  // Showing the label twice makes the axis look broken and adds no context.
+  const historyAxis = startLabel === endLabel
+    ? `<span class="holding-history-axis end">${endLabel}</span>`
+    : `<span class="holding-history-axis start">${startLabel}</span><span class="holding-history-axis end">${endLabel}</span>`;
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${kind === 'market' ? 'Market price' : 'Your position value'} history"><defs><linearGradient id="holdingHistoryFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".18"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs><path d="${area}" fill="url(#holdingHistoryFade)"/><path class="holding-history-line" pathLength="1" d="${line}" fill="none" stroke="#287143" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><line class="holding-scrub-line" x1="0" y1="${plot.top}" x2="0" y2="${plot.bottom}"/><circle class="holding-scrub-dot" cx="0" cy="0" r="4"/></svg>${historyAxis}<div class="chart-tooltip hidden"></div>`;
   if (pointsData.length < 2) return;
   const svg = el.querySelector('svg'); const tooltip = el.querySelector('.chart-tooltip'); const scrubLine = el.querySelector('.holding-scrub-line'); const scrubDot = el.querySelector('.holding-scrub-dot');
   const showPoint = (event) => {
@@ -1232,7 +1245,15 @@ function renderHoldingTrackingStart(el, snapshot, kind) {
 
 function holdingRangeMetric(progress) {
   if (progress?.state !== 'ready') return null;
+  // A holding's balance can change because shares arrived, left, or moved
+  // accounts. Only provider-confirmed same-share price movement is a holding
+  // performance result; otherwise withhold the number entirely.
+  if (progress.scope === 'holding' && progress.marketChange == null) return null;
   const change = Number(progress.marketChange ?? progress.valueChange);
+  // A displayed “+$0” promises movement where there is none at the precision
+  // we show people. Keep the chart/history available, but do not give a
+  // neutral, rounded amount gain styling or a metric slot.
+  if (!Number.isFinite(change) || Math.round(Math.abs(change) * 100) === 0) return null;
   const percent = progress.marketChange != null ? progress.marketChangePct : null;
   return {
     label: progress.marketChange != null ? 'Market movement' : 'Value change',
@@ -1259,8 +1280,9 @@ function renderHoldingHistoryDetail() {
   const gain = data.gain;
   const rangeMetric = holdingRangeMetric(data.progress);
   const metrics = $('#holdingHistoryMetrics');
-  metrics.classList.toggle('single', !rangeMetric && data.costBasis == null);
-  metrics.innerHTML = `<div><span>Current value</span><strong>${fmt.format(Number(data.value || 0))}</strong></div>${rangeMetric ? `<div><span>${rangeMetric.label}</span><strong class="${rangeMetric.tone}">${rangeMetric.value}</strong><small>${rangeMetric.detail}</small></div>` : data.costBasis != null ? `<div><span>${gain >= 0 ? 'Value vs reported cost' : 'Value vs reported cost'}</span><strong class="${gain >= 0 ? 'positive' : 'negative'}">${gain >= 0 ? '+' : '−'}${fmt.format(Math.abs(gain || 0))}</strong><small>All available cost-basis data</small></div>` : ''}`;
+  const hasCostBasisChange = data.costBasis != null && Math.round(Math.abs(Number(gain || 0)) * 100) > 0;
+  metrics.classList.toggle('single', !rangeMetric && !hasCostBasisChange);
+  metrics.innerHTML = `<div><span>Current value</span><strong>${fmt.format(Number(data.value || 0))}</strong></div>${rangeMetric ? `<div><span>${rangeMetric.label}</span><strong class="${rangeMetric.tone}">${rangeMetric.value}</strong><small>${rangeMetric.detail}</small></div>` : hasCostBasisChange ? `<div><span>Value vs reported cost</span><strong class="${gain >= 0 ? 'positive' : 'negative'}">${gain >= 0 ? '+' : '−'}${fmt.format(Math.abs(gain || 0))}</strong><small>All available cost-basis data</small></div>` : ''}`;
   const hasMarket = (data.market || []).length > 1;
   $('#holdingHistoryTabs').innerHTML = `<button type="button" class="${!isMarket ? 'active' : ''}" data-holding-history-mode="position" role="tab" aria-selected="${!isMarket}">Your position</button>${hasMarket ? `<button type="button" class="${isMarket ? 'active' : ''}" data-holding-history-mode="market" role="tab" aria-selected="${isMarket}">Market price</button>` : ''}`;
   const ranges = [['1m', '1M'], ['3m', '3M'], ['6m', '6M'], ['ytd', 'YTD'], ['1y', '1Y'], ['all', 'All']];
@@ -1373,7 +1395,12 @@ function renderInvestments(data) {
     $('#investmentAllocationInsight').textContent = 'Allocation appears when your institution provides holdings.';
     $('#investmentAllocation').innerHTML = '<p class="spending-empty">Allocation appears when your institution provides holdings.</p>';
   }
-  $('#investmentAccounts').innerHTML = accounts.length ? accounts.map((account) => `<button type="button" class="investment-account-row" data-investment-account-history="${escapeHtml(account.account_id)}" aria-label="View ${escapeHtml(account.name)} performance history"><div><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || '')} · View history</span></div><b>${fmt.format(account.value)}</b><i aria-hidden="true">›</i></button>`).join('') : '<p class="spending-empty">No investment accounts connected.</p>';
+  $('#investmentAccounts').innerHTML = accounts.length ? accounts.map((account) => {
+    const change = account.rangeProgress?.state === 'ready' ? Number(account.rangeProgress.valueChange) : null;
+    const showChange = change != null && Number.isFinite(change) && Math.round(Math.abs(change) * 100) > 0;
+    const changeLine = showChange ? `<small class="${change >= 0 ? 'positive' : 'negative'}">${change >= 0 ? '+' : '−'}${fmt.format(Math.abs(change))} value change · ${investmentRangeLabel(account.rangeProgress.range)}</small>` : '';
+    return `<button type="button" class="investment-account-row" data-investment-account-history="${escapeHtml(account.account_id)}" aria-label="View ${escapeHtml(account.name)} performance history"><div><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || '')} · View history</span></div><div class="investment-account-value"><b>${fmt.format(account.value)}</b>${changeLine}</div><i aria-hidden="true">›</i></button>`;
+  }).join('') : '<p class="spending-empty">No investment accounts connected.</p>';
   const names = new Map(accounts.map((account) => [account.account_id, account.name]));
   const isUnclassified = state.investmentFilter === 'Cash & unclassified';
   const unclassifiedAccounts = data.unclassifiedAccounts || [];
@@ -1398,13 +1425,14 @@ function renderInvestments(data) {
   $('#investmentHoldingsInsight').textContent = data.positionsAvailable ? `${previewCopy}${state.investmentFilter === 'all' ? '' : ` · ${state.investmentFilter}`} · ${periodLabel} selected` : 'Holdings appear when your institution provides them.';
   $('#investmentPositions').innerHTML = data.positionsAvailable ? visiblePositions.map((position) => {
     const progress = position.rangeProgress;
-    const change = progress?.state === 'ready' ? Number(progress.marketChange ?? progress.valueChange) : null;
+    const change = progress?.state === 'ready' && progress.marketChange != null ? Number(progress.marketChange) : null;
+    const hasVisibleChange = change != null && Math.round(Math.abs(change) * 100) > 0;
     const performance = change == null
-      ? (progress?.state === 'tracking' ? 'Tracking started' : 'No range data yet')
-      : `${change >= 0 ? '+' : '−'}${fmt.format(Math.abs(change))}${progress.marketChange != null && progress.marketChangePct != null ? ` · ${change >= 0 ? '+' : '−'}${Math.abs(progress.marketChangePct * 100).toFixed(1)}%` : ''}`;
+      ? (progress?.state === 'tracking' ? 'Tracking started' : '')
+      : hasVisibleChange ? `${change >= 0 ? '+' : '−'}${fmt.format(Math.abs(change))}${progress.marketChange != null && progress.marketChangePct != null ? ` · ${change >= 0 ? '+' : '−'}${Math.abs(progress.marketChangePct * 100).toFixed(1)}%` : ''}` : '';
     const share = data.total ? Math.max(0, Number(position.value || 0) / Number(data.total) * 100) : 0;
     const location = position.positions.length === 1 ? 'Held in 1 account' : `Held in ${position.positions.length} accounts`;
-    return `<button type="button" class="holding-row" data-holding-history="${escapeHtml(position.ticker || '')}" aria-label="View ${escapeHtml(position.name)} history"><div class="position-symbol">${escapeHtml(position.ticker || '•')}</div><div class="holding-copy"><strong class="holding-ticker">${escapeHtml(position.ticker || 'Holding')}</strong><span>${escapeHtml(position.name)} · ${location}</span><div class="holding-weight"><i><b style="width:${Math.min(100, share).toFixed(1)}%"></b></i><span>${Math.round(share)}% of portfolio</span></div></div><div class="position-value"><b>${fmt.format(position.value)}</b><small class="${change == null ? '' : change >= 0 ? 'positive' : 'negative'}">${performance}</small></div><i class="holding-chevron" aria-hidden="true">›</i></button>`;
+    return `<button type="button" class="holding-row" data-holding-history="${escapeHtml(position.ticker || '')}" aria-label="View ${escapeHtml(position.name)} history"><div class="position-symbol">${escapeHtml(position.ticker || '•')}</div><div class="holding-copy"><strong class="holding-ticker">${escapeHtml(position.ticker || 'Holding')}</strong><span>${escapeHtml(position.name)} · ${location}</span><div class="holding-weight"><i><b style="width:${Math.min(100, share).toFixed(1)}%"></b></i><span>${Math.round(share)}% of portfolio</span></div></div><div class="position-value"><b>${fmt.format(position.value)}</b>${performance ? `<small class="${change == null ? '' : change >= 0 ? 'positive' : 'negative'}">${performance}</small>` : ''}</div><i class="holding-chevron" aria-hidden="true">›</i></button>`;
   }).join('') : '<p class="positions-empty">Position details aren’t available from this connection yet. Your investment account balances still count toward your portfolio and net worth.</p>';
   const more = $('#investmentHoldingsMore');
   more.classList.toggle('hidden', positions.length <= 3);

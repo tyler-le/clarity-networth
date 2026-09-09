@@ -195,7 +195,7 @@ export function investmentSummary(store, { range = 'all' } = {}) {
     accounts: accounts.map((account) => ({ id: account.id, account_id: account.plaid_account_id, name: account.nickname || account.name, institution_name: account.institution_name, subtype: account.subtype, value: Math.abs(Number(account.current_balance || 0)), rangeProgress: investmentRangeProgress(store, { accountId: account.plaid_account_id, range }) })),
     allocation: allocationRows,
     unclassifiedAccounts,
-    positions: positions.map((position) => ({ ...position, gain: position.cost_basis == null ? null : Number(position.value || 0) - Number(position.cost_basis), gain_pct: position.cost_basis ? (Number(position.value || 0) - Number(position.cost_basis)) / Number(position.cost_basis) : null, rangeProgress: position.manual || !position.ticker ? null : investmentRangeProgress(store, { ticker: position.ticker, range }) })).sort((a, b) => Number(b.value || 0) - Number(a.value || 0)),
+    positions: positions.map((position) => ({ ...position, gain: position.cost_basis == null ? null : Number(position.value || 0) - Number(position.cost_basis), gain_pct: position.cost_basis ? (Number(position.value || 0) - Number(position.cost_basis)) / Number(position.cost_basis) : null, rangeProgress: position.manual || !position.ticker ? null : investmentRangeProgress(store, { ticker: position.ticker, holdingKeys: [positionSnapshotKey(position)], range }) })).sort((a, b) => Number(b.value || 0) - Number(a.value || 0)),
     snapshots: (store.investment_snapshots || []).slice(-3650),
     historyStatus: investmentHistoryStatus(store, accounts),
     positionsAvailable: positions.length > 0
@@ -268,13 +268,22 @@ export function snapshotInvestments(store, snapshotDate = new Date().toISOString
   if (store.investment_position_snapshots.length > 20_000) store.investment_position_snapshots = store.investment_position_snapshots.slice(-20_000);
 }
 
-function providerPositionHistory(store, { accountId = null, ticker = null } = {}) {
+function positionSnapshotKey(position) {
+  return position.id || `${position.account_id}:${position.security_id || position.ticker || position.name}`;
+}
+
+function providerPositionHistory(store, { accountId = null, ticker = null, holdingKeys = null } = {}) {
   const normalizedTicker = String(ticker || '').trim().toUpperCase();
+  const allowedHoldingKeys = holdingKeys?.length ? new Set(holdingKeys) : null;
   const records = (store.investment_position_snapshots || []).filter((record) => {
     if (record.source !== 'verified') return false;
     if (!(store.accounts || []).some((account) => !account.hidden && account.type === 'investment' && account.plaid_account_id === record.account_id)) return false;
     if (accountId) return record.kind === 'account' && record.account_id === accountId;
-    return record.kind === 'holding' && record.ticker === normalizedTicker;
+    // Ticker text is not a durable personal-position identity: the same fund
+    // can exist in several retirement accounts, or be moved between them.
+    // A current holding may only use snapshots of that exact provider position.
+    return record.kind === 'holding' && record.ticker === normalizedTicker
+      && (!allowedHoldingKeys || allowedHoldingKeys.has(record.key));
   });
   const totals = new Map();
   for (const record of records) totals.set(record.date, (totals.get(record.date) || 0) + Number(record.value || 0));
@@ -334,14 +343,16 @@ function holdingMarketChange(first, last) {
 // identified holding whose quantities and prices reconcile at both endpoints.
 // Account-level changes deliberately remain balance changes: deposits,
 // withdrawals, and cash movement cannot be separated safely from a balance.
-export function investmentRangeProgress(store, { accountId = null, ticker = null, range = 'all' } = {}) {
+export function investmentRangeProgress(store, { accountId = null, ticker = null, holdingKeys = null, range = 'all' } = {}) {
   const selectedRange = investmentRanges.has(range) ? range : 'all';
   const normalizedTicker = String(ticker || '').trim().toUpperCase();
+  const allowedHoldingKeys = holdingKeys?.length ? new Set(holdingKeys) : null;
   const scope = accountId ? 'account' : 'holding';
   const records = (store.investment_position_snapshots || []).filter((record) => {
     if (record.source !== 'verified') return false;
     if (accountId) return record.kind === 'account' && record.account_id === accountId;
-    return record.kind === 'holding' && record.ticker === normalizedTicker;
+    return record.kind === 'holding' && record.ticker === normalizedTicker
+      && (!allowedHoldingKeys || allowedHoldingKeys.has(record.key));
   });
   const endDate = records.map((record) => record.date).filter(Boolean).sort().at(-1) || null;
   if (!endDate) return { scope, range: selectedRange, state: 'tracking', points: 0 };
@@ -571,12 +582,13 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
     : null;
   const visibleAccounts = new Set(store.accounts.filter((account) => !account.hidden && account.type === 'investment').map((account) => account.plaid_account_id));
   const normalizedTicker = String(ticker || '').trim().toUpperCase();
-  const rangeProgress = investmentRangeProgress(store, { accountId, ticker: normalizedTicker, range });
   const positions = (store.positions || []).filter((position) => {
     if (!visibleAccounts.has(position.account_id) || position.hidden) return false;
     if (accountId) return position.account_id === accountId;
     return normalizedTicker && String(position.ticker || '').trim().toUpperCase() === normalizedTicker;
   });
+  const holdingKeys = accountId ? null : positions.map(positionSnapshotKey);
+  const rangeProgress = investmentRangeProgress(store, { accountId, ticker: normalizedTicker, holdingKeys, range });
   // Keep the account identity visible even if its provider has not supplied
   // positions in this response. A generic "$0 Investment account" is both
   // misleading and needlessly discards the nickname the person gave it.
@@ -594,7 +606,7 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
   const label = accountId
     ? (selectedAccount?.nickname || selectedAccount?.name || 'Investment account')
     : (positions[0].name || normalizedTicker);
-  const providerHistory = providerPositionHistory(store, { accountId, ticker: normalizedTicker });
+  const providerHistory = providerPositionHistory(store, { accountId, ticker: normalizedTicker, holdingKeys });
   // Real accounts use the complete ledger, cash movements and exact security
   // identities. Demo fixtures retain their explicitly synthetic timeline.
   const realAccounts = store.accounts.filter((account) => visibleAccounts.has(account.plaid_account_id)
