@@ -526,7 +526,7 @@ test('account detail names each holding instead of repeating the account name', 
   await expect(page.locator('#holdingHistoryEyebrow')).toHaveText('Your account');
   await expect(page.locator('#holdingHistoryTitle')).toHaveText('401(k)');
   await expect(where).toContainText('Holdings in this account');
-  await expect(where.locator('b').first()).toContainText(/VTI|VXUS|BND/);
+  await expect(where.locator('b').first()).toContainText(/FXAIX|FSPSX/);
   await expect(where.locator('small').first()).toContainText(/401\(k\).*Funds/);
 });
 
@@ -538,15 +538,13 @@ test('holding and account drill-ins show only a person’s verified position his
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('tab', { name: 'Your position' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('#holdingHistoryChart svg')).toBeVisible();
-  await expect(page.locator('#holdingHistoryNote')).toContainText(/Value change over/i);
+  await expect(page.locator('#holdingHistoryNote')).toContainText(/verified.*updates/i);
   await expect(dialog.getByRole('tab', { name: 'Market price' })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await page.locator('[data-investment-account-history]').first().click();
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('tab', { name: 'Your position' })).toBeVisible();
-  await expect(page.locator('#holdingHistoryChart svg')).toBeVisible();
-  await expect(page.locator('#holdingHistoryChart')).not.toContainText(/Tracking starts with your next update/i);
   await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe('holdingHistoryDialog');
 });
 
@@ -778,12 +776,6 @@ test('the retirement ladder remains legible and usable on a phone', async ({ pag
     };
   });
   expect(layout.overflows).toBe(false);
-  const projection = await page.locator('#retirementProjectionCard').evaluate((card) => {
-    const rect = card.getBoundingClientRect();
-    return { overflow: card.scrollWidth > card.clientWidth + 1, width: rect.width, viewport: window.innerWidth };
-  });
-  expect(projection.overflow).toBe(false);
-  expect(projection.width).toBeLessThanOrEqual(projection.viewport);
   expect(layout.cardCount).toBe(4);
   expect(layout.usableCardWidth).toBe(true);
   await page.locator('[data-retirement-milestone="coast"]').click();

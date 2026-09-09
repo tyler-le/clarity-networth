@@ -30,7 +30,7 @@ async function openSignedInScenario(page, transform = () => {}) {
   await page.route('**/api/auth/me', (route) => route.fulfill({ json: { user: { email: 'scenario@example.test', name: 'Scenario member' } } }));
   await page.route('**/api/dashboard', (route) => route.fulfill({ json: preview.dashboard }));
   await page.route(/\/api\/spending(?:\?.*)?$/, (route) => route.fulfill({ json: preview.spending }));
-  await page.route(/\/api\/investments(?:\?.*)?$/, (route) => route.fulfill({ json: preview.investments }));
+  await page.route('**/api/investments', (route) => route.fulfill({ json: preview.investments }));
   await page.route('**/api/retirement', (route) => route.fulfill({ json: preview.retirement }));
   await page.route('**/api/launch-event', (route) => route.fulfill({ status: 204 }));
   await page.route('**/api/settings/debt-strategy', (route) => route.fulfill({ json: preview.dashboard.debtPayoff || {} }));
@@ -93,7 +93,7 @@ test('reconstructed history is labeled on net worth, portfolio and account chart
   await netChart.dispatchEvent('pointerup');
   await goToView(page, 'investments');
   await page.locator('[data-investment-range="all"]').click();
-  await expect(page.locator('#investmentContext')).toContainText(/Estimated from reported activity/i);
+  await expect(page.locator('#investmentContext')).toContainText('Includes estimated history');
   await page.route('**/api/investments/history**', (route) => route.fulfill({ json: {
     state: 'ready', label: 'Investment account', value: 1300, reconstructed: true, history, market: [],
     detail: 'Earlier values are estimated from reported activity and historical prices. Saved balances take over when tracking begins.'
@@ -172,24 +172,7 @@ test('a one-month net-worth view never repeats a calendar label @critical', asyn
   expect(labels.length).toBeGreaterThanOrEqual(1);
   expect(labels.every((label) => /^[A-Z][a-z]{2} \d+$/.test(label))).toBe(true);
   expect(new Set(labels).size).toBe(labels.length);
-  await expect(page.locator('#netWorthChart .chart-unavailable-label')).toHaveText(/since|tracking began/i);
-});
-
-test('net-worth briefing recalculates from the selected chart timeframe', async ({ page }) => {
-  await openSignedInScenario(page, (preview) => {
-    preview.dashboard.snapshots = [
-      { date: '2025-10-01', net_worth: 30_000, assets: 35_000, liabilities: 5_000, source: 'verified' },
-      { date: '2026-08-31', net_worth: 60_000, assets: 64_000, liabilities: 4_000, source: 'verified' },
-      { date: '2026-09-07', net_worth: 61_000, assets: 64_500, liabilities: 3_500, source: 'verified' }
-    ];
-    preview.dashboard.summary = { ...preview.dashboard.summary, netWorth: 61_000, assets: 64_500, liabilities: 3_500 };
-  });
-
-  await page.locator('[data-networth-range="all"]').click();
-  await expect(page.locator('#netWorthMovementTitle')).toContainText('$31,000');
-  await page.locator('[data-networth-range="1m"]').click();
-  await expect(page.locator('#netWorthMovementTitle')).toContainText('$1,000');
-  await expect(page.locator('#netWorthMovementDetail')).toContainText('Assets rose $500; debt fell $500.');
+  await expect(page.locator('#netWorthChart .chart-unavailable-label')).toHaveText(/Since|Tracking began/);
 });
 
 test('a long net-worth range with only recent history does not overlap right-edge dates @critical', async ({ page }) => {
@@ -204,7 +187,7 @@ test('a long net-worth range with only recent history does not overlap right-edg
   await page.locator('[data-networth-range="1y"]').click();
   const labels = await page.locator('#netWorthChart .chart-x-axis-label').allTextContents();
   expect(labels).toEqual(['Sep 7']);
-  await expect(page.locator('#netWorthChart .chart-unavailable-label')).toHaveText(/since|tracking began/i);
+  await expect(page.locator('#netWorthChart .chart-unavailable-label')).toHaveText(/Since|Tracking began/);
 });
 
 test('an incomplete portfolio timeframe retains its verified endpoint dates', async ({ page }) => {

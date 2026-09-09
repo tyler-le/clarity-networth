@@ -255,7 +255,7 @@ test('selected holding range calls a change market performance only with unchang
   assert.deepEqual(result, {
     scope: 'holding', range: '1m', state: 'ready', points: 2,
     startDate: '2026-08-10', endDate: '2026-09-07', startValue: 1_000, endValue: 1_100, valueChange: 100,
-    marketChange: 100, marketChangePct: .1, trend: [1_000, 1_100], changeKind: 'market'
+    marketChange: 100, marketChangePct: .1, changeKind: 'market'
   });
 });
 
@@ -572,10 +572,12 @@ test('demo mode provides seven years of usable account and spending history', ()
   const portfolioChange = snapshots.at(-1).value - snapshots[0].value;
   const contributions = investmentContributions(store).reduce((sum, row) => sum + row.amount, 0);
   assert.ok(portfolioChange - contributions > 0, 'demo all-time investment growth should be positive');
+  const accountNetWorth = store.accounts.reduce((total, account) => total + (['credit', 'loan'].includes(account.type) ? -1 : 1) * Math.abs(Number(account.current_balance || 0)), 0);
+  const investmentBalance = store.accounts.filter((account) => account.type === 'investment').reduce((total, account) => total + Math.abs(Number(account.current_balance || 0)), 0);
+  assert.equal(store.snapshots.at(-1).net_worth, accountNetWorth, 'latest chart point reconciles to demo accounts');
+  assert.equal(snapshots.at(-1).value, investmentBalance, 'portfolio chart reconciles to demo investment accounts');
+  assert.equal(investmentSummary(store).allocation.some((row) => row.name === 'Cash & unclassified'), false);
   assert.deepEqual(goalProgress(store).map((goal) => goal.name), ['Emergency fund']);
-  const demoAllocation = investmentSummary(store);
-  assert.deepEqual(demoAllocation.allocation.map((row) => row.name), ['Funds', 'Cash']);
-  assert.equal(demoAllocation.unclassifiedAccounts.length, 0);
   const recurringNames = recurringCharges(store).recurring.map((charge) => charge.name);
   assert.ok(recurringNames.includes('Netflix'));
   assert.equal(recurringNames.some((name) => /groceries|dining|leisure/i.test(name)), false);
@@ -775,10 +777,6 @@ test('retirement presets calculate coast, lean, standard, fat, and a projected r
   assert.equal(plan.ladder[2].estimatedMonths, null, 'a Coast FI date is not shown when this saving pace cannot catch the moving target before retirement');
   assert.ok(plan.coast < plan.standard);
   assert.ok(plan.projectedAtRetirement > 100000);
-  assert.equal(plan.projection[0].age, 35);
-  assert.equal(plan.projection.at(-1).age, 65);
-  assert.ok(Math.abs(plan.projection.at(-1).value - plan.projectedAtRetirement) < 0.01, 'the visual retirement path must end at the displayed projection');
-  assert.equal(plan.projection.at(-1).target, plan.standard, 'the projection carries the same FI target shown in the plan');
   assert.equal(plan.progress.standard, 100000 / 1200000 * 100);
 
   const laterRetirement = calculateFire({ ...store, settings: { fire: { ...store.settings.fire, retirement_age: 70 } } }, 100000);

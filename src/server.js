@@ -1076,7 +1076,6 @@ app.get('/api/spending', async (req, res) => {
 });
 
 app.get('/api/investments', async (req, res) => {
-  const range = ['1m', '3m', '6m', 'ytd', '1y', 'all'].includes(String(req.query.range || '')) ? String(req.query.range) : 'all';
   const persistedStore = await loadStore(req.user);
   const isDemoMode = Boolean(persistedStore.settings?.demo_mode);
   const store = activeStore(persistedStore);
@@ -1089,7 +1088,7 @@ app.get('/api/investments', async (req, res) => {
   // over a member's real store; the safety boundary would block it anyway,
   // but an error here made demo mode appear as a failed data load.
   if (!isDemoMode) await saveStore(req.user, store);
-  res.json(investmentSummary(store, { range }));
+  res.json(investmentSummary(store));
 });
 
 app.get('/api/investments/history', async (req, res) => {
