@@ -232,7 +232,7 @@ integrationTest('investment history exposes range-safe verified progress without
   assert.deepEqual(holding.body.progress, {
     scope: 'holding', range: '1m', state: 'ready', points: 2,
     startDate: earlier, endDate: today, startValue: 1_000, endValue: 1_100, valueChange: 100,
-    marketChange: 100, marketChangePct: .1, changeKind: 'market'
+    marketChange: 100, marketChangePct: .1, trend: [1_000, 1_100], changeKind: 'market'
   });
   const account = await request(app).get('/api/investments/history?account_id=ira&range=1m').set('Cookie', cookie);
   assert.equal(account.status, 200);

@@ -374,6 +374,12 @@ export function investmentRangeProgress(store, { accountId = null, ticker = null
   const endValue = snapshotValue(closing);
   const valueChange = Math.round((endValue - startValue) * 100) / 100;
   const marketChange = scope === 'holding' ? holdingMarketChange(opening, closing) : null;
+  // A small, sampled series lets the list show a truthful movement cue without
+  // sending an entire detail chart with every holding.
+  const trendIndexes = dates.length <= 18
+    ? dates.map((_, index) => index)
+    : Array.from({ length: 18 }, (_, index) => Math.round(index * (dates.length - 1) / 17));
+  const trend = trendIndexes.map((index) => Math.round(snapshotValue(byDate.get(dates[index])) * 100) / 100);
   return {
     scope, range: selectedRange, state: 'ready', points: dates.length,
     startDate: dates[0], endDate: dates.at(-1), startValue, endValue, valueChange,
@@ -381,6 +387,7 @@ export function investmentRangeProgress(store, { accountId = null, ticker = null
     // provider facts prevent us from calling this investment performance.
     marketChange,
     marketChangePct: marketChange != null && startValue > 0 ? marketChange / startValue : null,
+    trend,
     changeKind: marketChange != null ? 'market' : 'balance'
   };
 }
@@ -1404,8 +1411,8 @@ export function seedDemo(store) {
     { id: 'demo-checking', item_id: 'demo-chase', plaid_account_id: 'demo-checking', institution_name: 'Chase', name: 'Checking', type: 'depository', subtype: 'checking', current_balance: 5200, available_balance: 5000, updated_at: new Date().toISOString(), demo: true },
     { id: 'demo-hysa', item_id: 'demo-ally', plaid_account_id: 'demo-hysa', institution_name: 'Ally', name: 'High Yield Savings', type: 'depository', subtype: 'savings', current_balance: 12500, available_balance: 12500, updated_at: new Date().toISOString(), demo: true },
     { id: 'demo-brokerage', item_id: 'demo-fidelity', plaid_account_id: 'demo-brokerage', institution_name: 'Fidelity', name: 'Brokerage', type: 'investment', subtype: 'brokerage', current_balance: 18200, updated_at: new Date().toISOString(), demo: true },
-    { id: 'demo-roth', item_id: 'demo-fidelity', plaid_account_id: 'demo-roth', institution_name: 'Fidelity', name: 'Roth IRA', type: 'investment', subtype: 'ira', current_balance: 26400, updated_at: new Date().toISOString(), demo: true },
-    { id: 'demo-401k', item_id: 'demo-fidelity', plaid_account_id: 'demo-401k', institution_name: 'Fidelity', name: '401(k)', type: 'investment', subtype: '401k', current_balance: 43800, updated_at: new Date().toISOString(), demo: true },
+    { id: 'demo-roth', item_id: 'demo-fidelity', plaid_account_id: 'demo-roth', institution_name: 'Fidelity', name: 'Roth IRA', type: 'investment', subtype: 'ira', current_balance: 26378, updated_at: new Date().toISOString(), demo: true },
+    { id: 'demo-401k', item_id: 'demo-fidelity', plaid_account_id: 'demo-401k', institution_name: 'Fidelity', name: '401(k)', type: 'investment', subtype: '401k', current_balance: 43810, updated_at: new Date().toISOString(), demo: true },
     { id: 'demo-credit', item_id: 'demo-chase', plaid_account_id: 'demo-credit', institution_name: 'Chase', name: 'Chase Sapphire Preferred', type: 'credit', subtype: 'credit card', current_balance: 1160, interest_rate: 24.49, interest_rate_source: 'institution', mask: '4821', updated_at: new Date().toISOString(), demo: true },
     { id: 'demo-venture', item_id: 'demo-capital-one', plaid_account_id: 'demo-venture', institution_name: 'Capital One', name: 'Capital One Venture', type: 'credit', subtype: 'credit card', current_balance: 640, interest_rate: 19.99, interest_rate_source: 'institution', mask: '6108', updated_at: new Date().toISOString(), demo: true },
     { id: 'demo-auto', item_id: 'demo-capital-one', plaid_account_id: 'demo-auto', institution_name: 'Capital One', name: 'Auto loan', type: 'loan', subtype: 'auto', current_balance: 9350, interest_rate: 5.9, interest_rate_source: 'institution', updated_at: new Date().toISOString(), demo: true }
@@ -1426,15 +1433,15 @@ export function seedDemo(store) {
     ['demo-401k', 'BND', 'Vanguard Total Bond Market ETF', 'etf', 110, 73, 8030]
   ].map(([account_id, ticker, name, type, quantity, price, value]) => ({ id: `demo-position-${ticker}-${account_id}`, item_id: 'demo-fidelity', account_id, security_id: `demo-security-${ticker}`, ticker, name, type, quantity, price, value, cost_basis: Math.round(value * .9), demo: true }));
   ensureDemoMarketHistory(store);
-  // Deliberately irregular contribution and market steps make the public
-  // sample legible without the decorative sine-wave pattern that looked fake.
+  // The long-term demo is an illustrative investing journey. It is not market
+  // data, but it should have the unevenness of a broad-market path rather than
+  // a repeating decorative pattern.
   let demoPortfolioValue = 21000;
+  let portfolioState = 87_321;
   store.investment_snapshots = Array.from({ length: 84 }, (_, index) => {
     const date = new Date(now.getFullYear(), now.getMonth() - (83 - index), 1);
-    // A deterministic but non-repeating sequence supplies restrained monthly
-    // market variation; the regular contribution makes the overall journey
-    // feel like a real long-term investing habit rather than a sine wave.
-    const marketReturn = (((index * 73 + 19) % 101) - 50) / 2200;
+    portfolioState = (portfolioState * 16_807) % 2_147_483_647;
+    const marketReturn = .0048 + (portfolioState / 2_147_483_647 - .5) * .042;
     demoPortfolioValue = demoPortfolioValue * (1 + marketReturn) + 760;
     return { date: date.toISOString().slice(0, 10), value: Math.round(demoPortfolioValue), source: 'verified' };
   });
@@ -1474,17 +1481,34 @@ export function seedDemo(store) {
     pfc_detailed: '', source: 'investment_transaction', demo: true
   });
 
-  const base = 84000;
+  // Continue the long-term monthly story with a single daily series. The
+  // previous demo mixed an unrelated daily base with monthly history, which
+  // created a fictional cliff where the two series met.
+  const dailyTarget = 95590;
+  const dailyStart = 92400;
+  let randomState = 24_681;
+  const nextDemoReturn = () => {
+    randomState = (randomState * 16_807) % 2_147_483_647;
+    return (randomState / 2_147_483_647 - .5) * .0042;
+  };
+  const dailyRaw = [];
+  let dailyValue = dailyStart;
+  for (let i = 0; i < 90; i += 1) {
+    // Illustrative broad-market-like movement, not an actual VTI price
+    // history. Small independent daily returns avoid a decorative wave or a
+    // transaction-shaped sawtooth in a long-term balance chart.
+    const pullback = i === 33 ? -.009 : i === 61 ? -.006 : 0;
+    dailyValue *= 1 + .00038 + nextDemoReturn() + pullback;
+    dailyRaw.push(dailyValue);
+  }
+  const rawSpan = Math.max(1, dailyRaw.at(-1) - dailyStart);
+  const scale = (dailyTarget - dailyStart) / rawSpan;
   store.snapshots = Array.from({ length: 90 }, (_, i) => {
     const dt = new Date(now);
     dt.setDate(now.getDate() - (89 - i));
-    // A daily chart should show small, uneven balance movement and periodic
-    // income/investment steps—not a smooth mathematical oscillation.
-    const dayMove = ((i * 37 + 11) % 29 - 14) * 46;
-    const paycheckSteps = Math.floor(i / 14) * 690;
-    const drift = i * 42 + paycheckSteps + dayMove;
-    const liabilities = Math.max(10450, 11500 - i * 11);
-    return { date: dt.toISOString().slice(0, 10), assets: base + drift + liabilities, liabilities, net_worth: base + drift };
+    const netWorth = Math.round(dailyStart + (dailyRaw[i] - dailyStart) * scale);
+    const liabilities = Math.round(10150 - i * 8.9);
+    return { date: dt.toISOString().slice(0, 10), assets: netWorth + liabilities, liabilities, net_worth: netWorth };
   });
   addDemoHistory(store);
   return store;
@@ -1495,6 +1519,14 @@ function ensureDemoMarketHistory(store) {
   store.investment_position_snapshots ||= [];
   store.investment_transactions ||= [];
   const today = new Date();
+  // Demo balances are deliberately reconciled to its displayed holdings. That
+  // prevents a tiny rounding residual from becoming a distracting fourth
+  // allocation category ("Cash & unclassified").
+  for (const account of store.accounts || []) {
+    if (!account.demo || account.type !== 'investment') continue;
+    const reportedHoldings = (store.positions || []).filter((position) => position.account_id === account.plaid_account_id);
+    if (reportedHoldings.length) account.current_balance = Math.round(reportedHoldings.reduce((sum, position) => sum + Math.abs(Number(position.value || 0)), 0) * 100) / 100;
+  }
   const byTicker = new Map();
   for (const position of store.positions || []) {
     if (!position.ticker || position.type === 'cash') continue;
@@ -1503,17 +1535,25 @@ function ensureDemoMarketHistory(store) {
   for (const [ticker, currentPrice] of byTicker) {
     if (Object.keys(store.market_prices[ticker] || {}).length >= 300) continue;
     const prices = store.market_prices[ticker] ||= {};
-    const phase = [...ticker].reduce((sum, character) => sum + character.charCodeAt(0), 0) / 13;
+    let priceState = [...ticker].reduce((sum, character) => sum * 31 + character.charCodeAt(0), 19) % 2_147_483_647;
+    let simulatedPrice = currentPrice * .87;
+    const simulated = [];
+    for (let index = 0; index <= 365; index += 1) {
+      priceState = (priceState * 16_807) % 2_147_483_647;
+      const noise = (priceState / 2_147_483_647 - .5) * .024;
+      const correction = index === 104 ? -.018 : index === 219 ? -.012 : 0;
+      simulatedPrice *= 1 + .00032 + noise + correction;
+      simulated.push(simulatedPrice);
+    }
+    const normalize = currentPrice / simulated.at(-1);
     for (let day = 365; day >= 0; day -= 1) {
       const date = new Date(today);
       date.setDate(today.getDate() - day);
-      const progress = (365 - day) / 365;
       // Demonstration-only market history: varied but restrained, so the
-      // public preview teaches the chart interaction without implying a real
-      // past return for a visitor.
-      const dailyMove = (((day * 37 + Math.round(phase * 10)) % 31) - 15) / 1400;
-      const multiplier = 0.88 + progress * 0.12 + dailyMove;
-      prices[date.toISOString().slice(0, 10)] = Math.round(currentPrice * multiplier * 100) / 100;
+      // public preview teaches chart interaction without implying it is a
+      // historical quote series for a visitor.
+      const index = 365 - day;
+      prices[date.toISOString().slice(0, 10)] = Math.round(simulated[index] * normalize * 100) / 100;
     }
   }
   // Demo-only acquisition records keep its personal-history chart internally
@@ -1612,8 +1652,9 @@ function addDemoHistory(store) {
     const snapshotDate = `${month}-28`;
     if (!existingSnapshotDates.has(snapshotDate)) {
       const progress = (historyMonths - monthsAgo) / historyMonths;
-      const monthlyMove = [0, 640, -310, 920, 270, -520, 740, 180, 1060, -390, 480, 820][monthsAgo % 12];
-      const netWorth = Math.round(demoStartingNetWorth + (demoCurrentNetWorth - demoStartingNetWorth) * progress + monthlyMove);
+      // A calm long-term trend joins the daily illustrative market series.
+      // Avoid a repeating monthly pattern, which reads as fabricated data.
+      const netWorth = Math.round(demoStartingNetWorth + (demoCurrentNetWorth - demoStartingNetWorth) * progress);
       const liabilities = Math.round(16500 - progress * 7150);
       store.snapshots.push({
         date: snapshotDate,

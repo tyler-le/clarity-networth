@@ -452,7 +452,7 @@ function renderLineChart(snapshots, summary, rangeStart = null) {
     : '';
   el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Net worth history${domainStart < firstObserved ? '; earlier time is not tracked' : ''}">
     <defs><linearGradient id="areaFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f6f4a" stop-opacity=".16"/><stop offset="1" stop-color="#1f6f4a" stop-opacity="0"/></linearGradient></defs>
-    ${yAxis}${xAxis}${unavailableLead}<path d="${area}" fill="url(#areaFade)"/><path class="main-history-line" pathLength="1" d="${d}" fill="none" stroke="#1f6f4a" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>
+    ${yAxis}${xAxis}<path d="${area}" fill="url(#areaFade)"/><path class="main-history-line" pathLength="1" d="${d}" fill="none" stroke="#1f6f4a" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>${unavailableLead}
     <line class="scrub-line" x1="0" y1="${plotTop}" x2="0" y2="${plotBottom}"/>
     <circle class="scrub-dot" cx="0" cy="0" r="5"/>
   </svg>
@@ -1086,7 +1086,7 @@ function renderPortfolioChart(data) {
   const unavailableLead = hasUntrackedLead
     ? `<path class="chart-unavailable-line" d="M ${plot.left} ${points[0][1].toFixed(1)} L ${points[0][0]} ${points[0][1]}"/><text x="${plot.left + 8}" y="${plot.top + 13}" text-anchor="start" class="chart-unavailable-label">Tracking since ${trackingDate}</text>`
     : '';
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Scrubbable portfolio value history${domainStart < firstObservedTime ? '; earlier time is not tracked' : ''}"><defs><linearGradient id="portfolioFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".16"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs>${grid}${xAxis}${unavailableLead}<path d="${area}" fill="url(#portfolioFade)"/><path class="main-history-line" pathLength="1" d="${line}" fill="none" stroke="#287143" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>${points.length === 1 ? `<circle cx="${points[0][0]}" cy="${points[0][1]}" r="5" fill="#287143"/>` : ''}<line class="scrub-line" x1="0" y1="${plot.top}" x2="0" y2="${plot.bottom}"/><circle class="scrub-dot" cx="0" cy="0" r="5"/></svg><div class="chart-tooltip hidden"></div>`;
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Scrubbable portfolio value history${domainStart < firstObservedTime ? '; earlier time is not tracked' : ''}"><defs><linearGradient id="portfolioFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".16"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs>${grid}${xAxis}<path d="${area}" fill="url(#portfolioFade)"/><path class="main-history-line" pathLength="1" d="${line}" fill="none" stroke="#287143" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>${unavailableLead}${points.length === 1 ? `<circle cx="${points[0][0]}" cy="${points[0][1]}" r="5" fill="#287143"/>` : ''}<line class="scrub-line" x1="0" y1="${plot.top}" x2="0" y2="${plot.bottom}"/><circle class="scrub-dot" cx="0" cy="0" r="5"/></svg><div class="chart-tooltip hidden"></div>`;
   if (snapshots.length < 2) return;
   const scrubLine = el.querySelector('.scrub-line');
   const scrubDot = el.querySelector('.scrub-dot');
@@ -1193,6 +1193,24 @@ function rangeProgressCopy(progress, range) {
     return `${formatSignedValue(progress.marketChange)}${pct} market performance · ${investmentRangeLabel(range)}`;
   }
   return `${formatSignedValue(progress.valueChange)} value change · ${investmentRangeLabel(range)}`;
+}
+
+function holdingMovementCue(progress, label) {
+  const trend = Array.isArray(progress?.trend) ? progress.trend.filter(Number.isFinite) : [];
+  if (trend.length < 2) return '';
+  const low = Math.min(...trend);
+  const high = Math.max(...trend);
+  const span = Math.max(.01, high - low);
+  const width = 68;
+  const height = 24;
+  const path = trend.map((value, index) => {
+    const x = index / (trend.length - 1) * width;
+    const y = height - 3 - (value - low) / span * (height - 6);
+    return `${index ? 'L' : 'M'} ${x.toFixed(1)} ${y.toFixed(1)}`;
+  }).join(' ');
+  const change = Number(progress.changeKind === 'market' ? progress.marketChange : progress.valueChange);
+  const tone = change < 0 ? 'negative' : 'positive';
+  return `<svg class="holding-movement ${tone}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(label)}"><path d="${path}"/></svg>`;
 }
 
 function renderHoldingHistoryChart(history, kind, emptyMessage = null, historyState = 'ready', progress = null) {
@@ -1464,7 +1482,8 @@ function renderInvestments(data) {
     const share = data.total ? Math.max(0, Number(position.value || 0) / Number(data.total) * 100) : 0;
     const location = position.positions.length === 1 ? 'Held in 1 account' : `Held in ${position.positions.length} accounts`;
     const negative = progress?.state === 'ready' && Number(progress.changeKind === 'market' ? progress.marketChange : progress.valueChange) < 0;
-    return `<button type="button" class="holding-row" data-holding-history="${escapeHtml(position.ticker || '')}" aria-label="View ${escapeHtml(position.name)} value history for ${escapeHtml(changePeriodLabel)}"><div class="position-symbol">${escapeHtml(position.ticker || '•')}</div><div class="holding-copy"><strong class="holding-ticker">${escapeHtml(position.ticker || 'Holding')}</strong><span>${escapeHtml(position.name)} · ${location}</span><div class="holding-weight"><i><b style="width:${Math.min(100, share).toFixed(1)}%"></b></i><span>${Math.round(share)}% of portfolio · ${escapeHtml(changePeriodLabel)}</span></div></div><div class="position-value"><b>${fmt.format(position.value)}</b><small class="${negative ? 'negative' : progress?.state === 'ready' ? 'positive' : ''}">${escapeHtml(performance)}</small></div><i class="holding-chevron" aria-hidden="true">›</i></button>`;
+    const cue = holdingMovementCue(progress, performance);
+    return `<button type="button" class="holding-row" data-holding-history="${escapeHtml(position.ticker || '')}" aria-label="View ${escapeHtml(position.name)} value history for ${escapeHtml(changePeriodLabel)}"><div class="position-symbol">${escapeHtml(position.ticker || '•')}</div><div class="holding-copy"><strong class="holding-ticker">${escapeHtml(position.ticker || 'Holding')}</strong><span>${escapeHtml(position.name)} · ${location}</span><div class="holding-weight"><i><b style="width:${Math.min(100, share).toFixed(1)}%"></b></i><span>${Math.round(share)}% of portfolio · ${escapeHtml(changePeriodLabel)}</span></div></div><div class="position-value">${cue}<b>${fmt.format(position.value)}</b></div><i class="holding-chevron" aria-hidden="true">›</i></button>`;
   }).join('') : '<p class="positions-empty">Position details aren’t available from this connection yet. Your investment account balances still count toward your portfolio and net worth.</p>';
   const more = $('#investmentHoldingsMore');
   more.classList.toggle('hidden', positions.length <= 3);
@@ -1548,7 +1567,7 @@ function renderRetirementProjection(data) {
   if (!chart || points.length < 2) return;
   const width = Math.max(280, Math.round(chart.clientWidth || 600));
   const height = 210;
-  const pad = { left: 12, right: 12, top: 20, bottom: 28 };
+  const pad = { left: 12, right: 12, top: 26, bottom: 28 };
   const values = points.map((point) => Number(point.value || 0));
   const target = Number(data.standard || 0);
   const high = Math.max(...values, target, 1);
@@ -1563,7 +1582,7 @@ function renderRetirementProjection(data) {
   $('#retirementPathContext').textContent = reaches
     ? `Your current plan reaches your financial-independence target by age ${data.retirementAge}.`
     : `Your plan projects ${fmt.format(Number(last.value || 0))} by age ${data.retirementAge}, against a ${fmt.format(target)} FI target.`;
-  chart.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Projected investment balance rises from age ${data.age} to ${data.retirementAge}; financial independence target ${fmt.format(target)}"><defs><linearGradient id="retirementProjectionFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".24"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs><line class="retirement-projection-target" x1="${pad.left}" x2="${width - pad.right}" y1="${targetY.toFixed(1)}" y2="${targetY.toFixed(1)}"/><text class="retirement-projection-target-label" x="${width - pad.right}" y="${Math.max(13, targetY - 7).toFixed(1)}" text-anchor="end">FI target · ${fmt.format(target)}</text><path d="${area}" fill="url(#retirementProjectionFill)"/><path class="retirement-projection-line" pathLength="1" d="${path}"/><circle class="retirement-projection-start" cx="${x(0)}" cy="${y(points[0].value)}" r="4"/><circle class="retirement-projection-end" cx="${x(points.length - 1)}" cy="${y(last.value)}" r="5"/><text class="retirement-projection-axis" x="${pad.left}" y="${height - 7}">Age ${points[0].age}</text><text class="retirement-projection-axis" x="${width - pad.right}" y="${height - 7}" text-anchor="end">Age ${last.age}</text></svg>`;
+  chart.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Projected investment balance rises from age ${data.age} to ${data.retirementAge}; financial independence target ${fmt.format(target)}"><defs><linearGradient id="retirementProjectionFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".24"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs><line class="retirement-projection-target" x1="${pad.left}" x2="${width - pad.right}" y1="${targetY.toFixed(1)}" y2="${targetY.toFixed(1)}"/><text class="retirement-projection-target-label" x="${width - pad.right}" y="${Math.max(16, targetY - 8).toFixed(1)}" text-anchor="end">FI target</text><path d="${area}" fill="url(#retirementProjectionFill)"/><path class="retirement-projection-line" pathLength="1" d="${path}"/><circle class="retirement-projection-start" cx="${x(0)}" cy="${y(points[0].value)}" r="4"/><circle class="retirement-projection-end" cx="${x(points.length - 1)}" cy="${y(last.value)}" r="5"/><text class="retirement-projection-axis" x="${pad.left}" y="${height - 7}">Age ${points[0].age}</text><text class="retirement-projection-axis" x="${width - pad.right}" y="${height - 7}" text-anchor="end">Age ${last.age}</text></svg>`;
 }
 
 function renderDashboard() {

@@ -255,7 +255,7 @@ test('selected holding range calls a change market performance only with unchang
   assert.deepEqual(result, {
     scope: 'holding', range: '1m', state: 'ready', points: 2,
     startDate: '2026-08-10', endDate: '2026-09-07', startValue: 1_000, endValue: 1_100, valueChange: 100,
-    marketChange: 100, marketChangePct: .1, changeKind: 'market'
+    marketChange: 100, marketChangePct: .1, trend: [1_000, 1_100], changeKind: 'market'
   });
 });
 
@@ -573,6 +573,9 @@ test('demo mode provides seven years of usable account and spending history', ()
   const contributions = investmentContributions(store).reduce((sum, row) => sum + row.amount, 0);
   assert.ok(portfolioChange - contributions > 0, 'demo all-time investment growth should be positive');
   assert.deepEqual(goalProgress(store).map((goal) => goal.name), ['Emergency fund']);
+  const demoAllocation = investmentSummary(store);
+  assert.deepEqual(demoAllocation.allocation.map((row) => row.name), ['Funds', 'Cash']);
+  assert.equal(demoAllocation.unclassifiedAccounts.length, 0);
   const recurringNames = recurringCharges(store).recurring.map((charge) => charge.name);
   assert.ok(recurringNames.includes('Netflix'));
   assert.equal(recurringNames.some((name) => /groceries|dining|leisure/i.test(name)), false);

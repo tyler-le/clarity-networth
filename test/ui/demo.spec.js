@@ -778,6 +778,12 @@ test('the retirement ladder remains legible and usable on a phone', async ({ pag
     };
   });
   expect(layout.overflows).toBe(false);
+  const projection = await page.locator('#retirementProjectionCard').evaluate((card) => {
+    const rect = card.getBoundingClientRect();
+    return { overflow: card.scrollWidth > card.clientWidth + 1, width: rect.width, viewport: window.innerWidth };
+  });
+  expect(projection.overflow).toBe(false);
+  expect(projection.width).toBeLessThanOrEqual(projection.viewport);
   expect(layout.cardCount).toBe(4);
   expect(layout.usableCardWidth).toBe(true);
   await page.locator('[data-retirement-milestone="coast"]').click();
