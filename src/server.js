@@ -995,6 +995,23 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+// Signed-in demo is an in-memory financial scenario. Do not rely only on the
+// UI to keep real mutations out of it: a stale tab or crafted request must
+// never alter a member's accounts, names, plan, or connections while demo is
+// active. The two allowlisted writes are intentionally non-financial: exiting
+// demo, and calculating a throwaway retirement preview.
+app.use('/api', async (req, res, next) => {
+  if (!req.user || !['POST', 'PATCH', 'DELETE'].includes(req.method)) return next();
+  if (['/demo-mode', '/launch-event', '/retirement/preview'].includes(req.path)) return next();
+  try {
+    const store = await loadStore(req.user);
+    if (store.settings?.demo_mode) return res.status(409).json({ error: 'Exit demo to change your personal financial data.' });
+    next();
+  } catch (error) {
+    res.status(503).json({ error: error.message || 'Your financial store is temporarily unavailable.' });
+  }
+});
+
 // Background-only product telemetry. The client can submit an allowlisted
 // event name and nothing else; values, account metadata, routes, and browser
 // identifiers are deliberately not accepted.
@@ -1009,15 +1026,20 @@ app.post('/api/launch-event', async (req, res) => {
 
 app.get('/api/dashboard', async (req, res) => {
   const store = await loadStore(req.user);
-  backfillRecentInvestmentLinkBalances(store);
-  backfillInvestmentContributionMetadata(store);
-  markInvestmentLinkCoverage(store);
-  removeEstimatedNetWorthHistory(store);
-  hideDuplicateAccounts(store);
-  refreshReconstructedInvestmentSnapshots(store, new Date().toISOString().slice(0, 10), Math.max(1, Math.min(2, Number(process.env.MARKETDATA_HISTORY_YEARS || 1))));
-  snapshotNetWorth(store);
-  snapshotInvestments(store);
-  await saveStore(req.user, store);
+  const isDemoMode = Boolean(store.settings?.demo_mode);
+  // Never backfill or snapshot the persisted account while its owner is
+  // looking at demo. Demo has its own seeded history and must be read-only.
+  if (!isDemoMode) {
+    backfillRecentInvestmentLinkBalances(store);
+    backfillInvestmentContributionMetadata(store);
+    markInvestmentLinkCoverage(store);
+    removeEstimatedNetWorthHistory(store);
+    hideDuplicateAccounts(store);
+    refreshReconstructedInvestmentSnapshots(store, new Date().toISOString().slice(0, 10), Math.max(1, Math.min(2, Number(process.env.MARKETDATA_HISTORY_YEARS || 1))));
+    snapshotNetWorth(store);
+    snapshotInvestments(store);
+    await saveStore(req.user, store);
+  }
   const visibleStore = activeStore(store);
   const summary = summarizeRange(visibleStore);
   const snapshots = [...reconstructedNetWorth(visibleStore, { years: 2 }), ...visibleStore.snapshots].slice(-3650);

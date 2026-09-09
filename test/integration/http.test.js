@@ -318,12 +318,19 @@ integrationTest('signed-in demo mode uses its own consistent retirement scenario
   const key = userStorageKey(email);
   writeStore({
     settings: { fire: { age: 42, retirement_age: 48, withdrawal_rate: 3, real_return: 1 } },
-    accounts: [{ id: 'personal-investment', type: 'investment', current_balance: 5000 }],
-    items: [], snapshots: [], transactions: []
+    accounts: [{ id: 'personal-investment', plaid_account_id: 'personal-investment', name: 'Private brokerage', type: 'investment', current_balance: 5000 }],
+    items: [], snapshots: [], transactions: [{ id: 'private-transaction', merchant_name: 'Private employer bonus', name: 'Private employer bonus', date: '2026-09-01', amount: -5000, bucket: 'income' }]
   }, key);
   const cookie = signedTestCookie(email);
   const enable = await request(app).post('/api/demo-mode').set('Cookie', cookie).send({ enabled: true });
   assert.equal(enable.status, 200);
+  const beforeDemoReads = readStore(key);
+  const dashboard = await request(app).get('/api/dashboard').set('Cookie', cookie);
+  const spending = await request(app).get('/api/spending?range=1y').set('Cookie', cookie);
+  assert.equal(dashboard.status, 200);
+  assert.equal(spending.status, 200);
+  assert.equal(JSON.stringify(dashboard.body).includes('Private brokerage'), false, 'dashboard must not expose a real account');
+  assert.equal(JSON.stringify(spending.body).includes('Private employer bonus'), false, 'cash flow must not expose a real transaction');
   const retirement = await request(app).get('/api/retirement').set('Cookie', cookie);
   assert.equal(retirement.status, 200);
   assert.equal(retirement.body.age, 27, 'demo must not inherit a member’s age');
@@ -339,7 +346,14 @@ integrationTest('signed-in demo mode uses its own consistent retirement scenario
   const demoAccount = investments.body.accounts[0];
   const history = await request(app).get(`/api/investments/history?account_id=${encodeURIComponent(demoAccount.id)}`).set('Cookie', cookie);
   assert.equal(history.status, 200, 'signed-in demo investment detail must not attempt to overwrite real data');
-  assert.equal(readStore(key).accounts[0].id, 'personal-investment', 'demo reads must leave the real account untouched');
+  const changeDebt = await request(app).patch('/api/settings/debt-strategy').set('Cookie', cookie).send({ strategy: 'snowball' });
+  const createGoal = await request(app).post('/api/goals').set('Cookie', cookie).send({ name: 'Should not persist', source: 'cash', target: 1000 });
+  assert.equal(changeDebt.status, 409, 'demo must reject real settings changes');
+  assert.equal(createGoal.status, 409, 'demo must reject real goal changes');
+  const afterDemoReads = readStore(key);
+  assert.deepEqual(afterDemoReads.accounts, beforeDemoReads.accounts, 'demo reads must leave real accounts untouched');
+  assert.deepEqual(afterDemoReads.transactions, beforeDemoReads.transactions, 'demo reads must leave real transactions untouched');
+  assert.deepEqual(afterDemoReads.snapshots, beforeDemoReads.snapshots, 'demo reads must not create real snapshots');
   deleteStore(key);
 });
 

@@ -1533,7 +1533,7 @@ async function loadSpending() {
 }
 
 async function connectPlaid() {
-  if (state.demoPreview) { showNotice('Sign in to connect your own accounts.'); return; }
+  if (isDemoExperience()) { showNotice('Exit demo to connect your own accounts.'); return; }
   try {
     const { link_token } = await api('/api/plaid/create_link_token', { method: 'POST', body: '{}' });
     if (!window.Plaid) throw new Error('Plaid Link failed to load. Check your internet connection.');
@@ -1558,7 +1558,7 @@ async function connectPlaid() {
 }
 
 async function reconnectPlaid(itemId) {
-  if (state.demoPreview) return;
+  if (isDemoExperience()) { showNotice('Exit demo to reconnect your own accounts.'); return; }
   try {
     const { link_token, reconnect_session } = await api(`/api/items/${itemId}/create_reconnect_token`, { method: 'POST', body: '{}' });
     if (!window.Plaid) throw new Error('Plaid Link failed to load. Check your internet connection.');
@@ -1614,11 +1614,22 @@ $('#demoToggle').addEventListener('click', async () => {
   // labelled “Exit demo” that cannot actually exit.
   if (state.demoPreview) { await exitDemoPreview(); return; }
   const button = $('#demoToggle');
+  const enteringDemo = !state.dashboard?.demoMode;
   button.disabled = true;
   try {
     state.demoGoal = null;
     state.demoGoalInitialized = false;
-    await api('/api/demo-mode', { method: 'POST', body: JSON.stringify({ enabled: !state.dashboard?.demoMode }) });
+    // Replace the real view before the demo payload arrives. A transition
+    // should never briefly leave balances or transactions visible below the
+    // demo loading state.
+    if (enteringDemo) {
+      state.dashboard = null;
+      state.spending = null;
+      state.investments = null;
+      state.retirement = null;
+      setInitialLoading(true);
+    }
+    await api('/api/demo-mode', { method: 'POST', body: JSON.stringify({ enabled: enteringDemo }) });
     await loadAll();
     showNotice(state.dashboard?.demoMode ? 'Demo mode is on. Your real data is safely hidden.' : 'Back to your real data.', 'success');
   } catch (error) { showNotice(error.message); }
@@ -1846,7 +1857,7 @@ $('#debtPayoffCard').addEventListener('click', async (event) => {
   if (!entries.length) { showNotice('Change a rate before saving.'); return; }
   button.disabled = true;
   try {
-    if (state.demoPreview) {
+    if (isDemoExperience()) {
       for (const input of entries) {
         const debt = state.dashboard.debtPayoff.debts.find((entry) => entry.id === input.dataset.debtRate);
         if (debt) debt.interestRate = input.value.trim() === '' ? null : Number(input.value);
@@ -2300,6 +2311,7 @@ $('#holdingHistoryClose').addEventListener('click', () => $('#holdingHistoryDial
     dialog.style.transform = '';
     dialog.style.transition = '';
     dialog.removeAttribute('data-dragging');
+    dialog.removeAttribute('data-settling');
   };
   const startDrawerDrag = (clientY) => {
     // Safari may emit both Pointer and Touch events for one gesture. Accept
@@ -2307,6 +2319,7 @@ $('#holdingHistoryClose').addEventListener('click', () => $('#holdingHistoryDial
     // visibly jitter under a thumb.
     if (dragging || !isPhoneDrawer() || !Number.isFinite(clientY)) return false;
     window.clearTimeout(settleTimer);
+    dialog.removeAttribute('data-settling');
     startY = clientY;
     dragging = true;
     pendingDragOffset = 0;
@@ -2329,6 +2342,11 @@ $('#holdingHistoryClose').addEventListener('click', () => $('#holdingHistoryDial
   };
   const settleAndCloseDrawer = () => {
     dialog.removeAttribute('data-dragging');
+    // Keep the entry keyframe disabled until the sheet has actually closed.
+    // Otherwise removing data-dragging replays its opening transform while we
+    // are trying to animate it downward, which is especially noticeable on a
+    // quick swipe.
+    dialog.setAttribute('data-settling', '');
     dialog.style.transition = 'transform .2s cubic-bezier(.2,.75,.25,1)';
     dialog.style.transform = `translate3d(0, ${Math.ceil(dialog.getBoundingClientRect().height)}px, 0)`;
     settleTimer = window.setTimeout(() => { dialog.close(); reset(); }, 210);
@@ -2350,6 +2368,7 @@ $('#holdingHistoryClose').addEventListener('click', () => $('#holdingHistoryDial
       return;
     }
     dialog.removeAttribute('data-dragging');
+    dialog.setAttribute('data-settling', '');
     dialog.style.transition = 'transform .18s ease-out';
     dialog.style.transform = 'translate3d(0, 0, 0)';
     settleTimer = window.setTimeout(reset, 190);
