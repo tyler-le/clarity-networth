@@ -601,6 +601,13 @@ test('demo mode provides seven years of usable account and spending history', ()
   const investmentBalance = store.accounts.filter((account) => account.type === 'investment').reduce((total, account) => total + Math.abs(Number(account.current_balance || 0)), 0);
   assert.equal(store.snapshots.at(-1).net_worth, accountNetWorth, 'latest chart point reconciles to demo accounts');
   assert.equal(snapshots.at(-1).value, investmentBalance, 'portfolio chart reconciles to demo investment accounts');
+  const vti = store.positions.filter((position) => position.ticker === 'VTI');
+  const vtiProgress = investmentRangeProgress(store, { ticker: 'VTI', holdingKeys: vti.map((position) => position.id), range: 'all' });
+  assert.deepEqual(
+    { startValue: vtiProgress.startValue, endValue: vtiProgress.endValue, marketChange: vtiProgress.marketChange },
+    { startValue: 48_172.32, endValue: 51_786, marketChange: 3_613.68 },
+    'the combined demo VTI position must use its recorded opening and closing snapshots'
+  );
   assert.equal(investmentSummary(store).allocation.some((row) => row.name === 'Cash & unclassified'), false);
   assert.deepEqual(goalProgress(store).map((goal) => goal.name), ['Emergency fund']);
   const recurringNames = recurringCharges(store).recurring.map((charge) => charge.name);
