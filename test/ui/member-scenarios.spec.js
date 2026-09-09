@@ -204,6 +204,84 @@ test('an incomplete portfolio timeframe retains its verified endpoint dates', as
   await expect(page.locator('#investmentChart .chart-unavailable-label')).toHaveText(/Since|Tracking began/);
 });
 
+test('portfolio timeframe controls redraw the verified window instead of relabeling the same short trend', async ({ page }) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const ago = (days) => new Date(Date.parse(`${today}T00:00:00Z`) - days * 86_400_000).toISOString().slice(0, 10);
+  await openSignedInScenario(page, (preview) => {
+    // Deliberately span more than one selectable range. This is the failure
+    // mode behind a portfolio chart that appeared to remain on Sep 5–Sep 7
+    // regardless of the selected control.
+    preview.investments.snapshots = [390, 160, 88, 31, 5, 0].map((days, index) => ({
+      date: ago(days), value: 200_000 + index * 1_000, source: 'verified'
+    }));
+    preview.investments.total = 205_000;
+  });
+
+  await goToView(page, 'investments');
+  const chart = page.locator('#investmentChart');
+  const lineSegments = async () => chart.locator('.main-history-line').evaluate((line) => (line.getAttribute('d') || '').split('L').length - 1);
+
+  await page.locator('[data-investment-range="1m"]').click();
+  await expect(page.locator('[data-investment-range="1m"]')).toHaveClass(/active/);
+  await expect(page.locator('#investmentContext')).toContainText('last month');
+  const oneMonthSegments = await lineSegments();
+
+  await page.locator('[data-investment-range="6m"]').click();
+  await expect(page.locator('[data-investment-range="6m"]')).toHaveClass(/active/);
+  await expect(page.locator('#investmentContext')).toContainText('last 6 months');
+  const sixMonthSegments = await lineSegments();
+
+  // More verified observations belong to six months than one month. Checking
+  // the plotted path—not only the active button or helper text—guards against
+  // a chart that silently keeps rendering the previous timeframe.
+  expect(oneMonthSegments).toBeGreaterThanOrEqual(1);
+  expect(sixMonthSegments).toBeGreaterThan(oneMonthSegments);
+  const labels = await chart.locator('.chart-x-axis-label').allTextContents();
+  expect(labels.length).toBeGreaterThanOrEqual(2);
+  expect(new Set(labels).size).toBe(labels.length);
+});
+
+test('investment account and holding rows keep names and values independently scannable', async ({ page }) => {
+  await openSignedInScenario(page, (preview) => {
+    preview.investments.accounts = preview.investments.accounts.map((account, index) => ({
+      ...account,
+      name: [
+        'Employer retirement plan with a long descriptive name',
+        'Individual brokerage account for long-term goals',
+        'Health savings account investments'
+      ][index] || account.name,
+      institution_name: `Institution with a descriptive name ${index + 1}`,
+      value: [186_420, 27_905, 1_250][index] || account.value
+    }));
+  });
+
+  await goToView(page, 'investments');
+  const accountRows = page.locator('#investmentAccounts .investment-account-row');
+  await expect(accountRows).toHaveCount(3);
+  const accountLayout = await accountRows.evaluateAll((rows) => rows.map((row) => {
+    const name = row.querySelector('strong')?.getBoundingClientRect();
+    const value = row.querySelector('b')?.getBoundingClientRect();
+    return {
+      row: row.getBoundingClientRect(),
+      name,
+      value,
+      overflow: row.scrollWidth > row.clientWidth + 1
+    };
+  }));
+  expect(accountLayout.every(({ row, name, value, overflow }) => name && value && !overflow && name.right + 4 <= value.left && value.right <= row.right + 1)).toBe(true);
+  const valueEdges = accountLayout.map(({ value }) => Math.round(value.right));
+  expect(Math.max(...valueEdges) - Math.min(...valueEdges)).toBeLessThanOrEqual(1);
+
+  const holdings = page.locator('#investmentPositions .holding-row');
+  await expect(holdings).toHaveCount(3);
+  const holdingsRemainLegible = await holdings.evaluateAll((rows) => rows.every((row) => {
+    const copy = row.querySelector('.holding-copy')?.getBoundingClientRect();
+    const value = row.querySelector('.position-value')?.getBoundingClientRect();
+    return Boolean(copy && value && row.scrollWidth <= row.clientWidth + 1 && copy.right + 4 <= value.left);
+  }));
+  expect(holdingsRemainLegible).toBe(true);
+});
+
 test('a member with debt receives one optional next step, not an alarming wall of payoff controls', async ({ page }) => {
   await openSignedInScenario(page, (preview) => {
     const credit = preview.dashboard.accounts.find((account) => account.type === 'credit');
