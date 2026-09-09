@@ -209,6 +209,39 @@ integrationTest('opening a holding begins a verified daily-snapshot trend when n
   deleteStore(key);
 });
 
+integrationTest('investment history exposes range-safe verified progress without calling deposits performance', async () => {
+  const email = 'verified-investment-progress@example.test';
+  const key = userStorageKey(email);
+  const today = new Date().toISOString().slice(0, 10);
+  const earlier = new Date(Date.parse(`${today}T00:00:00Z`) - 2 * 86400000).toISOString().slice(0, 10);
+  writeStore({
+    items: [{ id: 'progress-item' }],
+    accounts: [{ plaid_account_id: 'ira', item_id: 'progress-item', name: 'IRA', type: 'investment', current_balance: 1_100, iso_currency_code: 'USD', hidden: false }],
+    positions: [{ id: 'ira:vti', account_id: 'ira', security_id: 'security-vti', ticker: 'VTI', provider_ticker: 'VTI', name: 'Vanguard Total Stock Market ETF', type: 'etf', quantity: 10, price: 110, value: 1_100, iso_currency_code: 'USD' }],
+    investment_transactions: [], transactions: [], snapshots: [],
+    investment_position_snapshots: [
+      { date: earlier, kind: 'holding', key: 'ira:vti', account_id: 'ira', security_id: 'security-vti', ticker: 'VTI', provider_ticker: 'VTI', quantity: 10, price: 100, value: 1_000, source: 'verified' },
+      { date: today, kind: 'holding', key: 'ira:vti', account_id: 'ira', security_id: 'security-vti', ticker: 'VTI', provider_ticker: 'VTI', quantity: 10, price: 110, value: 1_100, source: 'verified' },
+      { date: earlier, kind: 'account', key: 'ira', account_id: 'ira', value: 1_000, source: 'verified' },
+      { date: today, kind: 'account', key: 'ira', account_id: 'ira', value: 1_100, source: 'verified' }
+    ]
+  }, key);
+  const cookie = signedTestCookie(email);
+  const holding = await request(app).get('/api/investments/history?ticker=VTI&range=1m').set('Cookie', cookie);
+  assert.equal(holding.status, 200);
+  assert.deepEqual(holding.body.progress, {
+    scope: 'holding', range: '1m', state: 'ready', points: 2,
+    startDate: earlier, endDate: today, startValue: 1_000, endValue: 1_100, valueChange: 100,
+    marketChange: 100, marketChangePct: .1, changeKind: 'market'
+  });
+  const account = await request(app).get('/api/investments/history?account_id=ira&range=1m').set('Cookie', cookie);
+  assert.equal(account.status, 200);
+  assert.equal(account.body.progress.valueChange, 100);
+  assert.equal(account.body.progress.marketChange, null);
+  assert.equal(account.body.progress.changeKind, 'balance');
+  deleteStore(key);
+});
+
 integrationTest('net worth returns reconstructed history only when all visible accounts have coverage', async () => {
   const email = 'cash-history@example.test';
   const key = userStorageKey(email);

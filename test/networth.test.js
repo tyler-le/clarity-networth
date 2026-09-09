@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentDetailHistory, investmentLinkBalances, monthlyReview, reconstructInvestmentHistory, refreshReconstructedInvestmentSnapshots, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, repairTransferClassifications, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
+import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentRangeProgress, monthlyReview, reconstructInvestmentHistory, refreshReconstructedInvestmentSnapshots, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, repairTransferClassifications, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
 import { normalizeCandles } from '../src/lib/market-data.js';
 import { filterSnapshots, preferredNetWorthRange, scrubIndex, uniqueDailySnapshots } from '../public/chart-utils.js';
 
@@ -217,6 +217,66 @@ test('portfolio history keeps one verified investment value for each day', () =>
     { date: '2026-09-01', value: 1250, source: 'verified' },
     { date: '2026-09-02', value: 1250, source: 'verified' }
   ]);
+});
+
+test('verified holding snapshots retain provider identity and observed quantity and price', () => {
+  const store = {
+    accounts: [{ plaid_account_id: 'ira', type: 'investment', current_balance: 1_250, iso_currency_code: 'USD' }],
+    positions: [{ id: 'ira:vti', account_id: 'ira', security_id: 'security-vti', ticker: 'VTI', provider_ticker: 'VTI', type: 'etf', quantity: 10, price: 125, value: 1_250, price_as_of: '2026-09-07', iso_currency_code: 'USD' }],
+    investment_snapshots: [], investment_position_snapshots: []
+  };
+  snapshotInvestments(store, '2026-09-07');
+  assert.deepEqual(store.investment_position_snapshots, [
+    { date: '2026-09-07', kind: 'account', key: 'ira', account_id: 'ira', account_type: 'investment', iso_currency_code: 'USD', value: 1_250, source: 'verified' },
+    { date: '2026-09-07', kind: 'holding', key: 'ira:vti', account_id: 'ira', security_id: 'security-vti', ticker: 'VTI', provider_ticker: 'VTI', quantity: 10, price: 125, price_as_of: '2026-09-07', security_type: 'etf', iso_currency_code: 'USD', unofficial_currency_code: null, value: 1_250, source: 'verified' }
+  ]);
+});
+
+test('verified holding snapshots preserve unavailable provider facts as null', () => {
+  const store = {
+    accounts: [{ plaid_account_id: 'ira', type: 'investment', current_balance: 500 }],
+    positions: [{ id: 'ira:unknown', account_id: 'ira', security_id: 'unknown', ticker: 'FUND', type: 'mutual fund', quantity: null, price: null, value: 500 }],
+    investment_snapshots: [], investment_position_snapshots: []
+  };
+  snapshotInvestments(store, '2026-09-07');
+  const holding = store.investment_position_snapshots.find((row) => row.kind === 'holding');
+  assert.equal(holding.quantity, null);
+  assert.equal(holding.price, null);
+});
+
+test('selected holding range calls a change market performance only with unchanged verified shares', () => {
+  const store = {
+    investment_position_snapshots: [
+      { date: '2026-08-10', kind: 'holding', key: 'ira:vti', account_id: 'ira', security_id: 'vti', ticker: 'VTI', provider_ticker: 'VTI', quantity: 10, price: 100, value: 1_000, source: 'verified' },
+      { date: '2026-09-07', kind: 'holding', key: 'ira:vti', account_id: 'ira', security_id: 'vti', ticker: 'VTI', provider_ticker: 'VTI', quantity: 10, price: 110, value: 1_100, source: 'verified' }
+    ]
+  };
+  const result = investmentRangeProgress(store, { ticker: 'VTI', range: '1m' });
+  assert.deepEqual(result, {
+    scope: 'holding', range: '1m', state: 'ready', points: 2,
+    startDate: '2026-08-10', endDate: '2026-09-07', startValue: 1_000, endValue: 1_100, valueChange: 100,
+    marketChange: 100, marketChangePct: .1, changeKind: 'market'
+  });
+});
+
+test('selected investment ranges never call deposits or account changes market performance', () => {
+  const store = {
+    investment_position_snapshots: [
+      { date: '2026-08-10', kind: 'holding', key: 'ira:vti', account_id: 'ira', security_id: 'vti', ticker: 'VTI', provider_ticker: 'VTI', quantity: 10, price: 100, value: 1_000, source: 'verified' },
+      // A purchase added five shares. The balance change is true; the return is unknown.
+      { date: '2026-09-07', kind: 'holding', key: 'ira:vti', account_id: 'ira', security_id: 'vti', ticker: 'VTI', provider_ticker: 'VTI', quantity: 15, price: 110, value: 1_650, source: 'verified' },
+      { date: '2026-08-10', kind: 'account', key: 'ira', account_id: 'ira', value: 1_000, source: 'verified' },
+      { date: '2026-09-07', kind: 'account', key: 'ira', account_id: 'ira', value: 1_650, source: 'verified' }
+    ]
+  };
+  const holding = investmentRangeProgress(store, { ticker: 'VTI' });
+  assert.equal(holding.valueChange, 650);
+  assert.equal(holding.marketChange, null);
+  assert.equal(holding.changeKind, 'balance');
+  const account = investmentRangeProgress(store, { accountId: 'ira' });
+  assert.equal(account.valueChange, 650);
+  assert.equal(account.marketChange, null);
+  assert.equal(account.changeKind, 'balance');
 });
 
 test('one verified account snapshot begins personal investment tracking without inventing earlier values', () => {

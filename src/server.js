@@ -1094,6 +1094,7 @@ app.get('/api/investments', async (req, res) => {
 app.get('/api/investments/history', async (req, res) => {
   const accountId = String(req.query.account_id || '').trim().slice(0, 180);
   const ticker = String(req.query.ticker || '').trim().toUpperCase().slice(0, 24);
+  const range = ['1m', '3m', '6m', 'ytd', '1y', 'all'].includes(String(req.query.range || '')) ? String(req.query.range) : 'all';
   if (!accountId && !ticker) return res.status(400).json({ error: 'Choose an investment account or holding.' });
   const persistedStore = await loadStore(req.user);
   const isDemoMode = Boolean(persistedStore.settings?.demo_mode);
@@ -1103,14 +1104,15 @@ app.get('/api/investments/history', async (req, res) => {
   // when the member arrived here before the scheduled daily sync.
   snapshotInvestments(store);
   if (!isDemoMode) await saveStore(req.user, store);
-  res.json(investmentDetailHistory(store, { accountId: accountId || null, ticker: ticker || null, years: Math.max(1, Math.min(2, Number(process.env.MARKETDATA_HISTORY_YEARS || 1))) }));
+  res.json(investmentDetailHistory(store, { accountId: accountId || null, ticker: ticker || null, range, years: Math.max(1, Math.min(2, Number(process.env.MARKETDATA_HISTORY_YEARS || 1))) }));
 });
 
 app.get('/api/demo-investments/history', demoLimiter, (req, res) => {
   const accountId = String(req.query.account_id || '').trim().slice(0, 180);
   const ticker = String(req.query.ticker || '').trim().toUpperCase().slice(0, 24);
+  const range = ['1m', '3m', '6m', 'ytd', '1y', 'all'].includes(String(req.query.range || '')) ? String(req.query.range) : 'all';
   if (!accountId && !ticker) return res.status(400).json({ error: 'Choose an investment account or holding.' });
-  res.json(investmentDetailHistory(demoPreviewStore(), { accountId: accountId || null, ticker: ticker || null, years: 1 }));
+  res.json(investmentDetailHistory(demoPreviewStore(), { accountId: accountId || null, ticker: ticker || null, range, years: 1 }));
 });
 
 app.get('/api/retirement', async (req, res) => {

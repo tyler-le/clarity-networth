@@ -239,9 +239,30 @@ export function snapshotInvestments(store, snapshotDate = new Date().toISOString
     const existingRecord = store.investment_position_snapshots.find((record) => record.date === snapshot.date && record.kind === snapshot.kind && record.key === snapshot.key);
     if (existingRecord) Object.assign(existingRecord, snapshot); else store.investment_position_snapshots.push(snapshot);
   };
-  for (const account of accounts) upsert({ date: snapshotDate, kind: 'account', key: account.plaid_account_id, account_id: account.plaid_account_id, value: Math.abs(Number(account.current_balance || 0)), source: 'verified' });
+  for (const account of accounts) upsert({
+    date: snapshotDate, kind: 'account', key: account.plaid_account_id,
+    account_id: account.plaid_account_id, account_type: account.type,
+    iso_currency_code: account.iso_currency_code || null,
+    value: Math.abs(Number(account.current_balance || 0)), source: 'verified'
+  });
   for (const position of (store.positions || []).filter((position) => !position.hidden && accounts.some((account) => account.plaid_account_id === position.account_id))) {
-    upsert({ date: snapshotDate, kind: 'holding', key: position.id || `${position.account_id}:${position.security_id || position.ticker || position.name}`, account_id: position.account_id, ticker: String(position.ticker || '').toUpperCase() || null, value: Math.abs(Number(position.value || 0)), source: 'verified' });
+    upsert({
+      date: snapshotDate, kind: 'holding', key: position.id || `${position.account_id}:${position.security_id || position.ticker || position.name}`,
+      account_id: position.account_id,
+      // Preserve provider identity and the provider-observed facts that make a
+      // later holding comparison meaningful. They are not reconstructed from
+      // the current quote, and missing fields remain null rather than guessed.
+      security_id: position.security_id || null,
+      ticker: String(position.ticker || '').toUpperCase() || null,
+      provider_ticker: String(position.provider_ticker || '').toUpperCase() || null,
+      quantity: position.quantity != null && Number.isFinite(Number(position.quantity)) ? Number(position.quantity) : null,
+      price: position.price != null && Number.isFinite(Number(position.price)) ? Number(position.price) : null,
+      price_as_of: position.price_as_of || null,
+      security_type: position.type || null,
+      iso_currency_code: position.iso_currency_code || null,
+      unofficial_currency_code: position.unofficial_currency_code || null,
+      value: Math.abs(Number(position.value || 0)), source: 'verified'
+    });
   }
   store.investment_position_snapshots.sort((a, b) => a.date.localeCompare(b.date));
   if (store.investment_position_snapshots.length > 20_000) store.investment_position_snapshots = store.investment_position_snapshots.slice(-20_000);
@@ -258,6 +279,99 @@ function providerPositionHistory(store, { accountId = null, ticker = null } = {}
   const totals = new Map();
   for (const record of records) totals.set(record.date, (totals.get(record.date) || 0) + Number(record.value || 0));
   return [...totals.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, value]) => ({ date, value }));
+}
+
+const investmentRanges = new Set(['1m', '3m', '6m', 'ytd', '1y', 'all']);
+
+function investmentRangeStart(endDate, range) {
+  if (range === 'all') return null;
+  const end = new Date(`${endDate}T12:00:00Z`);
+  const start = new Date(end);
+  if (range === '1m') start.setUTCMonth(start.getUTCMonth() - 1);
+  else if (range === '3m') start.setUTCMonth(start.getUTCMonth() - 3);
+  else if (range === '6m') start.setUTCMonth(start.getUTCMonth() - 6);
+  else if (range === 'ytd') start.setUTCMonth(0, 1);
+  else if (range === '1y') start.setUTCFullYear(start.getUTCFullYear() - 1);
+  return start.toISOString().slice(0, 10);
+}
+
+function holdingSnapshotIdentity(record) {
+  if (!record?.account_id || !record?.security_id) return null;
+  const symbol = String(record.provider_ticker || record.ticker || '').trim().toUpperCase();
+  return symbol ? `${record.account_id}:${record.security_id}:${symbol}` : null;
+}
+
+function snapshotValue(records) {
+  return records.reduce((sum, record) => sum + Math.abs(Number(record.value || 0)), 0);
+}
+
+function holdingMarketChange(first, last) {
+  const firstByIdentity = new Map(first.map((record) => [holdingSnapshotIdentity(record), record]));
+  const lastByIdentity = new Map(last.map((record) => [holdingSnapshotIdentity(record), record]));
+  if (!firstByIdentity.size || firstByIdentity.has(null) || lastByIdentity.has(null)
+    || firstByIdentity.size !== lastByIdentity.size
+    || [...firstByIdentity.keys()].some((identity) => !lastByIdentity.has(identity))) return null;
+  let change = 0;
+  for (const [identity, opening] of firstByIdentity) {
+    const closing = lastByIdentity.get(identity);
+    const quantity = Number(opening.quantity);
+    const openingPrice = Number(opening.price);
+    const closingPrice = Number(closing.price);
+    const openingValue = Math.abs(Number(opening.value));
+    const closingValue = Math.abs(Number(closing.value));
+    if (opening.quantity == null || closing.quantity == null || opening.price == null || closing.price == null
+      || !Number.isFinite(quantity) || quantity < 0 || Math.abs(Number(closing.quantity) - quantity) > .000001
+      || !Number.isFinite(openingPrice) || openingPrice <= 0 || !Number.isFinite(closingPrice) || closingPrice <= 0
+      || Math.abs(openingValue - quantity * openingPrice) > Math.max(1, openingValue * .01)
+      || Math.abs(closingValue - quantity * closingPrice) > Math.max(1, closingValue * .01)) return null;
+    change += quantity * (closingPrice - openingPrice);
+  }
+  return Math.round(change * 100) / 100;
+}
+
+// A selected investment range can always state the verified balance change.
+// It calls that change market performance only for an unchanged, provider-
+// identified holding whose quantities and prices reconcile at both endpoints.
+// Account-level changes deliberately remain balance changes: deposits,
+// withdrawals, and cash movement cannot be separated safely from a balance.
+export function investmentRangeProgress(store, { accountId = null, ticker = null, range = 'all' } = {}) {
+  const selectedRange = investmentRanges.has(range) ? range : 'all';
+  const normalizedTicker = String(ticker || '').trim().toUpperCase();
+  const scope = accountId ? 'account' : 'holding';
+  const records = (store.investment_position_snapshots || []).filter((record) => {
+    if (record.source !== 'verified') return false;
+    if (accountId) return record.kind === 'account' && record.account_id === accountId;
+    return record.kind === 'holding' && record.ticker === normalizedTicker;
+  });
+  const endDate = records.map((record) => record.date).filter(Boolean).sort().at(-1) || null;
+  if (!endDate) return { scope, range: selectedRange, state: 'tracking', points: 0 };
+  const startDate = investmentRangeStart(endDate, selectedRange);
+  const byDate = new Map();
+  for (const record of records) {
+    if (!record.date || (startDate && record.date < startDate) || record.date > endDate) continue;
+    if (!byDate.has(record.date)) byDate.set(record.date, []);
+    byDate.get(record.date).push(record);
+  }
+  const dates = [...byDate.keys()].sort();
+  if (dates.length < 2) return {
+    scope, range: selectedRange, state: 'tracking', points: dates.length,
+    trackingSince: dates[0] || null
+  };
+  const opening = byDate.get(dates[0]);
+  const closing = byDate.get(dates.at(-1));
+  const startValue = snapshotValue(opening);
+  const endValue = snapshotValue(closing);
+  const valueChange = Math.round((endValue - startValue) * 100) / 100;
+  const marketChange = scope === 'holding' ? holdingMarketChange(opening, closing) : null;
+  return {
+    scope, range: selectedRange, state: 'ready', points: dates.length,
+    startDate: dates[0], endDate: dates.at(-1), startValue, endValue, valueChange,
+    // `null` explicitly means that purchases, sales, transfers, or incomplete
+    // provider facts prevent us from calling this investment performance.
+    marketChange,
+    marketChangePct: marketChange != null && startValue > 0 ? marketChange / startValue : null,
+    changeKind: marketChange != null ? 'market' : 'balance'
+  };
 }
 
 // Some institutions send a display label in place of a tradable target-date
@@ -451,12 +565,13 @@ export function refreshReconstructedInvestmentSnapshots(store, endDate = new Dat
 // A detail chart is intentionally more conservative than a ticker chart. It
 // reconstructs the person's currently reported quantity from available trades
 // and historical prices, but never labels a missing trade record as a gain.
-export function investmentDetailHistory(store, { accountId = null, ticker = null, years = 1 } = {}) {
+export function investmentDetailHistory(store, { accountId = null, ticker = null, years = 1, range = 'all' } = {}) {
   const selectedAccount = accountId
     ? store.accounts.find((account) => account.plaid_account_id === accountId && !account.hidden && account.type === 'investment')
     : null;
   const visibleAccounts = new Set(store.accounts.filter((account) => !account.hidden && account.type === 'investment').map((account) => account.plaid_account_id));
   const normalizedTicker = String(ticker || '').trim().toUpperCase();
+  const rangeProgress = investmentRangeProgress(store, { accountId, ticker: normalizedTicker, range });
   const positions = (store.positions || []).filter((position) => {
     if (!visibleAccounts.has(position.account_id) || position.hidden) return false;
     if (accountId) return position.account_id === accountId;
@@ -470,7 +585,7 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
     label: selectedAccount?.nickname || selectedAccount?.name || (accountId ? 'Investment account' : normalizedTicker),
     ticker: accountId ? null : normalizedTicker || null,
     value: selectedAccount ? Math.abs(Number(selectedAccount.current_balance || 0)) : 0,
-    reason: 'This holding is not available from your latest connection.', history: [], market: []
+    reason: 'This holding is not available from your latest connection.', history: [], market: [], progress: rangeProgress
   };
   const resolvedTickers = [...new Set(positions.map((position) => String(position.ticker || '').trim().toUpperCase()).filter(Boolean))];
   const value = positions.reduce((sum, position) => sum + Math.abs(Number(position.value || 0)), 0);
@@ -499,6 +614,7 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
       label, ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null, value: currentValue,
       costBasis, gain: costBasis == null ? null : value - costBasis,
       history, market: [], reconstructed: estimated,
+      progress: rangeProgress,
       detail: estimated ? 'Earlier values are estimated from reported activity and historical prices. Saved balances take over when tracking begins.' : (history.length >= 2 ? `Based on ${providerHistory.length} verified updates from your connected institution.` : history.length === 1 ? `Tracking from a verified institution update on ${history[0].date}.` : undefined),
       reason: preparing ? 'Your institution is still preparing its reported investment activity.' : results.find((result) => result.state !== 'ready')?.reason
     };
@@ -510,6 +626,7 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
     state: 'tracking', label, ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null, value,
     costBasis, gain: costBasis == null ? null : value - costBasis,
     history: providerHistory, market: [],
+    progress: rangeProgress,
     detail: `Tracking from a verified institution update on ${providerHistory[0].date}.`
   };
   if (providerHistory.length < 2) {
@@ -517,6 +634,7 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
     if ((store.items || []).some((item) => itemIds.has(item.id) && item.investment_history_state === 'preparing')) return {
       state: 'preparing', label, ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null, value,
       costBasis, gain: costBasis == null ? null : value - costBasis, history: [], market: [],
+      progress: rangeProgress,
       reason: 'Your institution is still preparing its reported investment activity. We will only build a chart after the complete activity is available.'
     };
     const coverage = accountId ? reportedHistoricalPositions(store, positions, accountId) : { positions, reason: null };
@@ -528,11 +646,13 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
       costBasis, gain: costBasis == null ? null : value - costBasis,
       gainPct: costBasis ? (value - costBasis) / costBasis : null,
       history: reconstructed.history, market: [], reconstructed: true,
+      progress: rangeProgress,
       detail: `Reconstructed from reported institution activity beginning ${reconstructed.startDate}; it matches your latest institution value.`
     };
     return {
       state: 'unavailable', label, ticker: resolvedTickers.length === 1 ? resolvedTickers[0] : null, value,
       costBasis, gain: costBasis == null ? null : value - costBasis, history: [], market: [],
+      progress: rangeProgress,
       reason: reconstructed.reason
     };
   }
@@ -541,6 +661,7 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
     costBasis, gain: costBasis == null ? null : value - costBasis,
     gainPct: costBasis ? (value - costBasis) / costBasis : null,
     history: providerHistory, market: [],
+    progress: rangeProgress,
     detail: `Based on ${providerHistory.length} verified updates from your connected institution.`
   };
 
