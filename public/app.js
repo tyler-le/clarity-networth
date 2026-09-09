@@ -1062,7 +1062,7 @@ function renderPortfolioChart(data) {
   const verifiedSpanIsShort = lastObservedTime - firstObservedTime <= 45 * 86400000;
   const label = (index) => new Date(`${snapshots[index].date}T12:00:00`).toLocaleDateString('en-US', sameMonth || shortRange || (hasUntrackedLead && verifiedSpanIsShort)
     ? { month: 'short', day: 'numeric' }
-    : { month: 'short', year: '2-digit' });
+    : { month: 'short', year: 'numeric' });
   const xIndices = [...new Set(width > 420 ? [0, Math.floor((snapshots.length - 1) / 2), snapshots.length - 1] : [0, snapshots.length - 1])];
   const grid = [max, (max + min) / 2, min].map((value) => { const y = plot.bottom - (value - min) / (max - min) * (plot.bottom - plot.top); return `<line x1="${plot.left}" y1="${y}" x2="${width - plot.right}" y2="${y}" class="chart-grid"/><text x="${plot.left - 6}" y="${y + 3}" text-anchor="end" class="chart-axis-label">${axisCurrency(value)}</text>`; }).join('');
   // The dashed lead-in explains the unavailable part of a selected range;
@@ -1157,7 +1157,35 @@ function historyForRange(history, range = state.holdingHistoryRange) {
   return filtered.length ? filtered : history.slice(-1);
 }
 
-function renderHoldingHistoryChart(history, kind, emptyMessage = null, historyState = 'ready') {
+// A personal balance can move because of contributions or sales as well as
+// market movement. This deliberately describes a value change, never a
+// return, unless the view is explicitly the market-price chart.
+function valueChangeSummary(history, range) {
+  const points = historyForRange(history, range);
+  if (points.length < 2) return null;
+  const first = Number(points[0].value || 0);
+  const last = Number(points.at(-1).value || 0);
+  const change = last - first;
+  return { change, percent: Math.abs(first) > .005 ? change / Math.abs(first) : null };
+}
+
+function formatSignedValue(value) {
+  return `${value >= 0 ? '+' : '−'}${fmt.format(Math.abs(value || 0))}`;
+}
+
+function rangeProgressCopy(progress, range) {
+  if (!progress || progress.state !== 'ready') {
+    if (progress?.trackingSince) return `Tracking since ${new Date(`${progress.trackingSince}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    return 'Tracking is starting';
+  }
+  if (progress.changeKind === 'market' && progress.marketChange != null) {
+    const pct = progress.marketChangePct == null ? '' : ` · ${progress.marketChangePct >= 0 ? '+' : '−'}${Math.abs(progress.marketChangePct * 100).toFixed(1)}%`;
+    return `${formatSignedValue(progress.marketChange)}${pct} market performance · ${investmentRangeLabel(range)}`;
+  }
+  return `${formatSignedValue(progress.valueChange)} value change · ${investmentRangeLabel(range)}`;
+}
+
+function renderHoldingHistoryChart(history, kind, emptyMessage = null, historyState = 'ready', progress = null) {
   const el = $('#holdingHistoryChart');
   if (historyState === 'loading') {
     el.innerHTML = `<div class="holding-history-state holding-history-skeleton" data-history-state="loading" role="status"><b>Loading history</b><span>Checking the latest reported activity.</span><i></i><i></i></div>`;
@@ -1191,9 +1219,29 @@ function renderHoldingHistoryChart(history, kind, emptyMessage = null, historySt
   const points = values.map((value, index) => [plot.left + (times[index] - times[0]) / Math.max(times.at(-1) - times[0], 1) * (width - plot.left - plot.right), plot.bottom - (value - min) / (max - min) * (plot.bottom - plot.top)]);
   const line = points.map(([x, y], index) => `${index ? 'L' : 'M'} ${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
   const area = `${line} L ${points.at(-1)[0]} ${plot.bottom} L ${points[0][0]} ${plot.bottom} Z`;
-  const label = (entry) => new Date(`${entry.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+  const label = (entry) => new Date(`${entry.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   const endpoints = [0, pointsData.length - 1];
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${kind === 'market' ? 'Market price' : 'Your position value'} history"><defs><linearGradient id="holdingHistoryFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".18"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs><path d="${area}" fill="url(#holdingHistoryFade)"/><path class="holding-history-line" pathLength="1" d="${line}" fill="none" stroke="#287143" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><line class="holding-scrub-line" x1="0" y1="${plot.top}" x2="0" y2="${plot.bottom}"/><circle class="holding-scrub-dot" cx="0" cy="0" r="4"/></svg><span class="holding-history-axis start">${label(pointsData[endpoints[0]])}</span><span class="holding-history-axis end">${label(pointsData[endpoints[1]])}</span><div class="chart-tooltip hidden"></div>`;
+  const change = valueChangeSummary(history, state.holdingHistoryRange);
+  // The API's range progress is derived only from provider-observed position
+  // snapshots. Prefer it for a personal value summary; a reconstructed chart
+  // can still be useful context but must not silently become a return claim.
+  const verifiedProgress = kind !== 'market' && progress?.state === 'ready' ? progress : null;
+  const summaryChange = verifiedProgress ? Number(verifiedProgress.valueChange || 0) : change?.change;
+  const summaryPercent = verifiedProgress && Math.abs(Number(verifiedProgress.startValue || 0)) > .005
+    ? summaryChange / Math.abs(Number(verifiedProgress.startValue))
+    : change?.percent;
+  const trackingSince = progress?.state === 'tracking' && progress.trackingSince
+    ? new Date(`${progress.trackingSince}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : null;
+  const changeText = trackingSince
+    ? `Tracking since ${trackingSince}`
+    : summaryChange == null
+      ? 'One verified value so far'
+      : `${formatSignedValue(summaryChange)}${summaryPercent == null ? '' : ` · ${summaryPercent >= 0 ? '+' : '−'}${Math.abs(summaryPercent * 100).toFixed(1)}%`}`;
+  const changeLabel = kind === 'market'
+    ? `Market price change · ${investmentRangeLabel(state.holdingHistoryRange)}`
+    : `Verified value change · ${investmentRangeLabel(state.holdingHistoryRange)}`;
+  el.innerHTML = `<div class="holding-chart-summary"><span>${changeLabel}</span><strong class="${change && change.change < 0 ? 'negative' : 'positive'}">${changeText}</strong></div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${kind === 'market' ? 'Market price' : 'Your position value'} history"><defs><linearGradient id="holdingHistoryFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".18"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs><path d="${area}" fill="url(#holdingHistoryFade)"/><path class="holding-history-line" pathLength="1" d="${line}" fill="none" stroke="#287143" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><line class="holding-scrub-line" x1="0" y1="${plot.top}" x2="0" y2="${plot.bottom}"/><circle class="holding-scrub-dot" cx="0" cy="0" r="4"/></svg><span class="holding-history-axis start">${label(pointsData[endpoints[0]])}</span><span class="holding-history-axis end">${label(pointsData[endpoints[1]])}</span><div class="chart-tooltip hidden"></div>`;
   if (pointsData.length < 2) return;
   const svg = el.querySelector('svg'); const tooltip = el.querySelector('.chart-tooltip'); const scrubLine = el.querySelector('.holding-scrub-line'); const scrubDot = el.querySelector('.holding-scrub-dot');
   const showPoint = (event) => {
@@ -1246,15 +1294,23 @@ function renderHoldingHistoryDetail() {
   const gain = data.gain;
   const metrics = $('#holdingHistoryMetrics');
   metrics.classList.toggle('single', data.costBasis == null);
-  metrics.innerHTML = `<div><span>Current value</span><strong>${fmt.format(Number(data.value || 0))}</strong></div>${data.costBasis != null ? `<div><span>${gain >= 0 ? 'Investment gain' : 'Investment loss'}</span><strong class="${gain >= 0 ? 'positive' : 'negative'}">${gain >= 0 ? '+' : '−'}${fmt.format(Math.abs(gain || 0))}</strong><small>Based on reported purchase cost</small></div>` : ''}`;
+  metrics.innerHTML = `<div><span>Current value</span><strong>${fmt.format(Number(data.value || 0))}</strong></div>${data.costBasis != null ? `<div><span>Value vs reported cost</span><strong class="${gain >= 0 ? 'positive' : 'negative'}">${gain >= 0 ? '+' : '−'}${fmt.format(Math.abs(gain || 0))}</strong><small>Not a selected-period return</small></div>` : ''}`;
   const hasMarket = (data.market || []).length > 1;
   $('#holdingHistoryTabs').innerHTML = `<button type="button" class="${!isMarket ? 'active' : ''}" data-holding-history-mode="position" role="tab" aria-selected="${!isMarket}">Your position</button>${hasMarket ? `<button type="button" class="${isMarket ? 'active' : ''}" data-holding-history-mode="market" role="tab" aria-selected="${isMarket}">Market price</button>` : ''}`;
   const ranges = [['1m', '1M'], ['3m', '3M'], ['6m', '6M'], ['ytd', 'YTD'], ['1y', '1Y'], ['all', 'All']];
   $('#holdingHistoryRange').innerHTML = ranges.map(([value, label]) => `<button type="button" class="${state.holdingHistoryRange === value ? 'active' : ''}" data-holding-history-range="${value}" aria-pressed="${state.holdingHistoryRange === value}">${label}</button>`).join('');
-  $('#holdingHistoryNote').textContent = isMarket ? 'Market price does not include your purchases, sales, or contributions.' : (data.detail || data.reason || 'Your position history is unavailable.');
+  const selectedHistory = historyForRange(history, state.holdingHistoryRange);
+  const selectedProgress = !isMarket && data.progress?.range === state.holdingHistoryRange ? data.progress : null;
+  $('#holdingHistoryNote').textContent = isMarket
+    ? 'Market price is separate from your balance and does not include your purchases, sales, or contributions.'
+    : selectedProgress?.state === 'tracking' && selectedProgress.trackingSince
+      ? `Tracking this value since ${new Date(`${selectedProgress.trackingSince}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.`
+    : selectedHistory.length > 1
+      ? `Value change over ${investmentRangeLabel(state.holdingHistoryRange)} can include contributions, withdrawals, and market movement.`
+      : (data.detail || data.reason || 'Your position history is unavailable.');
   // A dialog has no stable width until the browser has painted it. Defer chart
   // measurement one frame so mobile and desktop both receive a real canvas.
-  requestAnimationFrame(() => renderHoldingHistoryChart(history, isMarket ? 'market' : 'position', data.reason, isMarket ? 'ready' : data.state));
+  requestAnimationFrame(() => renderHoldingHistoryChart(history, isMarket ? 'market' : 'position', data.reason, isMarket ? 'ready' : data.state, selectedProgress));
   const positions = (state.investments?.positions || []).filter((position) => data.accountId ? position.account_id === data.accountId : data.ticker && String(position.ticker || '').toUpperCase() === data.ticker);
   const accounts = new Map((state.investments?.accounts || []).map((account) => [account.account_id, account]));
   const canEditClass = !state.demoPreview && !state.dashboard?.demoMode;
@@ -1281,16 +1337,16 @@ function renderHoldingHistoryDetail() {
   }).join('')}` : '';
 }
 
-async function openHoldingHistory({ ticker = '', accountId = '' } = {}) {
+async function openHoldingHistory({ ticker = '', accountId = '' } = {}, { preserveMode = false } = {}) {
   const dialog = $('#holdingHistoryDialog');
   const selectedAccount = accountId ? (state.investments?.accounts || []).find((account) => account.account_id === accountId) : null;
   const accountLabel = selectedAccount?.name || 'Investment account';
   const accountValue = selectedAccount ? Number(selectedAccount.value || selectedAccount.balance || 0) : 0;
-  state.holdingHistory = { state: 'loading', label: accountId ? accountLabel : 'Investment detail', ticker, value: accountValue, history: [], market: [], reason: 'Loading your history…' };
-  state.holdingHistoryMode = 'position';
+  state.holdingHistory = { state: 'loading', label: accountId ? accountLabel : 'Investment detail', ticker, accountId: accountId || null, value: accountValue, history: [], market: [], reason: 'Loading your history…' };
+  if (!preserveMode) state.holdingHistoryMode = 'position';
   // This starts aligned with the page for continuity, then belongs only to
   // this drill-in. Changing it never alters the Investments overview.
-  state.holdingHistoryRange = state.investmentRange;
+  if (!preserveMode) state.holdingHistoryRange = state.investmentRange;
   if (!dialog.open) {
     dialog.showModal();
     // A dialog normally auto-focuses its first button. On the phone that is
@@ -1302,7 +1358,7 @@ async function openHoldingHistory({ ticker = '', accountId = '' } = {}) {
   renderHoldingHistoryDetail();
   try {
     const base = state.demoPreview || state.dashboard?.demoMode ? '/api/demo-investments/history' : '/api/investments/history';
-    const query = accountId ? `account_id=${encodeURIComponent(accountId)}` : `ticker=${encodeURIComponent(ticker)}`;
+    const query = `${accountId ? `account_id=${encodeURIComponent(accountId)}` : `ticker=${encodeURIComponent(ticker)}`}&range=${encodeURIComponent(state.holdingHistoryRange)}`;
     const response = await api(`${base}?${query}`);
     state.holdingHistory = {
       ...response,
@@ -1334,8 +1390,11 @@ function renderInvestments(data) {
   $('#investmentTotal').textContent = fmt.format(displayedTotal);
   const started = snapshots[0]?.date ? new Date(`${snapshots[0].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : null;
   const reconstructed = snapshots.some((snapshot) => snapshot.source === 'reconstructed');
-  const changeCopy = periodChange == null ? (started ? `Tracking since ${started}` : 'Sync to begin tracking') : `${periodChange >= 0 ? '+' : '−'}${fmt.format(Math.abs(periodChange))} ${changePeriodLabel}`;
-  $('#investmentContext').textContent = accounts.length ? `${changeCopy}${reconstructed ? ' · Includes estimated history' : ''}` : 'Connect an investment account to begin.';
+  const periodPercent = periodChange != null && Math.abs(Number(startSnapshot?.value || 0)) > .005 ? periodChange / Math.abs(Number(startSnapshot.value || 0)) : null;
+  const changeCopy = periodChange == null
+    ? (started ? `Tracking since ${started}` : 'Sync to begin tracking')
+    : `${formatSignedValue(periodChange)}${periodPercent == null ? '' : ` · ${periodPercent >= 0 ? '+' : '−'}${Math.abs(periodPercent * 100).toFixed(1)}%`} ${changePeriodLabel}`;
+  $('#investmentContext').textContent = accounts.length ? `${changeCopy}${reconstructed ? ' · Estimated from reported activity and prices' : ''}` : 'Connect an investment account to begin.';
   $('#investmentChartDate').textContent = '';
   $('#investmentChartContext').classList.add('hidden');
   renderPortfolioChart(data);
@@ -1348,7 +1407,7 @@ function renderInvestments(data) {
   const donut = $('#investmentDonut');
   if (allocation.length) {
     const largest = allocation[0];
-    $('#investmentAllocationInsight').textContent = `${largest.name} is your largest allocation at ${Math.round(largest.share * 100)}%. Current mix · ${periodLabel} selected.`;
+    $('#investmentAllocationInsight').textContent = `${largest.name} is your largest allocation at ${Math.round(largest.share * 100)}%. Current mix · portfolio chart ${changePeriodLabel}.`;
     const selected = allocation.find((row) => row.name === state.investmentFilter);
     donut.style.background = `conic-gradient(${allocation.map((row, index) => { const next = cursor + row.share * 100; const color = state.investmentFilter === 'all' || row.name === state.investmentFilter ? colors[index % colors.length] : '#dde4dd'; const stop = `${color} ${cursor.toFixed(2)}% ${next.toFixed(2)}%`; cursor = next; return stop; }).join(', ')})`;
     donut.innerHTML = selected ? `<span><strong>${fmt.format(selected.value)}</strong><small>${escapeHtml(selected.name)} · ${Math.round(selected.share * 100)}%</small></span>` : `<span><strong>${fmt.format(data.total || 0)}</strong><small>All assets</small></span>`;
@@ -1358,7 +1417,15 @@ function renderInvestments(data) {
     $('#investmentAllocationInsight').textContent = 'Allocation appears when your institution provides holdings.';
     $('#investmentAllocation').innerHTML = '<p class="spending-empty">Allocation appears when your institution provides holdings.</p>';
   }
-  $('#investmentAccounts').innerHTML = accounts.length ? accounts.map((account) => `<button type="button" class="investment-account-row" data-investment-account-history="${escapeHtml(account.account_id)}" aria-label="View ${escapeHtml(account.name)} performance history"><div><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || '')} · View history</span></div><b>${fmt.format(account.value)}</b><i aria-hidden="true">›</i></button>`).join('') : '<p class="spending-empty">No investment accounts connected.</p>';
+  // Account balances are current provider values. The selected range belongs
+  // to the portfolio chart and the account drill-in; do not imply each row
+  // has a calculated period return before we have its verified history.
+  const accountWindowCopy = snapshots.length > 1 ? `Portfolio ${changePeriodLabel}` : (started ? `Tracking since ${started}` : 'History is building');
+  document.querySelector('#investmentAccountsCard .spending-context').textContent = `Current account values · ${accountWindowCopy}.`;
+  $('#investmentAccounts').innerHTML = accounts.length ? accounts.map((account) => {
+    const progress = rangeProgressCopy(account.rangeProgress, state.investmentRange);
+    return `<button type="button" class="investment-account-row" data-investment-account-history="${escapeHtml(account.account_id)}" aria-label="View ${escapeHtml(account.name)} value history for ${escapeHtml(changePeriodLabel)}"><div><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || 'Institution')} · Current value</span><small class="${account.rangeProgress?.state === 'ready' && Number(account.rangeProgress.valueChange) < 0 ? 'negative' : 'positive'}">${escapeHtml(progress)} · View history</small></div><b>${fmt.format(account.value)}</b><i aria-hidden="true">›</i></button>`;
+  }).join('') : '<p class="spending-empty">No investment accounts connected.</p>';
   const names = new Map(accounts.map((account) => [account.account_id, account.name]));
   const isUnclassified = state.investmentFilter === 'Cash & unclassified';
   const unclassifiedAccounts = data.unclassifiedAccounts || [];
@@ -1380,13 +1447,14 @@ function renderInvestments(data) {
   }
   const visiblePositions = state.holdingsExpanded ? positions : positions.slice(0, 3);
   const previewCopy = visiblePositions.length < positions.length ? `Showing ${visiblePositions.length} of ${positions.length}` : `${positions.length} current holding${positions.length === 1 ? '' : 's'}`;
-  $('#investmentHoldingsInsight').textContent = data.positionsAvailable ? `${previewCopy}${state.investmentFilter === 'all' ? '' : ` · ${state.investmentFilter}`} · ${periodLabel} selected` : 'Holdings appear when your institution provides them.';
+  $('#investmentHoldingsInsight').textContent = data.positionsAvailable ? `${previewCopy}${state.investmentFilter === 'all' ? '' : ` · ${state.investmentFilter}`} · Current values · portfolio ${changePeriodLabel}` : 'Holdings appear when your institution provides them.';
   $('#investmentPositions').innerHTML = data.positionsAvailable ? visiblePositions.map((position) => {
-    const gain = position.gain_pct;
-    const performance = gain == null ? 'Performance unavailable' : `${gain >= 0 ? '+' : '−'}${Math.abs(gain * 100).toFixed(1)}%`;
+    const progress = position.positions.map((item) => item.rangeProgress).find(Boolean) || null;
+    const performance = rangeProgressCopy(progress, state.investmentRange);
     const share = data.total ? Math.max(0, Number(position.value || 0) / Number(data.total) * 100) : 0;
     const location = position.positions.length === 1 ? 'Held in 1 account' : `Held in ${position.positions.length} accounts`;
-    return `<button type="button" class="holding-row" data-holding-history="${escapeHtml(position.ticker || '')}" aria-label="View ${escapeHtml(position.name)} history"><div class="position-symbol">${escapeHtml(position.ticker || '•')}</div><div class="holding-copy"><strong class="holding-ticker">${escapeHtml(position.ticker || 'Holding')}</strong><span>${escapeHtml(position.name)} · ${location}</span><div class="holding-weight"><i><b style="width:${Math.min(100, share).toFixed(1)}%"></b></i><span>${Math.round(share)}% of portfolio</span></div></div><div class="position-value"><b>${fmt.format(position.value)}</b><small class="${gain == null ? '' : gain >= 0 ? 'positive' : 'negative'}">${performance}</small></div><i class="holding-chevron" aria-hidden="true">›</i></button>`;
+    const negative = progress?.state === 'ready' && Number(progress.changeKind === 'market' ? progress.marketChange : progress.valueChange) < 0;
+    return `<button type="button" class="holding-row" data-holding-history="${escapeHtml(position.ticker || '')}" aria-label="View ${escapeHtml(position.name)} value history for ${escapeHtml(changePeriodLabel)}"><div class="position-symbol">${escapeHtml(position.ticker || '•')}</div><div class="holding-copy"><strong class="holding-ticker">${escapeHtml(position.ticker || 'Holding')}</strong><span>${escapeHtml(position.name)} · ${location}</span><div class="holding-weight"><i><b style="width:${Math.min(100, share).toFixed(1)}%"></b></i><span>${Math.round(share)}% of portfolio · ${escapeHtml(changePeriodLabel)}</span></div></div><div class="position-value"><b>${fmt.format(position.value)}</b><small class="${negative ? 'negative' : progress?.state === 'ready' ? 'positive' : ''}">${escapeHtml(performance)}</small></div><i class="holding-chevron" aria-hidden="true">›</i></button>`;
   }).join('') : '<p class="positions-empty">Position details aren’t available from this connection yet. Your investment account balances still count toward your portfolio and net worth.</p>';
   const more = $('#investmentHoldingsMore');
   more.classList.toggle('hidden', positions.length <= 3);
@@ -2171,10 +2239,16 @@ $('#spendingTrend').addEventListener('keydown', (event) => {
   event.preventDefault();
   target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 });
-$$('[data-investment-range]').forEach((button) => button.addEventListener('click', () => {
+$$('[data-investment-range]').forEach((button) => button.addEventListener('click', async () => {
   if (button.disabled) return;
   state.investmentRange = button.dataset.investmentRange;
   renderInvestments(state.investments);
+  if (!isDemoExperience()) {
+    try {
+      state.investments = await api(`/api/investments?range=${encodeURIComponent(state.investmentRange)}`);
+      renderInvestments(state.investments);
+    } catch (error) { showNotice(error.message); }
+  }
 }));
 $('#investmentAllocation').addEventListener('click', (event) => {
   const filter = event.target.closest('[data-investment-filter]')?.dataset.investmentFilter;
@@ -2259,6 +2333,14 @@ $('#holdingHistoryRange').addEventListener('click', (event) => {
   const range = event.target.closest('[data-holding-history-range]')?.dataset.holdingHistoryRange;
   if (!range) return;
   state.holdingHistoryRange = range;
+  const detail = state.holdingHistory;
+  // Range progress is calculated against the provider snapshots on the
+  // server. Re-fetch it rather than merely relabeling an already-loaded
+  // timeline, while preserving the reader's chosen position/market tab.
+  if (detail?.accountId || detail?.ticker) {
+    openHoldingHistory({ accountId: detail.accountId || '', ticker: detail.ticker || '' }, { preserveMode: true });
+    return;
+  }
   renderHoldingHistoryDetail();
 });
 $('#holdingHistoryWhere').addEventListener('change', async (event) => {
