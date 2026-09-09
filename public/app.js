@@ -986,9 +986,12 @@ function portfolioSnapshots(data) {
 }
 
 function syncPortfolioRangeControls(snapshots) {
+  let changed = false;
   if (!state.investmentRangeInitialized) {
     const latest = snapshots.at(-1)?.date ? new Date(`${snapshots.at(-1).date}T12:00:00`) : new Date();
-    state.investmentRange = preferredNetWorthRange(snapshots, latest);
+    const preferredRange = preferredNetWorthRange(snapshots, latest);
+    changed = preferredRange !== state.investmentRange;
+    state.investmentRange = preferredRange;
     state.investmentRangeInitialized = true;
   }
   $$('[data-investment-range]').forEach((control) => {
@@ -999,6 +1002,25 @@ function syncPortfolioRangeControls(snapshots) {
     control.title = '';
     control.classList.toggle('active', control.dataset.investmentRange === state.investmentRange);
   });
+  return changed;
+}
+
+let investmentRangeRequest = 0;
+async function loadInvestmentRange(range) {
+  const request = ++investmentRangeRequest;
+  $$('[data-investment-range]').forEach((control) => { control.disabled = true; });
+  try {
+    const base = state.demoPreview || state.dashboard?.demoMode ? '/api/demo-investments' : '/api/investments';
+    const investments = await api(`${base}?range=${encodeURIComponent(range)}`);
+    // A faster second selection wins; never paint an older range over it.
+    if (request !== investmentRangeRequest || state.investmentRange !== range) return;
+    state.investments = investments;
+    renderInvestments(investments);
+  } catch (error) {
+    if (request === investmentRangeRequest) showNotice(error.message);
+  } finally {
+    if (request === investmentRangeRequest) $$('[data-investment-range]').forEach((control) => { control.disabled = false; });
+  }
 }
 
 function investmentRangeLabel(range) {
@@ -1383,6 +1405,14 @@ function renderInvestments(data) {
   const accounts = data.accounts || [];
   const allSnapshots = uniqueDailySnapshots(data.snapshots || []);
   syncPortfolioRangeControls(allSnapshots);
+  // Initial payloads are intentionally requested as `all` so the client can
+  // select the best available default. Once it selects a different range,
+  // fetch the matching server-calculated account and holding performance
+  // before rendering any amount beneath that selected control.
+  if (data.range && data.range !== state.investmentRange) {
+    void loadInvestmentRange(state.investmentRange);
+    return;
+  }
   const snapshots = portfolioSnapshots(data);
   const endSnapshot = snapshots.at(-1);
   const startSnapshot = snapshots[0];
@@ -2242,13 +2272,7 @@ $('#spendingTrend').addEventListener('keydown', (event) => {
 $$('[data-investment-range]').forEach((button) => button.addEventListener('click', async () => {
   if (button.disabled) return;
   state.investmentRange = button.dataset.investmentRange;
-  $$('[data-investment-range]').forEach((control) => { control.disabled = true; });
-  try {
-    const base = state.demoPreview || state.dashboard?.demoMode ? '/api/demo-investments' : '/api/investments';
-    state.investments = await api(`${base}?range=${encodeURIComponent(state.investmentRange)}`);
-    renderInvestments(state.investments);
-  } catch (error) { showNotice(error.message); }
-  finally { $$('[data-investment-range]').forEach((control) => { control.disabled = false; }); }
+  await loadInvestmentRange(state.investmentRange);
 }));
 $('#investmentAllocation').addEventListener('click', (event) => {
   const filter = event.target.closest('[data-investment-filter]')?.dataset.investmentFilter;

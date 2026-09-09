@@ -190,6 +190,7 @@ export function investmentSummary(store, { range = 'all' } = {}) {
   if (remaining > 1) allocation.set('Cash & unclassified', (allocation.get('Cash & unclassified') || 0) + remaining);
   const allocationRows = [...allocation.entries()].map(([name, value]) => ({ name, value, share: total ? value / total : 0 })).sort((a, b) => b.value - a.value);
   return {
+    range,
     total,
     accounts: accounts.map((account) => ({ id: account.id, account_id: account.plaid_account_id, name: account.nickname || account.name, institution_name: account.institution_name, subtype: account.subtype, value: Math.abs(Number(account.current_balance || 0)), rangeProgress: investmentRangeProgress(store, { accountId: account.plaid_account_id, range }) })),
     allocation: allocationRows,
