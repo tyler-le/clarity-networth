@@ -279,6 +279,20 @@ test('selected investment ranges never call deposits or account changes market p
   assert.equal(account.changeKind, 'balance');
 });
 
+test('investment summaries attach the requested observed range to holdings', () => {
+  const store = {
+    accounts: [{ id: 'ira', plaid_account_id: 'ira', name: 'IRA', type: 'investment', current_balance: 1100 }],
+    positions: [{ id: 'ira:vti', account_id: 'ira', security_id: 'vti', ticker: 'VTI', name: 'VTI', type: 'etf', quantity: 10, value: 1100 }],
+    investment_position_snapshots: [
+      { date: '2026-08-10', kind: 'holding', key: 'ira:vti', account_id: 'ira', security_id: 'vti', ticker: 'VTI', quantity: 10, price: 100, value: 1000, source: 'verified' },
+      { date: '2026-09-07', kind: 'holding', key: 'ira:vti', account_id: 'ira', security_id: 'vti', ticker: 'VTI', quantity: 10, price: 110, value: 1100, source: 'verified' }
+    ]
+  };
+  const result = investmentSummary(store, { range: '1m' });
+  assert.equal(result.positions[0].rangeProgress.range, '1m');
+  assert.equal(result.positions[0].rangeProgress.marketChange, 100);
+});
+
 test('one verified account snapshot begins personal investment tracking without inventing earlier values', () => {
   const store = {
     accounts: [{ plaid_account_id: 'ira', item_id: 'item-1', type: 'investment', name: 'IRA', current_balance: 1_250, hidden: false }],

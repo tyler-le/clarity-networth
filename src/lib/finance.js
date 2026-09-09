@@ -145,7 +145,7 @@ function investmentHistoryStatus(store, accounts) {
   return { state: 'tracking' };
 }
 
-export function investmentSummary(store) {
+export function investmentSummary(store, { range = 'all' } = {}) {
   const accounts = store.accounts.filter((account) => !account.hidden && account.type === 'investment');
   const accountIds = new Set(accounts.map((account) => account.plaid_account_id));
   const providerPositions = (store.positions || []).filter((position) => !position.hidden && accountIds.has(position.account_id));
@@ -192,10 +192,10 @@ export function investmentSummary(store) {
   const allocationRows = [...allocation.entries()].map(([name, value]) => ({ name, value, share: total ? value / total : 0 })).sort((a, b) => b.value - a.value);
   return {
     total,
-    accounts: accounts.map((account) => ({ id: account.id, account_id: account.plaid_account_id, name: account.nickname || account.name, institution_name: account.institution_name, subtype: account.subtype, value: Math.abs(Number(account.current_balance || 0)) })),
+    accounts: accounts.map((account) => ({ id: account.id, account_id: account.plaid_account_id, name: account.nickname || account.name, institution_name: account.institution_name, subtype: account.subtype, value: Math.abs(Number(account.current_balance || 0)), rangeProgress: investmentRangeProgress(store, { accountId: account.plaid_account_id, range }) })),
     allocation: allocationRows,
     unclassifiedAccounts,
-    positions: positions.map((position) => ({ ...position, gain: position.cost_basis == null ? null : Number(position.value || 0) - Number(position.cost_basis), gain_pct: position.cost_basis ? (Number(position.value || 0) - Number(position.cost_basis)) / Number(position.cost_basis) : null })).sort((a, b) => Number(b.value || 0) - Number(a.value || 0)),
+    positions: positions.map((position) => ({ ...position, gain: position.cost_basis == null ? null : Number(position.value || 0) - Number(position.cost_basis), gain_pct: position.cost_basis ? (Number(position.value || 0) - Number(position.cost_basis)) / Number(position.cost_basis) : null, rangeProgress: position.manual || !position.ticker ? null : investmentRangeProgress(store, { ticker: position.ticker, range }) })).sort((a, b) => Number(b.value || 0) - Number(a.value || 0)),
     snapshots: (store.investment_snapshots || []).slice(-3650),
     historyStatus: investmentHistoryStatus(store, accounts),
     positionsAvailable: positions.length > 0

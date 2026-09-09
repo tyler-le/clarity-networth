@@ -597,19 +597,19 @@ function renderAccounts(accounts) {
   const invested = accounts.filter((account) => accountGroup(account) === 'Investments').reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
   const totalDebt = accounts.filter(isDebt).reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
   $('#accountsSummary').innerHTML = `<div><span>Cash & savings</span><strong>${fmt.format(cashAndSavings)}</strong></div><div><span>Invested</span><strong class="positive">${fmt.format(invested)}</strong></div><div><span>Debt owed</span><strong class="negative">${fmt.format(totalDebt)}</strong></div>`;
-  $('#accountGrid').innerHTML = grouped.map(([name, items]) => {
+  $('#accountGrid').innerHTML = `<section class="account-ledger" aria-label="Connected accounts">${grouped.map(([name, items]) => {
     const debt = items.every(isDebt);
     const total = items.reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
     const sorted = [...items].sort((a, b) => Math.abs(Number(b.current_balance || 0)) - Math.abs(Number(a.current_balance || 0)));
     const expanded = state.expandedAccountGroups.has(name);
     const previewCount = 2;
-    return `<section class="account-collection ${debt ? 'debt' : 'asset'}">
-      <div class="account-collection-head"><span class="account-collection-icon" aria-hidden="true">${accountGroupIcons[name] || '◇'}</span><div><h2>${name}</h2><p>${items.length} account${items.length === 1 ? '' : 's'}</p></div><div class="account-collection-total ${debt ? 'negative' : 'positive'}"><span>${debt ? 'Owed' : 'Held'}</span><strong>${fmt.format(total)}</strong></div></div>
-      <div class="account-collection-items">${sorted.map((account, index) => `<article class="account-item ${debt ? 'debt' : 'asset'} ${index >= previewCount && !expanded ? 'hidden' : ''}">
-        ${institutionMark(account)}<div class="account-copy"><div class="account-name">${escapeHtml(account.nickname || account.name)}</div><div class="account-inst">${escapeHtml(accountSubtitle(account))}</div><div class="account-inline-balance ${debt ? 'negative' : 'positive'}">${displayBalance(account)}</div></div>${account.manual ? `<button class="account-rename" data-manual-account="${escapeHtml(account.id)}" data-manual-name="${escapeHtml(account.name)}" data-manual-subtype="${escapeHtml(account.subtype || '')}" data-manual-value="${escapeHtml(account.current_balance)}" data-manual-kind="${debt ? 'liability' : 'asset'}" aria-label="Edit ${escapeHtml(account.name)}">✎</button>` : `<button class="account-rename" data-account-rename="${escapeHtml(account.id)}" data-account-name="${escapeHtml(account.nickname || account.name)}" aria-label="Rename ${escapeHtml(account.nickname || account.name)}">✎</button>`}
+    return `<section class="account-ledger-section ${debt ? 'debt' : 'asset'}">
+      <header class="account-ledger-head"><span class="account-collection-icon" aria-hidden="true">${accountGroupIcons[name] || '◇'}</span><div><h2>${name}</h2><p>${items.length} account${items.length === 1 ? '' : 's'}</p></div><div class="account-collection-total ${debt ? 'negative' : 'positive'}"><span>${debt ? 'Total owed' : 'Total held'}</span><strong>${fmt.format(total)}</strong></div></header>
+      <div class="account-ledger-items">${sorted.map((account, index) => `<article class="account-item ${debt ? 'debt' : 'asset'} ${index >= previewCount && !expanded ? 'hidden' : ''}">
+        ${institutionMark(account)}<div class="account-copy"><div class="account-name">${escapeHtml(account.nickname || account.name)}</div><div class="account-inst">${escapeHtml(accountSubtitle(account))}</div></div><strong class="account-item-balance ${debt ? 'negative' : ''}">${displayBalance(account)}</strong>${account.manual ? `<button class="account-rename" data-manual-account="${escapeHtml(account.id)}" data-manual-name="${escapeHtml(account.name)}" data-manual-subtype="${escapeHtml(account.subtype || '')}" data-manual-value="${escapeHtml(account.current_balance)}" data-manual-kind="${debt ? 'liability' : 'asset'}" aria-label="Edit ${escapeHtml(account.name)}">✎</button>` : `<button class="account-rename" data-account-rename="${escapeHtml(account.id)}" data-account-name="${escapeHtml(account.nickname || account.name)}" aria-label="Rename ${escapeHtml(account.nickname || account.name)}">✎</button>`}
       </article>`).join('')}</div>${items.length > previewCount ? `<button class="account-group-more" data-account-group="${escapeHtml(name)}">${expanded ? 'Show less' : `View ${items.length - previewCount} more`}</button>` : ''}
     </section>`;
-  }).join('');
+  }).join('')}</section>`;
 }
 
 function debtPlanForStrategy(plan, strategy) {
@@ -1148,7 +1148,7 @@ function aggregateHoldings(positions) {
       ? group.positions.reduce((sum, position) => sum + Number(position.cost_basis || 0), 0) : null;
     const classifications = [...new Set(group.positions.map((position) => assetClassLabel(position.type, position.asset_class_override)))];
     const classification = classifications.length === 1 ? classifications[0] : 'Mixed';
-    return { ...group, value, costBasis, classification, gain: costBasis == null ? null : value - costBasis, gain_pct: costBasis ? (value - costBasis) / costBasis : null };
+    return { ...group, value, costBasis, classification, gain: costBasis == null ? null : value - costBasis, gain_pct: costBasis ? (value - costBasis) / costBasis : null, rangeProgress: group.positions.find((position) => position.rangeProgress)?.rangeProgress || null };
   });
 }
 
@@ -1230,6 +1230,18 @@ function renderHoldingTrackingStart(el, snapshot, kind) {
   </svg>`;
 }
 
+function holdingRangeMetric(progress) {
+  if (progress?.state !== 'ready') return null;
+  const change = Number(progress.marketChange ?? progress.valueChange);
+  const percent = progress.marketChange != null ? progress.marketChangePct : null;
+  return {
+    label: progress.marketChange != null ? 'Market movement' : 'Value change',
+    value: `${change >= 0 ? '+' : '−'}${fmt.format(Math.abs(change))}`,
+    detail: `${investmentRangeLabel(progress.range)}${percent == null ? '' : ` · ${change >= 0 ? '+' : '−'}${Math.abs(percent * 100).toFixed(1)}%`}`,
+    tone: change >= 0 ? 'positive' : 'negative'
+  };
+}
+
 function renderHoldingHistoryDetail() {
   const data = state.holdingHistory;
   if (!data) return;
@@ -1245,9 +1257,10 @@ function renderHoldingHistoryDetail() {
     ? 'Your account value over time'
     : (data.ticker && data.label !== data.ticker ? data.label : (isMarket ? 'Price history for this security' : 'Your value over time'));
   const gain = data.gain;
+  const rangeMetric = holdingRangeMetric(data.progress);
   const metrics = $('#holdingHistoryMetrics');
-  metrics.classList.toggle('single', data.costBasis == null);
-  metrics.innerHTML = `<div><span>Current value</span><strong>${fmt.format(Number(data.value || 0))}</strong></div>${data.costBasis != null ? `<div><span>${gain >= 0 ? 'Investment gain' : 'Investment loss'}</span><strong class="${gain >= 0 ? 'positive' : 'negative'}">${gain >= 0 ? '+' : '−'}${fmt.format(Math.abs(gain || 0))}</strong><small>Based on reported purchase cost</small></div>` : ''}`;
+  metrics.classList.toggle('single', !rangeMetric && data.costBasis == null);
+  metrics.innerHTML = `<div><span>Current value</span><strong>${fmt.format(Number(data.value || 0))}</strong></div>${rangeMetric ? `<div><span>${rangeMetric.label}</span><strong class="${rangeMetric.tone}">${rangeMetric.value}</strong><small>${rangeMetric.detail}</small></div>` : data.costBasis != null ? `<div><span>${gain >= 0 ? 'Value vs reported cost' : 'Value vs reported cost'}</span><strong class="${gain >= 0 ? 'positive' : 'negative'}">${gain >= 0 ? '+' : '−'}${fmt.format(Math.abs(gain || 0))}</strong><small>All available cost-basis data</small></div>` : ''}`;
   const hasMarket = (data.market || []).length > 1;
   $('#holdingHistoryTabs').innerHTML = `<button type="button" class="${!isMarket ? 'active' : ''}" data-holding-history-mode="position" role="tab" aria-selected="${!isMarket}">Your position</button>${hasMarket ? `<button type="button" class="${isMarket ? 'active' : ''}" data-holding-history-mode="market" role="tab" aria-selected="${isMarket}">Market price</button>` : ''}`;
   const ranges = [['1m', '1M'], ['3m', '3M'], ['6m', '6M'], ['ytd', 'YTD'], ['1y', '1Y'], ['all', 'All']];
@@ -1282,16 +1295,16 @@ function renderHoldingHistoryDetail() {
   }).join('')}` : '';
 }
 
-async function openHoldingHistory({ ticker = '', accountId = '' } = {}) {
+async function openHoldingHistory({ ticker = '', accountId = '' } = {}, { preserveRange = false } = {}) {
   const dialog = $('#holdingHistoryDialog');
   const selectedAccount = accountId ? (state.investments?.accounts || []).find((account) => account.account_id === accountId) : null;
   const accountLabel = selectedAccount?.name || 'Investment account';
   const accountValue = selectedAccount ? Number(selectedAccount.value || selectedAccount.balance || 0) : 0;
   state.holdingHistory = { state: 'loading', label: accountId ? accountLabel : 'Investment detail', ticker, value: accountValue, history: [], market: [], reason: 'Loading your history…' };
-  state.holdingHistoryMode = 'position';
+  if (!preserveRange) state.holdingHistoryMode = 'position';
   // This starts aligned with the page for continuity, then belongs only to
   // this drill-in. Changing it never alters the Investments overview.
-  state.holdingHistoryRange = state.investmentRange;
+  if (!preserveRange) state.holdingHistoryRange = state.investmentRange;
   if (!dialog.open) {
     dialog.showModal();
     // A dialog normally auto-focuses its first button. On the phone that is
@@ -1303,7 +1316,8 @@ async function openHoldingHistory({ ticker = '', accountId = '' } = {}) {
   renderHoldingHistoryDetail();
   try {
     const base = state.demoPreview || state.dashboard?.demoMode ? '/api/demo-investments/history' : '/api/investments/history';
-    const query = accountId ? `account_id=${encodeURIComponent(accountId)}` : `ticker=${encodeURIComponent(ticker)}`;
+    const scope = accountId ? `account_id=${encodeURIComponent(accountId)}` : `ticker=${encodeURIComponent(ticker)}`;
+    const query = `${scope}&range=${encodeURIComponent(state.holdingHistoryRange)}`;
     const response = await api(`${base}?${query}`);
     state.holdingHistory = {
       ...response,
@@ -1383,11 +1397,14 @@ function renderInvestments(data) {
   const previewCopy = visiblePositions.length < positions.length ? `Showing ${visiblePositions.length} of ${positions.length}` : `${positions.length} current holding${positions.length === 1 ? '' : 's'}`;
   $('#investmentHoldingsInsight').textContent = data.positionsAvailable ? `${previewCopy}${state.investmentFilter === 'all' ? '' : ` · ${state.investmentFilter}`} · ${periodLabel} selected` : 'Holdings appear when your institution provides them.';
   $('#investmentPositions').innerHTML = data.positionsAvailable ? visiblePositions.map((position) => {
-    const gain = position.gain_pct;
-    const performance = gain == null ? 'Performance unavailable' : `${gain >= 0 ? '+' : '−'}${Math.abs(gain * 100).toFixed(1)}%`;
+    const progress = position.rangeProgress;
+    const change = progress?.state === 'ready' ? Number(progress.marketChange ?? progress.valueChange) : null;
+    const performance = change == null
+      ? (progress?.state === 'tracking' ? 'Tracking started' : 'No range data yet')
+      : `${change >= 0 ? '+' : '−'}${fmt.format(Math.abs(change))}${progress.marketChange != null && progress.marketChangePct != null ? ` · ${change >= 0 ? '+' : '−'}${Math.abs(progress.marketChangePct * 100).toFixed(1)}%` : ''}`;
     const share = data.total ? Math.max(0, Number(position.value || 0) / Number(data.total) * 100) : 0;
     const location = position.positions.length === 1 ? 'Held in 1 account' : `Held in ${position.positions.length} accounts`;
-    return `<button type="button" class="holding-row" data-holding-history="${escapeHtml(position.ticker || '')}" aria-label="View ${escapeHtml(position.name)} history"><div class="position-symbol">${escapeHtml(position.ticker || '•')}</div><div class="holding-copy"><strong class="holding-ticker">${escapeHtml(position.ticker || 'Holding')}</strong><span>${escapeHtml(position.name)} · ${location}</span><div class="holding-weight"><i><b style="width:${Math.min(100, share).toFixed(1)}%"></b></i><span>${Math.round(share)}% of portfolio</span></div></div><div class="position-value"><b>${fmt.format(position.value)}</b><small class="${gain == null ? '' : gain >= 0 ? 'positive' : 'negative'}">${performance}</small></div><i class="holding-chevron" aria-hidden="true">›</i></button>`;
+    return `<button type="button" class="holding-row" data-holding-history="${escapeHtml(position.ticker || '')}" aria-label="View ${escapeHtml(position.name)} history"><div class="position-symbol">${escapeHtml(position.ticker || '•')}</div><div class="holding-copy"><strong class="holding-ticker">${escapeHtml(position.ticker || 'Holding')}</strong><span>${escapeHtml(position.name)} · ${location}</span><div class="holding-weight"><i><b style="width:${Math.min(100, share).toFixed(1)}%"></b></i><span>${Math.round(share)}% of portfolio</span></div></div><div class="position-value"><b>${fmt.format(position.value)}</b><small class="${change == null ? '' : change >= 0 ? 'positive' : 'negative'}">${performance}</small></div><i class="holding-chevron" aria-hidden="true">›</i></button>`;
   }).join('') : '<p class="positions-empty">Position details aren’t available from this connection yet. Your investment account balances still count toward your portfolio and net worth.</p>';
   const more = $('#investmentHoldingsMore');
   more.classList.toggle('hidden', positions.length <= 3);
@@ -2173,10 +2190,16 @@ $('#spendingTrend').addEventListener('keydown', (event) => {
   event.preventDefault();
   target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 });
-$$('[data-investment-range]').forEach((button) => button.addEventListener('click', () => {
+$$('[data-investment-range]').forEach((button) => button.addEventListener('click', async () => {
   if (button.disabled) return;
   state.investmentRange = button.dataset.investmentRange;
-  renderInvestments(state.investments);
+  $$('[data-investment-range]').forEach((control) => { control.disabled = true; });
+  try {
+    const base = state.demoPreview || state.dashboard?.demoMode ? '/api/demo-investments' : '/api/investments';
+    state.investments = await api(`${base}?range=${encodeURIComponent(state.investmentRange)}`);
+    renderInvestments(state.investments);
+  } catch (error) { showNotice(error.message); }
+  finally { $$('[data-investment-range]').forEach((control) => { control.disabled = false; }); }
 }));
 $('#investmentAllocation').addEventListener('click', (event) => {
   const filter = event.target.closest('[data-investment-filter]')?.dataset.investmentFilter;
@@ -2261,7 +2284,8 @@ $('#holdingHistoryRange').addEventListener('click', (event) => {
   const range = event.target.closest('[data-holding-history-range]')?.dataset.holdingHistoryRange;
   if (!range) return;
   state.holdingHistoryRange = range;
-  renderHoldingHistoryDetail();
+  const data = state.holdingHistory;
+  if (data) openHoldingHistory({ ticker: data.ticker || '', accountId: data.accountId || '' }, { preserveRange: true });
 });
 $('#holdingHistoryWhere').addEventListener('change', async (event) => {
   const select = event.target.closest('[data-history-position-class]');

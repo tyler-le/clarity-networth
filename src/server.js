@@ -971,13 +971,18 @@ app.get('/api/demo-preview', demoLimiter, (req, res) => {
       demoMode: true
     },
     spending: spendingSummary(store, range),
-    investments: investmentSummary(store),
+    investments: investmentSummary(store, { range: 'all' }),
     retirement: calculateFire(store, summarizeRange(store).netWorth)
   });
 });
 
+app.get('/api/demo-investments', demoLimiter, (req, res) => {
+  const range = ['1m', '3m', '6m', 'ytd', '1y', 'all'].includes(String(req.query.range || '')) ? String(req.query.range) : 'all';
+  res.json(investmentSummary(demoPreviewStore(), { range }));
+});
+
 app.use('/api', (req, res, next) => {
-  if (req.path.startsWith('/auth/') || req.path === '/health' || req.path === '/plaid/webhook' || req.path === '/demo-investments/history') return next();
+  if (req.path.startsWith('/auth/') || req.path === '/health' || req.path === '/plaid/webhook' || req.path === '/demo-investments' || req.path === '/demo-investments/history') return next();
   const user = verifySession(req);
   if (!user) return res.status(401).json({ error: 'Sign in required.' });
   if (!securityReady()) return res.status(503).json({ error: 'The service is not securely configured.' });
@@ -1076,6 +1081,7 @@ app.get('/api/spending', async (req, res) => {
 });
 
 app.get('/api/investments', async (req, res) => {
+  const range = ['1m', '3m', '6m', 'ytd', '1y', 'all'].includes(String(req.query.range || '')) ? String(req.query.range) : 'all';
   const persistedStore = await loadStore(req.user);
   const isDemoMode = Boolean(persistedStore.settings?.demo_mode);
   const store = activeStore(persistedStore);
@@ -1088,7 +1094,7 @@ app.get('/api/investments', async (req, res) => {
   // over a member's real store; the safety boundary would block it anyway,
   // but an error here made demo mode appear as a failed data load.
   if (!isDemoMode) await saveStore(req.user, store);
-  res.json(investmentSummary(store));
+  res.json(investmentSummary(store, { range }));
 });
 
 app.get('/api/investments/history', async (req, res) => {
