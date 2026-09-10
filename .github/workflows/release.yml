@@ -1,28 +1,24 @@
-name: Release through staging
+name: deploy-to-prod
 
 on:
-  # Temporary pre-launch fallback only. Releases are promoted locally with
-  # `npm run release:local`, so pushes do not consume GitHub Actions minutes
-  # or automatically deploy anything.
+  # Production is deliberately manual. This workflow always checks out dev,
+  # tests that exact branch, then deploys that exact commit to production.
   workflow_dispatch:
 
-# Normal releases follow one local path: fast local verification, deployment to
-# isolated staging, a health check, then promotion to production. This manual
-# workflow remains available as a pre-launch fallback; Railway GitHub
-# autodeploy stays disconnected so production cannot bypass an explicit release.
+# Development deploys are intentionally fast and ungated in deploy-to-dev.yml.
+# Production has one guarded path: manually dispatch this workflow. Railway
+# GitHub autodeploy must remain disconnected for production.
 permissions:
   contents: read
 
 concurrency:
-  group: clarity-release
+  group: clarity-production-deploy
   cancel-in-progress: false
 
 env:
   RAILWAY_PROJECT_ID: d8950f3f-2f64-408a-b183-7d5414306da1
   RAILWAY_SERVICE: clarity-networth
-  RAILWAY_STAGING_ENVIRONMENT: d13ce25d-49d5-413d-98fa-979090d1ef05
   RAILWAY_PRODUCTION_ENVIRONMENT: 583ca560-3c5a-4b8c-957b-6ee524e45fcc
-  STAGING_URL: https://clarity-networth-staging.up.railway.app
   PRODUCTION_URL: https://clarity-networth-production.up.railway.app
 
 jobs:
@@ -32,6 +28,8 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: dev
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -49,47 +47,20 @@ jobs:
             test-results/
           if-no-files-found: ignore
 
-  staging:
-    name: Deploy and verify staging
-    needs: verify
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment: staging
-    steps:
-      - uses: actions/checkout@v4
-      - name: Deploy this verified commit to staging
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_STAGING_TOKEN }}
-        run: npx --yes @railway/cli@latest up --ci --project "$RAILWAY_PROJECT_ID" --service "$RAILWAY_SERVICE" --environment "$RAILWAY_STAGING_ENVIRONMENT" --message "GitHub Actions $GITHUB_SHA"
-      - name: Smoke test staging
-        run: |
-          # Railway may cold-start a sleeping service. Capture curl failures so
-          # `bash -e -o pipefail` cannot abort the retry loop while it wakes.
-          for attempt in {1..12}; do
-            health="$(curl --silent --show-error --max-time 60 "$STAGING_URL/api/health" 2>&1 || true)"
-            if printf '%s' "$health" | grep -q '"ok":true'; then
-              curl --fail --silent --show-error --max-time 15 "$STAGING_URL/" >/dev/null
-              curl --fail --silent --show-error --max-time 15 "$STAGING_URL/privacy" >/dev/null
-              exit 0
-            fi
-            echo "Staging is not healthy yet (attempt $attempt/12): $health" >&2
-            sleep 5
-          done
-          echo "Staging did not become healthy. Production was not deployed." >&2
-          exit 1
-
   production:
-    name: Promote verified commit to production
-    needs: staging
+    name: Deploy tested development commit to production
+    needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: production
     steps:
       - uses: actions/checkout@v4
-      - name: Deploy the staged commit to production
+        with:
+          ref: dev
+      - name: Deploy the tested development commit to production
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: npx --yes @railway/cli@latest up --ci --project "$RAILWAY_PROJECT_ID" --service "$RAILWAY_SERVICE" --environment "$RAILWAY_PRODUCTION_ENVIRONMENT" --message "GitHub Actions $GITHUB_SHA"
+        run: npx --yes @railway/cli@latest up --ci --project "$RAILWAY_PROJECT_ID" --service "$RAILWAY_SERVICE" --environment "$RAILWAY_PRODUCTION_ENVIRONMENT" --message "Production from dev $(git rev-parse HEAD)"
       - name: Smoke test production
         run: |
           # Same cold-start handling as staging. Production is only promoted

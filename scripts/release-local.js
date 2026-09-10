@@ -2,16 +2,12 @@
 
 import { execFileSync } from 'node:child_process';
 
-// This flag exists only in Codex's restricted shell. A local release must
-// never treat that environment-specific limitation as permission to skip its
-// browser or integration coverage.
-delete process.env.CODEX_SANDBOX_NETWORK_DISABLED;
-
 const service = 'clarity-networth';
-const environments = [
-  { name: 'staging', healthUrl: 'https://clarity-networth-staging.up.railway.app/api/health' },
-  { name: 'production', healthUrl: 'https://claritynetworth.com/api/health' },
-];
+const environment = {
+  name: 'development',
+  railwayEnvironment: 'staging',
+  healthUrl: 'https://clarity-networth-staging.up.railway.app/api/health',
+};
 
 function run(command, args) {
   execFileSync(command, args, { stdio: 'inherit' });
@@ -31,17 +27,11 @@ async function waitForHealth(url, name) {
   }
 }
 
-const message = `Local release ${execFileSync('git', ['rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim()}`;
+const message = `Local development deploy ${execFileSync('git', ['rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim()}`;
 
-console.log('Running local release verification…');
-run('npm', ['run', 'test:local']);
-run('npm', ['run', 'test:ui:critical']);
+console.log('Deploying to development without a test gate…');
+run('railway', ['up', '--service', service, '--environment', environment.railwayEnvironment, '--ci', '--message', message]);
+console.log('Checking development health…');
+await waitForHealth(environment.healthUrl, environment.name);
 
-for (const environment of environments) {
-  console.log(`Deploying to ${environment.name}…`);
-  run('railway', ['up', '--service', service, '--environment', environment.name, '--ci', '--message', message]);
-  console.log(`Checking ${environment.name} health…`);
-  await waitForHealth(environment.healthUrl, environment.name);
-}
-
-console.log('Staging and production are healthy. Release complete.');
+console.log('Development is healthy. Production can only deploy through the manual deploy-to-prod GitHub Action.');

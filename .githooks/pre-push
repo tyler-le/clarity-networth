@@ -1,10 +1,6 @@
 #!/bin/sh
 set -e
 
-printf '%s\n' 'Running Clarity’s fast local verification before push…'
-# The focused phone journey catches broken user-facing interactions and stale
-# test hooks in seconds. The pre-launch release path promotes locally after
-# this verification; GitHub Actions is not part of the normal release path.
-unset CODEX_SANDBOX_NETWORK_DISABLED
-npm run test:fast
-npm run test:ui:critical
+# Development pushes are intentionally ungated. The manual deploy-to-prod
+# GitHub Action checks out dev and runs the full test suite before production.
+printf '%s\n' 'Development push: no local test gate. Production remains gated by deploy-to-prod.'
