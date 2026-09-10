@@ -176,6 +176,32 @@ app.use('/api', (req, res, next) => {
   });
   next();
 });
+function isDevelopmentRequest(req) {
+  const host = String(req.hostname || req.get('host') || '').split(':')[0].toLowerCase();
+  return host === 'localhost' || host === '127.0.0.1' || host.includes('staging');
+}
+
+// An installed PWA uses its manifest/icon rather than the in-app environment
+// badge. Serve a subtly marked icon only from development so a tester cannot
+// accidentally mistake a staging install for the production app.
+app.get('/app-icon.svg', (req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store, no-cache, max-age=0, must-revalidate');
+  res.type('svg').sendFile(path.join(projectRoot, 'public', isDevelopmentRequest(req) ? 'icon-dev.svg' : 'icon.svg'));
+});
+app.get('/manifest.webmanifest', (req, res) => {
+  const development = isDevelopmentRequest(req);
+  res.setHeader('Cache-Control', 'private, no-store, no-cache, max-age=0, must-revalidate');
+  res.type('application/manifest+json').json({
+    name: development ? 'Clarity Dev' : 'Clarity Net Worth',
+    short_name: development ? 'Clarity DEV' : 'Clarity',
+    start_url: '/',
+    display: 'standalone',
+    background_color: development ? '#123b2a' : '#f6f7f4',
+    theme_color: development ? '#123b2a' : '#f6f7f4',
+    description: development ? 'Clarity development environment' : 'A focused net worth and account tracker',
+    icons: [{ src: '/app-icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }]
+  });
+});
 app.use(express.static(path.join(projectRoot, 'public'), {
   setHeaders(res, filePath) {
     // The PWA intentionally serves no cached shell or financial data.
