@@ -427,8 +427,9 @@ html[data-theme="dark"] .profile-shell .connections-panel, html[data-theme="dark
 .profile-shell .profile-session { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px 0 0; border-top: 1px solid var(--line); }
 .profile-session strong { font-size: 14px; letter-spacing: -.015em; }
 .profile-session p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
-.profile-shell .sign-out-button { flex: 0 0 auto; min-height: 36px; border-color: #d9dfd9; color: #5f695f; background: #fff; }
-.profile-shell .sign-out-button:hover { border-color: #c5d1c6; color: var(--ink); background: #f8faf8; }
+.profile-shell .sign-out-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; flex: 0 0 auto; min-height: 38px; border: 0; border-radius: 10px; padding: 9px 12px; color: #526057; background: #eff3ef; box-shadow: inset 0 0 0 1px #e2e9e2; font-size: 12px; font-weight: 700; }
+.profile-shell .sign-out-button svg { width: 15px; height: 15px; }
+.profile-shell .sign-out-button:hover { color: #245f3b; background: #e5efe7; box-shadow: inset 0 0 0 1px #cfe0d1; }
 @media (max-width: 760px) { .profile-shell .demo-setting, .profile-shell .beta-help, .profile-shell .profile-session { align-items: stretch; flex-direction: column; gap: 12px; }.profile-shell .demo-toggle, .profile-shell .beta-help .secondary, .profile-shell .sign-out-button { width: 100%; }.profile-shell .profile-session { padding-top: 16px; } }
 
 /* A profile needs one point of identity and one settings surface. This avoids
