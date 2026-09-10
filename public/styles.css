@@ -315,30 +315,28 @@ dialog::backdrop { background: rgba(10,15,10,.28); backdrop-filter: blur(3px); }
 .target-item { display: grid; justify-items: center; gap: 2px; padding: 5px 2px; color: var(--muted); font-size: 10px; text-align: center; }
 .target-item strong { color: var(--ink); font-size: 14px; }
 
-.account-group-block + .account-group-block { border-top: 1px solid var(--line); }
-.account-group-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 18px 8px; background: #fbfcfa; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
-.account-group-head span:last-child { font-size: 12px; letter-spacing: 0; }
-.account-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.account-collection { overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: white; box-shadow: var(--shadow); }
-.account-collection-head { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 15px 14px 12px; list-style: none; }
-.account-collection-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 10px; background: var(--accent-soft); color: var(--accent); font-weight: 800; }
-.account-collection-icon svg { width: 19px; height: 19px; }
-.account-collection.debt .account-collection-icon { background: #f8eeee; color: var(--danger); }
-.account-collection-head h2 { margin: 0; font-size: 17px; }
-.account-collection-head p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
-.account-collection-total { display: grid; justify-items: end; gap: 2px; padding-right: 16px; font-variant-numeric: tabular-nums; }.account-collection-total span { color: var(--muted); font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; }.account-collection-total strong { font-size: 14px; }
-.account-collection-items { display: grid; }
-.account-group-more { width: 100%; border: 0; border-top: 1px solid var(--line); padding: 11px 14px; background: #fbfcfa; color: var(--accent); text-align: left; font-size: 12px; font-weight: 700; }.account-group-more:hover { background: var(--accent-soft); }
-.account-item { display: flex; align-items: flex-start; gap: 11px; padding: 15px 16px; }
+.account-groups { display: grid; }
+.account-section { padding: 22px 0 0; }
+.account-section + .account-section { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--line); }
+.account-section-head { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 0 2px 10px; }
+.account-section-icon { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 10px; color: var(--accent); background: var(--accent-soft); font-size: 16px; font-weight: 800; }
+.account-section-icon svg { width: 19px; height: 19px; }
+.account-section.debt .account-section-icon { color: var(--danger); background: #f8eeee; }
+.account-section-head h2 { margin: 0; font-size: 17px; }
+.account-section-head p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+.account-section-total { display: grid; justify-items: end; gap: 2px; font-variant-numeric: tabular-nums; }.account-section-total span { color: var(--muted); font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; }.account-section-total strong { font-size: 15px; }
+.account-section-items { display: grid; }
+.account-section-more { width: 100%; border: 0; border-top: 1px solid var(--line); padding: 12px 2px 2px; color: var(--accent); background: transparent; text-align: left; font-size: 12px; font-weight: 700; }.account-section-more:hover { color: #185b39; }
+.account-item { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto 29px; align-items: center; gap: 11px; padding: 14px 2px; }
 .account-item + .account-item { border-top: 1px solid var(--line); }
 .institution-logo, .institution-fallback { display: grid; flex: 0 0 auto; width: 32px; height: 32px; place-items: center; border: 1px solid var(--line); border-radius: 9px; background: white; object-fit: contain; overflow: hidden; }
 .institution-logo { padding: 3px; }
 .institution-fallback { color: #68726a; background: #f7f9f6; }
 .institution-fallback svg { width: 18px; height: 18px; }
-.account-copy { min-width: 0; flex: 1; }
+.account-copy { min-width: 0; }
 .account-item .account-name { font-size: 14px; font-weight: 690; }
 .account-item .account-inst { margin-top: 2px; font-size: 11px; }
-.account-inline-balance { margin-top: 8px; font-size: 17px; font-weight: 740; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.account-row-balance { justify-self: end; white-space: nowrap; font-size: 15px; font-weight: 740; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
 .account-rename { align-self: center; width: 29px; height: 29px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); font-size: 16px; opacity: .58; }.account-item:hover .account-rename, .account-rename:focus-visible { opacity: 1; }.account-rename:hover { border-color: var(--line); background: #f7f9f6; color: var(--accent); }
 .nickname-dialog { width: min(390px, calc(100vw - 36px)); padding: 0; border: 1px solid var(--line); border-radius: 20px; color: var(--ink); background: white; box-shadow: 0 24px 70px rgba(22,34,24,.22); }.nickname-dialog::backdrop { background: rgba(18,27,20,.34); backdrop-filter: blur(3px); }.nickname-dialog form { position: relative; padding: 25px; }.nickname-dialog h2 { margin: 5px 0 7px; font-size: 24px; letter-spacing: -.04em; }.nickname-dialog p { margin: 0 0 19px; color: var(--muted); font-size: 13px; line-height: 1.5; }.nickname-dialog input { width: 100%; border: 1px solid var(--line); border-radius: 11px; padding: 12px; outline: none; color: var(--ink); background: #fbfcfa; }.nickname-dialog input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }.dialog-close { position: absolute; top: 15px; right: 16px; width: 28px; height: 28px; border: 0; border-radius: 8px; color: var(--muted); background: transparent; font-size: 22px; line-height: 1; }.dialog-close:hover { background: #f2f4f0; }.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }.dialog-actions button { border: 0; padding: 9px 12px; border-radius: 10px; font-weight: 700; }.dialog-actions .secondary { border: 1px solid var(--line); }
 .goal-remove-dialog form { padding: 25px; }.goal-remove-mark { display: grid; width: 36px; height: 36px; margin-bottom: 15px; place-items: center; border-radius: 12px; color: #a84848; background: #faeeee; font-size: 24px; font-weight: 650; line-height: 1; }.goal-remove-dialog h2 { margin-top: 6px; }.goal-remove-dialog p { max-width: 285px; }.danger-button { color: white; background: #af4747; }.danger-button:hover { background: #973b3b; }.danger-button:focus-visible { outline: 3px solid rgba(175,71,71,.28); outline-offset: 3px; }
@@ -359,6 +357,19 @@ dialog::backdrop { background: rgba(10,15,10,.28); backdrop-filter: blur(3px); }
 .topbar #monthLabel { display: none; }
 .profile-connect { margin: -6px 8px 16px 0; }
 .appearance-setting { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 16px; padding: 18px 20px; }.appearance-setting p { margin: 5px 0 0; color: var(--muted); font-size: 12px; }.theme-toggle { display: inline-flex; align-items: center; gap: 9px; flex: 0 0 auto; color: var(--muted); font-size: 12px; font-weight: 650; cursor: pointer; }.theme-toggle input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; }.theme-toggle i { position: relative; width: 38px; height: 23px; border: 1px solid #cfd8d0; border-radius: 99px; background: #e8ede8; pointer-events: none; transition: background .18s ease, border-color .18s ease; }.theme-toggle i::after { content: ''; position: absolute; top: 3px; left: 3px; width: 15px; height: 15px; border-radius: 50%; background: white; box-shadow: 0 1px 3px rgba(18,28,20,.2); transition: transform .18s ease; }.theme-toggle input:checked + i { border-color: var(--accent); background: var(--accent); }.theme-toggle input:checked + i::after { transform: translateX(15px); }.theme-toggle input:focus-visible + i { outline: 3px solid rgba(77,155,104,.32); outline-offset: 3px; }
+
+/* Profile is a settings space, not another dashboard: quiet groups make
+   sensitive controls easy to find without turning every option into a card. */
+.profile-shell { display: grid; gap: 26px; width: min(760px, 100%); padding-bottom: 26px; }
+.profile-intro { padding: 4px 2px 0; }.profile-intro h2, .profile-group-head h3, .demo-setting h3 { margin: 5px 0 0; font-size: 20px; letter-spacing: -.035em; }.profile-intro p, .profile-group-head p { max-width: 500px; margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.profile-group { display: grid; gap: 10px; }.profile-group-head { display: flex; align-items: end; justify-content: space-between; gap: 18px; }.profile-group-head.compact { align-items: start; }.profile-connect { flex: 0 0 auto; margin: 0; white-space: nowrap; }
+.profile-shell .connections-panel { margin-top: 0; border-radius: 16px; background: var(--card); box-shadow: var(--shadow); }.profile-shell .connections-panel summary { padding: 15px 17px; color: var(--ink); font-size: 13px; }.profile-shell .connection-row { padding: 13px 17px; }
+.profile-shell .appearance-setting { margin-top: 0; border-radius: 16px; box-shadow: var(--shadow); }.appearance-setting > div > strong, .beta-help strong { font-size: 14px; letter-spacing: -.015em; }
+.demo-setting { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 132px; margin: 0; padding: 20px 22px; border-color: #dce7de; background: linear-gradient(125deg, #f7fbf8, #fff 58%); }.demo-setting-copy { min-width: 0; }.demo-setting h3 { font-size: 18px; }.demo-setting p { max-width: 445px; margin: 6px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }.demo-setting-status { display: inline-flex; align-items: center; gap: 6px; margin-top: 11px; padding: 4px 8px; border-radius: 99px; color: #59675c; background: #eef2ee; font-size: 10px; font-weight: 720; }.demo-setting-status::before { width: 6px; height: 6px; border-radius: 50%; background: #8c978d; content: ''; }.demo-setting[data-demo-state="active"] { border-color: #a9cdb2; background: linear-gradient(125deg, #eef8f0, #fff 62%); }.demo-setting[data-demo-state="active"] .demo-setting-status { color: #1f6f4a; background: #e0f1e4; }.demo-setting[data-demo-state="active"] .demo-setting-status::before { background: var(--accent); box-shadow: 0 0 0 3px rgba(31,111,74,.12); }.demo-toggle { flex: 0 0 auto; }
+.profile-shell .data-controls { margin-top: 0; border-radius: 16px; background: var(--card); box-shadow: var(--shadow); }.profile-shell .data-controls summary { padding: 15px 17px; color: var(--ink); font-size: 13px; }.profile-shell .data-controls > div { padding: 15px 17px 17px; }
+.profile-shell .beta-help { margin-top: 0; border-radius: 16px; }.profile-shell .beta-help p { margin-top: 5px; }.sign-out-button { justify-self: start; color: var(--muted); font-size: 12px; }.sign-out-button:hover { color: var(--ink); }
+html[data-theme="dark"] .profile-shell .connections-panel, html[data-theme="dark"] .profile-shell .data-controls { background: var(--card); }.profile-shell .demo-setting[data-demo-state="active"] { background: linear-gradient(125deg, #1e2b22, #1a201c 62%); }
+@media (max-width: 760px) { .profile-shell { gap: 21px; padding-bottom: 92px; }.profile-intro h2 { font-size: 19px; }.profile-group-head { align-items: flex-start; flex-direction: column; gap: 10px; }.profile-connect { width: 100%; }.profile-shell .appearance-setting, .demo-setting { padding: 18px; }.demo-setting { align-items: stretch; flex-direction: column; min-height: 0; }.demo-toggle { width: 100%; }.profile-shell .connections-panel summary, .profile-shell .connection-row, .profile-shell .data-controls summary, .profile-shell .data-controls > div { padding-inline: 16px; } }
 
 /* Paired bars make income and spending directly comparable without occlusion. */
 .trend-key i, .trend-detail i { width: 8px; height: 8px; border-radius: 3px; }.trend-detail .income { background: #5b9a70; }.trend-detail .spend { background: #c87862; }.trend-detail { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 13px; min-height: 30px; margin-top: 15px; color: var(--muted); font-size: 11px; }.trend-detail > span { flex-basis: 100%; font-weight: 680; }.trend-detail strong, .trend-detail b { display: inline-flex; align-items: center; gap: 5px; color: var(--ink); font-size: 12px; white-space: nowrap; }.trend-detail strong small { color: var(--muted); font-size: 10px; font-weight: 700; }.trend-detail b { margin-left: auto; }.trend-key { justify-content: flex-start; margin-top: 6px; }.spending-trend { margin-top: 6px; }.trend-bars { position: static; display: flex; align-items: end; justify-content: center; gap: 3px; width: min(36px, 100%); height: 100%; }.trend-bar { position: static; display: block; width: calc(50% - 2px); min-height: 0; border-radius: 6px 6px 2px 2px; }.trend-bar.income { z-index: auto; inset-inline: auto; background: #5b9a70; opacity: .82; }.trend-bar.spending { z-index: auto; left: auto; width: calc(50% - 2px); background: #c87862; }.trend-column.active .trend-bar.income, .trend-column:hover .trend-bar.income { background: #287143; opacity: 1; }.trend-column.active .trend-bar.spending, .trend-column:hover .trend-bar.spending { background: #aa4f42; }
@@ -551,6 +562,8 @@ html[data-theme="dark"] .holding-detail, html[data-theme="dark"] .holding-accoun
 html[data-theme="dark"] .holding-account, html[data-theme="dark"] .holding-account-list { background: #1c231e; }
 html[data-theme="dark"] .investment-donut::before, html[data-theme="dark"] .spending-donut::before { background: var(--card); }
 html[data-theme="dark"] .account-collection, html[data-theme="dark"] .accounts-summary { background: var(--card); }
+html[data-theme="dark"] .account-section.debt .account-section-icon { background: #352729; }
+html[data-theme="dark"] .account-section-more:hover { color: #8fc9a1; }
 html[data-theme="dark"] .debt-payoff-card { border-color: var(--line); background: var(--card); }
 html[data-theme="dark"] .debt-plan-summary:hover { background: rgba(255,255,255,.025); }
 html[data-theme="dark"] .debt-plan-mark { background: #252d28; color: #aeb8af; }

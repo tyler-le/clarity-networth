@@ -69,9 +69,36 @@ test('a cash-first member sees what they have without being pushed into debt or 
 
   await expect(page.locator('#netWorth')).toHaveText('$17,700');
   await goToView(page, 'accounts');
-  await expect(page.locator('#accountGrid')).toContainText('Cash');
+  await expect(page.locator('#accountGrid')).toContainText('Cash & savings');
   await expect(page.locator('#debtPayoffCard')).toBeHidden();
-  await expect(page.locator('.account-collection')).toHaveCount(2);
+  await expect(page.locator('#accountGrid .account-section')).toHaveCount(1);
+});
+
+test('accounts groups cash, investments, and debt without repeating collection cards', async ({ page }) => {
+  await openSignedInScenario(page, (preview) => {
+    const [first, second, third] = preview.dashboard.accounts;
+    const cash = { ...first, id: 'cash', type: 'depository', subtype: 'checking', name: 'Daily cash' };
+    const savings = { ...second, id: 'savings', type: 'depository', subtype: 'savings', name: 'Rainy day savings' };
+    const investment = { ...third, id: 'investment', type: 'investment', subtype: 'ira', name: 'Retirement account' };
+    const card = { ...first, id: 'card', type: 'credit', subtype: 'credit card', name: 'Everyday card', current_balance: 800 };
+    const loan = { ...second, id: 'loan', type: 'loan', subtype: 'student loan', name: 'Education loan', current_balance: 2_500 };
+    const extraCard = { ...card, id: 'card-2', name: 'Travel card', current_balance: 300 };
+    preview.dashboard.accounts = [cash, savings, investment, card, loan, extraCard];
+  });
+
+  await goToView(page, 'accounts');
+  const sections = page.locator('#accountGrid .account-section');
+  await expect(sections).toHaveCount(3);
+  await expect(sections.locator('h2')).toHaveText(['Cash & savings', 'Investments', 'Debt']);
+  await expect(page.locator('#accountGrid .account-collection')).toHaveCount(0);
+  const sectionRules = await sections.evaluateAll((items) => items.slice(1).every((item) => getComputedStyle(item).borderTopWidth === '1px'));
+  expect(sectionRules).toBe(true);
+
+  const debtMore = page.locator('[data-account-group="Debt"]');
+  await expect(debtMore).toHaveText(/view 1 more/i);
+  await debtMore.click();
+  await expect(debtMore).toHaveText(/show less/i);
+  await expect(sections.nth(2).locator('.account-item')).toHaveCount(3);
 });
 
 test('historical charts use only observed snapshots @critical', async ({ page }) => {

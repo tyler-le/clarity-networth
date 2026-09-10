@@ -39,8 +39,8 @@ const state = {
   demoPreview: false
 };
 
-const accountGroupOrder = ['Cash', 'Savings', 'Investments', 'Credit cards', 'Loans & debt', 'Other'];
-const accountGroupIcons = { Cash: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M6 9h1M17 15h1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>', Savings: '◒', Investments: '↗', 'Credit cards': '▣', 'Loans & debt': '−', Other: '◇' };
+const accountSectionOrder = ['Cash & savings', 'Investments', 'Debt', 'Other'];
+const accountSectionIcons = { 'Cash & savings': '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M6 9h1M17 15h1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>', Investments: '↗', Debt: '−', Other: '◇' };
 
 function escapeHtml(value = '') {
   return String(value).replace(/[&<>'"]/g, (char) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]));
@@ -570,11 +570,18 @@ function accountDescriptor(value) {
 function groupedAccounts(accounts) {
   const groups = new Map();
   for (const account of accounts) {
-    const group = accountGroup(account);
+    const group = accountSection(account);
     if (!groups.has(group)) groups.set(group, []);
     groups.get(group).push(account);
   }
-  return accountGroupOrder.filter((g) => groups.has(g)).map((name) => [name, groups.get(name)]);
+  return accountSectionOrder.filter((g) => groups.has(g)).map((name) => [name, groups.get(name)]);
+}
+
+function accountSection(account) {
+  if (isDebt(account)) return 'Debt';
+  if (accountGroup(account) === 'Investments') return 'Investments';
+  if (['Cash', 'Savings'].includes(accountGroup(account))) return 'Cash & savings';
+  return 'Other';
 }
 
 function accountRow(a) {
@@ -597,16 +604,16 @@ function renderAccounts(accounts) {
   const totalDebt = accounts.filter(isDebt).reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
   $('#accountsSummary').innerHTML = `<div><span>Cash & savings</span><strong>${fmt.format(cashAndSavings)}</strong></div><div><span>Invested</span><strong class="positive">${fmt.format(invested)}</strong></div><div><span>Debt owed</span><strong class="negative">${fmt.format(totalDebt)}</strong></div>`;
   $('#accountGrid').innerHTML = grouped.map(([name, items]) => {
-    const debt = items.every(isDebt);
+    const debt = name === 'Debt';
     const total = items.reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
     const sorted = [...items].sort((a, b) => Math.abs(Number(b.current_balance || 0)) - Math.abs(Number(a.current_balance || 0)));
     const expanded = state.expandedAccountGroups.has(name);
     const previewCount = 2;
-    return `<section class="account-collection ${debt ? 'debt' : 'asset'}">
-      <div class="account-collection-head"><span class="account-collection-icon" aria-hidden="true">${accountGroupIcons[name] || '◇'}</span><div><h2>${name}</h2><p>${items.length} account${items.length === 1 ? '' : 's'}</p></div><div class="account-collection-total ${debt ? 'negative' : 'positive'}"><span>${debt ? 'Owed' : 'Held'}</span><strong>${fmt.format(total)}</strong></div></div>
-      <div class="account-collection-items">${sorted.map((account, index) => `<article class="account-item ${debt ? 'debt' : 'asset'} ${index >= previewCount && !expanded ? 'hidden' : ''}">
-        ${institutionMark(account)}<div class="account-copy"><div class="account-name">${escapeHtml(account.nickname || account.name)}</div><div class="account-inst">${escapeHtml(accountSubtitle(account))}</div><div class="account-inline-balance ${debt ? 'negative' : 'positive'}">${displayBalance(account)}</div></div>${account.manual ? `<button class="account-rename" data-manual-account="${escapeHtml(account.id)}" data-manual-name="${escapeHtml(account.name)}" data-manual-subtype="${escapeHtml(account.subtype || '')}" data-manual-value="${escapeHtml(account.current_balance)}" data-manual-kind="${debt ? 'liability' : 'asset'}" aria-label="Edit ${escapeHtml(account.name)}">✎</button>` : `<button class="account-rename" data-account-rename="${escapeHtml(account.id)}" data-account-name="${escapeHtml(account.nickname || account.name)}" aria-label="Rename ${escapeHtml(account.nickname || account.name)}">✎</button>`}
-      </article>`).join('')}</div>${items.length > previewCount ? `<button class="account-group-more" data-account-group="${escapeHtml(name)}">${expanded ? 'Show less' : `View ${items.length - previewCount} more`}</button>` : ''}
+    return `<section class="account-section ${debt ? 'debt' : 'asset'}">
+      <div class="account-section-head"><span class="account-section-icon" aria-hidden="true">${accountSectionIcons[name] || '◇'}</span><div><h2>${name}</h2><p>${items.length} account${items.length === 1 ? '' : 's'}</p></div><div class="account-section-total ${debt ? 'negative' : 'positive'}"><span>${debt ? 'Owed' : 'Held'}</span><strong>${fmt.format(total)}</strong></div></div>
+      <div class="account-section-items">${sorted.map((account, index) => `<article class="account-item ${debt ? 'debt' : 'asset'} ${index >= previewCount && !expanded ? 'hidden' : ''}">
+        ${institutionMark(account)}<div class="account-copy"><div class="account-name">${escapeHtml(account.nickname || account.name)}</div><div class="account-inst">${escapeHtml(accountSubtitle(account))}</div></div><div class="account-row-balance ${debt ? 'negative' : 'positive'}">${displayBalance(account)}</div>${account.manual ? `<button class="account-rename" data-manual-account="${escapeHtml(account.id)}" data-manual-name="${escapeHtml(account.name)}" data-manual-subtype="${escapeHtml(account.subtype || '')}" data-manual-value="${escapeHtml(account.current_balance)}" data-manual-kind="${debt ? 'liability' : 'asset'}" aria-label="Edit ${escapeHtml(account.name)}">✎</button>` : `<button class="account-rename" data-account-rename="${escapeHtml(account.id)}" data-account-name="${escapeHtml(account.nickname || account.name)}" aria-label="Rename ${escapeHtml(account.nickname || account.name)}">✎</button>`}
+      </article>`).join('')}</div>${items.length > previewCount ? `<button class="account-section-more" data-account-group="${escapeHtml(name)}">${expanded ? 'Show less' : `View ${items.length - previewCount} more`}</button>` : ''}
     </section>`;
   }).join('');
 }
@@ -648,6 +655,36 @@ function renderConnections(items) {
   const panel = $('#connectionsList');
   const health = new Map((state.dashboard?.connectionHealth || []).map((entry) => [entry.id, entry]));
   panel.innerHTML = items.length ? items.map((item) => { const status = health.get(item.id); const needsReconnect = Boolean(status?.requires_reconnect); const detail = item.demo ? 'Sample connection' : status?.state === 'healthy' ? 'Up to date' : status?.state === 'stale' ? 'Update delayed · retrying automatically' : needsReconnect ? 'Reconnect to resume updates' : 'Update needs attention · retrying automatically'; const actions = item.demo ? '<span class="connection-demo-label">Demo</span>' : `${needsReconnect ? `<button class="reconnect-button" data-reconnect="${escapeHtml(item.id)}">Reconnect</button>` : ''}<button class="unlink-button" data-unlink="${escapeHtml(item.id)}">Unlink</button>`; return `<div class="connection-row"><div>${item.institution_logo ? `<img class="connection-logo" src="${escapeHtml(item.institution_logo)}" alt="" />` : '<span class="connection-fallback" aria-hidden="true">⌂</span>'}<span>${escapeHtml(item.institution_name)}<small class="connection-status ${status?.state || ''}">${detail}</small></span></div><span class="connection-actions">${actions}</span></div>`; }).join('') : '<div class="empty">No connected institutions.</div>';
+}
+
+function renderProfileSettings(d) {
+  const publicPreview = state.demoPreview;
+  const demoActive = isDemoExperience();
+  const demoSetting = $('#demoSetting');
+  const demoStatus = $('#demoSettingStatus');
+  const demoDescription = $('#demoSettingDescription');
+  const demoButton = $('#demoToggle');
+  demoSetting.dataset.demoState = demoActive ? 'active' : 'off';
+  demoButton.setAttribute('aria-pressed', String(demoActive));
+  if (publicPreview) {
+    demoStatus.textContent = 'Public demo · nothing is saved';
+    demoDescription.textContent = 'You are exploring sample data. Return to sign in whenever you are ready for your own financial picture.';
+    demoButton.textContent = 'Return to sign in';
+  } else if (d?.demoMode) {
+    demoStatus.textContent = 'Demo sandbox is on · your data is hidden';
+    demoDescription.textContent = 'Sample data is replacing your normal view for now. Your accounts, settings, and connections have not changed.';
+    demoButton.textContent = 'Exit demo & restore my data';
+  } else {
+    demoStatus.textContent = 'Demo is off';
+    demoDescription.textContent = 'Preview realistic sample data without changing your accounts or settings.';
+    demoButton.textContent = 'Explore demo';
+  }
+  $('#profileConnectButton').classList.toggle('hidden', demoActive);
+  $('#exportDataButton').disabled = demoActive;
+  $('#deleteAccountButton').disabled = demoActive;
+  $('#exportDataButton').title = demoActive ? 'Exit demo to download your personal data.' : '';
+  $('#deleteAccountButton').title = demoActive ? 'Exit demo to manage your account data.' : '';
+  $('#signOutButton').textContent = publicPreview ? 'Return to sign in' : 'Sign out';
 }
 
 const spendingColors = ['#1f6f4a', '#7ea98b', '#d5a75f', '#b88692', '#9ca9bd', '#c4c9c1'];
@@ -1569,8 +1606,7 @@ function renderDashboard() {
   renderDebtPayoff(d.debtPayoff);
   renderConnections(d.items || []);
   renderClarityLayer(d);
-  $('#demoToggle').textContent = d.demoMode ? 'Exit demo' : 'Try demo';
-  $('#demoToggle').setAttribute('aria-pressed', String(d.demoMode));
+  renderProfileSettings(d);
   $('#connectButton').classList.toggle('hidden', state.view === 'profile');
   $('#setupCard').classList.toggle('hidden', d.plaidConfigured || state.demoPreview);
   if (!d.plaidConfigured && !state.demoPreview) showNotice('Connect an account when you’re ready to see your own data.');
@@ -1697,7 +1733,7 @@ applyTheme(savedTheme(), false);
 $('#themeToggle').addEventListener('change', async (event) => {
   const theme = event.target.checked ? 'dark' : 'light';
   applyTheme(theme);
-  if (state.demoPreview) return;
+  if (isDemoExperience()) return;
   try {
     const appearance = await api('/api/settings/appearance', { method: 'PATCH', body: JSON.stringify({ theme }) });
     state.dashboard.appearance = appearance;
@@ -1728,12 +1764,12 @@ $('#demoToggle').addEventListener('click', async () => {
     }
     await api('/api/demo-mode', { method: 'POST', body: JSON.stringify({ enabled: enteringDemo }) });
     await loadAll();
-    showNotice(state.dashboard?.demoMode ? 'Demo mode is on. Your real data is safely hidden.' : 'Back to your real data.', 'success');
+    showNotice(state.dashboard?.demoMode ? 'Demo sandbox is on. Your real data is safely hidden.' : 'Your personal financial picture is back.', 'success');
   } catch (error) { showNotice(error.message); }
   finally { button.disabled = false; }
 });
 $('#exportDataButton').addEventListener('click', async () => {
-  if (state.demoPreview) { showNotice('Sign in to export your own data.'); return; }
+  if (isDemoExperience()) { showNotice(state.demoPreview ? 'Sign in to export your own data.' : 'Exit demo to download your personal data.'); return; }
   const button = $('#exportDataButton');
   button.disabled = true;
   try {
@@ -1750,7 +1786,7 @@ $('#exportDataButton').addEventListener('click', async () => {
   finally { button.disabled = false; }
 });
 $('#deleteAccountButton').addEventListener('click', async () => {
-  if (state.demoPreview) { showNotice('Demo data is not saved to an account.'); return; }
+  if (isDemoExperience()) { showNotice(state.demoPreview ? 'Demo data is not saved to an account.' : 'Exit demo before managing your account data.'); return; }
   if (!window.confirm('Permanently delete your connected financial data? This cannot be undone.')) return;
   const confirmation = window.prompt('Type DELETE to permanently remove your account and data.');
   if (confirmation !== 'DELETE') { showNotice('Account deletion was cancelled.'); return; }
