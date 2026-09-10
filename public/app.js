@@ -76,7 +76,9 @@ async function api(url, options = {}) {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         const message = response.status === 401 ? 'Your session has expired. Please sign in again.'
-          : response.status === 429 ? 'You’ve refreshed recently. Please wait a few minutes and try again.'
+          : response.status === 429 && url.startsWith('/api/plaid/')
+            ? (data.error || 'Too many connection attempts. Please wait a few minutes and try again.')
+            : response.status === 429 ? 'You’ve refreshed recently. Please wait a few minutes and try again.'
           : response.status >= 500 ? 'We couldn’t reach your financial data right now. Your saved data is still here—please try again shortly.'
           : data.error && !/request failed|gateway|server error/i.test(data.error) ? data.error
           : 'Something went wrong. Please try again.';
