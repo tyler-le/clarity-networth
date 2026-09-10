@@ -158,13 +158,31 @@
       </section>
 
       <section id="profileView" class="view">
-        <button class="primary profile-connect" data-connect-account>+ Connect account</button>
-        <details class="connections-panel" open><summary>Connected institutions</summary><div id="connectionsList"></div></details>
-        <article class="card appearance-setting"><div><div class="card-label">Appearance</div><p>A softer palette for low-light viewing.</p></div><label class="theme-toggle"><span>Dark mode</span><input id="themeToggle" type="checkbox" role="switch" aria-label="Use dark mode" /><i aria-hidden="true"></i></label></article>
-        <article class="card demo-setting"><div><div class="card-label">Demo mode</div><p>Preview sample data. Your accounts stay untouched.</p></div><button class="secondary demo-toggle" id="demoToggle" aria-pressed="false">Try demo</button></article>
-        <details class="data-controls"><summary>Data &amp; privacy</summary><div><p>Download a copy of your financial data or permanently remove this account.</p><button class="secondary" id="exportDataButton">Download my data</button><button class="text-button danger-button" id="deleteAccountButton">Delete account and data</button></div></details>
-        <article class="card beta-help"><div><div class="card-label">Help &amp; feedback</div><p>Clarity is in private beta. Share a question, issue, or idea directly with the team.</p></div><a class="secondary" href="/support">Get support</a></article>
-        <button class="text-button sign-out-button" id="signOutButton">Sign out</button>
+        <div class="profile-shell">
+          <section class="profile-group profile-connections" aria-labelledby="profileConnectionsTitle">
+            <div class="profile-group-head">
+              <div><div class="card-label">Connections</div><h3 id="profileConnectionsTitle">Your institutions</h3></div>
+              <button class="primary profile-connect" data-connect-account>+ Connect account</button>
+            </div>
+            <details class="connections-panel" open><summary>Connected institutions</summary><div id="connectionsList"></div></details>
+          </section>
+
+          <section class="profile-group" aria-labelledby="profilePreferencesTitle">
+            <div class="profile-group-head compact"><div><div class="card-label">Preferences</div><h3 id="profilePreferencesTitle">How Clarity feels</h3></div></div>
+            <div class="appearance-setting"><div><strong>Appearance</strong><p>A softer palette for low-light viewing.</p></div><label class="theme-toggle"><span>Dark mode</span><input id="themeToggle" type="checkbox" role="switch" aria-label="Use dark mode" /><i aria-hidden="true"></i></label></div>
+            <div class="demo-setting"><div class="demo-setting-copy"><div class="card-label">Demo mode</div><h3>Explore with sample data</h3><p>Preview the full product without changing your accounts.</p></div><button class="secondary demo-toggle" id="demoToggle" aria-pressed="false">Try demo</button></div>
+          </section>
+
+          <section class="profile-group" aria-labelledby="profileDataTitle">
+            <div class="profile-group-head compact"><div><div class="card-label">Account</div><h3 id="profileDataTitle">Data &amp; privacy</h3></div></div>
+            <details class="data-controls"><summary>Manage your data</summary><div><p>Download a copy of your financial data or permanently remove this account.</p><button class="secondary" id="exportDataButton">Download my data</button><button class="text-button danger-button" id="deleteAccountButton">Delete account and data</button></div></details>
+            <div class="profile-session"><div><strong>Session</strong><p>Sign out on this device when you’re finished.</p></div><button class="secondary sign-out-button" id="signOutButton">Sign out</button></div>
+          </section>
+
+          <section class="profile-group" aria-labelledby="profileHelpTitle">
+            <div class="beta-help"><div><div class="card-label">Help &amp; feedback</div><strong id="profileHelpTitle">Need a hand?</strong><p>Share a question, issue, or idea directly with the team.</p></div><a class="secondary" href="/support">Get support</a></div>
+          </section>
+        </div>
       </section>
     </main>
 
