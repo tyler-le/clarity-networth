@@ -1636,6 +1636,7 @@ function renderRetirement(data) {
 function renderDashboard() {
   const d = state.dashboard;
   if (!d) return;
+  renderFreshAccountStates(d);
   const s = d.summary;
   setInitialNetWorthRange(d.snapshots || []);
   if (state.view === 'overview') restoreNetWorthHero();
@@ -1649,6 +1650,29 @@ function renderDashboard() {
   $('#connectButton').classList.toggle('hidden', state.view === 'profile');
   $('#setupCard').classList.toggle('hidden', d.plaidConfigured || state.demoPreview);
   if (!d.plaidConfigured && !state.demoPreview) showNotice('Connect an account when you’re ready to see your own data.');
+}
+
+// A new member has no financial facts yet. Keep the product honest by
+// replacing data-dependent dashboards with a small, actionable starting point
+// instead of zeroes, empty charts, and controls that cannot do anything.
+function renderFreshAccountStates(data) {
+  const isFresh = !state.demoPreview && !(data.accounts || []).length && !(data.items || []).length;
+  document.documentElement.dataset.freshAccount = String(isFresh);
+  const views = [
+    ['overviewView', 'freshOverviewState'],
+    ['spendingView', 'freshSpendingState'],
+    ['investmentsView', 'freshInvestmentsState'],
+    ['retirementView', 'freshRetirementState'],
+    ['accountsView', 'freshAccountsState']
+  ];
+  views.forEach(([viewId, stateId]) => {
+    const view = $(`#${viewId}`);
+    const freshState = $(`#${stateId}`);
+    freshState.classList.toggle('hidden', !isFresh);
+    [...view.children].forEach((child) => {
+      if (child !== freshState) child.classList.toggle('fresh-account-hidden', isFresh);
+    });
+  });
 }
 
 async function loadAll() {

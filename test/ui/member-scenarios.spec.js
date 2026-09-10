@@ -51,9 +51,13 @@ test('a newly signed-in member with no accounts gets a calm, truthful start', as
     preview.investments = { ...preview.investments, total: 0, accounts: [], positions: [], allocation: [], snapshots: [], positionsAvailable: false, unclassifiedAccounts: [] };
   });
 
-  await expect(page.locator('#netWorth')).toHaveText('—');
-  await expect(page.locator('#netWorthChart')).toContainText('$0');
+  await expect(page.locator('#freshOverviewState')).toBeVisible();
+  await expect(page.locator('#freshOverviewState')).toContainText('Connect an account');
+  await expect(page.locator('#netWorthCard')).toBeHidden();
   await expect(page.locator('#debtPayoffCard')).toBeHidden();
+  await goToView(page, 'spending');
+  await expect(page.locator('#freshSpendingState')).toBeVisible();
+  await expect(page.locator('#cashFlowOverviewCard')).toBeHidden();
   await goToView(page, 'profile');
   await expect(page.locator('#connectionsList')).toContainText('No connected institutions.');
 });
