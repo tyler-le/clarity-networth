@@ -686,11 +686,12 @@ function renderConnections(items) {
     const needsReconnect = Boolean(status?.action_required || status?.requires_reconnect);
     const verified = label(status?.last_verified_update_at || item.last_verified_update_at || item.last_synced_at);
     const detail = item.demo ? 'Sample connection · demo data only'
+      : item.development_mock ? 'Development test connection · no Plaid account used'
       : needsReconnect ? `${verified} · Sign in again to resume updates`
         : status?.retrying_automatically ? `${verified} · Update delayed; retrying automatically`
           : status?.state === 'healthy' ? `${verified} · Updates automatically`
             : `${verified} · We’re checking again automatically`;
-    const actions = item.demo ? '<span class="connection-demo-label">Demo</span>' : `${needsReconnect ? `<button class="reconnect-button" data-reconnect="${escapeHtml(item.id)}">Reconnect</button>` : ''}<button class="unlink-button" data-unlink="${escapeHtml(item.id)}">Unlink</button>`;
+    const actions = item.demo ? '<span class="connection-demo-label">Demo</span>' : `${!item.development_mock && needsReconnect ? `<button class="reconnect-button" data-reconnect="${escapeHtml(item.id)}">Reconnect</button>` : ''}<button class="unlink-button" data-unlink="${escapeHtml(item.id)}">Unlink</button>`;
     return `<div class="connection-row"><div>${item.institution_logo ? `<img class="connection-logo" src="${escapeHtml(item.institution_logo)}" alt="" />` : '<span class="connection-fallback" aria-hidden="true">⌂</span>'}<span>${escapeHtml(item.institution_name)}<small class="connection-status ${status?.state || ''}">${detail}</small></span></div><span class="connection-actions">${actions}</span></div>`;
   }).join('') : '<div class="empty">No connected institutions yet. Connect one when you’re ready.</div>';
 }
@@ -1638,6 +1639,7 @@ function renderFreshAccountStates(data) {
   document.documentElement.dataset.freshAccount = String(isFresh);
   document.documentElement.dataset.onboardingPreview = String(isFresh);
   $('#onboardingPreviewBanner').classList.toggle('hidden', !isFresh);
+  $$('.onboarding-tab-cta').forEach((cta) => cta.classList.toggle('hidden', !isFresh));
   if (isFresh) $('#notice').classList.add('hidden');
   const views = [
     ['overviewView', 'freshOverviewState'],
@@ -1714,7 +1716,16 @@ async function loadSpending() {
 async function connectPlaid() {
   if (isDemoExperience()) { showNotice('Exit demo to connect your own accounts.'); return; }
   try {
-    const { link_token } = await api('/api/plaid/create_link_token', { method: 'POST', body: '{}' });
+    const link = await api('/api/plaid/create_link_token', { method: 'POST', body: '{}' });
+    if (link.development_mock) {
+      showNotice('Connecting a development test institution…');
+      const result = await api('/api/plaid/development_mock_connect', { method: 'POST', body: '{}' });
+      await loadAll();
+      showNotice(result.already_linked ? 'Your development test institution is already connected.' : 'Development test institution connected. No Plaid account was used.', 'success');
+      showConnectionOnboarding();
+      return;
+    }
+    const { link_token } = link;
     if (!window.Plaid) throw new Error('Plaid Link failed to load. Check your internet connection.');
     const handler = window.Plaid.create({
       token: link_token,

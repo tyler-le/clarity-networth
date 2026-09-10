@@ -336,6 +336,60 @@ function demoPreviewStore() {
   return store;
 }
 
+function developmentMockConnectionsEnabled(req) {
+  // This is a deliberate staging-only escape hatch for exercising the Link
+  // lifecycle without spending a person's Plaid quota. It is double-gated by
+  // an environment variable that is never set in production and by the
+  // development host check.
+  return process.env.DEV_MOCK_CONNECTIONS === 'true' && isDevelopmentRequest(req);
+}
+
+function addDevelopmentMockInstitution(store) {
+  const existing = store.items.find((item) => item.development_mock);
+  if (existing) return { item: existing, alreadyLinked: true };
+
+  const fixture = demoPreviewStore();
+  const now = new Date().toISOString();
+  const item = {
+    id: crypto.randomUUID(),
+    institution_name: 'Clarity Test Bank',
+    institution_id: 'clarity-development-mock',
+    created_at: now,
+    last_synced_at: now,
+    last_verified_update_at: now,
+    development_mock: true,
+    demo: false
+  };
+  const sourceAccounts = fixture.accounts.filter((account) => ['demo-checking', 'demo-hysa', 'demo-brokerage', 'demo-credit'].includes(account.id));
+  const accountIds = new Map();
+  for (const source of sourceAccounts) accountIds.set(source.id, crypto.randomUUID());
+  store.items.push(item);
+  store.accounts.push(...sourceAccounts.map((source) => ({
+    ...source,
+    id: accountIds.get(source.id),
+    item_id: item.id,
+    plaid_account_id: `development-mock-${source.plaid_account_id}`,
+    institution_name: item.institution_name,
+    updated_at: now,
+    demo: false
+  })));
+  store.positions.push(...fixture.positions
+    .filter((position) => accountIds.has(position.account_id))
+    .map((position) => ({ ...position, id: crypto.randomUUID(), item_id: item.id, account_id: accountIds.get(position.account_id), demo: false })));
+  store.transactions.push(...fixture.transactions.map((transaction) => ({
+    ...transaction,
+    id: crypto.randomUUID(),
+    plaid_transaction_id: `development-mock-${transaction.plaid_transaction_id || transaction.id}`,
+    item_id: item.id,
+    account_id: accountIds.get(transaction.account_id) || accountIds.get('demo-checking'),
+    demo: false
+  })));
+  hideDuplicateAccounts(store);
+  snapshotNetWorth(store);
+  snapshotInvestments(store);
+  return { item, alreadyLinked: false };
+}
+
 function readCookie(req, name) {
   const entry = String(req.headers.cookie || '').split(';').map((part) => part.trim()).find((part) => part.startsWith(`${name}=`));
   return entry ? decodeURIComponent(entry.slice(name.length + 1)) : null;
@@ -392,7 +446,8 @@ function publicItem(item) {
     last_verified_update_at: item.last_verified_update_at || null,
     last_sync_attempt_at: item.last_sync_attempt_at || null,
     requires_reconnect: Boolean(item.requires_reconnect),
-    demo: item.demo || false
+    demo: item.demo || false,
+    development_mock: Boolean(item.development_mock)
   };
 }
 
@@ -555,7 +610,7 @@ async function syncItem(store, item) {
 
 async function syncStoreItems(store) {
   const results = [];
-  for (const item of store.items.filter((candidate) => !candidate.demo)) {
+  for (const item of store.items.filter((candidate) => !candidate.demo && !candidate.development_mock)) {
     try {
       await syncItem(store, item);
       results.push({ item: item.institution_name, ok: true });
@@ -580,7 +635,7 @@ async function scheduledDailySync() {
     await queueUserSync(storageKey, async () => {
       try {
         const store = await loadStoreByKey(storageKey);
-        if (!store.items.some((item) => !item.demo)) return;
+        if (!store.items.some((item) => !item.demo && !item.development_mock)) return;
         const results = await syncStoreItems(store);
         await saveStoreByKey(storageKey, store);
         trackLaunchEvent({ storageKey }, results.some((result) => result.ok) ? 'sync_succeeded' : 'sync_failed');
@@ -606,7 +661,7 @@ async function requestPendingInvestmentHistory() {
     await queueUserSync(storageKey, async () => {
       const store = await loadStoreByKey(storageKey);
       let changed = false;
-      for (const item of store.items.filter((candidate) => !candidate.demo)) {
+      for (const item of store.items.filter((candidate) => !candidate.demo && !candidate.development_mock)) {
         const hasInvestmentAccount = store.accounts.some((account) => account.item_id === item.id && account.type === 'investment');
         try {
           // Upgrade existing connections automatically. Mark the attempt first
@@ -1421,10 +1476,12 @@ app.delete('/api/items/:id', async (req, res) => {
   const store = await loadStore(req.user);
   const item = store.items.find((candidate) => candidate.id === req.params.id);
   if (!item || item.demo) return res.status(404).json({ error: 'Connection not found.' });
-  try { await plaidPost('/item/remove', { access_token: decrypt(item.access_token_enc) }); }
-  catch (error) {
-    console.warn('Plaid connection revocation failed:', error.message);
-    return res.status(503).json({ error: 'We could not unlink this institution yet. Please try again shortly.' });
+  if (!item.development_mock) {
+    try { await plaidPost('/item/remove', { access_token: decrypt(item.access_token_enc) }); }
+    catch (error) {
+      console.warn('Plaid connection revocation failed:', error.message);
+      return res.status(503).json({ error: 'We could not unlink this institution yet. Please try again shortly.' });
+    }
   }
   store.items = store.items.filter((candidate) => candidate.id !== item.id);
   store.accounts = store.accounts.filter((account) => account.item_id !== item.id);
@@ -1481,6 +1538,7 @@ app.post('/api/items/:id/reconnected', plaidCostLimiter({ scope: 'plaid_reconnec
 
 app.post('/api/plaid/create_link_token', plaidCostLimiter({ scope: 'plaid_link_token', userLimit: 5, ipLimit: 20, windowMs: 15 * 60_000 }), async (req, res) => {
   try {
+    if (developmentMockConnectionsEnabled(req)) return res.json({ development_mock: true });
     const body = {
       user: { client_user_id: req.user.storageKey },
       client_name: 'Clarity',
@@ -1501,6 +1559,18 @@ app.post('/api/plaid/create_link_token', plaidCostLimiter({ scope: 'plaid_link_t
     console.warn('Plaid link token failed:', error.message);
     res.status(error.status || 500).json({ error: publicPlaidError(error) });
   }
+});
+
+app.post('/api/plaid/development_mock_connect', async (req, res) => {
+  if (!developmentMockConnectionsEnabled(req)) return res.status(404).json({ error: 'Not found.' });
+  const store = await loadStore(req.user);
+  if (store.settings?.demo_mode) return res.status(409).json({ error: 'Exit demo before connecting an account.' });
+  const linkedItems = store.items.filter((item) => !item.demo).length;
+  if (linkedItems >= MAX_LINKED_ITEMS) return res.status(429).json({ error: `You can connect up to ${MAX_LINKED_ITEMS} institutions. Unlink one before adding another.` });
+  const { item, alreadyLinked } = addDevelopmentMockInstitution(store);
+  await saveStore(req.user, store);
+  trackLaunchEvent(req.user, 'account_link_completed');
+  res.json({ ok: true, item: publicItem(item), development_mock: true, already_linked: alreadyLinked });
 });
 
 app.post('/api/plaid/exchange_public_token', plaidCostLimiter({ scope: 'plaid_item_exchange', userLimit: 10, ipLimit: 25, windowMs: 24 * 60 * 60_000 }), async (req, res) => {
