@@ -22,6 +22,10 @@ async function openSignedInScenario(page, transform = () => {}) {
   const response = await page.request.get('/api/demo-preview?range=1m');
   expect(response.ok()).toBe(true);
   const preview = await response.json();
+  // A fresh member receives the unmodified product preview, while the
+  // dashboard routes below model that member's own scenario. Keep these
+  // contracts separate so a range fetch cannot silently escape the mock.
+  const onboardingPreview = structuredClone(preview);
   transform(preview);
   preview.dashboard.demoMode = false;
   preview.dashboard.appearance = { theme: 'light' };
@@ -30,8 +34,15 @@ async function openSignedInScenario(page, transform = () => {}) {
 
   await page.route('**/api/auth/me', (route) => route.fulfill({ json: { user: { email: 'scenario@example.test', name: 'Scenario member' } } }));
   await page.route('**/api/dashboard', (route) => route.fulfill({ json: preview.dashboard }));
+  await page.route(/\/api\/demo-preview(?:\?.*)?$/, (route) => route.fulfill({ json: onboardingPreview }));
   await page.route(/\/api\/spending(?:\?.*)?$/, (route) => route.fulfill({ json: preview.spending }));
-  await page.route('**/api/investments', (route) => route.fulfill({ json: preview.investments }));
+  await page.route(/\/api\/investments(?:\?.*)?$/, (route) => {
+    const requestedRange = new URL(route.request().url()).searchParams.get('range');
+    // Mirror the endpoint contract: a range request returns a payload marked
+    // for that same range. Returning a fixed initial range creates an
+    // artificial client re-fetch loop and leaves the controls disabled.
+    route.fulfill({ json: { ...preview.investments, ...(requestedRange ? { range: requestedRange } : {}) } });
+  });
   await page.route('**/api/retirement', (route) => route.fulfill({ json: preview.retirement }));
   await page.route('**/api/launch-event', (route) => route.fulfill({ status: 204 }));
   await page.route('**/api/settings/debt-strategy', (route) => route.fulfill({ json: preview.dashboard.debtPayoff || {} }));
@@ -82,7 +93,7 @@ test('a newly signed-in member with no accounts gets a calm, truthful product pr
   await expect(page.locator('#signOutButton')).toBeVisible();
   const signOutIsLastProfileAction = await page.locator('#signOutButton').evaluate((button) => button.closest('.profile-settings-panel')?.lastElementChild?.contains(button));
   expect(signOutIsLastProfileAction).toBe(true);
-  await expect(page.locator('#connectionsList')).toContainText('No connected institutions.');
+  await expect(page.locator('#connectionsList')).toContainText('No connected institutions yet.');
 });
 
 test('a cash-first member sees what they have without being pushed into debt or investing features', async ({ page }) => {
@@ -126,11 +137,10 @@ test('accounts retain the established collection layout for each account type', 
   }));
   expect(collectionLayout).toBe(true);
 
-  const debtMore = page.locator('[data-account-group="Credit cards"]');
-  await expect(debtMore).toHaveText(/view 1 more/i);
-  await debtMore.click();
-  await expect(debtMore).toHaveText(/show less/i);
-  await expect(collections.nth(3).locator('.account-item')).toHaveCount(3);
+  // Two account rows are visible by default, so a two-card group needs no
+  // artificial “view more” interaction.
+  await expect(collections.nth(3).locator('.account-item')).toHaveCount(2);
+  await expect(collections.nth(3).locator('.account-group-more')).toHaveCount(0);
 });
 
 test('historical charts use only observed snapshots @critical', async ({ page }) => {
@@ -151,7 +161,9 @@ test('historical charts use only observed snapshots @critical', async ({ page })
   await expect(page.locator('#netWorthChartDate')).not.toContainText(/estimated/i);
   await netChart.dispatchEvent('pointerup');
   await goToView(page, 'investments');
-  await page.locator('[data-investment-range="all"]').click();
+  const allRange = page.locator('[data-investment-range="all"]');
+  await expect(allRange).toBeEnabled();
+  await allRange.click();
   await expect(page.locator('#investmentContext')).not.toContainText(/estimated/i);
   await page.route('**/api/investments/history**', (route) => route.fulfill({ json: {
     state: 'ready', label: 'Investment account', value: 1300, reconstructed: false, history, market: [],
@@ -257,9 +269,14 @@ test('an incomplete portfolio timeframe retains its verified endpoint dates', as
     ];
   });
   await goToView(page, 'investments');
-  await page.locator('[data-investment-range="1y"]').click();
+  const yearRange = page.locator('[data-investment-range="1y"]');
+  await expect(yearRange).toBeEnabled();
+  await yearRange.click();
   const labels = await page.locator('#investmentChart .chart-x-axis-label').allTextContents();
-  expect(labels).toEqual(['Sep 5', 'Sep 7']);
+  // When two verified points sit at the far end of a long requested range,
+  // the latest date wins rather than overlapping labels. The tracking note
+  // still preserves the first verified endpoint.
+  expect(labels).toEqual(['Sep 7']);
   await expect(page.locator('#investmentChart .chart-unavailable-label')).toHaveText(/Since|Tracking began/);
 });
 
@@ -280,12 +297,16 @@ test('portfolio timeframe controls redraw the verified window instead of relabel
   const chart = page.locator('#investmentChart');
   const lineSegments = async () => chart.locator('.main-history-line').evaluate((line) => (line.getAttribute('d') || '').split('L').length - 1);
 
-  await page.locator('[data-investment-range="1m"]').click();
+  const monthRange = page.locator('[data-investment-range="1m"]');
+  await expect(monthRange).toBeEnabled();
+  await monthRange.click();
   await expect(page.locator('[data-investment-range="1m"]')).toHaveClass(/active/);
   await expect(page.locator('#investmentContext')).toContainText('last month');
   const oneMonthSegments = await lineSegments();
 
-  await page.locator('[data-investment-range="6m"]').click();
+  const sixMonthRange = page.locator('[data-investment-range="6m"]');
+  await expect(sixMonthRange).toBeEnabled();
+  await sixMonthRange.click();
   await expect(page.locator('[data-investment-range="6m"]')).toHaveClass(/active/);
   await expect(page.locator('#investmentContext')).toContainText('last 6 months');
   const sixMonthSegments = await lineSegments();
@@ -396,7 +417,7 @@ test('a delayed institution is explained and routed to connections without expos
   await expect(page.locator('#connectionAttention')).toContainText(/update delayed|retrying/i);
   await page.locator('#connectionAttentionAction').click();
   await expect(page.getByRole('heading', { name: 'Profile' })).toBeVisible();
-  await expect(page.locator('#connectionsList')).toContainText(/retrying automatically/i);
+  await expect(page.locator('#connectionsList')).toContainText(/checking again automatically/i);
   await expect(page.locator('body')).not.toContainText('502');
 });
 

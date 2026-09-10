@@ -423,6 +423,10 @@ function renderNetWorthChartWhenVisible(attempt = 0) {
   const rangeStart = netWorthRangeBounds(state.networthRange).startDate;
   const d = state.onboardingPreview?.dashboard || state.dashboard;
   renderLineChart(visibleSnapshots(d.snapshots || []), d.summary, rangeStart);
+  // Chart layout can complete after the first-run explanatory copy. Reapply
+  // that copy last so a delayed chart render cannot briefly restore demo
+  // values into a member's no-account preview.
+  if (state.onboardingPreview) applyOnboardingPreviewCopy();
 }
 
 function axisCurrency(value) {
@@ -1019,13 +1023,18 @@ function renderSpending(data) {
   renderRecurringCharges(state.dashboard?.recurring);
   // The Sankey now owns the category story; the older donut is intentionally
   // absent from the simplified cash-flow experience.
-  if (!$('#spendingDonut')) { renderSpendingTransactions(selected); return; }
+  if (!$('#spendingDonut')) {
+    renderSpendingTransactions(selected);
+    if (state.onboardingPreview) applyOnboardingPreviewCopy();
+    return;
+  }
   const rows = selected.categories || [];
   const donut = $('#spendingDonut');
   if (!rows.length) {
     donut.style.background = '#edf0eb'; donut.innerHTML = '<span>No data</span>';
     $('#spendingLegend').innerHTML = '<p class="spending-empty">Your category mix will appear here.</p>';
     renderSpendingTransactions(selected);
+    if (state.onboardingPreview) applyOnboardingPreviewCopy();
     return;
   }
   let cursor = 0;
@@ -1035,6 +1044,9 @@ function renderSpending(data) {
   donut.innerHTML = chosen ? `<span><strong>${state.allocationDisplay === 'amount' ? fmt.format(chosen.amount) : `${chosen.percentage}%`}</strong><small>${escapeHtml(compactCategoryLabel(chosen.name))}</small></span>` : '<span>Plan<br>mix</span>';
   $('#spendingLegend').innerHTML = rows.slice(0, 5).map((row, index) => `<button class="legend-row" data-spending-category="${escapeHtml(row.name)}"><i style="background:${spendingColors[index % spendingColors.length]}"></i><span>${escapeHtml(row.name)}</span><strong>${state.allocationDisplay === 'amount' ? fmt.format(row.amount) : `${row.percentage}%`}</strong></button>`).join('');
   renderSpendingTransactions(selected);
+  // A view can be resized or restored after the first preview pass. Keep the
+  // no-account explanation authoritative over the illustrative payload.
+  if (state.onboardingPreview) applyOnboardingPreviewCopy();
 }
 
 function renderSpendingTransactions(data) {
@@ -1641,6 +1653,7 @@ function renderRetirement(data) {
   $('#retirementReturnValue').value = data.realReturn;
   form.retirement_age.min = String(Math.min(80, Number(data.age) + 1));
   $('#retirementRetireAgeValue').min = form.retirement_age.min;
+  if (state.onboardingPreview) applyOnboardingPreviewCopy();
 }
 
 function renderDashboard() {

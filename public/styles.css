@@ -753,6 +753,15 @@ html[data-theme="dark"] .account-preview-group,
 html[data-theme="dark"] .account-group-head,
 html[data-theme="dark"] .transaction-toolbar { border-color: #353936; background: #222522; }
 html[data-theme="dark"] .auth-halo { display: none; }
+/* The first-run invitation is a deliberate dark-surface component, not a
+   light banner carried over from the default theme. */
+html[data-theme="dark"] :is(.onboarding-preview-banner, .onboarding-tab-cta) {
+  border-color: #38513f;
+  background: linear-gradient(105deg, #1e2b22, #1c211e 68%);
+  box-shadow: none;
+}
+html[data-theme="dark"] :is(.onboarding-preview-banner, .onboarding-tab-cta) strong { color: #edf2ee; }
+html[data-theme="dark"] :is(.onboarding-preview-banner, .onboarding-tab-cta) span { color: #aeb9b0; }
 /* Public legal pages deliberately use the same quiet visual system as the app. */
 .legal-page { width: min(680px, calc(100% - 40px)); margin: clamp(44px, 10vh, 96px) auto; color: var(--ink); line-height: 1.65; }
 .legal-page h1 { margin: 16px 0 28px; font-size: clamp(2rem, 6vw, 3.4rem); letter-spacing: -.055em; }

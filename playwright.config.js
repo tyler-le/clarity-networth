@@ -4,7 +4,11 @@ const networkDisabled = Boolean(process.env.CODEX_SANDBOX_NETWORK_DISABLED);
 
 export default defineConfig({
   testDir: './test/ui',
-  timeout: 30_000,
+  // Release feedback must be prompt. A healthy local UI scenario settles in
+  // seconds; a 30-second per-test ceiling multiplied across viewports turns
+  // one stale selector into a cancelled release rather than a useful failure.
+  timeout: 15_000,
+  expect: { timeout: 5_000 },
   // The demo server intentionally has shared in-memory preview state. Keep UI
   // verification serial everywhere so a developer's multi-core machine runs
   // the same deterministic suite as GitHub Actions.

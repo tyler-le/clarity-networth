@@ -23,13 +23,17 @@ env:
 
 jobs:
   verify:
-    name: Full test suite
+    name: Targeted release checks
+    outputs:
+      tested_sha: ${{ steps.tested_commit.outputs.sha }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
         with:
           ref: dev
+      - id: tested_commit
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -56,7 +60,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: dev
+          ref: ${{ needs.verify.outputs.tested_sha }}
       - name: Deploy the tested development commit to production
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

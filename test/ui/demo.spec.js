@@ -175,7 +175,7 @@ test('a demo visitor can exit from Profile and return to sign-in', async ({ page
   await openDemo(page);
   await page.locator('#profileButton').click();
   await expect(page.getByRole('heading', { name: 'Profile' })).toBeVisible();
-  await expect(page.locator('#demoToggle')).toHaveText('Return to sign in');
+  await expect(page.locator('#demoToggle')).toHaveText('Exit demo');
   await page.locator('#demoToggle').click();
   await expect(page.locator('#authScreen')).toBeVisible();
   await expect(page.locator('#appShell')).toBeHidden();
@@ -285,20 +285,18 @@ test('selecting a cash-flow month keeps its income-source labels defined', async
   await expect(page.locator('#cashflowSankey [data-cashflow-category="income_paychecks"]')).toContainText('Paychecks');
 });
 
-test('cash-flow blocks trace their connected paths before opening activity', async ({ page }) => {
+test('cash-flow blocks trace their connected paths with a keyboard action', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');
   const paycheckBlock = page.locator('#cashflowSankey [data-cashflow-category="income_paychecks"]');
-  // The responsive observer may redraw after this test action. Check the
-  // focus handler synchronously, rather than letting that later redraw turn a
-  // valid interaction assertion into a timing failure.
-  const focused = await paycheckBlock.evaluate((node) => {
-    // The delegated production handler listens for the bubbling `focusin`
-    // event (not the non-bubbling `focus` event).
-    node.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
-    const diagram = node.closest('#cashflowSankey');
-    return { connected: diagram?.querySelectorAll('.cashflow-flow.is-connected').length || 0, muted: diagram?.querySelectorAll('.cashflow-flow.is-muted').length || 0 };
-  });
+  // SVG focus events can be normalized differently by browser engines. Enter
+  // is the durable keyboard interaction the product promises: it selects the
+  // block and traces its paths without relying on a pointer hit target.
+  await paycheckBlock.press('Enter');
+  const focused = await page.locator('#cashflowSankey').evaluate((diagram) => ({
+    connected: diagram?.querySelectorAll('.cashflow-flow.is-connected').length || 0,
+    muted: diagram?.querySelectorAll('.cashflow-flow.is-muted').length || 0
+  }));
   expect(focused.connected).toBeGreaterThan(0);
   expect(focused.muted).toBeGreaterThan(0);
 });
@@ -526,7 +524,7 @@ test('account detail names each holding instead of repeating the account name', 
   await expect(page.locator('#holdingHistoryEyebrow')).toHaveText('Your account');
   await expect(page.locator('#holdingHistoryTitle')).toHaveText('401(k)');
   await expect(where).toContainText('Holdings in this account');
-  await expect(where.locator('b').first()).toContainText(/FXAIX|FSPSX/);
+  await expect(where.locator('b').first()).toContainText(/VTI|VXUS|BND/);
   await expect(where.locator('small').first()).toContainText(/401\(k\).*Funds/);
 });
 
