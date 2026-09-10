@@ -961,7 +961,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const hiddenCategoryCount = allSpendCategories.length - actualCategories.length;
   const more = !expanded && hiddenCategoryCount > 0 ? `<button type="button" class="cashflow-more" data-cashflow-expand aria-label="Show all ${hiddenCategoryCount + actualCategories.length} spending categories">View all ${allSpendCategories.length} spending categories <span>↗</span></button>` : '';
   const categoryList = compact && expanded && allSpendCategories.length
-    ? `<div class="cashflow-category-list" aria-label="Spending categories">${withShare(allSpendCategories, actualSpend).map((row) => `<button type="button" data-cashflow-category="${escapeHtml(row.key)}"><span><i style="background:${colorFor(row.key, 'var(--outflow-muted)')}"></i>${escapeHtml(row.name)}</span><strong>${fmt.format(row.amount)} <small>${row.share}%</small></strong></button>`).join('')}</div>`
+    ? `<div class="cashflow-category-list" aria-label="Spending categories"><p>Tap a category to view its activity.</p>${withShare(allSpendCategories, actualSpend).map((row) => `<button type="button" data-cashflow-category="${escapeHtml(row.key)}" data-cashflow-node="${escapeHtml(row.key)}" aria-label="View ${escapeHtml(row.name)} activity" aria-pressed="false"><span><i style="background:${colorFor(row.key, 'var(--outflow-muted)')}"></i>${escapeHtml(row.name)}</span><strong>${fmt.format(row.amount)} <small>${row.share}%</small></strong><b aria-hidden="true">›</b></button>`).join('')}</div>`
     : '';
   const sourceBlocks = incomeNodes.map((source, index) => block(sourceX, sourceStart + index * rowStep, sourceW, source.color || colorFor(source.key, 'var(--income)'), source.label, source.amount, source.share, source.key, 'right')).join('');
   const bridgeBlock = sourceTotal >= .5 ? block(bridgeX, bridgeY, bridgeW, bridgeNode.color, bridgeNode.label, bridgeNode.value, null, bridgeNode.key, 'left') : '';
@@ -2218,6 +2218,33 @@ function openCashflowDialog() {
   dialog.showModal();
   renderCashFlowSankey(spendingForSelectedMonth(state.spending), $('#cashflowDialogContent'), true);
 }
+
+function cashflowActivityLabel(data, category) {
+  const transaction = (data.transactions || []).find((row) => row.flowKey === category || row.flowGroup === category);
+  return transaction?.flowLabel || ({ actual_spend: 'Actual spend', save_invest: 'Save & invest', savings: 'Savings', investments: 'Investments', income: 'Income' }[category] || 'Cash flow activity');
+}
+
+function renderCashflowActivityDetail(category) {
+  const data = spendingForSelectedMonth(state.spending);
+  const rows = (data.transactions || [])
+    .filter((transaction) => transaction.flowKey === category || transaction.flowGroup === category)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)) || Number(b.amount || 0) - Number(a.amount || 0));
+  const label = cashflowActivityLabel(data, category);
+  const panel = $('#spendingTransactionsPanel');
+  state.spendingCategory = category;
+  panel.open = true;
+  renderSpendingTransactions(data);
+  $('#cashflowDialogContent').innerHTML = `<section class="cashflow-activity-detail" aria-labelledby="cashflowActivityTitle"><button class="cashflow-activity-back" type="button" data-cashflow-back>‹ All categories</button><div class="card-label">CASH FLOW ACTIVITY</div><h2 id="cashflowActivityTitle">${escapeHtml(label)}</h2><p>${rows.length} posted transaction${rows.length === 1 ? '' : 's'} in this period.</p><div class="cashflow-activity-rows">${rows.length ? rows.map((transaction) => `<div><span><strong>${escapeHtml(transaction.name)}</strong><small>${new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</small></span><b class="${transaction.bucket === 'income' ? 'positive' : ''}">${transaction.bucket === 'income' ? '+' : ''}${fmt.format(Number(transaction.amount || 0))}</b></div>`).join('') : '<p class="spending-empty">No posted transactions in this category for this period.</p>'}</div></section>`;
+}
+
+function openCashflowCategoryActivity(category) {
+  const data = spendingForSelectedMonth(state.spending);
+  const transactionKeys = new Set((data.transactions || []).flatMap((transaction) => [transaction.flowKey, transaction.flowGroup]));
+  if (!transactionKeys.has(category)) return;
+  trackProductEvent('cash_flow_drilldown');
+  renderCashflowActivityDetail(category);
+}
+
 $('#cashflowExpand').addEventListener('click', openCashflowDialog);
 $('#cashflowDialogClose').addEventListener('click', () => $('#cashflowDialog').close());
 let cashflowResizeFrame;
@@ -2288,7 +2315,9 @@ function setCashflowFlowFocus(container, key = '') {
     path.classList.toggle('is-muted', hasFocus && !connected);
   });
   container.querySelectorAll('[data-cashflow-node]').forEach((node) => {
-    node.classList.toggle('is-selected', Boolean(key && node.dataset.cashflowNode === key));
+    const selected = Boolean(key && node.dataset.cashflowNode === key);
+    node.classList.toggle('is-selected', selected);
+    if (node.matches('button')) node.setAttribute('aria-pressed', String(selected));
   });
 }
 function selectedCashflowFlow(container) {
@@ -2322,15 +2351,20 @@ wireCashflowFlowFocus($('#cashflowDialogContent'));
 // The expanded dialog renders into a separate DOM node, so it needs the same
 // in-place flow selection as the inline Sankey.
 $('#cashflowDialogContent').addEventListener('click', (event) => {
+  if (event.target.closest('[data-cashflow-back]')) {
+    renderCashFlowSankey(spendingForSelectedMonth(state.spending), $('#cashflowDialogContent'), true);
+    return;
+  }
   const node = event.target.closest('[data-cashflow-node]');
-  if (node) toggleCashflowFlowSelection($('#cashflowDialogContent'), node.dataset.cashflowNode);
+  if (!node) return;
+  openCashflowCategoryActivity(node.dataset.cashflowNode);
 });
 $('#cashflowDialogContent').addEventListener('keydown', (event) => {
   if (!['Enter', ' '].includes(event.key)) return;
   const target = event.target.closest('[data-cashflow-node]');
   if (!target) return;
   event.preventDefault();
-  toggleCashflowFlowSelection($('#cashflowDialogContent'), target.dataset.cashflowNode);
+  openCashflowCategoryActivity(target.dataset.cashflowNode);
 });
 $('#cashflowPreTax').addEventListener('click', () => openSpendingCategory('payroll_retirement'));
 function donutSelection(event, element, rows) {

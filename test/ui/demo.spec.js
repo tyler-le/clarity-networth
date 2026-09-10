@@ -391,9 +391,15 @@ test('cash-flow diagram stays readable on mobile and expands in-app', async ({ p
   await page.locator('#cashflowExpand').click();
   await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
   await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
-  await page.locator('#cashflowDialogContent [data-cashflow-category]').first().click();
-  await expect(page.locator('#cashflowDialogContent .cashflow-flow.is-connected')).not.toHaveCount(0);
+  const category = page.locator('#cashflowDialogContent [data-cashflow-category]').first();
+  const categoryKey = await category.getAttribute('data-cashflow-category');
+  await category.click();
   await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
+  await expect(page.locator('#cashflowDialogContent .cashflow-activity-detail')).toBeVisible();
+  await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
+  await expect(page.locator('#spendingCategoryFilter')).toHaveValue(categoryKey || 'all');
+  await page.locator('#cashflowDialogContent [data-cashflow-back]').click();
+  await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
   await page.locator('#cashflowDialogClose').click();
 });
 
