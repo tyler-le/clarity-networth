@@ -7,19 +7,6 @@ const fmt2 = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD'
 const themeStorageKey = 'clarity-theme';
 const onboardingStorageKey = 'clarity-connection-onboarding-seen';
 
-function isDevelopmentEnvironment() {
-  return /(^localhost$)|(^127\.0\.0\.1$)|staging/i.test(location.hostname);
-}
-
-function applyEnvironmentIdentity() {
-  if (!isDevelopmentEnvironment()) return;
-  document.documentElement.dataset.environment = 'development';
-  document.title = 'Clarity DEV';
-  $$('.environment-badge').forEach((badge) => { badge.hidden = false; });
-}
-
-applyEnvironmentIdentity();
-
 const state = {
   dashboard: null,
   spending: null,

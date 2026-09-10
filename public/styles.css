@@ -250,7 +250,6 @@ html[data-theme="dark"] .fresh-feature-tour-grid { border-color: #395541; backgr
 
 /* The mark is a single clear financial path, ending in a highlighted present point. */
 .brand-mark { overflow: hidden; }.brand-mark svg { width: 19px; height: 19px; }
-.environment-badge { display: inline-flex; align-items: center; height: 19px; margin-left: 3px; padding: 0 6px; border: 1px solid #b9d4c0; border-radius: 999px; color: #176440; background: #e9f5ec; font-size: 9px; font-weight: 800; letter-spacing: .09em; line-height: 1; vertical-align: middle; }.brand-home .environment-badge { margin-left: 5px; }
 
 @media (max-width: 1000px) {
   .csp-grid { grid-template-columns: repeat(2, 1fr); }
@@ -705,7 +704,6 @@ html[data-theme="dark"] .primary:hover { background: #368456; }
 html[data-theme="dark"] .brand-mark { background: #2d744a; color: #f5f8f5; }
 html[data-theme="dark"] .profile-button { border-color: #3a463d; background: #202720; color: #b6c0b8; }
 html[data-theme="dark"] .profile-button:hover { border-color: #4c7357; background: #273128; color: #a7d9b4; }
-html[data-theme="dark"] .environment-badge { border-color: #3e6749; color: #a5d9b1; background: #203d28; }
 html[data-theme="dark"] .account-preview-group, html[data-theme="dark"] .account-group-head, html[data-theme="dark"] .transaction-toolbar { border-color: var(--line); background: #202720; }
 html[data-theme="dark"] .accounts-summary, html[data-theme="dark"] .account-collection { background: var(--card); }
 html[data-theme="dark"] .account-type, html[data-theme="dark"] .code-row code, html[data-theme="dark"] .tx-icon { background: #273029; color: #b6c0b8; }
