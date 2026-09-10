@@ -259,7 +259,9 @@ function applyOnboardingPreviewCopy() {
     retirementProjectionContext: 'Grounded in your balances and spending.',
     retirementAgeChip: 'Your timeline',
     retirementSpendContext: 'Targets reflect the life you want to fund.',
-    retirementAssumption: 'Your plan'
+    retirementAssumption: 'Your plan',
+    goalTitle: 'Build toward what matters',
+    goalDetail: 'Track a goal from your connected balances.'
   };
   Object.entries(copy).forEach(([id, text]) => {
     const element = $(`#${id}`);
