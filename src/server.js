@@ -119,6 +119,17 @@ function plaidCostLimiter({ scope, userLimit, ipLimit, windowMs }) {
   };
 }
 
+// Provider diagnostics belong in server logs, never in a browser response.
+// This prevents credentials, provider request details, and opaque error codes
+// from becoming part of a customer's connection experience.
+function publicPlaidError(error, fallback = 'We could not start a secure connection right now. Please try again shortly.') {
+  const code = String(error?.plaid?.error_code || '');
+  if (code === 'ITEM_LOGIN_REQUIRED') return 'Your institution needs you to sign in again to resume updates.';
+  if (code === 'INSTITUTION_NOT_RESPONDING') return 'Your institution is temporarily unavailable. Please try again later.';
+  if (code === 'PRODUCT_NOT_READY') return 'Your institution is still preparing this data. We’ll keep trying automatically.';
+  return fallback;
+}
+
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '1mb', verify: (req, _res, buffer) => { req.rawBody = Buffer.from(buffer); } }));
 app.use((_req, res, next) => {
@@ -1440,7 +1451,8 @@ app.post('/api/items/:id/create_reconnect_token', plaidCostLimiter({ scope: 'pla
     reconnectSessions.set(reconnectSession, { userKey: req.user.storageKey, itemId: item.id, expiresAt: Date.now() + 30 * 60_000 });
     res.json({ link_token: data.link_token, reconnect_session: reconnectSession });
   } catch (error) {
-    res.status(error.status || 500).json({ error: error.message });
+    console.warn('Plaid reconnect token failed:', error.message);
+    res.status(error.status || 500).json({ error: publicPlaidError(error) });
   }
 });
 
@@ -1486,7 +1498,8 @@ app.post('/api/plaid/create_link_token', plaidCostLimiter({ scope: 'plaid_link_t
     res.json({ link_token: data.link_token });
     trackLaunchEvent(req.user, 'account_link_started');
   } catch (error) {
-    res.status(error.status || 500).json({ error: error.message, plaid: error.plaid });
+    console.warn('Plaid link token failed:', error.message);
+    res.status(error.status || 500).json({ error: publicPlaidError(error) });
   }
 });
 
@@ -1531,7 +1544,8 @@ app.post('/api/plaid/exchange_public_token', plaidCostLimiter({ scope: 'plaid_it
     }
     trackLaunchEvent(req.user, 'account_link_completed');
   } catch (error) {
-    res.status(error.status || 500).json({ error: error.message, plaid: error.plaid });
+    console.warn('Plaid item exchange failed:', error.message);
+    res.status(error.status || 500).json({ error: publicPlaidError(error, 'We could not finish connecting this institution. Please try again shortly.') });
   }
 });
 
