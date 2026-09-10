@@ -72,6 +72,7 @@
       </section>
 
       <section id="overviewView" class="view active">
+        <section class="onboarding-preview-banner hidden" id="onboardingPreviewBanner"><div><strong>See what your connected financial picture can look like.</strong><span>These examples become your balances, activity, and progress after you connect.</span></div><button class="primary" type="button" data-connect-account>Connect an account</button></section>
         <section class="fresh-account-state hidden" id="freshOverviewState" aria-labelledby="freshOverviewTitle">
           <div class="fresh-account-copy"><div class="card-label">YOUR FINANCIAL HOME</div><h2 id="freshOverviewTitle">Your financial picture starts with one connection.</h2><p>Connect the account you use most. We’ll organize the balances, transactions, and progress that matter—without asking you to build a spreadsheet.</p><button class="primary" type="button" data-connect-account>Connect an account</button><small>Your credentials are handled by Plaid. Clarity never sees your bank password.</small></div>
           <div class="fresh-preview-panel fresh-overview-preview" aria-label="Illustrative net worth dashboard preview"><div class="fresh-preview-head"><span>NET WORTH</span><i></i><i></i></div><svg class="fresh-preview-line" viewBox="0 0 360 142" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="freshPreviewFill" x1="0" x2="0" y1="0" y2="1"><stop stop-color="currentColor" stop-opacity=".18"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs><path d="M3 125L46 113 82 117 115 87 150 96 186 70 220 79 252 50 285 62 320 25 357 12V142H3Z" fill="url(#freshPreviewFill)"/><path d="M3 125L46 113 82 117 115 87 150 96 186 70 220 79 252 50 285 62 320 25 357 12" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="fresh-preview-caption"><strong>Your progress, over time</strong><span>Balances today. Verified history tomorrow.</span></div></div>
@@ -158,29 +159,13 @@
       </section>
 
       <section id="profileView" class="view">
-        <div class="profile-shell">
-          <header class="profile-intro"><p>Manage your connections, preferences, and data.</p></header>
-          <section class="profile-group profile-connections-group" aria-labelledby="profileConnectionsHeading">
-            <div class="profile-group-head"><div><div class="card-label">CONNECTIONS</div><h3 id="profileConnectionsHeading">Accounts and institutions</h3><p id="connectionLifecycleSummary">Clarity updates connected accounts automatically.</p></div><button class="secondary profile-connect" id="profileConnectButton" data-connect-account>+ Connect account</button></div>
-            <details class="connections-panel" open>
-              <summary>Connected institutions</summary>
-              <div id="connectionsList"></div>
-            </details>
-          </section>
-          <section class="profile-group" aria-labelledby="profilePreferencesHeading">
-            <div class="profile-group-head compact"><div><div class="card-label">PREFERENCES</div><h3 id="profilePreferencesHeading">Appearance</h3></div></div>
-            <article class="card appearance-setting"><div><strong>Appearance</strong><p>A softer palette for low-light viewing.</p></div><label class="theme-toggle"><span>Dark mode</span><input id="themeToggle" type="checkbox" role="switch" aria-label="Use dark mode" /><i aria-hidden="true"></i></label></article>
-          </section>
-          <section class="profile-group" aria-labelledby="profileDemoHeading">
-            <article class="card demo-setting" id="demoSetting" data-demo-state="off"><div class="demo-setting-copy"><div class="card-label">DEMO SANDBOX</div><h3 id="profileDemoHeading">Explore safely</h3><p id="demoSettingDescription">Preview realistic sample data without changing your accounts or settings.</p><span class="demo-setting-status" id="demoSettingStatus" aria-live="polite">Demo is off</span></div><button class="secondary demo-toggle" id="demoToggle" aria-pressed="false">Explore demo</button></article>
-          </section>
-          <section class="profile-group" aria-labelledby="profileDataHeading">
-            <div class="profile-group-head compact"><div><div class="card-label">DATA &amp; PRIVACY</div><h3 id="profileDataHeading">Your information</h3></div></div>
-            <details class="data-controls"><summary>Download or remove your data</summary><div><p>Download a copy of your financial data or permanently remove this account.</p><button class="secondary" id="exportDataButton">Download my data</button><button class="text-button danger-button" id="deleteAccountButton">Delete account and data</button></div></details>
-          </section>
-          <article class="card beta-help"><div><div class="card-label">HELP &amp; FEEDBACK</div><strong>Need a hand?</strong><p>Clarity is in private beta. Share a question, issue, or idea directly with the team.</p></div><a class="secondary" href="/support">Get support</a></article>
-          <button class="text-button sign-out-button" id="signOutButton">Sign out</button>
-        </div>
+        <button class="primary profile-connect" data-connect-account>+ Connect account</button>
+        <details class="connections-panel" open><summary>Connected institutions</summary><div id="connectionsList"></div></details>
+        <article class="card appearance-setting"><div><div class="card-label">Appearance</div><p>A softer palette for low-light viewing.</p></div><label class="theme-toggle"><span>Dark mode</span><input id="themeToggle" type="checkbox" role="switch" aria-label="Use dark mode" /><i aria-hidden="true"></i></label></article>
+        <article class="card demo-setting"><div><div class="card-label">Demo mode</div><p>Preview sample data. Your accounts stay untouched.</p></div><button class="secondary demo-toggle" id="demoToggle" aria-pressed="false">Try demo</button></article>
+        <details class="data-controls"><summary>Data &amp; privacy</summary><div><p>Download a copy of your financial data or permanently remove this account.</p><button class="secondary" id="exportDataButton">Download my data</button><button class="text-button danger-button" id="deleteAccountButton">Delete account and data</button></div></details>
+        <article class="card beta-help"><div><div class="card-label">Help &amp; feedback</div><p>Clarity is in private beta. Share a question, issue, or idea directly with the team.</p></div><a class="secondary" href="/support">Get support</a></article>
+        <button class="text-button sign-out-button" id="signOutButton">Sign out</button>
       </section>
     </main>
 

@@ -49,7 +49,11 @@ const state = {
   debtPlanExpanded: false,
   view: 'overview',
   returnView: 'overview',
-  demoPreview: false
+  demoPreview: false,
+  // A signed-in member with no connections sees the real product composition
+  // populated by a clearly disclosed sample payload. Their actual dashboard
+  // remains empty so actions such as Link always operate on their own account.
+  onboardingPreview: null
 };
 
 const accountSectionOrder = ['Cash & savings', 'Investments', 'Debt', 'Other'];
@@ -236,7 +240,7 @@ function setView(view) {
 }
 
 function restoreNetWorthHero() {
-  const d = state.dashboard;
+  const d = state.onboardingPreview?.dashboard || state.dashboard;
   if (!d) return;
   const s = d.summary;
   const accounts = d.accounts || [];
@@ -383,7 +387,8 @@ function renderNetWorthChartWhenVisible(attempt = 0) {
   }
   restoreNetWorthHero();
   const rangeStart = netWorthRangeBounds(state.networthRange).startDate;
-  renderLineChart(visibleSnapshots(state.dashboard.snapshots || []), state.dashboard.summary, rangeStart);
+  const d = state.onboardingPreview?.dashboard || state.dashboard;
+  renderLineChart(visibleSnapshots(d.snapshots || []), d.summary, rangeStart);
 }
 
 function axisCurrency(value) {
@@ -691,41 +696,9 @@ function renderConnections(items) {
 }
 
 function renderProfileSettings(d) {
-  const publicPreview = state.demoPreview;
-  const demoActive = isDemoExperience();
-  const demoSetting = $('#demoSetting');
-  const demoStatus = $('#demoSettingStatus');
-  const demoDescription = $('#demoSettingDescription');
   const demoButton = $('#demoToggle');
-  demoSetting.dataset.demoState = demoActive ? 'active' : 'off';
-  demoButton.setAttribute('aria-pressed', String(demoActive));
-  if (publicPreview) {
-    demoStatus.textContent = 'Public demo · nothing is saved';
-    demoDescription.textContent = 'You are exploring sample data. Return to sign in whenever you are ready for your own financial picture.';
-    demoButton.textContent = 'Return to sign in';
-  } else if (d?.demoMode) {
-    demoStatus.textContent = 'Demo sandbox is on · your data is hidden';
-    demoDescription.textContent = 'Sample data is replacing your normal view for now. Your accounts, settings, and connections have not changed.';
-    demoButton.textContent = 'Exit demo & restore my data';
-  } else {
-    demoStatus.textContent = 'Demo is off';
-    demoDescription.textContent = 'Preview realistic sample data without changing your accounts or settings.';
-    demoButton.textContent = 'Explore demo';
-  }
-  $('#profileConnectButton').classList.toggle('hidden', demoActive);
-  $('#exportDataButton').disabled = demoActive;
-  $('#deleteAccountButton').disabled = demoActive;
-  $('#exportDataButton').title = demoActive ? 'Exit demo to download your personal data.' : '';
-  $('#deleteAccountButton').title = demoActive ? 'Exit demo to manage your account data.' : '';
-  $('#signOutButton').textContent = publicPreview ? 'Return to sign in' : 'Sign out';
-  const health = d?.connectionHealth || [];
-  const reconnects = health.filter((item) => item.action_required || item.requires_reconnect).length;
-  const delayed = health.filter((item) => item.retrying_automatically).length;
-  $('#connectionLifecycleSummary').textContent = demoActive ? 'Demo is a separate sample workspace; your real institutions are hidden.'
-    : reconnects ? `${reconnects} institution${reconnects === 1 ? '' : 's'} needs reconnection to resume updates.`
-      : delayed ? `${delayed} institution${delayed === 1 ? '' : 's'} is delayed and retrying automatically.`
-        : health.length ? `${health.length} institution${health.length === 1 ? '' : 's'} updating automatically.`
-          : 'Connect an institution to begin building your financial picture.';
+  demoButton.textContent = d?.demoMode ? 'Exit demo' : 'Try demo';
+  demoButton.setAttribute('aria-pressed', String(Boolean(d?.demoMode)));
 }
 
 const spendingColors = ['#1f6f4a', '#7ea98b', '#d5a75f', '#b88692', '#9ca9bd', '#c4c9c1'];
@@ -1088,7 +1061,7 @@ async function loadInvestmentRange(range) {
   const request = ++investmentRangeRequest;
   $$('[data-investment-range]').forEach((control) => { control.disabled = true; });
   try {
-    const base = state.demoPreview || state.dashboard?.demoMode ? '/api/demo-investments' : '/api/investments';
+    const base = state.demoPreview || state.onboardingPreview || state.dashboard?.demoMode ? '/api/demo-investments' : '/api/investments';
     const investments = await api(`${base}?range=${encodeURIComponent(range)}`);
     // A faster second selection wins; never paint an older range over it.
     if (request !== investmentRangeRequest || state.investmentRange !== range) return;
@@ -1459,7 +1432,7 @@ async function openHoldingHistory({ ticker = '', accountId = '' } = {}, { preser
   }
   renderHoldingHistoryDetail();
   try {
-    const base = state.demoPreview || state.dashboard?.demoMode ? '/api/demo-investments/history' : '/api/investments/history';
+    const base = state.demoPreview || state.onboardingPreview || state.dashboard?.demoMode ? '/api/demo-investments/history' : '/api/investments/history';
     const scope = accountId ? `account_id=${encodeURIComponent(accountId)}` : `ticker=${encodeURIComponent(ticker)}`;
     const query = `${scope}&range=${encodeURIComponent(state.holdingHistoryRange)}`;
     const response = await api(`${base}?${query}`);
@@ -1636,9 +1609,10 @@ function renderRetirement(data) {
 }
 
 function renderDashboard() {
-  const d = state.dashboard;
-  if (!d) return;
-  renderFreshAccountStates(d);
+  const actual = state.dashboard;
+  if (!actual) return;
+  const d = state.onboardingPreview?.dashboard || actual;
+  renderFreshAccountStates(actual);
   const s = d.summary;
   setInitialNetWorthRange(d.snapshots || []);
   if (state.view === 'overview') restoreNetWorthHero();
@@ -1646,20 +1620,22 @@ function renderDashboard() {
   if (state.view === 'overview') renderNetWorthChartWhenVisible();
   renderAccounts(d.accounts || []);
   renderDebtPayoff(d.debtPayoff);
-  renderConnections(d.items || []);
+  renderConnections(actual.items || []);
   renderClarityLayer(d);
-  renderProfileSettings(d);
+  renderProfileSettings(actual);
   $('#connectButton').classList.toggle('hidden', state.view === 'profile');
   $('#setupCard').classList.toggle('hidden', d.plaidConfigured || state.demoPreview);
   if (!d.plaidConfigured && !state.demoPreview) showNotice('Connect an account when you’re ready to see your own data.');
 }
 
-// A new member has no financial facts yet. Keep the product honest by
-// replacing data-dependent dashboards with a small, actionable starting point
-// instead of zeroes, empty charts, and controls that cannot do anything.
+// A new member has no financial facts yet. Preserve the product's real layout
+// and render its preview dataset in that layout, while keeping the person’s
+// actual empty dashboard separate for connection and privacy actions.
 function renderFreshAccountStates(data) {
   const isFresh = !state.demoPreview && !(data.accounts || []).length && !(data.items || []).length;
   document.documentElement.dataset.freshAccount = String(isFresh);
+  document.documentElement.dataset.onboardingPreview = String(isFresh);
+  $('#onboardingPreviewBanner').classList.toggle('hidden', !isFresh);
   const views = [
     ['overviewView', 'freshOverviewState'],
     ['spendingView', 'freshSpendingState'],
@@ -1670,10 +1646,8 @@ function renderFreshAccountStates(data) {
   views.forEach(([viewId, stateId]) => {
     const view = $(`#${viewId}`);
     const freshState = $(`#${stateId}`);
-    freshState.classList.toggle('hidden', !isFresh);
-    [...view.children].forEach((child) => {
-      if (child !== freshState) child.classList.toggle('fresh-account-hidden', isFresh);
-    });
+    freshState.classList.add('hidden');
+    [...view.children].forEach((child) => child.classList.remove('fresh-account-hidden'));
   });
 }
 
@@ -1689,6 +1663,7 @@ async function loadAll() {
   try {
     if (state.demoPreview) {
       const preview = await api(`/api/demo-preview?range=${state.spendingRange}`);
+      state.onboardingPreview = null;
       state.dashboard = preview.dashboard;
       state.spending = preview.spending;
       state.investments = preview.investments;
@@ -1702,14 +1677,17 @@ async function loadAll() {
     }
     const [dashboard, spending, investments, retirement] = await Promise.all([api('/api/dashboard'), api(`/api/spending?range=${state.spendingRange}`), api('/api/investments'), api('/api/retirement')]);
     state.dashboard = dashboard;
-    state.spending = spending;
-    state.investments = investments;
-    state.retirement = retirement;
+    const fresh = !(dashboard.accounts || []).length && !(dashboard.items || []).length;
+    const preview = fresh ? await api(`/api/demo-preview?range=${state.spendingRange}`) : null;
+    state.onboardingPreview = preview;
+    state.spending = preview?.spending || spending;
+    state.investments = preview?.investments || investments;
+    state.retirement = preview?.retirement || retirement;
     applyTheme(dashboard.appearance?.theme || 'light', false);
     renderDashboard();
-    renderSpending(spending);
-    renderInvestments(investments);
-    renderRetirement(retirement);
+    renderSpending(state.spending);
+    renderInvestments(state.investments);
+    renderRetirement(state.retirement);
     observeCoreCardViews();
     $('#monthLabel').textContent = 'Account overview';
   } finally {
@@ -1723,7 +1701,7 @@ async function loadAll() {
 }
 
 async function loadSpending() {
-  if (state.demoPreview) {
+  if (state.demoPreview || state.onboardingPreview) {
     const preview = await api(`/api/demo-preview?range=${state.spendingRange}`);
     return preview.spending;
   }
@@ -1821,6 +1799,7 @@ $('#demoToggle').addEventListener('click', async () => {
     // should never briefly leave balances or transactions visible below the
     // demo loading state.
     if (enteringDemo) {
+      state.onboardingPreview = null;
       state.dashboard = null;
       state.spending = null;
       state.investments = null;
@@ -1859,6 +1838,7 @@ $('#deleteAccountButton').addEventListener('click', async () => {
   button.disabled = true;
   try {
     await api('/api/account', { method: 'DELETE', body: JSON.stringify({ confirmation }) });
+    state.onboardingPreview = null;
     state.dashboard = null;
     $('#appShell').classList.add('hidden');
     $('#authScreen').classList.remove('hidden');
@@ -2660,6 +2640,7 @@ async function startDemoPreview() {
   button.disabled = true;
   button.textContent = 'Opening demo…';
   state.demoPreview = true;
+  state.onboardingPreview = null;
   state.demoGoal = null;
   state.demoGoalInitialized = false;
   state.spendingMonth = null;
@@ -2680,6 +2661,7 @@ async function startDemoPreview() {
     setView('overview');
   } catch (error) {
     state.demoPreview = false;
+    state.onboardingPreview = null;
     $('#appShell').classList.add('hidden');
     $('#authScreen').classList.remove('hidden');
     $('#authMessage').textContent = error.message;
@@ -2691,6 +2673,7 @@ async function startDemoPreview() {
 
 async function exitDemoPreview() {
   state.demoPreview = false;
+  state.onboardingPreview = null;
   state.demoGoal = null;
   state.demoGoalInitialized = false;
   state.dashboard = null;
@@ -2828,6 +2811,7 @@ $('#signOutButton').addEventListener('click', async () => {
   if (state.demoPreview) { await exitDemoPreview(); return; }
   await api('/api/auth/logout', { method: 'POST', body: '{}' });
   state.demoPreview = false;
+  state.onboardingPreview = null;
   state.dashboard = null;
   state.spending = null;
   state.investments = null;

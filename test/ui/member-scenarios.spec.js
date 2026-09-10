@@ -51,13 +51,13 @@ test('a newly signed-in member with no accounts gets a calm, truthful start', as
     preview.investments = { ...preview.investments, total: 0, accounts: [], positions: [], allocation: [], snapshots: [], positionsAvailable: false, unclassifiedAccounts: [] };
   });
 
-  await expect(page.locator('#freshOverviewState')).toBeVisible();
-  await expect(page.locator('#freshOverviewState')).toContainText('Connect an account');
-  await expect(page.locator('#netWorthCard')).toBeHidden();
-  await expect(page.locator('#debtPayoffCard')).toBeHidden();
+  await expect(page.locator('#onboardingPreviewBanner')).toBeVisible();
+  await expect(page.locator('#onboardingPreviewBanner')).toContainText('Connect an account');
+  await expect(page.locator('#netWorthCard')).toBeVisible();
+  await expect(page.locator('#debtPayoffCard')).toBeVisible();
   await goToView(page, 'spending');
-  await expect(page.locator('#freshSpendingState')).toBeVisible();
-  await expect(page.locator('#cashFlowOverviewCard')).toBeHidden();
+  await expect(page.locator('#freshSpendingState')).toBeHidden();
+  await expect(page.locator('#cashFlowOverviewCard')).toBeVisible();
   await goToView(page, 'profile');
   await expect(page.locator('#connectionsList')).toContainText('No connected institutions.');
 });
