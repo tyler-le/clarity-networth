@@ -236,7 +236,37 @@ function setView(view) {
   }
   if (view === 'investments' && state.investments) requestAnimationFrame(() => renderInvestments(state.investments));
   if (view === 'retirement' && state.retirement) requestAnimationFrame(() => renderRetirement(state.retirement));
+  if (state.onboardingPreview) requestAnimationFrame(applyOnboardingPreviewCopy);
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function applyOnboardingPreviewCopy() {
+  if (!state.onboardingPreview) return;
+  const copy = {
+    netWorth: 'Your net worth',
+    netWorthDelta: 'Built from connected balances',
+    netWorthMovementTitle: 'Understand what changed',
+    netWorthMovementDetail: 'See balance and debt movement over time.',
+    investmentTotal: 'Your portfolio',
+    investmentContext: 'Value, holdings, and performance in one view.',
+    spendingTotal: 'Your monthly cash flow',
+    cashflowHeadline: 'Income, spending, and saving in one view',
+    spendingContext: 'Track what comes in, what goes out, and what is left.',
+    spendingPeriodSummary: 'Your activity over time',
+    monthlyCashFlowPeriod: 'Your monthly pattern',
+    trendDetail: 'Compare income and spending by month.',
+    retirementProjection: 'Your retirement outlook',
+    retirementProjectionContext: 'Grounded in your balances and spending.',
+    retirementAgeChip: 'Your timeline',
+    retirementSpendContext: 'Targets reflect the life you want to fund.',
+    retirementAssumption: 'Your plan'
+  };
+  Object.entries(copy).forEach(([id, text]) => {
+    const element = $(`#${id}`);
+    if (!element) return;
+    element.textContent = text;
+    element.classList.add('preview-copy');
+  });
 }
 
 function restoreNetWorthHero() {
@@ -1640,6 +1670,8 @@ function renderFreshAccountStates(data) {
   $('#onboardingPreviewBanner').classList.toggle('hidden', !isFresh);
   $$('.onboarding-tab-cta').forEach((cta) => cta.classList.toggle('hidden', !isFresh));
   if (isFresh) $('#notice').classList.add('hidden');
+  if (isFresh) requestAnimationFrame(applyOnboardingPreviewCopy);
+  else $$('.preview-copy').forEach((element) => element.classList.remove('preview-copy'));
   const views = [
     ['overviewView', 'freshOverviewState'],
     ['spendingView', 'freshSpendingState'],
