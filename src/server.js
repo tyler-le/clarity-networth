@@ -352,6 +352,9 @@ function publicItem(item) {
     institution_logo: item.institution_logo || null,
     created_at: item.created_at,
     last_synced_at: item.last_synced_at,
+    last_verified_update_at: item.last_verified_update_at || null,
+    last_sync_attempt_at: item.last_sync_attempt_at || null,
+    requires_reconnect: Boolean(item.requires_reconnect),
     demo: item.demo || false
   };
 }
@@ -468,32 +471,49 @@ function queueUserSync(storageKey, task) {
   });
 }
 
+function markItemSyncFailure(item, error) {
+  item.last_sync_error_at = new Date().toISOString();
+  item.last_sync_error_code = String(error?.plaid?.error_code || '');
+  item.requires_reconnect = item.last_sync_error_code === 'ITEM_LOGIN_REQUIRED';
+  item.sync_failure_count = Number(item.sync_failure_count || 0) + 1;
+}
+
 async function syncItem(store, item) {
-  await hydrateInstitutionBrand(item);
-  await refreshAccountsForItem(store, item);
-  // Transaction availability can lag a connection or institution update.
-  // Keep a successful balance refresh instead of failing the entire item.
-  try { await syncTransactionsForItem(store, item); } catch (error) { console.warn('Transactions sync failed:', error.message); }
-  // Investments was historically consented in Link, then added on demand. Ask
-  // Plaid to prepare the initial extraction asynchronously once, rather than
-  // blocking a newly connected account for up to two minutes or silently
-  // settling for a connection-day balance. A HISTORICAL_UPDATE webhook will
-  // re-enter this sync once the provider has finished preparing its records.
-  const hasInvestmentAccount = store.accounts.some((account) => account.item_id === item.id && account.type === 'investment');
+  item.last_sync_attempt_at = new Date().toISOString();
   try {
-    await syncRetirementContributionsForItem(store, item, {
-      asyncUpdate: hasInvestmentAccount && !item.investment_history_requested_at
-    });
-  } catch (error) { console.warn('Investment contribution sync unavailable:', error.message); }
-  if (hasInvestmentAccount) {
-    try { await hydrateInvestmentPriceHistory(store, item); }
-    catch (error) { console.warn('Investment price history unavailable:', error.message); }
+    await hydrateInstitutionBrand(item);
+    await refreshAccountsForItem(store, item);
+    // A successful accounts response is the verified point-in-time update
+    // behind balances, holdings, and connection recency. It is intentionally
+    // recorded before optional transactions/price enrichment below.
+    item.last_verified_update_at = new Date().toISOString();
+    // Transaction availability can lag a connection or institution update.
+    // Keep a successful balance refresh instead of failing the entire item.
+    try { await syncTransactionsForItem(store, item); } catch (error) { console.warn('Transactions sync failed:', error.message); }
+    // Investments was historically consented in Link, then added on demand. Ask
+    // Plaid to prepare the initial extraction asynchronously once, rather than
+    // blocking a newly connected account for up to two minutes or silently
+    // settling for a connection-day balance. A HISTORICAL_UPDATE webhook will
+    // re-enter this sync once the provider has finished preparing its records.
+    const hasInvestmentAccount = store.accounts.some((account) => account.item_id === item.id && account.type === 'investment');
+    try {
+      await syncRetirementContributionsForItem(store, item, {
+        asyncUpdate: hasInvestmentAccount && !item.investment_history_requested_at
+      });
+    } catch (error) { console.warn('Investment contribution sync unavailable:', error.message); }
+    if (hasInvestmentAccount) {
+      try { await hydrateInvestmentPriceHistory(store, item); }
+      catch (error) { console.warn('Investment price history unavailable:', error.message); }
+    }
+    item.last_synced_at = new Date().toISOString();
+    delete item.last_sync_error_at;
+    delete item.last_sync_error_code;
+    delete item.requires_reconnect;
+    delete item.sync_failure_count;
+  } catch (error) {
+    markItemSyncFailure(item, error);
+    throw error;
   }
-  item.last_synced_at = new Date().toISOString();
-  delete item.last_sync_error_at;
-  delete item.last_sync_error_code;
-  delete item.requires_reconnect;
-  delete item.sync_failure_count;
 }
 
 async function syncStoreItems(store) {
@@ -504,10 +524,6 @@ async function syncStoreItems(store) {
       results.push({ item: item.institution_name, ok: true });
     } catch (error) {
       console.warn(`Account refresh failed for ${item.institution_name}:`, error.message);
-      item.last_sync_error_at = new Date().toISOString();
-      item.last_sync_error_code = String(error.plaid?.error_code || '');
-      item.requires_reconnect = item.last_sync_error_code === 'ITEM_LOGIN_REQUIRED';
-      item.sync_failure_count = Number(item.sync_failure_count || 0) + 1;
       results.push({ item: item.institution_name, ok: false });
     }
   }

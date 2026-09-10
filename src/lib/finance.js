@@ -848,19 +848,40 @@ export function connectionHealth(store, now = new Date()) {
       .map((account) => new Date(account.updated_at).getTime())
       .filter(Number.isFinite);
     const inferredAt = accountUpdates.length ? Math.max(...accountUpdates) : 0;
+    const verifiedAt = item.last_verified_update_at ? new Date(item.last_verified_update_at).getTime() : 0;
     const explicitAt = item.last_synced_at ? new Date(item.last_synced_at).getTime() : 0;
-    const syncedAt = Number.isFinite(explicitAt) && explicitAt > 0 ? explicitAt : inferredAt;
+    // `last_verified_update_at` is written only after /accounts/get succeeds.
+    // Older stores do not have it, so a completed sync (then a provider
+    // account timestamp) are honest compatibility fallbacks.
+    const syncedAt = Number.isFinite(verifiedAt) && verifiedAt > 0 ? verifiedAt
+      : Number.isFinite(explicitAt) && explicitAt > 0 ? explicitAt : inferredAt;
     const failureCount = Number(item.sync_failure_count || (item.last_sync_error_at ? 1 : 0));
     // Escalate only after three consecutive full-refresh failures. A single
     // failed daily attempt is retried automatically and should stay quiet.
     const state = item.requires_reconnect || failureCount >= 3 ? 'attention' : syncedAt < staleCutoff ? 'stale' : 'healthy';
+    const updateSource = Number.isFinite(verifiedAt) && verifiedAt > 0 ? 'provider_accounts'
+      : Number.isFinite(explicitAt) && explicitAt > 0 ? 'successful_sync'
+        : inferredAt ? 'legacy_account_record' : 'unavailable';
+    const lastVerified = syncedAt ? new Date(syncedAt).toISOString() : null;
+    const lastAttempt = item.last_sync_attempt_at && Number.isFinite(new Date(item.last_sync_attempt_at).getTime())
+      ? new Date(item.last_sync_attempt_at).toISOString() : null;
+    const action = item.requires_reconnect ? 'reconnect' : state === 'stale' || state === 'attention' ? 'automatic_retry' : 'none';
     return {
       id: item.id,
       institution_name: item.institution_name,
-      last_synced_at: item.last_synced_at || (syncedAt ? new Date(syncedAt).toISOString() : null),
+      // Preserve the original field while exposing a clearer data-recency
+      // contract for every UI surface. No provider error codes are exposed.
+      last_synced_at: item.last_synced_at || lastVerified,
+      last_verified_update_at: lastVerified,
+      last_sync_attempt_at: lastAttempt,
+      update_source: updateSource,
+      has_verified_update: Boolean(lastVerified),
       failure_count: failureCount,
       requires_reconnect: Boolean(item.requires_reconnect),
-      state
+      state,
+      action,
+      action_required: action === 'reconnect',
+      retrying_automatically: action === 'automatic_retry'
     };
   });
 }

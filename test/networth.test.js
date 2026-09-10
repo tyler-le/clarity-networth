@@ -785,6 +785,12 @@ test('connection health stays quiet through transient delays and failures', () =
   assert.deepEqual(health.map((item) => item.state), ['healthy', 'healthy', 'stale', 'healthy', 'attention', 'attention', 'healthy']);
   assert.equal(health[5].requires_reconnect, true);
   assert.equal(health[6].last_synced_at, '2026-09-06T11:30:00.000Z');
+  assert.equal(health[0].last_verified_update_at, '2026-09-05T10:00:00.000Z');
+  assert.equal(health[0].update_source, 'successful_sync');
+  assert.equal(health[4].action, 'automatic_retry');
+  assert.equal(health[5].action, 'reconnect');
+  assert.equal(health[5].action_required, true);
+  assert.equal(health[6].update_source, 'legacy_account_record');
 });
 
 test('retirement presets calculate coast, lean, standard, fat, and a projected retirement value', () => {
