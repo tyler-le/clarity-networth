@@ -226,7 +226,7 @@ dialog::backdrop { background: rgba(10,15,10,.28); backdrop-filter: blur(3px); }
    or a populated personal account. Preserve the actual information design,
    mute only individual financial facts, and leave feature headings legible. */
 html[data-onboarding-preview="true"] .view:not(#profileView) > :not(#onboardingPreviewBanner):not(.onboarding-tab-cta) { pointer-events: none; user-select: none; }
-html[data-onboarding-preview="true"] .view:not(#profileView) :is(.hero-number, .delta, .portfolio-total, .spending-total, .retirement-total, .retirement-spend-number, .overview-glance-values strong, #accountsSummary strong, .account-section-total strong, .account-section-head p, .account-row-balance, .account-balance, .investment-account-row strong, .investment-account-row span, .investment-account-value b, .investment-account-value small, .position-value b, .position-value small, .investment-allocation-row strong, .investment-allocation-row small, .allocation-row strong, .account-name, .account-inst, .position-row strong, .position-row span, .position-symbol, .retirement-milestone strong, .retirement-milestone-detail, .retirement-milestone em, .retirement-lifestyle strong, .retirement-lifestyle small, .retirement-value) { color: transparent !important; background: linear-gradient(100deg, #dbe5dc, #edf2ed); border-radius: 5px; text-shadow: none; }
+html[data-onboarding-preview="true"] .view:not(#profileView) :is(.hero-number, .delta, .portfolio-total, .spending-total, .retirement-total, .retirement-spend-number, .overview-glance-values strong, #accountsSummary strong, .account-collection-total strong, .account-collection-head p, .account-inline-balance, .account-balance, .investment-account-row strong, .investment-account-row span, .investment-account-value b, .investment-account-value small, .position-value b, .position-value small, .investment-allocation-row strong, .investment-allocation-row small, .allocation-row strong, .account-name, .account-inst, .position-row strong, .position-row span, .position-symbol, .retirement-milestone strong, .retirement-milestone-detail, .retirement-milestone em, .retirement-lifestyle strong, .retirement-lifestyle small, .retirement-value) { color: transparent !important; background: linear-gradient(100deg, #dbe5dc, #edf2ed); border-radius: 5px; text-shadow: none; }
 html[data-onboarding-preview="true"] .view:not(#profileView) .preview-copy { color: var(--muted) !important; background: transparent !important; text-shadow: none; }
 html[data-onboarding-preview="true"] .view:not(#profileView) :is(.hero-number, .portfolio-total, .spending-total, .retirement-total).preview-copy { color: var(--ink) !important; font-size: clamp(24px, 3vw, 36px); letter-spacing: -.04em; }
 html[data-onboarding-preview="true"] :is(#balanceSheetCard p, #goalAction, #clarityCheckinAction) { visibility: hidden; }
@@ -342,28 +342,27 @@ html[data-theme="dark"] .fresh-feature-tour-grid { border-color: #395541; backgr
 .target-item { display: grid; justify-items: center; gap: 2px; padding: 5px 2px; color: var(--muted); font-size: 10px; text-align: center; }
 .target-item strong { color: var(--ink); font-size: 14px; }
 
-.account-groups { display: grid; }
-.account-section { padding: 22px 0 0; }
-.account-section + .account-section { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--line); }
-.account-section-head { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 14px 16px; border: 1px solid #dfe9e1; border-radius: 15px; background: linear-gradient(100deg, #f4f9f5, #fbfdfb); }
-.account-section-icon { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 10px; color: var(--accent); background: var(--accent-soft); font-size: 16px; font-weight: 800; }
-.account-section-icon svg { width: 19px; height: 19px; }
-.account-section.debt .account-section-head { border-color: #f0dfdf; background: linear-gradient(100deg, #fcf6f6, #fffafa); }.account-section.debt .account-section-icon { color: var(--danger); background: #f8eeee; }
-.account-section-head h2 { margin: 0; font-size: 17px; }
-.account-section-head p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
-.account-section-total { display: grid; justify-items: end; gap: 2px; font-variant-numeric: tabular-nums; }.account-section-total span { color: var(--muted); font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; }.account-section-total strong { font-size: 15px; }
-.account-section-items { display: grid; margin: 4px 16px 0; }
-.account-section-more { width: calc(100% - 32px); margin: 0 16px; border: 0; border-top: 1px solid var(--line); padding: 12px 2px 2px; color: var(--accent); background: transparent; text-align: left; font-size: 12px; font-weight: 700; }.account-section-more:hover { color: #185b39; }
-.account-item { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto 29px; align-items: center; gap: 11px; padding: 15px 2px 15px 11px; }
+.account-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.account-collection { overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: white; box-shadow: var(--shadow); }
+.account-collection-head { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 15px 14px 12px; list-style: none; }
+.account-collection-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 10px; background: var(--accent-soft); color: var(--accent); font-weight: 800; }
+.account-collection-icon svg { width: 19px; height: 19px; }
+.account-collection.debt .account-collection-icon { background: #f8eeee; color: var(--danger); }
+.account-collection-head h2 { margin: 0; font-size: 17px; }
+.account-collection-head p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+.account-collection-total { display: grid; justify-items: end; gap: 2px; padding-right: 16px; font-variant-numeric: tabular-nums; }.account-collection-total span { color: var(--muted); font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; }.account-collection-total strong { font-size: 14px; }
+.account-collection-items { display: grid; }
+.account-group-more { width: 100%; border: 0; border-top: 1px solid var(--line); padding: 11px 14px; background: #fbfcfa; color: var(--accent); text-align: left; font-size: 12px; font-weight: 700; }.account-group-more:hover { background: var(--accent-soft); }
+.account-item { display: flex; align-items: flex-start; gap: 11px; padding: 15px 16px; }
 .account-item + .account-item { border-top: 1px solid var(--line); }
 .institution-logo, .institution-fallback { display: grid; flex: 0 0 auto; width: 32px; height: 32px; place-items: center; border: 1px solid var(--line); border-radius: 9px; background: white; object-fit: contain; overflow: hidden; }
 .institution-logo { padding: 3px; }
 .institution-fallback { color: #68726a; background: #f7f9f6; }
 .institution-fallback svg { width: 18px; height: 18px; }
-.account-copy { min-width: 0; }
+.account-copy { min-width: 0; flex: 1; }
 .account-item .account-name { font-size: 14px; font-weight: 690; }
 .account-item .account-inst { margin-top: 2px; font-size: 11px; }
-.account-row-balance { justify-self: end; white-space: nowrap; font-size: 15px; font-weight: 740; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.account-inline-balance { margin-top: 8px; font-size: 17px; font-weight: 740; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
 .account-rename { align-self: center; width: 29px; height: 29px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); font-size: 16px; opacity: .58; }.account-item:hover .account-rename, .account-rename:focus-visible { opacity: 1; }.account-rename:hover { border-color: var(--line); background: #f7f9f6; color: var(--accent); }
 .nickname-dialog { width: min(390px, calc(100vw - 36px)); padding: 0; border: 1px solid var(--line); border-radius: 20px; color: var(--ink); background: white; box-shadow: 0 24px 70px rgba(22,34,24,.22); }.nickname-dialog::backdrop { background: rgba(18,27,20,.34); backdrop-filter: blur(3px); }.nickname-dialog form { position: relative; padding: 25px; }.nickname-dialog h2 { margin: 5px 0 7px; font-size: 24px; letter-spacing: -.04em; }.nickname-dialog p { margin: 0 0 19px; color: var(--muted); font-size: 13px; line-height: 1.5; }.nickname-dialog input { width: 100%; border: 1px solid var(--line); border-radius: 11px; padding: 12px; outline: none; color: var(--ink); background: #fbfcfa; }.nickname-dialog input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }.dialog-close { position: absolute; top: 15px; right: 16px; width: 28px; height: 28px; border: 0; border-radius: 8px; color: var(--muted); background: transparent; font-size: 22px; line-height: 1; }.dialog-close:hover { background: #f2f4f0; }.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }.dialog-actions button { border: 0; padding: 9px 12px; border-radius: 10px; font-weight: 700; }.dialog-actions .secondary { border: 1px solid var(--line); }
 .goal-remove-dialog form { padding: 25px; }.goal-remove-mark { display: grid; width: 36px; height: 36px; margin-bottom: 15px; place-items: center; border-radius: 12px; color: #a84848; background: #faeeee; font-size: 24px; font-weight: 650; line-height: 1; }.goal-remove-dialog h2 { margin-top: 6px; }.goal-remove-dialog p { max-width: 285px; }.danger-button { color: white; background: #af4747; }.danger-button:hover { background: #973b3b; }.danger-button:focus-visible { outline: 3px solid rgba(175,71,71,.28); outline-offset: 3px; }
@@ -632,10 +631,6 @@ html[data-theme="dark"] .holding-detail, html[data-theme="dark"] .holding-accoun
 html[data-theme="dark"] .holding-account, html[data-theme="dark"] .holding-account-list { background: #1c231e; }
 html[data-theme="dark"] .investment-donut::before, html[data-theme="dark"] .spending-donut::before { background: var(--card); }
 html[data-theme="dark"] .account-collection, html[data-theme="dark"] .accounts-summary { background: var(--card); }
-html[data-theme="dark"] .account-section.debt .account-section-icon { background: #352729; }
-html[data-theme="dark"] .account-section.asset .account-section-head { border-color: #344438; background: linear-gradient(100deg, #202b22, #1b231d); }
-html[data-theme="dark"] .account-section.debt .account-section-head { border-color: #49383a; background: linear-gradient(100deg, #2b2021, #251b1c); }
-html[data-theme="dark"] .account-section-more:hover { color: #8fc9a1; }
 html[data-theme="dark"] .debt-payoff-card { border-color: var(--line); background: var(--card); }
 html[data-theme="dark"] .debt-plan-summary:hover { background: rgba(255,255,255,.025); }
 html[data-theme="dark"] .debt-plan-mark { background: #252d28; color: #aeb8af; }

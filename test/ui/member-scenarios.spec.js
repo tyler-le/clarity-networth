@@ -96,10 +96,10 @@ test('a cash-first member sees what they have without being pushed into debt or 
   await goToView(page, 'accounts');
   await expect(page.locator('#accountGrid')).toContainText('Cash & savings');
   await expect(page.locator('#debtPayoffCard')).toBeHidden();
-  await expect(page.locator('#accountGrid .account-section')).toHaveCount(1);
+  await expect(page.locator('#accountGrid .account-collection')).toHaveCount(2);
 });
 
-test('accounts groups cash, investments, and debt without repeating collection cards', async ({ page }) => {
+test('accounts retain the established collection layout for each account type', async ({ page }) => {
   await openSignedInScenario(page, (preview) => {
     const [first, second, third] = preview.dashboard.accounts;
     const cash = { ...first, id: 'cash', type: 'depository', subtype: 'checking', name: 'Daily cash' };
@@ -112,27 +112,22 @@ test('accounts groups cash, investments, and debt without repeating collection c
   });
 
   await goToView(page, 'accounts');
-  const sections = page.locator('#accountGrid .account-section');
-  await expect(sections).toHaveCount(3);
-  await expect(sections.locator('h2')).toHaveText(['Cash & savings', 'Investments', 'Debt']);
-  await expect(page.locator('#accountGrid .account-collection')).toHaveCount(0);
-  const sectionRules = await sections.evaluateAll((items) => items.slice(1).every((item) => getComputedStyle(item).borderTopWidth === '1px'));
-  expect(sectionRules).toBe(true);
-  const hierarchyIsVisible = await sections.evaluateAll((items) => items.every((section) => {
-    const head = section.querySelector('.account-section-head');
-    const firstRow = section.querySelector('.account-item');
-    if (!head || !firstRow) return false;
-    const headBox = head.getBoundingClientRect();
-    const rowBox = firstRow.getBoundingClientRect();
-    return getComputedStyle(head).backgroundImage !== 'none' && rowBox.left > headBox.left;
+  const collections = page.locator('#accountGrid .account-collection');
+  await expect(collections).toHaveCount(5);
+  await expect(collections.locator('h2')).toHaveText(['Cash', 'Savings', 'Investments', 'Credit cards', 'Loans & debt']);
+  await expect(page.locator('#accountGrid .account-section')).toHaveCount(0);
+  const collectionLayout = await collections.evaluateAll((items) => items.every((collection) => {
+    const head = collection.querySelector('.account-collection-head');
+    const rows = collection.querySelectorAll('.account-item');
+    return Boolean(head && rows.length && getComputedStyle(collection).borderTopWidth === '1px');
   }));
-  expect(hierarchyIsVisible).toBe(true);
+  expect(collectionLayout).toBe(true);
 
-  const debtMore = page.locator('[data-account-group="Debt"]');
+  const debtMore = page.locator('[data-account-group="Credit cards"]');
   await expect(debtMore).toHaveText(/view 1 more/i);
   await debtMore.click();
   await expect(debtMore).toHaveText(/show less/i);
-  await expect(sections.nth(2).locator('.account-item')).toHaveCount(3);
+  await expect(collections.nth(3).locator('.account-item')).toHaveCount(3);
 });
 
 test('historical charts use only observed snapshots @critical', async ({ page }) => {
