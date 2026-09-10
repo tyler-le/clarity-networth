@@ -77,6 +77,9 @@ test('a newly signed-in member with no accounts gets a calm, truthful product pr
   await expect(page.locator('#profileName')).toHaveText('Scenario member');
   await expect(page.locator('#profileEmail')).toHaveText('scenario@example.test');
   await expect(page.locator('.profile-settings-panel')).toBeVisible();
+  await expect(page.locator('#signOutButton')).toBeVisible();
+  const signOutIsLastProfileAction = await page.locator('#signOutButton').evaluate((button) => button.closest('.profile-settings-panel')?.lastElementChild?.contains(button));
+  expect(signOutIsLastProfileAction).toBe(true);
   await expect(page.locator('#connectionsList')).toContainText('No connected institutions.');
 });
 
