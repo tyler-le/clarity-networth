@@ -1625,7 +1625,6 @@ function renderDashboard() {
   renderClarityLayer(d);
   renderProfileSettings(actual);
   $('#connectButton').classList.toggle('hidden', state.view === 'profile');
-  $('#setupCard').classList.toggle('hidden', d.plaidConfigured || state.demoPreview);
   // First-run has its own composed preview and CTA. A generic warning toast
   // makes that deliberate state look like an error or failed load.
   if (!d.plaidConfigured && !state.demoPreview && !state.onboardingPreview) showNotice('Connect an account when you’re ready to see your own data.');
