@@ -118,6 +118,15 @@ test('accounts groups cash, investments, and debt without repeating collection c
   await expect(page.locator('#accountGrid .account-collection')).toHaveCount(0);
   const sectionRules = await sections.evaluateAll((items) => items.slice(1).every((item) => getComputedStyle(item).borderTopWidth === '1px'));
   expect(sectionRules).toBe(true);
+  const hierarchyIsVisible = await sections.evaluateAll((items) => items.every((section) => {
+    const head = section.querySelector('.account-section-head');
+    const firstRow = section.querySelector('.account-item');
+    if (!head || !firstRow) return false;
+    const headBox = head.getBoundingClientRect();
+    const rowBox = firstRow.getBoundingClientRect();
+    return getComputedStyle(head).backgroundImage !== 'none' && rowBox.left > headBox.left;
+  }));
+  expect(hierarchyIsVisible).toBe(true);
 
   const debtMore = page.locator('[data-account-group="Debt"]');
   await expect(debtMore).toHaveText(/view 1 more/i);

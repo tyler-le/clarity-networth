@@ -345,16 +345,16 @@ html[data-theme="dark"] .fresh-feature-tour-grid { border-color: #395541; backgr
 .account-groups { display: grid; }
 .account-section { padding: 22px 0 0; }
 .account-section + .account-section { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--line); }
-.account-section-head { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 0 2px 10px; }
+.account-section-head { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 14px 16px; border: 1px solid #dfe9e1; border-radius: 15px; background: linear-gradient(100deg, #f4f9f5, #fbfdfb); }
 .account-section-icon { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 10px; color: var(--accent); background: var(--accent-soft); font-size: 16px; font-weight: 800; }
 .account-section-icon svg { width: 19px; height: 19px; }
-.account-section.debt .account-section-icon { color: var(--danger); background: #f8eeee; }
+.account-section.debt .account-section-head { border-color: #f0dfdf; background: linear-gradient(100deg, #fcf6f6, #fffafa); }.account-section.debt .account-section-icon { color: var(--danger); background: #f8eeee; }
 .account-section-head h2 { margin: 0; font-size: 17px; }
 .account-section-head p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
 .account-section-total { display: grid; justify-items: end; gap: 2px; font-variant-numeric: tabular-nums; }.account-section-total span { color: var(--muted); font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; }.account-section-total strong { font-size: 15px; }
-.account-section-items { display: grid; }
-.account-section-more { width: 100%; border: 0; border-top: 1px solid var(--line); padding: 12px 2px 2px; color: var(--accent); background: transparent; text-align: left; font-size: 12px; font-weight: 700; }.account-section-more:hover { color: #185b39; }
-.account-item { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto 29px; align-items: center; gap: 11px; padding: 14px 2px; }
+.account-section-items { display: grid; margin: 4px 16px 0; }
+.account-section-more { width: calc(100% - 32px); margin: 0 16px; border: 0; border-top: 1px solid var(--line); padding: 12px 2px 2px; color: var(--accent); background: transparent; text-align: left; font-size: 12px; font-weight: 700; }.account-section-more:hover { color: #185b39; }
+.account-item { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto 29px; align-items: center; gap: 11px; padding: 15px 2px 15px 11px; }
 .account-item + .account-item { border-top: 1px solid var(--line); }
 .institution-logo, .institution-fallback { display: grid; flex: 0 0 auto; width: 32px; height: 32px; place-items: center; border: 1px solid var(--line); border-radius: 9px; background: white; object-fit: contain; overflow: hidden; }
 .institution-logo { padding: 3px; }
@@ -633,6 +633,8 @@ html[data-theme="dark"] .holding-account, html[data-theme="dark"] .holding-accou
 html[data-theme="dark"] .investment-donut::before, html[data-theme="dark"] .spending-donut::before { background: var(--card); }
 html[data-theme="dark"] .account-collection, html[data-theme="dark"] .accounts-summary { background: var(--card); }
 html[data-theme="dark"] .account-section.debt .account-section-icon { background: #352729; }
+html[data-theme="dark"] .account-section.asset .account-section-head { border-color: #344438; background: linear-gradient(100deg, #202b22, #1b231d); }
+html[data-theme="dark"] .account-section.debt .account-section-head { border-color: #49383a; background: linear-gradient(100deg, #2b2021, #251b1c); }
 html[data-theme="dark"] .account-section-more:hover { color: #8fc9a1; }
 html[data-theme="dark"] .debt-payoff-card { border-color: var(--line); background: var(--card); }
 html[data-theme="dark"] .debt-plan-summary:hover { background: rgba(255,255,255,.025); }
