@@ -39,7 +39,7 @@ async function openSignedInScenario(page, transform = () => {}) {
   await expect(page.locator('#appShell')).toHaveAttribute('aria-busy', 'false');
 }
 
-test('a newly signed-in member with no accounts gets a calm, truthful start', async ({ page }) => {
+test('a newly signed-in member with no accounts gets a calm, truthful product preview', async ({ page }) => {
   await openSignedInScenario(page, (preview) => {
     preview.dashboard.accounts = [];
     preview.dashboard.items = [];
@@ -53,11 +53,25 @@ test('a newly signed-in member with no accounts gets a calm, truthful start', as
 
   await expect(page.locator('#onboardingPreviewBanner')).toBeVisible();
   await expect(page.locator('#onboardingPreviewBanner')).toContainText('Connect an account');
+  await expect(page.locator('#connectButton')).toBeHidden();
   await expect(page.locator('#netWorthCard')).toBeVisible();
   await expect(page.locator('#debtPayoffCard')).toBeVisible();
+  await expect(page.locator('#netWorth')).toHaveText('Your net worth');
+  await expect(page.locator('#netWorthMovementTitle')).toHaveText('Understand what changed');
   await goToView(page, 'spending');
   await expect(page.locator('#freshSpendingState')).toBeHidden();
   await expect(page.locator('#cashFlowOverviewCard')).toBeVisible();
+  await expect(page.locator('#spendingView .onboarding-tab-cta')).toBeVisible();
+  await expect(page.locator('#cashflowHeadline')).toHaveText('Income, spending, and saving in one view');
+  await goToView(page, 'investments');
+  await expect(page.locator('#investmentsView .onboarding-tab-cta')).toBeVisible();
+  await expect(page.locator('#investmentTotal')).toHaveText('Your portfolio');
+  await goToView(page, 'retirement');
+  await expect(page.locator('#retirementView .onboarding-tab-cta')).toBeVisible();
+  await expect(page.locator('#retirementProjection')).toHaveText('Your retirement outlook');
+  await goToView(page, 'accounts');
+  await expect(page.locator('#accountsView .onboarding-tab-cta')).toBeVisible();
+  await expect(page.locator('#accountsSummary strong').first()).toHaveCSS('color', 'rgba(0, 0, 0, 0)');
   await goToView(page, 'profile');
   await expect(page.locator('#connectionsList')).toContainText('No connected institutions.');
 });

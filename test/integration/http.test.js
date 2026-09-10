@@ -17,6 +17,7 @@ const previousEnvironment = {
   PLAID_CLIENT_ID: process.env.PLAID_CLIENT_ID,
   PLAID_SECRET: process.env.PLAID_SECRET,
   PLAID_ENV: process.env.PLAID_ENV,
+  DEV_MOCK_CONNECTIONS: process.env.DEV_MOCK_CONNECTIONS,
   INVITE_CODE: process.env.INVITE_CODE,
   DOTENV_CONFIG_PATH: process.env.DOTENV_CONFIG_PATH
 };
@@ -403,6 +404,69 @@ integrationTest('caps cost-sensitive Plaid link-token attempts before provider c
   const blocked = await request(app).post('/api/plaid/create_link_token').set('Cookie', cookie).send({});
   assert.equal(blocked.status, 429);
   assert.match(blocked.body.error, /Too many account-connection attempts/);
+});
+
+integrationTest('staging mock connection is explicitly gated, seeded, and removable without Plaid', async (t) => {
+  const previousMockSetting = process.env.DEV_MOCK_CONNECTIONS;
+  process.env.DEV_MOCK_CONNECTIONS = 'true';
+  t.after(() => {
+    if (previousMockSetting === undefined) delete process.env.DEV_MOCK_CONNECTIONS;
+    else process.env.DEV_MOCK_CONNECTIONS = previousMockSetting;
+  });
+  const email = 'development-mock@example.test';
+  const key = userStorageKey(email);
+  const cookie = signedTestCookie(email);
+
+  const link = await request(app).post('/api/plaid/create_link_token').set('Cookie', cookie).send({});
+  assert.equal(link.status, 200);
+  assert.deepEqual(link.body, { development_mock: true });
+
+  const connected = await request(app).post('/api/plaid/development_mock_connect').set('Cookie', cookie).send({});
+  assert.equal(connected.status, 200);
+  assert.equal(connected.body.development_mock, true);
+  assert.equal(connected.body.already_linked, false);
+  assert.equal(connected.body.item.institution_name, 'Clarity Test Bank');
+  const stored = readStore(key);
+  assert.equal(stored.items.length, 1);
+  assert.equal(stored.items[0].development_mock, true);
+  assert.equal(stored.items[0].access_token_enc, undefined);
+  assert.ok(stored.accounts.length >= 4);
+  assert.ok(stored.accounts.every((account) => account.demo === false));
+  assert.ok(stored.positions.length > 0);
+  assert.ok(stored.transactions.length > 0);
+  assert.ok(stored.snapshots.length > 0);
+
+  const repeated = await request(app).post('/api/plaid/development_mock_connect').set('Cookie', cookie).send({});
+  assert.equal(repeated.status, 200);
+  assert.equal(repeated.body.already_linked, true);
+  assert.equal(readStore(key).items.length, 1);
+
+  const dashboard = await request(app).get('/api/dashboard').set('Cookie', cookie);
+  assert.equal(dashboard.status, 200);
+  assert.equal(dashboard.body.demoMode, false);
+  assert.equal(dashboard.body.items[0].development_mock, true);
+  assert.equal(dashboard.body.connectionHealth[0].state, 'healthy');
+
+  const unlinked = await request(app).delete(`/api/items/${connected.body.item.id}`).set('Cookie', cookie);
+  assert.equal(unlinked.status, 200);
+  assert.equal(readStore(key).items.length, 0);
+  assert.equal(readStore(key).accounts.length, 0);
+  deleteStore(key);
+});
+
+integrationTest('development mock connection cannot be reached from a production host', async (t) => {
+  const previousMockSetting = process.env.DEV_MOCK_CONNECTIONS;
+  process.env.DEV_MOCK_CONNECTIONS = 'true';
+  t.after(() => {
+    if (previousMockSetting === undefined) delete process.env.DEV_MOCK_CONNECTIONS;
+    else process.env.DEV_MOCK_CONNECTIONS = previousMockSetting;
+  });
+  const response = await request(app)
+    .post('/api/plaid/development_mock_connect')
+    .set('Host', 'claritynetworth.com')
+    .set('Cookie', signedTestCookie('production-host@example.test'))
+    .send({});
+  assert.equal(response.status, 404);
 });
 
 integrationTest('does not create a Plaid reconnect session for another or missing connection', async () => {
