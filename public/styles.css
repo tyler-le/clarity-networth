@@ -22,8 +22,10 @@ html[data-theme="dark"] {
   color-scheme: dark;
   --bg: #111513;
   --card: #1a201c;
-  --ink: #edf2ee;
-  --muted: #9da89f;
+  /* Avoid pure white against charcoal. A soft mineral white maintains an
+     accessible hierarchy without making every heading compete for attention. */
+  --ink: #d9e0da;
+  --muted: #98a49a;
   --line: #303a32;
   /* Green is reserved for actions and genuinely positive financial signals.
      Supporting surfaces stay neutral so those signals retain their meaning. */
@@ -696,7 +698,7 @@ html[data-theme="dark"] .retirement-info-head .dialog-close:hover { background: 
 html[data-theme="dark"] .portfolio-card { border-color: #363f38; background: linear-gradient(135deg, #1d221f 0%, #1a201c 68%); box-shadow: 0 12px 30px rgba(0,0,0,.14); }
 html[data-theme="dark"] .portfolio-card::after { opacity: .28; }
 html[data-theme="dark"] .portfolio-card .card-label { color: #aeb9b0; }
-html[data-theme="dark"] .portfolio-total { color: #f0f4f0; }
+html[data-theme="dark"] .portfolio-total { color: var(--ink); }
 html[data-theme="dark"] .portfolio-card .spending-context, html[data-theme="dark"] .portfolio-card .chart-context { color: #9ba69d; }
 html[data-theme="dark"] .portfolio-chart { border-color: rgba(135,174,144,.12); }
 html[data-theme="dark"] .chart-grid { stroke: #2d3930; }
@@ -706,9 +708,9 @@ html[data-theme="dark"] .scrub-dot { fill: #1a201c; }
 
 /* Full dark-surface audit: interactive controls must never inherit the light
    theme's white surfaces or use the light text token as a background. */
-html[data-theme="dark"] .primary { background: #2d744a; color: #f5f8f5; box-shadow: 0 3px 10px rgba(0,0,0,.18); }
+html[data-theme="dark"] .primary { background: #2d744a; color: #edf2ee; box-shadow: 0 3px 10px rgba(0,0,0,.18); }
 html[data-theme="dark"] .primary:hover { background: #368456; }
-html[data-theme="dark"] .brand-mark { background: #2d744a; color: #f5f8f5; }
+html[data-theme="dark"] .brand-mark { background: #2d744a; color: #edf2ee; }
 html[data-theme="dark"] .profile-button { border-color: #3a463d; background: #202720; color: #b6c0b8; }
 html[data-theme="dark"] .profile-button:hover { border-color: #4c7357; background: #273128; color: #a7d9b4; }
 html[data-theme="dark"] .account-preview-group, html[data-theme="dark"] .account-group-head, html[data-theme="dark"] .transaction-toolbar { border-color: var(--line); background: #202720; }
@@ -718,7 +720,7 @@ html[data-theme="dark"] .exclude-button { border-color: var(--line); background:
 html[data-theme="dark"] .exclude-button.active { background: #422b2c; color: var(--danger); }
 html[data-theme="dark"] .account-rename:hover { background: #273128; }
 html[data-theme="dark"] .sankey-label, html[data-theme="dark"] .cashflow-label { fill: #a7b1a9; }
-html[data-theme="dark"] .sankey-value, html[data-theme="dark"] .cashflow-value { fill: #e5ebe6; }
+html[data-theme="dark"] .sankey-value, html[data-theme="dark"] .cashflow-value { fill: var(--ink); }
 html[data-theme="dark"] .cashflow-share { fill: #a7b1a9; }
 html[data-theme="dark"] .cashflow-flow { stroke-opacity: .25; }
 html[data-theme="dark"] .auth-screen { background: #111513; }
@@ -768,7 +770,7 @@ html[data-theme="dark"] :is(.onboarding-preview-banner, .onboarding-tab-cta) {
   box-shadow: none;
 }
 html[data-theme="dark"] :is(.onboarding-preview-banner, .onboarding-tab-cta) > div { background: transparent !important; }
-html[data-theme="dark"] :is(.onboarding-preview-banner, .onboarding-tab-cta) strong { color: #edf2ee; }
+html[data-theme="dark"] :is(.onboarding-preview-banner, .onboarding-tab-cta) strong { color: var(--ink); }
 html[data-theme="dark"] :is(.onboarding-preview-banner, .onboarding-tab-cta) span { color: #aeb9b0; }
 html[data-theme="dark"] :is(.onboarding-preview-banner, .onboarding-tab-cta) .primary { background: #287a4d; color: #fff; }
 /* Public legal pages deliberately use the same quiet visual system as the app. */
