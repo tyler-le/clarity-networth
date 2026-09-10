@@ -226,6 +226,7 @@ dialog::backdrop { background: rgba(10,15,10,.28); backdrop-filter: blur(3px); }
 
 /* The mark is a single clear financial path, ending in a highlighted present point. */
 .brand-mark { overflow: hidden; }.brand-mark svg { width: 19px; height: 19px; }
+.environment-badge { display: inline-flex; align-items: center; height: 19px; margin-left: 3px; padding: 0 6px; border: 1px solid #b9d4c0; border-radius: 999px; color: #176440; background: #e9f5ec; font-size: 9px; font-weight: 800; letter-spacing: .09em; line-height: 1; vertical-align: middle; }.brand-home .environment-badge { margin-left: 5px; }
 
 @media (max-width: 1000px) {
   .csp-grid { grid-template-columns: repeat(2, 1fr); }
@@ -364,6 +365,7 @@ dialog::backdrop { background: rgba(10,15,10,.28); backdrop-filter: blur(3px); }
 .profile-intro { padding: 4px 2px 0; }.profile-intro h2, .profile-group-head h3, .demo-setting h3 { margin: 5px 0 0; font-size: 20px; letter-spacing: -.035em; }.profile-intro p, .profile-group-head p { max-width: 500px; margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .profile-group { display: grid; gap: 10px; }.profile-group-head { display: flex; align-items: end; justify-content: space-between; gap: 18px; }.profile-group-head.compact { align-items: start; }.profile-connect { flex: 0 0 auto; margin: 0; white-space: nowrap; }
 .profile-shell .connections-panel { margin-top: 0; border-radius: 16px; background: var(--card); box-shadow: var(--shadow); }.profile-shell .connections-panel summary { padding: 15px 17px; color: var(--ink); font-size: 13px; }.profile-shell .connection-row { padding: 13px 17px; }
+.connection-status.healthy::before, .connection-status.stale::before, .connection-status.attention::before { display: inline-block; width: 6px; height: 6px; margin-right: 5px; border-radius: 50%; background: var(--accent); content: ''; }.connection-status.stale::before, .connection-status.attention::before { background: #b07a29; }
 .profile-shell .appearance-setting { margin-top: 0; border-radius: 16px; box-shadow: var(--shadow); }.appearance-setting > div > strong, .beta-help strong { font-size: 14px; letter-spacing: -.015em; }
 .demo-setting { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 132px; margin: 0; padding: 20px 22px; border-color: #dce7de; background: linear-gradient(125deg, #f7fbf8, #fff 58%); }.demo-setting-copy { min-width: 0; }.demo-setting h3 { font-size: 18px; }.demo-setting p { max-width: 445px; margin: 6px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }.demo-setting-status { display: inline-flex; align-items: center; gap: 6px; margin-top: 11px; padding: 4px 8px; border-radius: 99px; color: #59675c; background: #eef2ee; font-size: 10px; font-weight: 720; }.demo-setting-status::before { width: 6px; height: 6px; border-radius: 50%; background: #8c978d; content: ''; }.demo-setting[data-demo-state="active"] { border-color: #a9cdb2; background: linear-gradient(125deg, #eef8f0, #fff 62%); }.demo-setting[data-demo-state="active"] .demo-setting-status { color: #1f6f4a; background: #e0f1e4; }.demo-setting[data-demo-state="active"] .demo-setting-status::before { background: var(--accent); box-shadow: 0 0 0 3px rgba(31,111,74,.12); }.demo-toggle { flex: 0 0 auto; }
 .profile-shell .data-controls { margin-top: 0; border-radius: 16px; background: var(--card); box-shadow: var(--shadow); }.profile-shell .data-controls summary { padding: 15px 17px; color: var(--ink); font-size: 13px; }.profile-shell .data-controls > div { padding: 15px 17px 17px; }
@@ -638,6 +640,7 @@ html[data-theme="dark"] .primary:hover { background: #368456; }
 html[data-theme="dark"] .brand-mark { background: #2d744a; color: #f5f8f5; }
 html[data-theme="dark"] .profile-button { border-color: #3a463d; background: #202720; color: #b6c0b8; }
 html[data-theme="dark"] .profile-button:hover { border-color: #4c7357; background: #273128; color: #a7d9b4; }
+html[data-theme="dark"] .environment-badge { border-color: #3e6749; color: #a5d9b1; background: #203d28; }
 html[data-theme="dark"] .account-preview-group, html[data-theme="dark"] .account-group-head, html[data-theme="dark"] .transaction-toolbar { border-color: var(--line); background: #202720; }
 html[data-theme="dark"] .accounts-summary, html[data-theme="dark"] .account-collection { background: var(--card); }
 html[data-theme="dark"] .account-type, html[data-theme="dark"] .code-row code, html[data-theme="dark"] .tx-icon { background: #273029; color: #b6c0b8; }

@@ -175,7 +175,7 @@ test('a demo visitor can exit from Profile and return to sign-in', async ({ page
   await openDemo(page);
   await page.locator('#profileButton').click();
   await expect(page.getByRole('heading', { name: 'Profile' })).toBeVisible();
-  await expect(page.locator('#demoToggle')).toHaveText('Exit demo');
+  await expect(page.locator('#demoToggle')).toHaveText('Return to sign in');
   await page.locator('#demoToggle').click();
   await expect(page.locator('#authScreen')).toBeVisible();
   await expect(page.locator('#appShell')).toBeHidden();

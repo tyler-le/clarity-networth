@@ -7,6 +7,19 @@ const fmt2 = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD'
 const themeStorageKey = 'clarity-theme';
 const onboardingStorageKey = 'clarity-connection-onboarding-seen';
 
+function isDevelopmentEnvironment() {
+  return /(^localhost$)|(^127\.0\.0\.1$)|staging/i.test(location.hostname);
+}
+
+function applyEnvironmentIdentity() {
+  if (!isDevelopmentEnvironment()) return;
+  document.documentElement.dataset.environment = 'development';
+  document.title = 'Clarity DEV';
+  $$('.environment-badge').forEach((badge) => { badge.hidden = false; });
+}
+
+applyEnvironmentIdentity();
+
 const state = {
   dashboard: null,
   spending: null,
@@ -654,7 +667,25 @@ function renderDebtPayoff(plan) {
 function renderConnections(items) {
   const panel = $('#connectionsList');
   const health = new Map((state.dashboard?.connectionHealth || []).map((entry) => [entry.id, entry]));
-  panel.innerHTML = items.length ? items.map((item) => { const status = health.get(item.id); const needsReconnect = Boolean(status?.requires_reconnect); const detail = item.demo ? 'Sample connection' : status?.state === 'healthy' ? 'Up to date' : status?.state === 'stale' ? 'Update delayed · retrying automatically' : needsReconnect ? 'Reconnect to resume updates' : 'Update needs attention · retrying automatically'; const actions = item.demo ? '<span class="connection-demo-label">Demo</span>' : `${needsReconnect ? `<button class="reconnect-button" data-reconnect="${escapeHtml(item.id)}">Reconnect</button>` : ''}<button class="unlink-button" data-unlink="${escapeHtml(item.id)}">Unlink</button>`; return `<div class="connection-row"><div>${item.institution_logo ? `<img class="connection-logo" src="${escapeHtml(item.institution_logo)}" alt="" />` : '<span class="connection-fallback" aria-hidden="true">⌂</span>'}<span>${escapeHtml(item.institution_name)}<small class="connection-status ${status?.state || ''}">${detail}</small></span></div><span class="connection-actions">${actions}</span></div>`; }).join('') : '<div class="empty">No connected institutions.</div>';
+  const label = (timestamp) => {
+    if (!timestamp || Number.isNaN(new Date(timestamp).getTime())) return 'No verified update yet';
+    const date = new Date(timestamp);
+    const today = new Date();
+    const sameDay = date.toDateString() === today.toDateString();
+    return sameDay ? `Verified today at ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : `Last verified ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+  };
+  panel.innerHTML = items.length ? items.map((item) => {
+    const status = health.get(item.id);
+    const needsReconnect = Boolean(status?.action_required || status?.requires_reconnect);
+    const verified = label(status?.last_verified_update_at || item.last_verified_update_at || item.last_synced_at);
+    const detail = item.demo ? 'Sample connection · demo data only'
+      : needsReconnect ? `${verified} · Sign in again to resume updates`
+        : status?.retrying_automatically ? `${verified} · Update delayed; retrying automatically`
+          : status?.state === 'healthy' ? `${verified} · Updates automatically`
+            : `${verified} · We’re checking again automatically`;
+    const actions = item.demo ? '<span class="connection-demo-label">Demo</span>' : `${needsReconnect ? `<button class="reconnect-button" data-reconnect="${escapeHtml(item.id)}">Reconnect</button>` : ''}<button class="unlink-button" data-unlink="${escapeHtml(item.id)}">Unlink</button>`;
+    return `<div class="connection-row"><div>${item.institution_logo ? `<img class="connection-logo" src="${escapeHtml(item.institution_logo)}" alt="" />` : '<span class="connection-fallback" aria-hidden="true">⌂</span>'}<span>${escapeHtml(item.institution_name)}<small class="connection-status ${status?.state || ''}">${detail}</small></span></div><span class="connection-actions">${actions}</span></div>`;
+  }).join('') : '<div class="empty">No connected institutions yet. Connect one when you’re ready.</div>';
 }
 
 function renderProfileSettings(d) {
@@ -685,6 +716,14 @@ function renderProfileSettings(d) {
   $('#exportDataButton').title = demoActive ? 'Exit demo to download your personal data.' : '';
   $('#deleteAccountButton').title = demoActive ? 'Exit demo to manage your account data.' : '';
   $('#signOutButton').textContent = publicPreview ? 'Return to sign in' : 'Sign out';
+  const health = d?.connectionHealth || [];
+  const reconnects = health.filter((item) => item.action_required || item.requires_reconnect).length;
+  const delayed = health.filter((item) => item.retrying_automatically).length;
+  $('#connectionLifecycleSummary').textContent = demoActive ? 'Demo is a separate sample workspace; your real institutions are hidden.'
+    : reconnects ? `${reconnects} institution${reconnects === 1 ? '' : 's'} needs reconnection to resume updates.`
+      : delayed ? `${delayed} institution${delayed === 1 ? '' : 's'} is delayed and retrying automatically.`
+        : health.length ? `${health.length} institution${health.length === 1 ? '' : 's'} updating automatically.`
+          : 'Connect an institution to begin building your financial picture.';
 }
 
 const spendingColors = ['#1f6f4a', '#7ea98b', '#d5a75f', '#b88692', '#9ca9bd', '#c4c9c1'];
@@ -1674,12 +1713,12 @@ async function connectPlaid() {
       token: link_token,
       onSuccess: async (public_token, metadata) => {
         showNotice('Connecting account…');
-        await api('/api/plaid/exchange_public_token', {
+        const result = await api('/api/plaid/exchange_public_token', {
           method: 'POST',
           body: JSON.stringify({ public_token, institution_name: metadata.institution?.name || 'Connected institution', institution_id: metadata.institution?.institution_id || null })
         });
         await loadAll();
-        showNotice('Account connected.', 'success');
+        showNotice(result.sync_pending ? 'Account connected. We’re finishing its first update and will keep trying automatically.' : 'Account connected.', 'success');
         showConnectionOnboarding();
       },
       onExit: (err) => { if (err) showNotice(err.display_message || err.error_message || 'Plaid Link closed with an error.'); }

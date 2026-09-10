@@ -1484,14 +1484,26 @@ app.post('/api/plaid/exchange_public_token', plaidCostLimiter({ scope: 'plaid_it
       demo: false
     };
     store.items.push(item);
-    await syncItem(store, item);
-    hideDuplicateAccounts(store);
-    snapshotNetWorth(store);
-    snapshotInvestments(store);
+    // Persist the successful Plaid link before the first data sync. An
+    // institution can take time to prepare transactions or holdings; a
+    // temporary first-sync failure must not make an already-linked item vanish.
     await saveStore(req.user, store);
-    res.json({ ok: true, item: publicItem(item) });
+    try {
+      await syncItem(store, item);
+      hideDuplicateAccounts(store);
+      snapshotNetWorth(store);
+      snapshotInvestments(store);
+      await saveStore(req.user, store);
+      res.json({ ok: true, item: publicItem(item), sync_pending: false });
+      trackLaunchEvent(req.user, 'sync_succeeded');
+    } catch (error) {
+      // The link itself succeeded. Preserve it with its actionable lifecycle
+      // state so the profile can show retry/reconnect rather than data loss.
+      await saveStore(req.user, store);
+      res.status(202).json({ ok: true, item: publicItem(item), sync_pending: true });
+      trackLaunchEvent(req.user, 'sync_failed');
+    }
     trackLaunchEvent(req.user, 'account_link_completed');
-    trackLaunchEvent(req.user, 'sync_succeeded');
   } catch (error) {
     res.status(error.status || 500).json({ error: error.message, plaid: error.plaid });
   }
