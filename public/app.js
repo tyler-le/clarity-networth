@@ -1625,7 +1625,9 @@ function renderDashboard() {
   renderProfileSettings(actual);
   $('#connectButton').classList.toggle('hidden', state.view === 'profile');
   $('#setupCard').classList.toggle('hidden', d.plaidConfigured || state.demoPreview);
-  if (!d.plaidConfigured && !state.demoPreview) showNotice('Connect an account when you’re ready to see your own data.');
+  // First-run has its own composed preview and CTA. A generic warning toast
+  // makes that deliberate state look like an error or failed load.
+  if (!d.plaidConfigured && !state.demoPreview && !state.onboardingPreview) showNotice('Connect an account when you’re ready to see your own data.');
 }
 
 // A new member has no financial facts yet. Preserve the product's real layout
@@ -1636,6 +1638,7 @@ function renderFreshAccountStates(data) {
   document.documentElement.dataset.freshAccount = String(isFresh);
   document.documentElement.dataset.onboardingPreview = String(isFresh);
   $('#onboardingPreviewBanner').classList.toggle('hidden', !isFresh);
+  if (isFresh) $('#notice').classList.add('hidden');
   const views = [
     ['overviewView', 'freshOverviewState'],
     ['spendingView', 'freshSpendingState'],

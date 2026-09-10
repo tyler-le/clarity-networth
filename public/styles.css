@@ -224,23 +224,13 @@ dialog::backdrop { background: rgba(10,15,10,.28); backdrop-filter: blur(3px); }
 .chart-empty { min-height: 150px; display: grid; place-content: center; gap: 7px; text-align: center; color: var(--muted); font-size: 12px; }
 .chart-empty span { color: var(--accent); font-size: 26px; line-height: 1; }
 .onboarding-preview-banner { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin: 0 0 18px; padding: 15px 18px; border: 1px solid #d6e5d9; border-radius: 16px; background: linear-gradient(100deg, #f4faf5, var(--card)); }.onboarding-preview-banner div { display: grid; gap: 3px; }.onboarding-preview-banner strong { font-size: 14px; letter-spacing: -.015em; }.onboarding-preview-banner span { color: var(--muted); font-size: 11px; line-height: 1.4; }.onboarding-preview-banner .primary { flex: 0 0 auto; white-space: nowrap; }
-/* A first-run dashboard is a shadow of the real product, not a fake account.
-   Layout remains recognizable, while every fact is replaced with neutral
-   skeleton marks. Navigation and the explicit Link action stay available. */
+/* A first-run preview should explain the product—not resemble a stalled load
+   or a populated personal account. Preserve the actual information design,
+   mute only individual financial facts, and leave feature headings legible. */
 html[data-onboarding-preview="true"] .view:not(#profileView) > :not(#onboardingPreviewBanner) { pointer-events: none; user-select: none; }
-html[data-onboarding-preview="true"] .view:not(#profileView) .card,
-html[data-onboarding-preview="true"] .view:not(#profileView) .spending-period-selector,
-html[data-onboarding-preview="true"] .view:not(#profileView) #accountsSummary,
-html[data-onboarding-preview="true"] .view:not(#profileView) #accountGrid { position: relative; overflow: hidden; background: #fafcf9; box-shadow: none; }
-html[data-onboarding-preview="true"] .view:not(#profileView) .card > *,
-html[data-onboarding-preview="true"] .view:not(#profileView) .spending-period-selector > *,
-html[data-onboarding-preview="true"] .view:not(#profileView) #accountsSummary > *,
-html[data-onboarding-preview="true"] .view:not(#profileView) #accountGrid > * { visibility: hidden; }
-html[data-onboarding-preview="true"] .view:not(#profileView) .card::after,
-html[data-onboarding-preview="true"] .view:not(#profileView) .spending-period-selector::after,
-html[data-onboarding-preview="true"] .view:not(#profileView) #accountsSummary::after,
-html[data-onboarding-preview="true"] .view:not(#profileView) #accountGrid::after { content: ''; position: absolute; inset: 20px; border-radius: 12px; opacity: .92; background: linear-gradient(#dbe5dc 0 0) 0 0 / 28% 11px no-repeat, linear-gradient(#e8eeea 0 0) 0 27px / 54% 10px no-repeat, linear-gradient(#e8eeea 0 0) 0 54px / 100% 1px no-repeat, linear-gradient(#e4ebe5 0 0) 0 76px / 100% 44% no-repeat, linear-gradient(#e8eeea 0 0) 0 100% / 68% 10px no-repeat; }
-html[data-onboarding-preview="true"] #accountGrid::after { inset: 0; background: repeating-linear-gradient(to bottom, transparent 0 18px, #dbe5dc 18px 29px, transparent 29px 47px, #e7ede8 47px 57px, transparent 57px 81px, #dfe8e0 81px 82px); }
+html[data-onboarding-preview="true"] .view:not(#profileView) :is(.hero-number, .delta, .portfolio-total, .spending-total, .retirement-total, .retirement-spend-number, .overview-glance-values strong, .account-section-total strong, .account-row-balance, .investment-account-value b, .investment-account-value small, .position-value b, .position-value small, .investment-allocation-row strong, .investment-allocation-row small, .allocation-row strong, .account-name, .account-inst, .position-row strong, .position-row span, .position-symbol, .retirement-milestone strong, .retirement-milestone-detail, .retirement-milestone em) { color: transparent !important; background: linear-gradient(100deg, #dbe5dc, #edf2ed); border-radius: 5px; text-shadow: none; }
+html[data-onboarding-preview="true"] .view:not(#profileView) :is(.line-chart, .portfolio-chart, .cashflow-sankey, .spending-trend, .retirement-path, .retirement-lifestyle-paths) { filter: grayscale(1) saturate(.25) opacity(.38); }
+html[data-onboarding-preview="true"] .view:not(#profileView) :is(.range-control, .spending-period-selector, .investment-donut, .spending-donut, .allocation-visual) { opacity: .6; filter: grayscale(.75) saturate(.35); }
 
 /* First-run is guidance, not an empty dashboard. A single composed surface
    gives a new member one clear next action and explains its payoff. */
