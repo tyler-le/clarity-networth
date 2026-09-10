@@ -162,6 +162,7 @@ integrationTest('serves an authenticated dashboard for an existing member sessio
   const response = await request(app).get('/api/dashboard').set('Cookie', signedTestCookie(email));
   assert.equal(response.status, 200);
   assert.ok(response.body.summary);
+  assert.deepEqual(response.body.user, { email, name: 'Rate Limit' });
   deleteStore(key);
 });
 

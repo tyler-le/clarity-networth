@@ -734,6 +734,13 @@ function renderProfileSettings(d) {
   const demoButton = $('#demoToggle');
   demoButton.textContent = d?.demoMode ? 'Exit demo' : 'Try demo';
   demoButton.setAttribute('aria-pressed', String(Boolean(d?.demoMode)));
+  const user = d?.user || {};
+  const name = String(user.name || '').trim() || 'Your account';
+  const email = String(user.email || '').trim();
+  $('#profileName').textContent = name;
+  $('#profileEmail').textContent = email || 'Signed in securely';
+  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+  $('#profileMonogram').textContent = initials || 'C';
 }
 
 const spendingColors = ['#1f6f4a', '#7ea98b', '#d5a75f', '#b88692', '#9ca9bd', '#c4c9c1'];

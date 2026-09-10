@@ -26,6 +26,7 @@ async function openSignedInScenario(page, transform = () => {}) {
   preview.dashboard.demoMode = false;
   preview.dashboard.appearance = { theme: 'light' };
   preview.dashboard.plaidConfigured = true;
+  preview.dashboard.user = { email: 'scenario@example.test', name: 'Scenario member' };
 
   await page.route('**/api/auth/me', (route) => route.fulfill({ json: { user: { email: 'scenario@example.test', name: 'Scenario member' } } }));
   await page.route('**/api/dashboard', (route) => route.fulfill({ json: preview.dashboard }));
@@ -73,6 +74,9 @@ test('a newly signed-in member with no accounts gets a calm, truthful product pr
   await expect(page.locator('#accountsView .onboarding-tab-cta')).toBeVisible();
   await expect(page.locator('#accountsSummary strong').first()).toHaveCSS('color', 'rgba(0, 0, 0, 0)');
   await goToView(page, 'profile');
+  await expect(page.locator('#profileName')).toHaveText('Scenario member');
+  await expect(page.locator('#profileEmail')).toHaveText('scenario@example.test');
+  await expect(page.locator('.profile-settings-panel')).toBeVisible();
   await expect(page.locator('#connectionsList')).toContainText('No connected institutions.');
 });
 

@@ -1162,6 +1162,7 @@ app.get('/api/dashboard', async (req, res) => {
   await trackLaunchEvent(req.user, 'sign_in_completed');
   await trackLaunchEvent(req.user, 'dashboard_opened');
   res.json({
+    user: publicUser(req.user),
     summary,
     runway: cashRunway(visibleStore),
     goals: goalProgress(visibleStore),
