@@ -227,7 +227,7 @@ dialog::backdrop { background: rgba(10,15,10,.28); backdrop-filter: blur(3px); }
 /* Keep sample screens visually faithful while preventing a visitor from
    mistaking illustrative controls or values for their own account. The
    app-level navigation and the explicit Link action remain available. */
-html[data-onboarding-preview="true"] .view:not(#profileView) > :not(#onboardingPreviewBanner) { pointer-events: none; user-select: none; }
+html[data-onboarding-preview="true"] .view:not(#profileView) > :not(#onboardingPreviewBanner) { pointer-events: none; user-select: none; filter: grayscale(.55) saturate(.52) blur(2.2px); opacity: .48; }
 
 /* First-run is guidance, not an empty dashboard. A single composed surface
    gives a new member one clear next action and explains its payoff. */
