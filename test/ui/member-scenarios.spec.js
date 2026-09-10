@@ -56,7 +56,9 @@ test('a newly signed-in member with no accounts gets a calm, truthful product pr
   await expect(page.locator('#onboardingPreviewBanner')).toContainText('Connect an account');
   await expect(page.locator('#connectButton')).toBeHidden();
   await expect(page.locator('#netWorthCard')).toBeVisible();
-  await expect(page.locator('#debtPayoffCard')).toBeVisible();
+  // A first-run member has no debt evidence yet. Keep the preview focused on
+  // its truthful connection invitation rather than suggesting a payoff plan.
+  await expect(page.locator('#debtPayoffCard')).toBeHidden();
   await expect(page.locator('#netWorth')).toHaveText('Your net worth');
   await expect(page.locator('#netWorthMovementTitle')).toHaveText('Understand what changed');
   await goToView(page, 'spending');
@@ -94,7 +96,8 @@ test('a cash-first member sees what they have without being pushed into debt or 
 
   await expect(page.locator('#netWorth')).toHaveText('$17,700');
   await goToView(page, 'accounts');
-  await expect(page.locator('#accountGrid')).toContainText('Cash & savings');
+  await expect(page.locator('#accountGrid')).toContainText('Cash');
+  await expect(page.locator('#accountGrid')).not.toContainText('Investments');
   await expect(page.locator('#debtPayoffCard')).toBeHidden();
   await expect(page.locator('#accountGrid .account-collection')).toHaveCount(2);
 });
