@@ -232,14 +232,6 @@ html[data-onboarding-preview="true"] .view:not(#profileView) :is(.hero-number, .
 html[data-onboarding-preview="true"] :is(#balanceSheetCard p, #goalAction, #clarityCheckinAction) { visibility: hidden; }
 html[data-onboarding-preview="true"] .view:not(#profileView) :is(.line-chart, .portfolio-chart, .cashflow-sankey, .spending-trend, .retirement-path, .retirement-lifestyle-paths, .spending-transactions #spendingTransactions, .spending-transaction-controls) { filter: grayscale(1) saturate(.25) blur(1.4px) opacity(.38); }
 html[data-onboarding-preview="true"] .view:not(#profileView) :is(.range-control, .spending-period-selector, .investment-donut, .spending-donut, .allocation-visual) { opacity: .6; filter: grayscale(.75) saturate(.35); }
-/* Generic preview copy is intentionally readable. It replaces values and
-   identities rather than showing a loading-style skeleton or fake money. */
-html[data-onboarding-preview="true"] .view:not(#profileView) .onboarding-account-fact { color: var(--muted) !important; background: transparent !important; text-shadow: none; }
-html[data-onboarding-preview="true"] .view:not(#profileView) :is(.account-name.onboarding-account-fact, .investment-account-row strong.onboarding-account-fact, .holding-copy strong.onboarding-account-fact) { color: var(--ink) !important; }
-html[data-onboarding-preview="true"] .view:not(#profileView) .account-collection-total .onboarding-account-fact { color: var(--muted) !important; font-size: 11px; }
-html[data-onboarding-preview="true"] .view:not(#profileView) .onboarding-allocation-preview { pointer-events: none; }
-html[data-onboarding-preview="true"] .view:not(#profileView) :is(.holding-ticker, .holding-copy > span:not(.onboarding-account-fact), .holding-weight span:not(.onboarding-account-fact), .spending-transaction-row strong, .spending-transaction-row span, .spending-transaction-row b, .transaction-category-label, #recurringList button span, #recurringList button strong) { color: transparent !important; background: linear-gradient(100deg, #dbe5dc, #edf2ed); border-radius: 5px; text-shadow: none; }
-html[data-onboarding-preview="true"] .view:not(#profileView) :is(.cashflow-sankey, .spending-trend, .spending-transactions #spendingTransactions, .spending-transaction-controls, #recurringList) { filter: grayscale(1) saturate(.2) blur(3px); opacity: .24; }
 
 /* First-run is guidance, not an empty dashboard. A single composed surface
    gives a new member one clear next action and explains its payoff. */

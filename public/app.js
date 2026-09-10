@@ -649,21 +649,7 @@ function renderAccounts(accounts) {
   const cashAndSavings = accounts.filter((account) => ['Cash', 'Savings'].includes(accountGroup(account))).reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
   const invested = accounts.filter((account) => accountGroup(account) === 'Investments').reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
   const totalDebt = accounts.filter(isDebt).reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
-  const previewing = Boolean(state.onboardingPreview);
-  // The preview is an explanation of the product, not a fictional balance
-  // sheet. Keep the real account layout, but replace every financial fact
-  // with a short, truthful description before it reaches the DOM.
-  $('#accountsSummary').innerHTML = previewing
-    ? '<div><span>Cash & savings</span><strong class="onboarding-account-fact">Your balances</strong></div><div><span>Invested</span><strong class="onboarding-account-fact">Your portfolio</strong></div><div><span>Debt owed</span><strong class="onboarding-account-fact">Your debt</strong></div>'
-    : `<div><span>Cash & savings</span><strong>${fmt.format(cashAndSavings)}</strong></div><div><span>Invested</span><strong class="positive">${fmt.format(invested)}</strong></div><div><span>Debt owed</span><strong class="negative">${fmt.format(totalDebt)}</strong></div>`;
-  const previewAccountCopy = {
-    Cash: 'A connected cash account',
-    Savings: 'A connected savings account',
-    Investments: 'A connected investment account',
-    'Credit cards': 'A connected credit card',
-    'Loans & debt': 'A connected loan',
-    Other: 'A connected account'
-  };
+  $('#accountsSummary').innerHTML = `<div><span>Cash & savings</span><strong>${fmt.format(cashAndSavings)}</strong></div><div><span>Invested</span><strong class="positive">${fmt.format(invested)}</strong></div><div><span>Debt owed</span><strong class="negative">${fmt.format(totalDebt)}</strong></div>`;
   $('#accountGrid').innerHTML = grouped.map(([name, items]) => {
     const debt = items.every(isDebt);
     const total = items.reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
@@ -671,9 +657,9 @@ function renderAccounts(accounts) {
     const expanded = state.expandedAccountGroups.has(name);
     const previewCount = 2;
     return `<section class="account-collection ${debt ? 'debt' : 'asset'}">
-      <div class="account-collection-head"><span class="account-collection-icon" aria-hidden="true">${accountGroupIcons[name] || '◇'}</span><div><h2>${name}</h2><p class="onboarding-account-fact">${previewing ? 'Accounts you choose to share' : `${items.length} account${items.length === 1 ? '' : 's'}`}</p></div><div class="account-collection-total ${debt ? 'negative' : 'positive'}"><span>${previewing ? 'When connected' : debt ? 'Owed' : 'Held'}</span><strong class="onboarding-account-fact">${previewing ? 'Your balance' : fmt.format(total)}</strong></div></div>
+      <div class="account-collection-head"><span class="account-collection-icon" aria-hidden="true">${accountGroupIcons[name] || '◇'}</span><div><h2>${name}</h2><p>${items.length} account${items.length === 1 ? '' : 's'}</p></div><div class="account-collection-total ${debt ? 'negative' : 'positive'}"><span>${debt ? 'Owed' : 'Held'}</span><strong>${fmt.format(total)}</strong></div></div>
       <div class="account-collection-items">${sorted.map((account, index) => `<article class="account-item ${debt ? 'debt' : 'asset'} ${index >= previewCount && !expanded ? 'hidden' : ''}">
-        ${previewing ? institutionMark({}) : institutionMark(account)}<div class="account-copy"><div class="account-name onboarding-account-fact">${previewing ? previewAccountCopy[name] : escapeHtml(account.nickname || account.name)}</div><div class="account-inst onboarding-account-fact">${previewing ? 'Institution, type, and balance' : escapeHtml(accountSubtitle(account))}</div><div class="account-inline-balance ${debt ? 'negative' : 'positive'} onboarding-account-fact">${previewing ? 'Balance after you connect' : displayBalance(account)}</div></div>${previewing ? '' : account.manual ? `<button class="account-rename" data-manual-account="${escapeHtml(account.id)}" data-manual-name="${escapeHtml(account.name)}" data-manual-subtype="${escapeHtml(account.subtype || '')}" data-manual-value="${escapeHtml(account.current_balance)}" data-manual-kind="${debt ? 'liability' : 'asset'}" aria-label="Edit ${escapeHtml(account.name)}">✎</button>` : `<button class="account-rename" data-account-rename="${escapeHtml(account.id)}" data-account-name="${escapeHtml(account.nickname || account.name)}" aria-label="Rename ${escapeHtml(account.nickname || account.name)}">✎</button>`}
+        ${institutionMark(account)}<div class="account-copy"><div class="account-name">${escapeHtml(account.nickname || account.name)}</div><div class="account-inst">${escapeHtml(accountSubtitle(account))}</div><div class="account-inline-balance ${debt ? 'negative' : 'positive'}">${displayBalance(account)}</div></div>${account.manual ? `<button class="account-rename" data-manual-account="${escapeHtml(account.id)}" data-manual-name="${escapeHtml(account.name)}" data-manual-subtype="${escapeHtml(account.subtype || '')}" data-manual-value="${escapeHtml(account.current_balance)}" data-manual-kind="${debt ? 'liability' : 'asset'}" aria-label="Edit ${escapeHtml(account.name)}">✎</button>` : `<button class="account-rename" data-account-rename="${escapeHtml(account.id)}" data-account-name="${escapeHtml(account.nickname || account.name)}" aria-label="Rename ${escapeHtml(account.nickname || account.name)}">✎</button>`}
       </article>`).join('')}</div>${items.length > previewCount ? `<button class="account-group-more" data-account-group="${escapeHtml(name)}">${expanded ? 'Show less' : `View ${items.length - previewCount} more`}</button>` : ''}
     </section>`;
   }).join('');
@@ -1534,13 +1520,7 @@ function renderInvestments(data) {
   let cursor = 0;
   const colors = ['#287143', '#7ea98b', '#d5a75f', '#9ca9bd', '#b88692', '#7d91a5'];
   const donut = $('#investmentDonut');
-  const previewing = Boolean(state.onboardingPreview);
-  if (previewing) {
-    $('#investmentAllocationInsight').textContent = 'Your allocation appears after you connect an investment account.';
-    donut.style.background = 'conic-gradient(#287143 0 58%, #7ea98b 58% 80%, #d5e4d8 80% 100%)';
-    donut.innerHTML = '<span><strong class="onboarding-account-fact">Your mix</strong><small class="onboarding-account-fact">After you connect</small></span>';
-    $('#investmentAllocation').innerHTML = '<div class="investment-allocation-row onboarding-allocation-preview"><i></i><span>Your asset allocation</span><strong class="onboarding-account-fact">Personalized after you connect</strong></div>';
-  } else if (allocation.length) {
+  if (allocation.length) {
     const largest = allocation[0];
     $('#investmentAllocationInsight').textContent = `${largest.name} is your largest allocation at ${Math.round(largest.share * 100)}%. Current mix · ${periodLabel} selected.`;
     const selected = allocation.find((row) => row.name === state.investmentFilter);
@@ -1552,12 +1532,12 @@ function renderInvestments(data) {
     $('#investmentAllocationInsight').textContent = 'Allocation appears when your institution provides holdings.';
     $('#investmentAllocation').innerHTML = '<p class="spending-empty">Allocation appears when your institution provides holdings.</p>';
   }
-  $('#investmentAccounts').innerHTML = accounts.length ? (previewing ? accounts.slice(0, 3).map(() => `<div class="investment-account-row onboarding-investment-account" aria-label="Illustrative investment account preview"><div><strong class="onboarding-account-fact">Investment account</strong><span class="onboarding-account-fact">Holdings and verified history appear here</span></div><div class="investment-account-value"><b class="onboarding-account-fact">Value after you connect</b></div></div>`).join('') : accounts.map((account) => {
+  $('#investmentAccounts').innerHTML = accounts.length ? accounts.map((account) => {
     const change = account.rangeProgress?.state === 'ready' ? Number(account.rangeProgress.valueChange) : null;
     const showChange = change != null && Number.isFinite(change) && Math.round(Math.abs(change) * 100) > 0;
     const changeLine = showChange ? `<small class="${change >= 0 ? 'positive' : 'negative'}">${change >= 0 ? '+' : '−'}${fmt.format(Math.abs(change))} · ${investmentRangeLabel(account.rangeProgress.range)}</small>` : '';
     return `<button type="button" class="investment-account-row" data-investment-account-history="${escapeHtml(account.account_id)}" aria-label="View ${escapeHtml(account.name)} performance history"><div><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || '')} · View history</span></div><div class="investment-account-value"><b>${fmt.format(account.value)}</b>${changeLine}</div><i aria-hidden="true">›</i></button>`;
-  }).join('')) : '<p class="spending-empty">No investment accounts connected.</p>';
+  }).join('') : '<p class="spending-empty">No investment accounts connected.</p>';
   const names = new Map(accounts.map((account) => [account.account_id, account.name]));
   const isUnclassified = state.investmentFilter === 'Cash & unclassified';
   const unclassifiedAccounts = data.unclassifiedAccounts || [];
@@ -1574,12 +1554,6 @@ function renderInvestments(data) {
       const action = missing && canEdit ? `<button type="button" class="manual-holding-button" data-add-manual-holding="${escapeHtml(account.account_id)}" data-manual-account-name="${escapeHtml(account.name)}" data-manual-remaining="${amount}">Add holding</button>` : '';
       return `<div class="unclassified-account-row"><div class="unclassified-mark" aria-hidden="true">?</div><div><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || 'Institution')} · ${missing ? 'No matching holdings returned' : 'Holdings currently exceed the account balance'}</span></div><div class="unclassified-actions"><b class="${missing ? '' : 'negative'}">${missing ? '' : '−'}${fmt.format(amount)}</b>${action}</div></div>`;
     }).join('') : '<p class="positions-empty">All investment account balances match their returned holdings.</p>';
-    $('#investmentHoldingsMore').classList.add('hidden');
-    return;
-  }
-  if (previewing) {
-    $('#investmentHoldingsInsight').textContent = 'See your holdings and how they change over time.';
-    $('#investmentPositions').innerHTML = Array.from({ length: 3 }, () => '<div class="holding-row onboarding-holding-preview" aria-label="Illustrative holding preview"><div class="position-symbol onboarding-account-fact">•••</div><div class="holding-copy"><strong class="onboarding-account-fact">A connected holding</strong><span class="onboarding-account-fact">Name, value, and performance appear here</span><div class="holding-weight"><i><b style="width:56%"></b></i><span class="onboarding-account-fact">Your share of portfolio</span></div></div><div class="position-value"><b class="onboarding-account-fact">Value after you connect</b></div></div>').join('');
     $('#investmentHoldingsMore').classList.add('hidden');
     return;
   }
