@@ -221,7 +221,7 @@ function setView(view) {
   }[view] || [view[0].toUpperCase() + view.slice(1), ''];
   $('#pageTitle').textContent = pageMeta[0];
   $('#monthLabel').textContent = pageMeta[1];
-  $('#connectButton').classList.toggle('hidden', view === 'profile');
+  $('#connectButton').classList.toggle('hidden', view === 'profile' || Boolean(state.onboardingPreview));
   $('#profileBack').classList.toggle('hidden', view !== 'profile');
   $('#profileButton').classList.toggle('hidden', view === 'profile');
   const launchEvent = {
@@ -261,7 +261,9 @@ function applyOnboardingPreviewCopy() {
     retirementSpendContext: 'Targets reflect the life you want to fund.',
     retirementAssumption: 'Your plan',
     goalTitle: 'Build toward what matters',
-    goalDetail: 'Track a goal from your connected balances.'
+    goalDetail: 'Track a goal from your connected balances.',
+    clarityCheckinTitle: 'See your next meaningful step',
+    clarityCheckinDetail: 'Clarity connects your current picture to a longer-term plan.'
   };
   Object.entries(copy).forEach(([id, text]) => {
     const element = $(`#${id}`);
@@ -1656,7 +1658,7 @@ function renderDashboard() {
   renderConnections(actual.items || []);
   renderClarityLayer(d);
   renderProfileSettings(actual);
-  $('#connectButton').classList.toggle('hidden', state.view === 'profile');
+  $('#connectButton').classList.toggle('hidden', state.view === 'profile' || Boolean(state.onboardingPreview));
   // First-run has its own composed preview and CTA. A generic warning toast
   // makes that deliberate state look like an error or failed load.
   if (!d.plaidConfigured && !state.demoPreview && !state.onboardingPreview) showNotice('Connect an account when you’re ready to see your own data.');
