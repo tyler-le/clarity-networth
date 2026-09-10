@@ -85,7 +85,10 @@ test('a newly signed-in member with no accounts gets a calm, truthful product pr
   await expect(page.locator('#retirementProjection')).toHaveText('Your retirement outlook');
   await goToView(page, 'accounts');
   await expect(page.locator('#accountsView .onboarding-tab-cta')).toBeVisible();
-  await expect(page.locator('#accountsSummary strong').first()).toHaveCSS('color', 'rgba(0, 0, 0, 0)');
+  // Product guidance remains legible; only the illustrative financial facts
+  // are obscured. A loading-style blank bar would make this feel broken.
+  await expect(page.locator('#investmentTotal')).toHaveCSS('filter', 'none');
+  await expect(page.locator('#accountsSummary strong').first()).toHaveCSS('filter', 'blur(4px)');
   await goToView(page, 'profile');
   await expect(page.locator('#profileName')).toHaveText('Scenario member');
   await expect(page.locator('#profileEmail')).toHaveText('scenario@example.test');
