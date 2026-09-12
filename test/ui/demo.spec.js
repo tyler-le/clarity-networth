@@ -347,6 +347,17 @@ test('one cash-flow period control keeps the overview and monthly chart in sync'
   await expect(page.locator('#monthlyCashFlowPeriod')).toContainText('last 3 completed months');
 });
 
+test('cash-flow timeframe stays available while reading the full view @critical', async ({ page }) => {
+  await openDemo(page);
+  await goToView(page, 'spending');
+  const control = page.locator('.spending-period-selector');
+  await expect(control).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, 700));
+  await expect.poll(() => control.evaluate((element) => Math.round(element.getBoundingClientRect().top))).toBeLessThanOrEqual(12);
+  await page.locator('[data-spending-range="6m"]').click();
+  await expect(page.locator('[data-spending-range="6m"]')).toHaveClass(/active/);
+});
+
 test('cash-flow diagram omits zero-dollar cells and flows', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');
@@ -530,7 +541,7 @@ test('account detail names each holding instead of repeating the account name', 
   await expect(where.locator('small').first()).toContainText(/401\(k\).*Funds/);
   await expect(where.getByTestId('holding-history-performance').first()).toContainText(/[+$−]/);
   await page.locator('[data-holding-history-range="1m"]').click();
-  await expect(where.getByTestId('holding-history-performance').first()).toContainText(/last month/);
+  await expect(where.getByTestId('holding-history-performance-period')).toContainText(/last month performance/);
 });
 
 test('holding and account drill-ins show only a person’s verified position history', async ({ page }) => {
@@ -712,6 +723,18 @@ test('investment timeframes keep the portfolio context in sync', async ({ page }
   await page.locator('[data-investment-range="6m"]').click();
   await expect(page.locator('[data-investment-range="6m"]')).toHaveClass(/active/);
   await expect(page.locator('#investmentContext')).toContainText('last 6 months');
+});
+
+test('portfolio timeframe stays available while comparing accounts and holdings @critical', async ({ page }) => {
+  await openDemo(page);
+  await goToView(page, 'investments');
+  const control = page.getByTestId('investment-period-selector');
+  await expect(control).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, 700));
+  await expect.poll(() => control.evaluate((element) => Math.round(element.getBoundingClientRect().top))).toBeLessThanOrEqual(12);
+  await page.locator('[data-investment-range="3m"]').click();
+  await expect(page.locator('[data-investment-range="3m"]')).toHaveClass(/active/);
+  await expect(page.locator('#investmentContext')).toContainText('last 3 months');
 });
 
 test('investment account values share one calm right edge for quick scanning', async ({ page }) => {

@@ -1436,7 +1436,8 @@ function renderHoldingHistoryDetail() {
     if (name && !accountLabels.has(name.toLowerCase())) return name;
     return `Unnamed ${assetClassLabel(position.type, position.asset_class_override).toLowerCase()} holding`;
   };
-  $('#holdingHistoryWhere').innerHTML = positions.length ? `<span>${isAccountDetail ? 'Holdings in this account' : 'Held in'}</span>${positions.map((position) => {
+  const rangeLabel = investmentRangeLabel(data.progress?.range || state.holdingHistoryRange);
+  $('#holdingHistoryWhere').innerHTML = positions.length ? `<div class="holding-history-where-heading"><span>${isAccountDetail ? 'Holdings in this account' : 'Held in'}</span>${isAccountDetail ? `<small data-testid="holding-history-performance-period">${escapeHtml(rangeLabel)} performance</small>` : ''}</div>${positions.map((position) => {
     const account = accounts.get(position.account_id);
     const accountName = account?.name || 'Investment account';
     const assetClass = assetClassLabel(position.type, position.asset_class_override);
@@ -1444,7 +1445,8 @@ function renderHoldingHistoryDetail() {
     const rowDetail = isAccountDetail ? `${accountName} · ${assetClass}` : assetClass;
     const snapshotKey = position.id || `${position.account_id}:${position.security_id || position.ticker || position.name}`;
     const positionMetric = holdingRangeMetric(data.holdingProgress?.[snapshotKey] || position.rangeProgress);
-    return `<div><b>${escapeHtml(rowTitle)}</b><small>${escapeHtml(rowDetail)}</small><strong>${fmt.format(Number(position.value || 0))}</strong>${positionMetric ? `<em class="holding-history-performance ${positionMetric.tone}" data-testid="holding-history-performance">${escapeHtml(positionMetric.value)}<small>${escapeHtml(positionMetric.detail)}</small></em>` : ''}${canEditClass ? holdingClassControl(position) : ''}</div>`;
+    const percent = positionMetric?.detail.split(' · ').at(-1);
+    return `<div><b>${escapeHtml(rowTitle)}</b><small>${escapeHtml(rowDetail)}</small><strong>${fmt.format(Number(position.value || 0))}</strong>${positionMetric ? `<em class="holding-history-performance ${positionMetric.tone}" data-testid="holding-history-performance" aria-label="${escapeHtml(`${positionMetric.label}: ${positionMetric.value}, ${positionMetric.detail}`)}" title="${escapeHtml(`${positionMetric.label}: ${positionMetric.detail}`)}">${escapeHtml(positionMetric.value)}${percent && percent !== positionMetric.detail ? `<small>${escapeHtml(percent)}</small>` : ''}</em>` : ''}${canEditClass ? holdingClassControl(position) : ''}</div>`;
   }).join('')}` : '';
 }
 

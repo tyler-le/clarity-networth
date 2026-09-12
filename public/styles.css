@@ -468,11 +468,20 @@ html[data-theme="dark"] .profile-settings-panel { border-color: var(--line); bac
 .spending-period-selector p { margin: 3px 0 0; color: var(--muted); font-size: 12px; font-weight: 620; }
 .spending-period-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
 .spending-period-note { margin: 4px 0 0; color: var(--muted); font-size: 11px; font-weight: 620; }
+.investment-period-selector { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 12px; padding: 8px 4px; }
+/* One persistent, view-level control is easier to use than making people
+   scroll back to a chart. It stays visually quiet until it is needed. */
+.spending-period-selector, .investment-period-selector { position: sticky; z-index: 8; top: 8px; }
+.spending-period-selector { box-shadow: 0 6px 18px color-mix(in srgb, var(--ink) 5%, transparent); }
+.investment-period-selector { border-bottom: 1px solid color-mix(in srgb, var(--line) 82%, transparent); background: color-mix(in srgb, var(--bg) 94%, transparent); }
 @media (max-width: 560px) {
   .spending-period-selector { align-items: flex-start; flex-direction: column; gap: 11px; padding: 13px 14px; }
   .spending-period-actions { width: 100%; justify-content: space-between; }
   .spending-period-actions .range-control { flex: 1; }
   .spending-period-actions .range-control button { flex: 1; }
+  .investment-period-selector { align-items: stretch; flex-direction: column; gap: 7px; margin-bottom: 10px; padding: 7px 2px 9px; }
+  .investment-period-selector .range-control { display: flex; width: 100%; }
+  .investment-period-selector .range-control button { flex: 1; min-width: 0; padding-inline: 3px; }
 }
 .spending-summary { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; font-size: 12px; font-weight: 650; }.spending-summary span { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); }.spending-summary .income-flow { color: var(--accent); }.spending-summary .spend-flow { color: #ae5547; }.spending-summary .save-flow, .spending-summary .retirement-flow { color: var(--muted); }.spending-summary .negative { color: var(--danger); }.spending-summary i { width: 7px; height: 7px; border-radius: 3px; background: #5b9a70; }.spending-summary .spend-flow i { background: #c87862; }.spending-summary .save-flow i { background: var(--save-invest); }.spending-summary .retirement-flow i { background: #8391ae; }.spending-summary small { color: var(--muted); font-size: 10px; font-weight: 600; }.spending-summary strong { color: var(--ink); font-variant-numeric: tabular-nums; }
 .cashflow-headline { margin-top: 1px; color: var(--accent); font-size: 13px; font-weight: 720; }.cashflow-headline.negative { color: var(--danger); }
@@ -597,11 +606,6 @@ button:focus-visible, select:focus-visible, summary:focus-visible { outline: 3px
   .holding-history-head .dialog-close { display: none; }
   .holding-history-head h2 { padding-right: 0; }
   .holding-history-dialog[open] { animation-name: holding-sheet-enter; animation-duration: .32s; animation-timing-function: cubic-bezier(.22,.9,.25,1); }
-  /* Keep the complete timeframe control visible instead of squeezing six
-     choices into the title row on a phone. */
-  .portfolio-card .card-top { align-items: stretch; flex-direction: column; }
-  .portfolio-card .range-control { display: flex; width: 100%; box-sizing: border-box; }
-  .portfolio-card .range-control button { flex: 1; min-width: 0; padding-inline: 3px; }
 }
 html[data-theme="dark"] .holding-history-drag-handle::after { background: #59645b; }
 html[data-theme="dark"] .holding-history-head .dialog-close { background: #29312b; }
@@ -824,3 +828,14 @@ html[data-theme="dark"] .retirement-milestone.complete, html[data-theme="dark"] 
 .holding-history-performance { grid-column: 2; grid-row: 2; display: grid; justify-items: end; align-self: start; color: var(--accent); font-size: 10px; font-style: normal; font-weight: 720; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .holding-history-performance.negative { color: var(--danger); }
 .holding-history-performance small { color: inherit; font-size: 9px; font-weight: 620; }
+.holding-history-where > .holding-history-where-heading { display: flex; grid-template-columns: none; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 7px; padding: 0; border: 0; }
+.holding-history-where-heading > span { color: var(--muted); font-size: 11px; font-weight: 720; }
+.holding-history-where-heading > small { color: var(--muted); font-size: 10px; font-weight: 650; text-transform: lowercase; }
+.holding-history-where > div:not(.holding-history-where-heading) { grid-template-columns: minmax(0, 1fr) minmax(132px, auto); }
+.holding-history-performance { display: inline-flex; align-items: baseline; justify-content: flex-end; gap: 4px; }
+
+/* Timeframe is the one control that changes every number in this sheet. Keep
+   it in reach while a person compares individual holdings, without making it
+   a page-level floating widget. */
+.holding-history-controls { position: sticky; z-index: 3; top: 0; margin: 0 -4px; padding: 8px 4px; background: var(--card); border-bottom: 1px solid var(--line); }
+@media (max-width: 560px) { .holding-history-controls { top: 94px; margin-inline: -4px; } }
