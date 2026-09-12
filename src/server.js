@@ -1062,7 +1062,7 @@ app.post('/api/auth/logout', (_req, res) => {
 app.get('/api/demo-preview', demoLimiter, (req, res) => {
   trackLaunchEvent(null, 'demo_opened');
   const store = demoPreviewStore();
-  const range = ['1m', '3m', '6m', 'ytd', '1y'].includes(req.query.range) ? req.query.range : '1m';
+  const range = ['1m', '3m', '6m', 'ytd', '1y', 'all'].includes(req.query.range) ? req.query.range : '1m';
   res.json({
     dashboard: {
       summary: summarizeRange(store),
@@ -1183,7 +1183,7 @@ app.get('/api/dashboard', async (req, res) => {
 });
 
 app.get('/api/spending', async (req, res) => {
-  const range = ['1m', '3m', '6m', 'ytd', '1y'].includes(req.query.range) ? req.query.range : '1m';
+  const range = ['1m', '3m', '6m', 'ytd', '1y', 'all'].includes(req.query.range) ? req.query.range : '1m';
   const store = activeStore(await loadStore(req.user));
   res.json(spendingSummary(store, range));
 });

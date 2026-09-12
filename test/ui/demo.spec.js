@@ -347,6 +347,15 @@ test('one cash-flow period control keeps the overview and monthly chart in sync'
   await expect(page.locator('#monthlyCashFlowPeriod')).toContainText('last 3 completed months');
 });
 
+test('cash flow all uses the same visible range contract as its data', async ({ page }) => {
+  await openDemo(page);
+  await goToView(page, 'spending');
+  await page.locator('[data-spending-range="all"]').click();
+  await expect(page.locator('[data-spending-range="all"]')).toHaveClass(/active/);
+  await expect(page.locator('#spendingPeriodSummary')).toContainText('all available history');
+  await expect(page.locator('#monthlyCashFlowPeriod')).toContainText('all available history');
+});
+
 test('cash-flow timeframe stays available while reading the full view @critical', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');
@@ -541,6 +550,30 @@ test('holding detail performance follows its own selected timeframe', async ({ p
   await expect(metric).toHaveAttribute('aria-label', /last month/);
 });
 
+test('changing a holding detail timeframe keeps the sheet stable while it updates @critical', async ({ page }) => {
+  await openDemo(page);
+  await goToView(page, 'investments');
+  await page.locator('[data-holding-history]').first().click();
+  const dialog = page.locator('#holdingHistoryDialog');
+  const chart = page.locator('#holdingHistoryChart');
+  await expect(chart.locator('svg')).toBeVisible();
+  let releaseRequest;
+  const pendingRequest = new Promise((resolve) => { releaseRequest = resolve; });
+  await page.route('**/api/demo-investments/history?**', async (route) => {
+    if (new URL(route.request().url()).searchParams.get('range') === '1m') {
+      await pendingRequest;
+    }
+    await route.continue();
+  });
+  await page.locator('[data-holding-history-range="1m"]').click();
+  await expect(page.locator('#holdingHistoryRange')).toHaveAttribute('aria-busy', 'true');
+  await expect(dialog).toBeVisible();
+  await expect(chart.locator('svg')).toBeVisible();
+  releaseRequest();
+  await expect(page.locator('#holdingHistoryRange')).not.toHaveAttribute('aria-busy', 'true');
+  await expect(page.locator('[data-holding-history-range="1m"]')).toHaveClass(/active/);
+});
+
 test('account detail names each holding instead of repeating the account name', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'investments');
@@ -646,6 +679,20 @@ test('holding detail timeframes stay local to the drill-in chart', async ({ page
   await page.locator('[data-holding-history-range="1m"]').click();
   await expect(page.locator('[data-holding-history-range="1m"]')).toHaveClass(/active/);
   await expect(page.locator(`[data-investment-range="${portfolioRangeName}"]`)).toHaveClass(/active/);
+});
+
+test('account chart endpoints use the exact verified window behind its metric', async ({ page }) => {
+  await openDemo(page);
+  await goToView(page, 'investments');
+  await page.locator('[data-investment-account-history]').first().click();
+  const responsePromise = page.waitForResponse((response) => response.url().includes('/api/demo-investments/history')
+    && new URL(response.url()).searchParams.get('range') === '1m');
+  await page.locator('[data-holding-history-range="1m"]').click();
+  const payload = await (await responsePromise).json();
+  expect(payload.progress.state).toBe('ready');
+  const format = (date) => new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  await expect(page.locator('#holdingHistoryChart .holding-history-axis.start')).toHaveText(format(payload.progress.startDate));
+  await expect(page.locator('#holdingHistoryChart .holding-history-axis.end')).toHaveText(format(payload.progress.endDate));
 });
 
 test('holding-chart values stay inside the chart at both timeline boundaries', async ({ page }) => {

@@ -1000,7 +1000,7 @@ function renderSpending(data) {
   preTaxNote.setAttribute('aria-label', `View ${fmt.format(preTaxRetirement)} in payroll contributions`);
   preTaxNote.classList.toggle('hidden', !preTaxRetirement);
   const completedThrough = data.completedMonths ? new Date(`${data.endDate}T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '';
-  const rangeLabel = ({ '1m': 'this month to date', '3m': 'last 3 completed months', '6m': 'last 6 completed months', ytd: `year to date through ${completedThrough}`, '1y': 'last 12 completed months' })[data.range] || 'this month to date';
+  const rangeLabel = ({ '1m': 'this month to date', '3m': 'last 3 completed months', '6m': 'last 6 completed months', ytd: `year to date through ${completedThrough}`, '1y': 'last 12 completed months', all: 'all available history' })[data.range] || 'this month to date';
   const selectedMonthLabel = state.spendingMonth && new Date(`${state.spendingMonth}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   $('#spendingPeriodSummary').textContent = selectedMonthLabel ? `${selectedMonthLabel} selected · ${rangeLabel}` : rangeLabel;
   $('#monthlyCashFlowPeriod').textContent = selectedMonthLabel ? `Selected: ${selectedMonthLabel}` : `Showing ${rangeLabel}`;
@@ -1066,6 +1066,12 @@ function portfolioSnapshots(data) {
   // labels for a person who has only recently started tracking.
   const snapshots = uniqueDailySnapshots(data.snapshots || []);
   if (state.investmentRange === 'all' || !snapshots.length) return snapshots;
+  // `progress` is the server's single range decision for the portfolio. It
+  // uses the identical verified dates as the headline amount, so never apply
+  // a second client-side calendar calculation when it is available.
+  if (data.progress?.startDate && data.progress?.endDate) {
+    return snapshots.filter((snapshot) => snapshot.date >= data.progress.startDate && snapshot.date <= data.progress.endDate);
+  }
   const latest = new Date(`${snapshots.at(-1).date}T12:00:00`);
   return filterSnapshots(snapshots, state.investmentRange, latest);
 }
@@ -1112,7 +1118,8 @@ function investmentRangeLabel(range) {
   return ({ '1m': 'last month', '3m': 'last 3 months', '6m': 'last 6 months', ytd: 'year to date', '1y': 'last year', all: 'all history' })[range] || 'last year';
 }
 
-function portfolioChangeLabel(snapshots) {
+function portfolioChangeLabel(snapshots, progress = null) {
+  if (progress?.state === 'ready') return investmentRangeLabel(progress.range);
   const first = snapshots[0];
   const last = snapshots.at(-1);
   if (!first || !last) return investmentRangeLabel(state.investmentRange);
@@ -1139,7 +1146,7 @@ function renderPortfolioChart(data) {
   }
   if (snapshots.length === 1) {
     const latest = new Date(`${snapshots[0].date}T12:00:00`);
-    renderPortfolioTrackingStart(el, snapshots[0], data.total, netWorthRangeBounds(state.investmentRange, latest).startDate);
+    renderPortfolioTrackingStart(el, snapshots[0], data.total, data.progress?.startDate || netWorthRangeBounds(state.investmentRange, latest).startDate);
     return;
   }
   const width = Math.max(1, Math.round(el.clientWidth));
@@ -1147,7 +1154,7 @@ function renderPortfolioChart(data) {
   const plot = { left: 46, right: 6, top: 8, bottom: height - 23 };
   const firstObservedTime = new Date(`${snapshots[0].date}T12:00:00`).getTime();
   const lastObservedTime = new Date(`${snapshots.at(-1).date}T12:00:00`).getTime();
-  const selectedStartDate = netWorthRangeBounds(state.investmentRange, new Date(`${snapshots.at(-1).date}T12:00:00`)).startDate;
+  const selectedStartDate = data.progress?.startDate || netWorthRangeBounds(state.investmentRange, new Date(`${snapshots.at(-1).date}T12:00:00`)).startDate;
   const requestedStartTime = selectedStartDate ? new Date(`${selectedStartDate}T12:00:00`).getTime() : firstObservedTime;
   const domainStart = Math.min(firstObservedTime, requestedStartTime);
   const domainEnd = Math.max(domainStart + 86_400_000, lastObservedTime);
@@ -1283,13 +1290,21 @@ function aggregateHoldings(positions) {
   });
 }
 
-function historyForRange(history, range = state.holdingHistoryRange) {
+function historyForRange(history, range = state.holdingHistoryRange, progress = null) {
   if (!history?.length || range === 'all') return history || [];
+  // The API already chose the exact verified window used for the accompanying
+  // value-change metric. Reuse it here so a chart and its headline never
+  // describe different dates (for example, a trailing month vs a calendar
+  // month ending at month-end).
+  if (progress?.startDate && progress?.endDate) {
+    const matching = history.filter((entry) => entry.date >= progress.startDate && entry.date <= progress.endDate);
+    return matching.length ? matching : history.slice(-1);
+  }
   const filtered = filterSnapshots(history, range, new Date(`${history.at(-1).date}T12:00:00`));
   return filtered.length ? filtered : history.slice(-1);
 }
 
-function renderHoldingHistoryChart(history, kind, emptyMessage = null, historyState = 'ready') {
+function renderHoldingHistoryChart(history, kind, emptyMessage = null, historyState = 'ready', progress = null) {
   const el = $('#holdingHistoryChart');
   if (historyState === 'loading') {
     el.innerHTML = `<div class="holding-history-state holding-history-skeleton" data-history-state="loading" role="status"><b>Loading history</b><span>Checking the latest reported activity.</span><i></i><i></i></div>`;
@@ -1311,7 +1326,7 @@ function renderHoldingHistoryChart(history, kind, emptyMessage = null, historySt
     el.innerHTML = `<div class="holding-history-empty holding-history-state" data-history-state="tracking"><b>Tracking starts with your next update</b><span>${escapeHtml(message)}</span></div>`;
     return;
   }
-  const pointsData = historyForRange(history, state.holdingHistoryRange);
+  const pointsData = historyForRange(history, state.holdingHistoryRange, progress);
   const width = Math.max(1, Math.round(el.clientWidth));
   const height = Math.max(1, Math.round(el.clientHeight));
   const plot = { left: 12, right: 12, top: 12, bottom: height - 28 };
@@ -1419,7 +1434,7 @@ function renderHoldingHistoryDetail() {
   $('#holdingHistoryNote').textContent = isMarket ? 'Market price does not include your purchases, sales, or contributions.' : (data.detail || data.reason || 'Your position history is unavailable.');
   // A dialog has no stable width until the browser has painted it. Defer chart
   // measurement one frame so mobile and desktop both receive a real canvas.
-  requestAnimationFrame(() => renderHoldingHistoryChart(history, isMarket ? 'market' : 'position', data.reason, isMarket ? 'ready' : data.state));
+  requestAnimationFrame(() => renderHoldingHistoryChart(history, isMarket ? 'market' : 'position', data.reason, isMarket ? 'ready' : data.state, data.progress));
   const positions = (state.investments?.positions || []).filter((position) => data.accountId ? position.account_id === data.accountId : data.ticker && String(position.ticker || '').toUpperCase() === data.ticker);
   const accounts = new Map((state.investments?.accounts || []).map((account) => [account.account_id, account]));
   const canEditClass = !state.demoPreview && !state.dashboard?.demoMode;
@@ -1450,13 +1465,28 @@ function renderHoldingHistoryDetail() {
   }).join('')}` : '';
 }
 
+let holdingHistoryRequest = 0;
+function setHoldingHistoryRangeLoading(loading) {
+  const control = $('#holdingHistoryRange');
+  if (loading) control.setAttribute('aria-busy', 'true');
+  else control.removeAttribute('aria-busy');
+  $$('[data-holding-history-range]').forEach((button) => {
+    button.disabled = loading;
+    button.classList.toggle('active', button.dataset.holdingHistoryRange === state.holdingHistoryRange);
+    button.setAttribute('aria-pressed', button.dataset.holdingHistoryRange === state.holdingHistoryRange);
+  });
+}
+
 async function openHoldingHistory({ ticker = '', accountId = '' } = {}, { preserveRange = false } = {}) {
   const dialog = $('#holdingHistoryDialog');
   const selectedAccount = accountId ? (state.investments?.accounts || []).find((account) => account.account_id === accountId) : null;
   const accountLabel = selectedAccount?.name || 'Investment account';
   const accountValue = selectedAccount ? Number(selectedAccount.value || selectedAccount.balance || 0) : 0;
-  state.holdingHistory = { state: 'loading', label: accountId ? accountLabel : 'Investment detail', ticker, value: accountValue, history: [], market: [], reason: 'Loading your history…' };
-  if (!preserveRange) state.holdingHistoryMode = 'position';
+  const request = ++holdingHistoryRequest;
+  if (!preserveRange) {
+    state.holdingHistory = { state: 'loading', label: accountId ? accountLabel : 'Investment detail', ticker, value: accountValue, history: [], market: [], reason: 'Loading your history…' };
+    state.holdingHistoryMode = 'position';
+  }
   // This starts aligned with the page for continuity, then belongs only to
   // this drill-in. Changing it never alters the Investments overview.
   if (!preserveRange) state.holdingHistoryRange = state.investmentRange;
@@ -1468,12 +1498,14 @@ async function openHoldingHistory({ ticker = '', accountId = '' } = {}, { preser
     // Tab still reaches the handle and shows its focus indicator as expected.
     dialog.focus({ preventScroll: true });
   }
-  renderHoldingHistoryDetail();
+  if (!preserveRange) renderHoldingHistoryDetail();
+  else setHoldingHistoryRangeLoading(true);
   try {
     const base = state.demoPreview || state.onboardingPreview || state.dashboard?.demoMode ? '/api/demo-investments/history' : '/api/investments/history';
     const scope = accountId ? `account_id=${encodeURIComponent(accountId)}` : `ticker=${encodeURIComponent(ticker)}`;
     const query = `${scope}&range=${encodeURIComponent(state.holdingHistoryRange)}`;
     const response = await api(`${base}?${query}`);
+    if (request !== holdingHistoryRequest) return;
     state.holdingHistory = {
       ...response,
       // The API normally supplies these fields. Retain the selected account
@@ -1484,8 +1516,15 @@ async function openHoldingHistory({ ticker = '', accountId = '' } = {}, { preser
     };
     renderHoldingHistoryDetail();
   } catch (error) {
+    if (request !== holdingHistoryRequest) return;
+    if (preserveRange) {
+      showNotice(error.message || 'We could not update this timeframe right now.');
+      return;
+    }
     state.holdingHistory = { state: 'unavailable', label: 'Investment detail', ticker, value: 0, history: [], market: [], reason: error.message || 'We could not load this history right now.' };
     renderHoldingHistoryDetail();
+  } finally {
+    if (request === holdingHistoryRequest) setHoldingHistoryRangeLoading(false);
   }
 }
 
@@ -1506,9 +1545,11 @@ function renderInvestments(data) {
   const endSnapshot = snapshots.at(-1);
   const startSnapshot = snapshots[0];
   const displayedTotal = Number(endSnapshot?.value ?? data.total ?? 0);
-  const periodChange = snapshots.length > 1 ? displayedTotal - Number(startSnapshot?.value || 0) : null;
+  const periodChange = data.progress?.state === 'ready'
+    ? Number(data.progress.valueChange)
+    : snapshots.length > 1 ? displayedTotal - Number(startSnapshot?.value || 0) : null;
   const periodLabel = investmentRangeLabel(state.investmentRange);
-  const changePeriodLabel = portfolioChangeLabel(snapshots);
+  const changePeriodLabel = portfolioChangeLabel(snapshots, data.progress);
   $('#investmentTotal').textContent = fmt.format(displayedTotal);
   $('#investmentPeriodSummary').textContent = periodLabel;
   const started = snapshots[0]?.date ? new Date(`${snapshots[0].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : null;

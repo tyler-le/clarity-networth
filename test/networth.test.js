@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentRangeProgress, monthlyReview, reconstructInvestmentHistory, refreshReconstructedInvestmentSnapshots, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, repairIncomingClassifications, repairTransferClassifications, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
+import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentPortfolioRangeProgress, investmentRangeProgress, monthlyReview, reconstructInvestmentHistory, refreshReconstructedInvestmentSnapshots, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, repairIncomingClassifications, repairTransferClassifications, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
 import { normalizeCandles } from '../src/lib/market-data.js';
 import { filterSnapshots, preferredNetWorthRange, scrubIndex, uniqueDailySnapshots } from '../public/chart-utils.js';
 
@@ -205,6 +205,22 @@ test('multi-month cash flow excludes an incomplete current month', () => {
   assert.equal(monthToDate.total, 900);
 });
 
+test('all cash flow uses the complete observed ledger, including the current month', () => {
+  const store = { transactions: [
+    { date: '2024-01-03', amount: -2_000, bucket: 'income', merchant_name: 'Payroll' },
+    { date: '2024-01-04', amount: 800, bucket: 'fixed', merchant_name: 'Rent' },
+    { date: '2026-09-04', amount: -2_500, bucket: 'income', merchant_name: 'Payroll' },
+    { date: '2026-09-05', amount: 900, bucket: 'guilt_free', merchant_name: 'Grocer' }
+  ] };
+  const result = spendingSummary(store, 'all', new Date('2026-09-05T12:00:00'));
+  assert.equal(result.range, 'all');
+  assert.equal(result.startDate, '2024-01-03');
+  assert.equal(result.endDate, '2026-09-05');
+  assert.equal(result.completedMonths, false);
+  assert.equal(result.income, 4_500);
+  assert.equal(result.total, 1_700);
+});
+
 test('cash flow separates actual spending details from saving and investing', () => {
   const store = { transactions: [
     { date: '2026-09-01', amount: -5000, bucket: 'income', merchant_name: 'Payroll' },
@@ -307,6 +323,22 @@ test('selected holding range calls a change market performance only with unchang
     startDate: '2026-08-10', endDate: '2026-09-07', startValue: 1_000, endValue: 1_100, valueChange: 100,
     marketChange: 100, marketChangePct: .1, changeKind: 'market'
   });
+});
+
+test('portfolio range progress gives the overview one verified date window', () => {
+  const store = { investment_snapshots: [
+    { date: '2026-08-11', value: 17_800, source: 'verified' },
+    { date: '2026-08-12', value: 17_968.64, source: 'verified' },
+    { date: '2026-08-30', value: 18_241, source: 'verified' },
+    { date: '2026-09-12', value: 18_200, source: 'verified' }
+  ] };
+  assert.deepEqual(investmentPortfolioRangeProgress(store, { range: '1m' }), {
+    scope: 'portfolio', range: '1m', state: 'ready', points: 3,
+    startDate: '2026-08-12', endDate: '2026-09-12', startValue: 17_968.64,
+    endValue: 18_200, valueChange: 231.36, changeKind: 'balance'
+  });
+  const summary = investmentSummary({ ...store, accounts: [], positions: [], manual_holdings: [] }, { range: '1m' });
+  assert.deepEqual(summary.progress, investmentPortfolioRangeProgress(store, { range: '1m' }));
 });
 
 test('selected investment ranges never call deposits or account changes market performance', () => {

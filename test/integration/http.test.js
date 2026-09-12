@@ -127,6 +127,14 @@ integrationTest('falls back safely for unsupported public-demo timeframes', asyn
   assert.equal(response.body.spending.monthly.length, 1);
 });
 
+integrationTest('serves all available cash-flow history through the same public range contract', async () => {
+  const response = await request(app).get('/api/demo-preview?range=all');
+  assert.equal(response.status, 200);
+  assert.equal(response.body.spending.range, 'all');
+  assert.ok(response.body.spending.startDate <= response.body.spending.endDate);
+  assert.ok(response.body.spending.monthly.length > 12);
+});
+
 integrationTest('protects personal financial endpoints without a session', async () => {
   for (const [method, pathname] of [
     ['get', '/api/dashboard'],

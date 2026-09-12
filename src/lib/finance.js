@@ -239,6 +239,10 @@ export function investmentSummary(store, { range = 'all' } = {}) {
   return {
     range,
     total,
+    // This is the canonical portfolio range result. The client must use its
+    // observed endpoints for the headline, the chart, and supporting copy;
+    // account and holding rows already follow the equivalent scoped result.
+    progress: investmentPortfolioRangeProgress(store, { range }),
     accounts: accounts.map((account) => ({ id: account.id, account_id: account.plaid_account_id, name: account.nickname || account.name, institution_name: account.institution_name, subtype: account.subtype, value: Math.abs(Number(account.current_balance || 0)), rangeProgress: investmentRangeProgress(store, { accountId: account.plaid_account_id, range }) })),
     allocation: allocationRows,
     unclassifiedAccounts,
@@ -428,6 +432,41 @@ export function investmentRangeProgress(store, { accountId = null, ticker = null
     marketChange,
     marketChangePct: marketChange != null && startValue > 0 ? marketChange / startValue : null,
     changeKind: marketChange != null ? 'market' : 'balance'
+  };
+}
+
+// Portfolio balances are observed separately from position snapshots. Keep
+// their range calculation in the same layer as account and holding progress
+// so no view has to invent a second calendar boundary in the browser.
+export function investmentPortfolioRangeProgress(store, { range = 'all' } = {}) {
+  const selectedRange = investmentRanges.has(range) ? range : 'all';
+  const records = (store.investment_snapshots || [])
+    .filter((record) => record.source === 'verified' && record.date)
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const endDate = records.at(-1)?.date || null;
+  if (!endDate) return { scope: 'portfolio', range: selectedRange, state: 'tracking', points: 0 };
+  const requestedStart = investmentRangeStart(endDate, selectedRange);
+  // A sync can retry within a day. The last observed balance for that day is
+  // the one that represents the daily snapshot, matching chart semantics.
+  const byDate = new Map();
+  for (const record of records) {
+    if ((requestedStart && record.date < requestedStart) || record.date > endDate) continue;
+    byDate.set(record.date, record);
+  }
+  const dates = [...byDate.keys()].sort();
+  if (dates.length < 2) return {
+    scope: 'portfolio', range: selectedRange, state: 'tracking', points: dates.length,
+    trackingSince: dates[0] || null
+  };
+  const opening = byDate.get(dates[0]);
+  const closing = byDate.get(dates.at(-1));
+  const startValue = Math.abs(Number(opening.value || 0));
+  const endValue = Math.abs(Number(closing.value || 0));
+  return {
+    scope: 'portfolio', range: selectedRange, state: 'ready', points: dates.length,
+    startDate: dates[0], endDate: dates.at(-1), startValue, endValue,
+    valueChange: Math.round((endValue - startValue) * 100) / 100,
+    changeKind: 'balance'
   };
 }
 
@@ -1001,7 +1040,7 @@ export function recurringCharges(store, anchor = new Date()) {
 }
 
 
-function spendingPeriod(range, anchor = new Date()) {
+function spendingPeriod(range, anchor = new Date(), transactions = []) {
   // Month-to-date is useful while a month is in progress. Comparisons over
   // several months are not: early-month bills frequently arrive before a
   // paycheck, producing a false-looking deficit. Those ranges therefore end
@@ -1012,6 +1051,14 @@ function spendingPeriod(range, anchor = new Date()) {
       endDate: anchor.toISOString().slice(0, 10),
       completedMonths: false
     };
+  }
+  if (range === 'all') {
+    const endDate = anchor.toISOString().slice(0, 10);
+    const startDate = transactions
+      .map((transaction) => String(transaction.date || ''))
+      .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date) && date <= endDate)
+      .sort()[0] || new Date(anchor.getFullYear(), anchor.getMonth(), 1).toISOString().slice(0, 10);
+    return { startDate, endDate, completedMonths: false };
   }
   const end = new Date(anchor.getFullYear(), anchor.getMonth(), 0);
   const start = new Date(end.getFullYear(), end.getMonth(), 1);
@@ -1081,7 +1128,7 @@ function incomeSource(transaction) {
 }
 
 export function spendingSummary(store, range = '1m', anchor = new Date()) {
-  const { startDate, endDate, completedMonths } = spendingPeriod(range, anchor);
+  const { startDate, endDate, completedMonths } = spendingPeriod(range, anchor, store.transactions || []);
   const categories = new Map();
   const merchants = new Map();
   const monthly = new Map();
