@@ -354,6 +354,7 @@ test('cash-flow timeframe stays available while reading the full view @critical'
   await expect(control).toBeVisible();
   await expect(control).not.toHaveCSS('box-shadow', 'none');
   await page.evaluate(() => window.scrollTo(0, 700));
+  await expect.poll(() => control.evaluate((element) => Math.round(element.getBoundingClientRect().top))).toBeGreaterThanOrEqual(0);
   await expect.poll(() => control.evaluate((element) => Math.round(element.getBoundingClientRect().top))).toBeLessThanOrEqual(12);
   await page.locator('[data-spending-range="6m"]').click();
   await expect(page.locator('[data-spending-range="6m"]')).toHaveClass(/active/);
@@ -751,6 +752,7 @@ test('portfolio timeframe stays available while comparing accounts and holdings 
   const control = page.getByTestId('investment-period-selector');
   await expect(control).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, 700));
+  await expect.poll(() => control.evaluate((element) => Math.round(element.getBoundingClientRect().top))).toBeGreaterThanOrEqual(0);
   await expect.poll(() => control.evaluate((element) => Math.round(element.getBoundingClientRect().top))).toBeLessThanOrEqual(12);
   await page.locator('[data-investment-range="3m"]').click();
   await expect(page.locator('[data-investment-range="3m"]')).toHaveClass(/active/);

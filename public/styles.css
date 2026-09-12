@@ -471,7 +471,7 @@ html[data-theme="dark"] .profile-settings-panel { border-color: var(--line); bac
 /* One persistent, view-level control is easier to use than making people
    scroll back to a chart. It stays visually quiet until it is needed. */
 .spending-period-selector, .investment-period-selector { position: sticky; z-index: 8; top: 8px; }
-.spending-period-selector, .investment-period-selector { position: relative; isolation: isolate; box-shadow: 0 9px 22px rgba(24, 33, 25, .11); }
+.spending-period-selector, .investment-period-selector { isolation: isolate; box-shadow: 0 9px 22px rgba(24, 33, 25, .11); }
 .spending-period-selector::after, .investment-period-selector::after { content: ''; position: absolute; right: 16px; bottom: -1px; left: 16px; height: 1px; background: color-mix(in srgb, var(--line) 88%, var(--ink)); pointer-events: none; }
 @media (max-width: 560px) {
   .spending-period-selector, .investment-period-selector { align-items: flex-start; flex-direction: column; gap: 11px; padding: 13px 14px; }
