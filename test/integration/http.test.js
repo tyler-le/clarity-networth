@@ -258,6 +258,7 @@ integrationTest('investment history exposes range-safe verified progress without
     startDate: earlier, endDate: today, startValue: 1_000, endValue: 1_100, valueChange: 100,
     marketChange: 100, marketChangePct: .1, changeKind: 'market'
   });
+  assert.deepEqual(holding.body.holdingProgress['ira:vti'], holding.body.progress);
   const account = await request(app).get('/api/investments/history?account_id=ira&range=1m').set('Cookie', cookie);
   assert.equal(account.status, 200);
   assert.equal(account.body.progress.valueChange, 100);

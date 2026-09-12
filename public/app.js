@@ -1510,6 +1510,7 @@ function renderInvestments(data) {
   const periodLabel = investmentRangeLabel(state.investmentRange);
   const changePeriodLabel = portfolioChangeLabel(snapshots);
   $('#investmentTotal').textContent = fmt.format(displayedTotal);
+  $('#investmentPeriodSummary').textContent = periodLabel;
   const started = snapshots[0]?.date ? new Date(`${snapshots[0].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : null;
   const changeCopy = periodChange == null ? (started ? `Tracking since ${started}` : 'Sync to begin tracking') : `${periodChange >= 0 ? '+' : '−'}${fmt.format(Math.abs(periodChange))} ${changePeriodLabel}`;
   $('#investmentContext').textContent = accounts.length ? changeCopy : 'Connect an investment account to begin.';

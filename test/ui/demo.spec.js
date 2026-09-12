@@ -352,6 +352,7 @@ test('cash-flow timeframe stays available while reading the full view @critical'
   await goToView(page, 'spending');
   const control = page.locator('.spending-period-selector');
   await expect(control).toBeVisible();
+  await expect(control).not.toHaveCSS('box-shadow', 'none');
   await page.evaluate(() => window.scrollTo(0, 700));
   await expect.poll(() => control.evaluate((element) => Math.round(element.getBoundingClientRect().top))).toBeLessThanOrEqual(12);
   await page.locator('[data-spending-range="6m"]').click();
@@ -529,6 +530,16 @@ test('holding details preserve account context without crowding the overview', a
   await expect(page.locator('.holding-row').first()).not.toHaveAttribute('open', '');
 });
 
+test('holding detail performance follows its own selected timeframe', async ({ page }) => {
+  await openDemo(page);
+  await goToView(page, 'investments');
+  await page.locator('[data-holding-history]').first().click();
+  const metric = page.locator('#holdingHistoryWhere').getByTestId('holding-history-performance').first();
+  await expect(metric).toBeVisible();
+  await page.locator('[data-holding-history-range="1m"]').click();
+  await expect(metric).toHaveAttribute('aria-label', /last month/);
+});
+
 test('account detail names each holding instead of repeating the account name', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'investments');
@@ -538,8 +549,16 @@ test('account detail names each holding instead of repeating the account name', 
   await expect(page.locator('#holdingHistoryTitle')).toHaveText('401(k)');
   await expect(where).toContainText('Holdings in this account');
   await expect(where.locator('b').first()).toContainText(/VTI|VXUS|BND/);
-  await expect(where.locator('small').first()).toContainText(/401\(k\).*Funds/);
+  await expect(where.locator(':scope > div:not(.holding-history-where-heading) small').first()).toContainText(/401\(k\).*Funds/);
   await expect(where.getByTestId('holding-history-performance').first()).toContainText(/[+$−]/);
+  const metricEdges = await where.locator(':scope > div:not(.holding-history-where-heading)').evaluateAll((rows) => rows.flatMap((row) => {
+    const value = row.querySelector('strong');
+    const performance = row.querySelector('[data-testid="holding-history-performance"]');
+    if (!value || !performance) return [];
+    return [Math.abs(value.getBoundingClientRect().right - performance.getBoundingClientRect().right)];
+  }));
+  expect(metricEdges.length).toBeGreaterThan(0);
+  expect(Math.max(...metricEdges)).toBeLessThanOrEqual(1);
   await page.locator('[data-holding-history-range="1m"]').click();
   await expect(where.getByTestId('holding-history-performance-period')).toContainText(/last month performance/);
 });
@@ -718,6 +737,7 @@ test('investment timeframes keep the portfolio context in sync', async ({ page }
   await goToView(page, 'investments');
   await page.locator('[data-investment-range="3m"]').click();
   await expect(page.locator('[data-investment-range="3m"]')).toHaveClass(/active/);
+  await expect(page.locator('#investmentPeriodSummary')).toHaveText('last 3 months');
   await expect(page.locator('#investmentContext')).toContainText('last 3 months');
   await expect(page.locator('#investmentHoldingsInsight')).toContainText('last 3 months selected');
   await page.locator('[data-investment-range="6m"]').click();

@@ -464,24 +464,20 @@ html[data-theme="dark"] .profile-settings-panel { border-color: var(--line); bac
 
 /* One period picker governs both cash-flow views. It avoids duplicated,
    competing date controls while making the relationship explicit. */
-.spending-period-selector { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 16px; padding: 14px 17px; border: 1px solid var(--line); border-radius: 15px; background: color-mix(in srgb, var(--card) 92%, #eef5ef); }
-.spending-period-selector p { margin: 3px 0 0; color: var(--muted); font-size: 12px; font-weight: 620; }
-.spending-period-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.spending-period-selector, .investment-period-selector { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 16px; padding: 14px 17px; border: 1px solid var(--line); border-radius: 15px; background: color-mix(in srgb, var(--card) 92%, #eef5ef); }
+.spending-period-selector p, .investment-period-selector p { margin: 3px 0 0; color: var(--muted); font-size: 12px; font-weight: 620; }
+.spending-period-actions, .investment-period-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
 .spending-period-note { margin: 4px 0 0; color: var(--muted); font-size: 11px; font-weight: 620; }
-.investment-period-selector { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 12px; padding: 8px 4px; }
 /* One persistent, view-level control is easier to use than making people
    scroll back to a chart. It stays visually quiet until it is needed. */
 .spending-period-selector, .investment-period-selector { position: sticky; z-index: 8; top: 8px; }
-.spending-period-selector { box-shadow: 0 6px 18px color-mix(in srgb, var(--ink) 5%, transparent); }
-.investment-period-selector { border-bottom: 1px solid color-mix(in srgb, var(--line) 82%, transparent); background: color-mix(in srgb, var(--bg) 94%, transparent); }
+.spending-period-selector, .investment-period-selector { position: relative; isolation: isolate; box-shadow: 0 9px 22px rgba(24, 33, 25, .11); }
+.spending-period-selector::after, .investment-period-selector::after { content: ''; position: absolute; right: 16px; bottom: -1px; left: 16px; height: 1px; background: color-mix(in srgb, var(--line) 88%, var(--ink)); pointer-events: none; }
 @media (max-width: 560px) {
-  .spending-period-selector { align-items: flex-start; flex-direction: column; gap: 11px; padding: 13px 14px; }
-  .spending-period-actions { width: 100%; justify-content: space-between; }
-  .spending-period-actions .range-control { flex: 1; }
-  .spending-period-actions .range-control button { flex: 1; }
-  .investment-period-selector { align-items: stretch; flex-direction: column; gap: 7px; margin-bottom: 10px; padding: 7px 2px 9px; }
-  .investment-period-selector .range-control { display: flex; width: 100%; }
-  .investment-period-selector .range-control button { flex: 1; min-width: 0; padding-inline: 3px; }
+  .spending-period-selector, .investment-period-selector { align-items: flex-start; flex-direction: column; gap: 11px; padding: 13px 14px; }
+  .spending-period-actions, .investment-period-actions { width: 100%; justify-content: space-between; }
+  .spending-period-actions .range-control, .investment-period-actions .range-control { display: flex; flex: 1; width: 100%; }
+  .spending-period-actions .range-control button, .investment-period-actions .range-control button { flex: 1; min-width: 0; padding-inline: 3px; }
 }
 .spending-summary { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; font-size: 12px; font-weight: 650; }.spending-summary span { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); }.spending-summary .income-flow { color: var(--accent); }.spending-summary .spend-flow { color: #ae5547; }.spending-summary .save-flow, .spending-summary .retirement-flow { color: var(--muted); }.spending-summary .negative { color: var(--danger); }.spending-summary i { width: 7px; height: 7px; border-radius: 3px; background: #5b9a70; }.spending-summary .spend-flow i { background: #c87862; }.spending-summary .save-flow i { background: var(--save-invest); }.spending-summary .retirement-flow i { background: #8391ae; }.spending-summary small { color: var(--muted); font-size: 10px; font-weight: 600; }.spending-summary strong { color: var(--ink); font-variant-numeric: tabular-nums; }
 .cashflow-headline { margin-top: 1px; color: var(--accent); font-size: 13px; font-weight: 720; }.cashflow-headline.negative { color: var(--danger); }
@@ -608,6 +604,7 @@ button:focus-visible, select:focus-visible, summary:focus-visible { outline: 3px
   .holding-history-dialog[open] { animation-name: holding-sheet-enter; animation-duration: .32s; animation-timing-function: cubic-bezier(.22,.9,.25,1); }
 }
 html[data-theme="dark"] .holding-history-drag-handle::after { background: #59645b; }
+html[data-theme="dark"] .spending-period-selector, html[data-theme="dark"] .investment-period-selector { box-shadow: 0 9px 22px rgba(0, 0, 0, .28); }
 html[data-theme="dark"] .holding-history-head .dialog-close { background: #29312b; }
 .legend-row { width: 100%; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }.legend-row:hover { color: var(--accent); }.spending-transactions { margin-top: 16px; overflow: hidden; }.spending-transactions summary { display: flex; justify-content: space-between; align-items: center; padding: 18px 22px; cursor: pointer; font-size: 14px; font-weight: 720; list-style: none; }.spending-transactions summary::-webkit-details-marker { display: none; }.spending-transactions summary small { color: var(--muted); font-size: 12px; font-weight: 600; }.spending-transactions[open] summary { border-bottom: 1px solid var(--line); }.spending-transaction-controls { display: flex; gap: 8px; padding: 14px 18px; background: #fbfcfa; border-bottom: 1px solid var(--line); }.spending-transaction-controls select { border: 1px solid var(--line); border-radius: 9px; background: white; padding: 7px 9px; color: var(--ink); font-size: 12px; }.spending-transaction-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--line); }.spending-transaction-row:last-child { border-bottom: 0; }.spending-transaction-row > div { min-width: 0; display: grid; gap: 3px; }.spending-transaction-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }.spending-transaction-row span { color: var(--muted); font-size: 11px; }.spending-transaction-row b { white-space: nowrap; font-size: 13px; font-variant-numeric: tabular-nums; }.transaction-plan { max-width: 124px; min-width: 0; }
 .allocation-toggle { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: #f0f3ef; }.allocation-toggle button { width: 26px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 11px; font-weight: 750; }.allocation-toggle button.active { color: var(--ink); background: white; box-shadow: 0 1px 3px rgba(20,30,20,.08); }
@@ -824,7 +821,7 @@ html[data-theme="dark"] .retirement-milestone.complete, html[data-theme="dark"] 
 
 /* A range metric belongs visually with each holding, but stays quieter than
    the reported value so an account drawer remains easy to scan. */
-.holding-history-where strong { grid-row: 1; align-self: end; }
+.holding-history-where strong { grid-row: 1; align-self: end; justify-self: end; }
 .holding-history-performance { grid-column: 2; grid-row: 2; display: grid; justify-items: end; align-self: start; color: var(--accent); font-size: 10px; font-style: normal; font-weight: 720; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .holding-history-performance.negative { color: var(--danger); }
 .holding-history-performance small { color: inherit; font-size: 9px; font-weight: 620; }

@@ -606,6 +606,20 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
   });
   const holdingKeys = accountId ? null : positions.map(positionSnapshotKey);
   const rangeProgress = investmentRangeProgress(store, { accountId, ticker: normalizedTicker, holdingKeys, range });
+  // Detail rows can represent several accounts that hold the same security.
+  // Calculate each row from its own verified snapshots for this exact range;
+  // never reuse an overview metric that may have been fetched for another
+  // timeframe.
+  const holdingProgress = Object.fromEntries(positions.map((position) => [
+    positionSnapshotKey(position),
+    position.manual || !position.ticker
+      ? null
+      : investmentRangeProgress(store, {
+        ticker: position.ticker,
+        holdingKeys: [positionSnapshotKey(position)],
+        range
+      })
+  ]));
   // Keep the account identity visible even if its provider has not supplied
   // positions in this response. A generic "$0 Investment account" is both
   // misleading and needlessly discards the nickname the person gave it.
@@ -641,16 +655,7 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
       // Each account-drawer row gets the same selected-range, verified
       // snapshot calculation as the overview. Never derive it from trades or
       // quotes in the UI.
-      holdingProgress: Object.fromEntries(positions.map((position) => [
-        positionSnapshotKey(position),
-        position.manual || !position.ticker
-          ? null
-          : investmentRangeProgress(store, {
-            ticker: position.ticker,
-            holdingKeys: [positionSnapshotKey(position)],
-            range
-          })
-      ])),
+      holdingProgress,
       detail: providerHistory.length ? `Based on ${providerHistory.length} verified daily update${providerHistory.length === 1 ? '' : 's'} from your connected institution.` : undefined,
       reason: preparing ? 'Your institution is still preparing its reported investment activity.' : 'Daily account tracking will begin with your next verified update.'
     };
@@ -663,6 +668,7 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
     costBasis: null, gain: null,
     history: providerHistory, market: [],
     progress: rangeProgress,
+    holdingProgress,
     detail: providerHistory.length ? `Based on ${providerHistory.length} verified daily update${providerHistory.length === 1 ? '' : 's'} from your connected institution.` : undefined,
     reason: preparing ? 'Your institution is still preparing its reported investment activity.' : 'Daily holding tracking will begin with your next verified update.'
   };
