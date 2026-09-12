@@ -361,10 +361,10 @@ test('monthly cash-flow values stay self-labeled instead of relying on a detache
   await openDemo(page);
   await goToView(page, 'spending');
   const detail = page.locator('#trendDetail');
-  await expect(detail).toContainText('Income');
+  await expect(detail).toContainText('Money in');
   await expect(detail).toContainText('Spent');
   await expect(detail).toContainText(/Left|Over/);
-  const labelsStayWithValues = await detail.locator('strong').evaluateAll((items) => items.every((item) => /Income|Spent/.test(item.textContent || '') && item.getBoundingClientRect().width > 0));
+  const labelsStayWithValues = await detail.locator('strong').evaluateAll((items) => items.every((item) => /Money in|Spent/.test(item.textContent || '') && item.getBoundingClientRect().width > 0));
   expect(labelsStayWithValues).toBe(true);
 });
 
@@ -528,6 +528,9 @@ test('account detail names each holding instead of repeating the account name', 
   await expect(where).toContainText('Holdings in this account');
   await expect(where.locator('b').first()).toContainText(/VTI|VXUS|BND/);
   await expect(where.locator('small').first()).toContainText(/401\(k\).*Funds/);
+  await expect(where.getByTestId('holding-history-performance').first()).toContainText(/[+$−]/);
+  await page.locator('[data-holding-history-range="1m"]').click();
+  await expect(where.getByTestId('holding-history-performance').first()).toContainText(/last month/);
 });
 
 test('holding and account drill-ins show only a person’s verified position history', async ({ page }) => {

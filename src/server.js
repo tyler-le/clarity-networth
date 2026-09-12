@@ -8,7 +8,7 @@ import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './lib/store.js';
 import { assertSafeFinancialStoreWrite, chooseSaferStore, hasConnectedFinancialData } from './lib/store-safety.js';
 import { consumeRateLimit, databaseEnabled, databaseHealthy, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, recordDependencyEvent, recordLaunchEvent, writeDatabaseStore } from './lib/database.js';
-import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentSummary, monthlyReview, recurringCharges, removeEstimatedNetWorthHistory, repairTransferClassifications, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './lib/finance.js';
+import { calculateFire, cashFlowType, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentSummary, monthlyReview, recurringCharges, removeEstimatedNetWorthHistory, repairIncomingClassifications, repairTransferClassifications, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './lib/finance.js';
 import { investmentLedgerPages, plaidConfigured, plaidPost } from './lib/plaid.js';
 import { loadHistoricalPrices } from './lib/market-data.js';
 import { historyStart } from './lib/history.js';
@@ -262,7 +262,7 @@ async function loadStore(user) {
   const key = user?.storageKey;
   if (!key) throw new Error('Authenticated user storage is required.');
   let store = await loadStoreByKey(key);
-  if (repairTransferClassifications(store)) await saveStore(user, store);
+  if (repairTransferClassifications(store) + repairIncomingClassifications(store)) await saveStore(user, store);
   const ownerEmail = String(process.env.OWNER_EMAIL || '').trim().toLowerCase();
   if (!store.accounts.length && !store.items.length && ownerEmail && user.email === ownerEmail && hasLegacyStore()) {
     store = readStore();
@@ -814,7 +814,7 @@ async function syncTransactionsForItem(store, item) {
       const normalized = {
         id: existing?.id || crypto.randomUUID(), item_id: item.id, plaid_transaction_id: transaction.transaction_id,
         account_id: transaction.account_id, merchant_name: transaction.merchant_name, name: transaction.name,
-        amount: transaction.amount, date: transaction.date, bucket: existing?.category_overridden ? existing.bucket : (transferTarget?.bucket || baseBucket), investment_contribution_amount: contributionAmount, investment_contribution_account_id: sourceAccount?.type === 'investment' ? sourceAccount.plaid_account_id : transferTarget?.accountId || null, excluded: existing?.excluded || false,
+        amount: transaction.amount, date: transaction.date, bucket: existing?.category_overridden ? existing.bucket : (transferTarget?.bucket || baseBucket), cash_flow_type: cashFlowType(transaction), investment_contribution_amount: contributionAmount, investment_contribution_account_id: sourceAccount?.type === 'investment' ? sourceAccount.plaid_account_id : transferTarget?.accountId || null, excluded: existing?.excluded || false,
         iso_currency_code: transaction.iso_currency_code, unofficial_currency_code: transaction.unofficial_currency_code || null,
         pending: transaction.pending, pfc_primary: transaction.personal_finance_category?.primary || '',
         pfc_detailed: transaction.personal_finance_category?.detailed || '', demo: false

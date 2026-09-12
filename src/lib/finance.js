@@ -14,22 +14,40 @@ function isProviderTransfer(tx) {
   const primary = (tx.personal_finance_category?.primary || tx.pfc_primary || '').toUpperCase();
   const detailed = (tx.personal_finance_category?.detailed || tx.pfc_detailed || '').toUpperCase();
   const name = `${tx.merchant_name || ''} ${tx.name || ''}`.toUpperCase();
-  return primary.includes('TRANSFER') || detailed.includes('TRANSFER') || detailed.includes('CREDIT_CARD_PAYMENT') || name.includes('PAYMENT THANK YOU') || name.includes('AUTOPAY PAYMENT');
+  const transactionCode = String(tx.transaction_code || '').toLowerCase();
+  return transactionCode === 'transfer' || primary.includes('TRANSFER') || detailed.includes('TRANSFER') || detailed.includes('CREDIT_CARD_PAYMENT') || name.includes('PAYMENT THANK YOU') || name.includes('AUTOPAY PAYMENT');
+}
+
+// Cash flow is a signed, posted ledger. A category describes the purpose of a
+// transaction; it does not decide whether money entered or left a person's
+// accounts. Keep the two concepts separate so a provider category correction
+// cannot turn an employer credit into a shopping transaction.
+export function cashFlowType(tx) {
+  if (tx.source === 'investment_transaction' && tx.bucket === 'investments') return 'pre_tax_retirement';
+  if (isProviderTransfer(tx) || tx.bucket === 'transfer') return 'internal_transfer';
+  const amount = Number(tx.amount || 0);
+  if (amount < 0) return 'external_inflow';
+  if (amount > 0) return 'external_outflow';
+  return 'neutral';
 }
 
 export function classifyTransaction(tx) {
-  const primary = (tx.personal_finance_category?.primary || '').toUpperCase();
-  const detailed = (tx.personal_finance_category?.detailed || '').toUpperCase();
+  const primary = (tx.personal_finance_category?.primary || tx.pfc_primary || '').toUpperCase();
+  const detailed = (tx.personal_finance_category?.detailed || tx.pfc_detailed || '').toUpperCase();
   const name = `${tx.merchant_name || ''} ${tx.name || ''}`.toUpperCase();
-
-  if (tx.amount < 0 && (primary.includes('INCOME') || detailed.includes('INCOME') || name.includes('PAYROLL'))) {
-    return 'income';
-  }
 
   // The sync layer may later promote an explicitly identified investment or
   // savings transfer. Classification itself remains a transfer so a card
   // payment or generic withdrawal is never promoted from a name match.
-  if (isProviderTransfer(tx)) return 'transfer';
+  if (cashFlowType(tx) === 'internal_transfer') return 'transfer';
+
+  // Plaid's merchant/category model can occasionally describe an incoming
+  // credit as a purchase category (for example an employer payout labeled as
+  // marketplace activity). Once a provider-identified transfer is ruled out,
+  // the transaction direction is the durable cash-flow fact: money entering
+  // an account is an inflow, not discretionary spending. This also makes
+  // refunds and credits reconcile rather than silently disappearing.
+  if (cashFlowType(tx) === 'external_inflow') return 'income';
 
   if (detailed.includes('INVESTMENT') || detailed.includes('RETIREMENT')) return 'investments';
   if (detailed.includes('SAVINGS')) return 'savings';
@@ -67,13 +85,42 @@ export function repairTransferClassifications(store) {
   for (const transaction of store.transactions || []) {
     if (transaction.category_overridden || transaction.source === 'investment_transaction' || !isProviderTransfer(transaction)) continue;
     const destination = providerTransferDestinationBucket(transaction);
-    const expectedBucket = destination || 'transfer';
-    if (!['investments', 'savings', 'transfer'].includes(transaction.bucket) || transaction.bucket === expectedBucket) continue;
+    // Plaid's sign convention is positive for money leaving this account.
+    // Only that source-side leg may be presented as saving or investing; the
+    // receiving leg is an internal transfer and must never be a second
+    // allocation or an income event.
+    const expectedBucket = Number(transaction.amount || 0) > 0 && destination ? destination : 'transfer';
+    // Older versions could have placed a provider-confirmed transfer in any
+    // cash-flow bucket. Reconcile every non-overridden mismatch, not only the
+    // investment/savings buckets, so a mislabeled transfer cannot become
+    // income or discretionary spending after an app upgrade.
+    if (transaction.bucket === expectedBucket) continue;
     transaction.bucket = expectedBucket;
     if (expectedBucket === 'transfer') {
       delete transaction.investment_contribution_amount;
       delete transaction.investment_contribution_account_id;
     }
+    repaired += 1;
+  }
+  return repaired;
+}
+
+// Reconcile records saved before inbound direction was made authoritative.
+// Preserve explicit member choices and never reinterpret provider-identified
+// transfers or investment-ledger entries. This is deliberately narrow: it
+// only fixes money entering an account that had been incorrectly assigned to
+// an outgoing bucket by a provider category.
+export function repairIncomingClassifications(store) {
+  let repaired = 0;
+  for (const transaction of store.transactions || []) {
+    const flowType = cashFlowType(transaction);
+    if (transaction.cash_flow_type !== flowType) {
+      transaction.cash_flow_type = flowType;
+      repaired += 1;
+    }
+    if (transaction.category_overridden || transaction.source === 'investment_transaction') continue;
+    if (flowType !== 'external_inflow' || transaction.bucket === 'income') continue;
+    transaction.bucket = 'income';
     repaired += 1;
   }
   return repaired;
@@ -591,6 +638,19 @@ export function investmentDetailHistory(store, { accountId = null, ticker = null
       market: [],
       reconstructed: false,
       progress: rangeProgress,
+      // Each account-drawer row gets the same selected-range, verified
+      // snapshot calculation as the overview. Never derive it from trades or
+      // quotes in the UI.
+      holdingProgress: Object.fromEntries(positions.map((position) => [
+        positionSnapshotKey(position),
+        position.manual || !position.ticker
+          ? null
+          : investmentRangeProgress(store, {
+            ticker: position.ticker,
+            holdingKeys: [positionSnapshotKey(position)],
+            range
+          })
+      ])),
       detail: providerHistory.length ? `Based on ${providerHistory.length} verified daily update${providerHistory.length === 1 ? '' : 's'} from your connected institution.` : undefined,
       reason: preparing ? 'Your institution is still preparing its reported investment activity.' : 'Daily account tracking will begin with your next verified update.'
     };
@@ -1008,7 +1068,10 @@ function incomeSource(transaction) {
   if (/PAYROLL|SALARY|WAGE/.test(context)) return { key: 'income_paychecks', label: 'Paychecks' };
   if (/BENEFIT|UNEMPLOYMENT|SOCIAL_SECURITY|PENSION/.test(context)) return { key: 'income_benefits', label: 'Benefits' };
   if (/FREELANCE|CONTRACT|BUSINESS|GIG/.test(context)) return { key: 'income_business', label: 'Business & freelance' };
-  return { key: 'income_other', label: 'Other income' };
+  // An incoming refund, reimbursement, severance payment, or one-off credit
+  // is still real money in, but we must not claim to know that it was earned
+  // income when the provider did not tell us so.
+  return { key: 'money_in_other', label: 'Other money in' };
 }
 
 export function spendingSummary(store, range = '1m', anchor = new Date()) {
@@ -1026,7 +1089,10 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
   let investments = 0;
   let savingsAndInvestments = 0;
   const incomeTransactions = store.transactions.filter((transaction) => {
-    if (transaction.pending || transaction.excluded || transaction.bucket !== 'income') return false;
+    // Cash flow follows the posted signed ledger, not a spending category.
+    // Categories can change; whether external money entered the connected
+    // accounts cannot. Provider-confirmed transfers remain outside cash flow.
+    if (transaction.pending || transaction.excluded || cashFlowType(transaction) !== 'external_inflow') return false;
     return transaction.date >= startDate && transaction.date <= endDate;
   });
   for (const transaction of incomeTransactions) {
@@ -1074,7 +1140,7 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
     });
   }
   const eligibleTransactions = store.transactions.filter((transaction) => {
-    if (transaction.pending || transaction.excluded || transaction.bucket === 'transfer' || (transaction.source === 'investment_transaction' && transaction.bucket === 'investments') || Number(transaction.amount || 0) <= 0) return false;
+    if (transaction.pending || transaction.excluded || cashFlowType(transaction) !== 'external_outflow') return false;
     return transaction.date >= startDate && transaction.date <= endDate;
   });
   for (const transaction of eligibleTransactions) {

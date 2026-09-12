@@ -76,7 +76,7 @@ test('a newly signed-in member with no accounts gets a calm, truthful product pr
   await expect(page.locator('#freshSpendingState')).toBeHidden();
   await expect(page.locator('#cashFlowOverviewCard')).toBeVisible();
   await expect(page.locator('#spendingView .onboarding-tab-cta')).toBeVisible();
-  await expect(page.locator('#cashflowHeadline')).toHaveText('Income, spending, and saving in one view');
+  await expect(page.locator('#cashflowHeadline')).toHaveText('Money in, spending, and saving in one view');
   await goToView(page, 'investments');
   await expect(page.locator('#investmentsView .onboarding-tab-cta')).toBeVisible();
   await expect(page.locator('#investmentTotal')).toHaveText('Your portfolio');

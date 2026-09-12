@@ -817,3 +817,10 @@ html[data-theme="dark"] .retirement-milestone.complete, html[data-theme="dark"] 
    width, stays inside the viewport, and dismisses with the existing tap-outside
    behavior. */
 @media (max-width: 560px) { .retirement-method[open] > .retirement-method-popover { position: fixed; z-index: 60; top: auto; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); left: 16px; width: auto; max-height: min(420px, calc(100dvh - 116px)); overflow: auto; padding: 18px; border-radius: 18px; box-shadow: 0 20px 54px rgba(20,30,20,.2); }.retirement-method-popover > strong { font-size: 13px; }.retirement-method-popover > p { font-size: 12px; }.retirement-method-popover li { padding: 10px; }.retirement-method-popover li b, .retirement-method-popover li span, .retirement-method-popover > small { font-size: 11px; } }
+
+/* A range metric belongs visually with each holding, but stays quieter than
+   the reported value so an account drawer remains easy to scan. */
+.holding-history-where strong { grid-row: 1; align-self: end; }
+.holding-history-performance { grid-column: 2; grid-row: 2; display: grid; justify-items: end; align-self: start; color: var(--accent); font-size: 10px; font-style: normal; font-weight: 720; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.holding-history-performance.negative { color: var(--danger); }
+.holding-history-performance small { color: inherit; font-size: 9px; font-weight: 620; }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentRangeProgress, monthlyReview, reconstructInvestmentHistory, refreshReconstructedInvestmentSnapshots, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, repairTransferClassifications, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
+import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentRangeProgress, monthlyReview, reconstructInvestmentHistory, refreshReconstructedInvestmentSnapshots, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, repairIncomingClassifications, repairTransferClassifications, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
 import { normalizeCandles } from '../src/lib/market-data.js';
 import { filterSnapshots, preferredNetWorthRange, scrubIndex, uniqueDailySnapshots } from '../public/chart-utils.js';
 
@@ -132,6 +132,56 @@ test('cash flow keeps HYSA interest distinct from paychecks without excluding ei
     { key: 'income_paychecks', label: 'Paychecks', amount: 4200 },
     { key: 'income_interest', label: 'Interest', amount: 18.42 }
   ]);
+});
+
+test('cash flow keeps every posted non-transfer inbound credit, even when Plaid assigns a purchase category', () => {
+  const incomingCredit = {
+    date: '2026-02-12', amount: -10440.38, bucket: 'guilt_free',
+    pfc_primary: 'GENERAL_MERCHANDISE', pfc_detailed: 'GENERAL_MERCHANDISE_ONLINE_MARKETPLACES', merchant_name: 'Employer payout'
+  };
+  const transferIn = {
+    date: '2026-02-13', amount: -500, bucket: 'guilt_free',
+    pfc_primary: 'TRANSFER_IN', pfc_detailed: 'TRANSFER_IN_INVESTMENT_AND_RETIREMENT_FUNDS', merchant_name: 'Investment transfer'
+  };
+  const memberChoice = { ...incomingCredit, date: '2026-02-14', amount: -60, bucket: 'guilt_free', category_overridden: true };
+  const store = { transactions: [incomingCredit, transferIn, memberChoice, { date: '2026-02-15', amount: 8000, bucket: 'investments', merchant_name: 'Brokerage contribution' }] };
+
+  assert.equal(classifyTransaction(incomingCredit), 'income');
+  assert.equal(classifyTransaction(transferIn), 'transfer');
+  assert.ok(repairIncomingClassifications(store) >= 1);
+  assert.equal(incomingCredit.bucket, 'income');
+  assert.equal(transferIn.bucket, 'guilt_free'); // Its provider transfer category is intentionally left for transfer repair.
+  assert.equal(memberChoice.bucket, 'guilt_free');
+  assert.equal(repairTransferClassifications(store), 1);
+  assert.equal(transferIn.bucket, 'transfer');
+  const result = spendingSummary(store, '1m', new Date('2026-02-28T12:00:00'));
+  // A member may choose a display category, but that must not change the
+  // signed-ledger fact that external money entered their accounts.
+  assert.equal(result.income, 10500.38);
+  assert.equal(result.investments, 8000);
+  assert.equal(result.total, 8000);
+});
+
+test('account detail exposes each holding’s selected-range verified performance', () => {
+  const store = {
+    accounts: [{ plaid_account_id: 'ira', name: 'IRA', type: 'investment', current_balance: 2_300, hidden: false }],
+    positions: [
+      { id: 'ira:vti', account_id: 'ira', security_id: 'vti', ticker: 'VTI', name: 'Total stock', type: 'etf', quantity: 10, price: 110, value: 1_100 },
+      { id: 'ira:bnd', account_id: 'ira', security_id: 'bnd', ticker: 'BND', name: 'Total bond', type: 'etf', quantity: 10, price: 120, value: 1_200 }
+    ],
+    investment_position_snapshots: [
+      { date: '2026-09-01', kind: 'holding', key: 'ira:vti', account_id: 'ira', security_id: 'vti', ticker: 'VTI', quantity: 10, price: 100, value: 1_000, source: 'verified' },
+      { date: '2026-09-12', kind: 'holding', key: 'ira:vti', account_id: 'ira', security_id: 'vti', ticker: 'VTI', quantity: 10, price: 110, value: 1_100, source: 'verified' },
+      { date: '2026-09-01', kind: 'holding', key: 'ira:bnd', account_id: 'ira', security_id: 'bnd', ticker: 'BND', quantity: 10, price: 125, value: 1_250, source: 'verified' },
+      { date: '2026-09-12', kind: 'holding', key: 'ira:bnd', account_id: 'ira', security_id: 'bnd', ticker: 'BND', quantity: 10, price: 120, value: 1_200, source: 'verified' },
+      { date: '2026-09-01', kind: 'account', key: 'ira', account_id: 'ira', value: 2_250, source: 'verified' },
+      { date: '2026-09-12', kind: 'account', key: 'ira', account_id: 'ira', value: 2_300, source: 'verified' }
+    ]
+  };
+  const detail = investmentDetailHistory(store, { accountId: 'ira', range: '1m' });
+  assert.equal(detail.holdingProgress['ira:vti'].marketChange, 100);
+  assert.equal(detail.holdingProgress['ira:bnd'].marketChange, -50);
+  assert.equal(detail.holdingProgress['ira:vti'].range, '1m');
 });
 
 test('multi-month cash flow excludes an incomplete current month', () => {

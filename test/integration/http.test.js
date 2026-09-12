@@ -166,6 +166,30 @@ integrationTest('serves an authenticated dashboard for an existing member sessio
   deleteStore(key);
 });
 
+integrationTest('repairs a miscategorized posted inbound credit before serving cash flow', async () => {
+  const email = 'cash-flow-reconciliation@example.com';
+  const key = userStorageKey(email);
+  const today = new Date().toISOString().slice(0, 10);
+  writeStore({
+    items: [], accounts: [], snapshots: [],
+    transactions: [
+      { id: 'external-credit', plaid_transaction_id: 'external-credit', date: today, amount: -10_440.38, bucket: 'guilt_free', pfc_primary: 'GENERAL_MERCHANDISE', pfc_detailed: 'GENERAL_MERCHANDISE_ONLINE_MARKETPLACES', pending: false },
+      { id: 'internal-transfer', plaid_transaction_id: 'internal-transfer', date: today, amount: -500, bucket: 'guilt_free', pfc_primary: 'TRANSFER_IN', pfc_detailed: 'TRANSFER_IN_INVESTMENT_AND_RETIREMENT_FUNDS', pending: false },
+      { id: 'brokerage-contribution', plaid_transaction_id: 'brokerage-contribution', date: today, amount: 8_000, bucket: 'investments', pending: false }
+    ]
+  }, key);
+  const response = await request(app).get('/api/spending?range=1m').set('Cookie', signedTestCookie(email));
+  assert.equal(response.status, 200);
+  assert.equal(response.body.income, 10_440.38);
+  assert.equal(response.body.investments, 8_000);
+  assert.equal(response.body.total, 8_000);
+  assert.equal(response.body.transactions.some((row) => row.id === 'internal-transfer'), false);
+  assert.equal(readStore(key).transactions.find((row) => row.id === 'external-credit').bucket, 'income');
+  assert.equal(readStore(key).transactions.find((row) => row.id === 'external-credit').cash_flow_type, 'external_inflow');
+  assert.equal(readStore(key).transactions.find((row) => row.id === 'internal-transfer').cash_flow_type, 'internal_transfer');
+  deleteStore(key);
+});
+
 integrationTest('investment history uses observed daily snapshots and stays isolated by session', async () => {
   const email = 'history-owner@example.test';
   const key = userStorageKey(email);
@@ -239,6 +263,7 @@ integrationTest('investment history exposes range-safe verified progress without
   assert.equal(account.body.progress.valueChange, 100);
   assert.equal(account.body.progress.marketChange, null);
   assert.equal(account.body.progress.changeKind, 'balance');
+  assert.deepEqual(account.body.holdingProgress['ira:vti'], holding.body.progress);
   deleteStore(key);
 });
 

@@ -200,7 +200,7 @@ function setView(view) {
   $$('[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   const pageMeta = {
     overview: ['Net Worth', 'Your financial picture'],
-    spending: ['Cash flow', 'Income and money out'],
+    spending: ['Cash flow', 'Money in and money out'],
     investments: ['Investments', 'Your portfolio'],
     retirement: ['Retirement', 'A simple plan for later'],
     accounts: ['Accounts', 'What you own and owe'],
@@ -237,11 +237,11 @@ function applyOnboardingPreviewCopy() {
     investmentTotal: 'Your portfolio',
     investmentContext: 'Value, holdings, and performance in one view.',
     spendingTotal: 'Your monthly cash flow',
-    cashflowHeadline: 'Income, spending, and saving in one view',
+    cashflowHeadline: 'Money in, spending, and saving in one view',
     spendingContext: 'Track what comes in, what goes out, and what is left.',
     spendingPeriodSummary: 'Your activity over time',
     monthlyCashFlowPeriod: 'Your monthly pattern',
-    trendDetail: 'Compare income and spending by month.',
+    trendDetail: 'Compare money in and spending by month.',
     retirementProjection: 'Your retirement outlook',
     retirementProjectionContext: 'Grounded in your balances and spending.',
     retirementAgeChip: 'Your timeline',
@@ -782,7 +782,7 @@ function renderSpendingTrend(data) {
   if (detail) {
     const label = new Date(`${detail.month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     const remaining = Number(detail.income || 0) - Number(detail.amount || 0);
-    $('#trendDetail').innerHTML = `<span>${state.spendingMonth ? label : `Latest · ${label}`}</span><strong><i class="income"></i><small>Income</small>${fmt.format(detail.income || 0)}</strong><strong><i class="spend"></i><small>Spent</small>${fmt.format(detail.amount || 0)}</strong><b class="${remaining >= 0 ? 'positive' : 'negative'}">${remaining >= 0 ? 'Left' : 'Over'} ${fmt.format(Math.abs(remaining))}</b>`;
+    $('#trendDetail').innerHTML = `<span>${state.spendingMonth ? label : `Latest · ${label}`}</span><strong><i class="income"></i><small>Money in</small>${fmt.format(detail.income || 0)}</strong><strong><i class="spend"></i><small>Spent</small>${fmt.format(detail.amount || 0)}</strong><b class="${remaining >= 0 ? 'positive' : 'negative'}">${remaining >= 0 ? 'Left' : 'Over'} ${fmt.format(Math.abs(remaining))}</b>`;
   } else $('#trendDetail').innerHTML = '';
   const chart = $('#spendingTrend');
   if (!months.length) { chart.innerHTML = '<p class="spending-empty">Monthly patterns will appear once transactions arrive.</p>'; return; }
@@ -821,10 +821,10 @@ function renderSpendingTrend(data) {
     const barHeight = Math.max(value ? 6 : 0, Math.abs(value) * scale);
     const y = value >= 0 ? zeroY - barHeight : zeroY;
     const label = new Date(`${row.month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'short' });
-    const title = `${row.month}: Income ${fmt.format(row.income || 0)} · Money out ${fmt.format(row.amount || 0)} · ${value >= 0 ? 'Left' : 'Over'} ${fmt.format(Math.abs(value))}`;
+    const title = `${row.month}: Money in ${fmt.format(row.income || 0)} · Money out ${fmt.format(row.amount || 0)} · ${value >= 0 ? 'Left' : 'Over'} ${fmt.format(Math.abs(value))}`;
     return `<g class="trend-column ${state.spendingMonth === row.month ? 'active' : ''}" data-spending-month="${row.month}" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} cash flow activity" title="${escapeHtml(title)}"><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="5" fill="${value >= 0 ? 'var(--income)' : 'var(--outflow)'}"/><text x="${(x + barWidth / 2).toFixed(1)}" y="${height - 10}" text-anchor="middle" class="trend-month">${label}</text></g>`;
   }).join('');
-  chart.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Monthly cash flow. Green bars above zero show money left after cash outflow; coral bars below zero show months where cash outflow exceeded income.">${ticks}${bars}</svg>`;
+  chart.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Monthly cash flow. Green bars above zero show money left after cash outflow; coral bars below zero show months where cash outflow exceeded money in.">${ticks}${bars}</svg>`;
 }
 
 function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false) {
@@ -840,8 +840,8 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const compact = availableWidth < 600;
   const tablet = !compact && availableWidth < 760;
   const allSpendCategories = (data.actualSpendCategories || []).filter((row) => hasVisibleAmount(row.amount));
-  const incomeSources = (data.incomeSources?.length ? data.incomeSources : [{ key: 'income', label: 'Income received', amount: income }])
-    .map((source) => ({ ...source, label: source.label || source.name || 'Income received' }))
+  const incomeSources = (data.incomeSources?.length ? data.incomeSources : [{ key: 'money_in', label: 'Money in', amount: income }])
+    .map((source) => ({ ...source, label: source.label || source.name || 'Money in' }))
     .filter((source) => hasVisibleAmount(source.amount));
   // On a phone, keep the primary story to three readable columns. Spending
   // categories are secondary detail, revealed below in the expanded view.
@@ -904,7 +904,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const middleX = compact ? 230 : tablet ? 330 : 482;
   const destinationX = compact ? 0 : tablet ? 488 : 758;
   const colorFor = (key, fallback) => ({
-    income_paychecks: 'var(--income)', income_interest: '#b08a4a', income_dividends: '#8a71a5', income_benefits: '#5e91a2', income_business: '#5d9b81', income_other: '#7893a8',
+    income_paychecks: 'var(--income)', income_interest: '#b08a4a', income_dividends: '#8a71a5', income_benefits: '#5e91a2', income_business: '#5d9b81', money_in_other: '#7893a8',
     actual_spend: 'var(--outflow)', savings: 'var(--save)', investments: 'var(--invest)',
     housing_bills: '#c87862', food_dining: '#c69656', shopping: '#9a78a2', transport: '#6996a7', health: '#6a9b88', insurance: '#728aac', services: '#8d87aa', entertainment: '#b47b92', travel: '#6499a0', education: '#8d9a5f', personal_care: '#b98675', home: '#739585', taxes: '#ab8066', civic: '#7d91a4', fees: '#9a8f81', uncategorized: '#9a8f81'
   }[key] || fallback);
@@ -919,7 +919,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
       else if (lines.length < 2) lines.push(shortened);
       else lines[1] = `${lines[1].slice(0, Math.max(1, maxChars - 1))}…`;
     }
-    const displayLines = lines.length ? lines : ['Income'];
+    const displayLines = lines.length ? lines : ['Money in'];
     const labelMarkup = displayLines.map((line, index) => `<tspan x="${x + 11}" dy="${index ? 11 : 0}">${escapeHtml(line)}</tspan>`).join('');
     const valueY = y + (displayLines.length > 1 ? 39 : 29);
     const accentX = side === 'right' ? x + w - 6 : x;
@@ -967,9 +967,9 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const bridgeBlock = sourceTotal >= .5 ? block(bridgeX, bridgeY, bridgeW, bridgeNode.color, bridgeNode.label, bridgeNode.value, null, bridgeNode.key, 'left') : '';
   const middleBlocks = allocationNodes.map((node) => block(middleX, middleY.get(node.key), middleW, node.color, node.label, node.value, node.share, node.key, 'left')).join('');
   const reconciliationNote = unmatchedOutflow >= .5
-    ? `<p class="cashflow-reconciliation-note">${fmt.format(unmatchedOutflow)} more went out than Plaid categorized as income in this period. This is a timing or funding gap, not a transaction category.</p>`
+    ? `<p class="cashflow-reconciliation-note">${fmt.format(unmatchedOutflow)} more went out than entered connected accounts in this period. This is a timing or funding gap, not a transaction category.</p>`
     : '';
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Plaid-categorized income sources flow into money in, then spending, saving, and investing">${paths}${sourceBlocks}${bridgeBlock}${middleBlocks}${categories}</svg>${categoryList}${reconciliationNote}${more}`;
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="External money in flows into spending, saving, and investing">${paths}${sourceBlocks}${bridgeBlock}${middleBlocks}${categories}</svg>${categoryList}${reconciliationNote}${more}`;
   // SVG focus delegation differs subtly across browsers. Bind directly as
   // well so keyboard focus always traces the same connected flow as hover.
   el.querySelectorAll('[data-cashflow-node]').forEach((node) => {
@@ -993,7 +993,7 @@ function renderSpending(data) {
   const preTaxRetirement = Number(selected.preTaxRetirement || 0);
   const remaining = income - total;
   $('#spendingTotal').textContent = fmt.format(Math.abs(remaining));
-  $('#cashflowHeadline').textContent = remaining >= 0 ? 'Left after spending and saving' : 'More allocated than income';
+  $('#cashflowHeadline').textContent = remaining >= 0 ? 'Left after spending and saving' : 'More allocated than money in';
   $('#cashflowHeadline').className = `cashflow-headline ${remaining >= 0 ? 'positive' : 'negative'}`;
   const preTaxNote = $('#cashflowPreTax');
   preTaxNote.innerHTML = preTaxRetirement ? `<span class="cashflow-payroll-mark" aria-hidden="true">↗</span><div><span>PAYROLL CONTRIBUTIONS</span><strong>${fmt.format(preTaxRetirement)}</strong><p>401(k), HSA, and similar contributions saved before reaching your bank account.</p></div><i class="cashflow-payroll-chevron" aria-hidden="true">›</i>` : '';
@@ -1442,7 +1442,9 @@ function renderHoldingHistoryDetail() {
     const assetClass = assetClassLabel(position.type, position.asset_class_override);
     const rowTitle = isAccountDetail ? holdingLabel(position, account) : accountName;
     const rowDetail = isAccountDetail ? `${accountName} · ${assetClass}` : assetClass;
-    return `<div><b>${escapeHtml(rowTitle)}</b><small>${escapeHtml(rowDetail)}</small><strong>${fmt.format(Number(position.value || 0))}</strong>${canEditClass ? holdingClassControl(position) : ''}</div>`;
+    const snapshotKey = position.id || `${position.account_id}:${position.security_id || position.ticker || position.name}`;
+    const positionMetric = holdingRangeMetric(data.holdingProgress?.[snapshotKey] || position.rangeProgress);
+    return `<div><b>${escapeHtml(rowTitle)}</b><small>${escapeHtml(rowDetail)}</small><strong>${fmt.format(Number(position.value || 0))}</strong>${positionMetric ? `<em class="holding-history-performance ${positionMetric.tone}" data-testid="holding-history-performance">${escapeHtml(positionMetric.value)}<small>${escapeHtml(positionMetric.detail)}</small></em>` : ''}${canEditClass ? holdingClassControl(position) : ''}</div>`;
   }).join('')}` : '';
 }
 
@@ -2221,7 +2223,7 @@ function openCashflowDialog() {
 
 function cashflowActivityLabel(data, category) {
   const transaction = (data.transactions || []).find((row) => row.flowKey === category || row.flowGroup === category);
-  return transaction?.flowLabel || ({ actual_spend: 'Actual spend', save_invest: 'Save & invest', savings: 'Savings', investments: 'Investments', income: 'Income' }[category] || 'Cash flow activity');
+  return transaction?.flowLabel || ({ actual_spend: 'Actual spend', save_invest: 'Save & invest', savings: 'Savings', investments: 'Investments', income: 'Money in' }[category] || 'Cash flow activity');
 }
 
 function renderCashflowActivityDetail(category) {
