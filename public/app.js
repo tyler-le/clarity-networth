@@ -871,10 +871,8 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const knownAllocation = middleNodes.reduce((sum, node) => sum + Number(node.value || 0), 0);
   const sourceTotal = incomeSources.reduce((sum, source) => sum + Number(source.amount || 0), 0);
   // “Money in” is deliberately limited to transactions Plaid categorized as
-  // income. If more goes out than comes in, we explain the reconciliation
-  // gap separately instead of inventing an inbound source for the Sankey.
+  // income; never invent an inbound source to make the Sankey reconcile.
   const bridgeTotal = sourceTotal;
-  const unmatchedOutflow = Math.max(0, knownAllocation - sourceTotal);
   const unallocated = Math.max(0, sourceTotal - knownAllocation);
   const fundingRows = incomeSources;
   const allocationRows = unallocated >= .5
@@ -981,11 +979,8 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const sourceBlocks = incomeNodes.map((source, index) => block(sourceX, sourceStart + index * rowStep, sourceW, source.color || colorFor(source.key, 'var(--income)'), source.label, source.amount, source.share, source.key, 'right')).join('');
   const bridgeBlock = sourceTotal >= .5 ? block(bridgeX, bridgeY, bridgeW, bridgeNode.color, bridgeNode.label, bridgeNode.value, null, bridgeNode.key, 'left') : '';
   const middleBlocks = allocationNodes.map((node) => block(middleX, middleY.get(node.key), middleW, node.color, node.label, node.value, node.share, node.key, 'left')).join('');
-  const reconciliationNote = unmatchedOutflow >= .5
-    ? `<p class="cashflow-reconciliation-note">${fmt.format(unmatchedOutflow)} more went out than entered connected accounts in this period. This is a timing or funding gap, not a transaction category.</p>`
-    : '';
   el.classList.toggle('has-transaction-action', Boolean(transactionAction));
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="External money in flows into spending, saving, and investing">${paths}${sourceBlocks}${bridgeBlock}${middleBlocks}${categories}</svg>${categoryList}${reconciliationNote}${more}${transactionAction}`;
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="External money in flows into spending, saving, and investing">${paths}${sourceBlocks}${bridgeBlock}${middleBlocks}${categories}</svg>${categoryList}${more}${transactionAction}`;
   // SVG focus delegation differs subtly across browsers. Bind directly as
   // well so keyboard focus always traces the same connected flow as hover.
   el.querySelectorAll('[data-cashflow-node]').forEach((node) => {
