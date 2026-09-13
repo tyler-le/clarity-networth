@@ -333,12 +333,44 @@ test('portfolio range progress gives the overview one verified date window', () 
     { date: '2026-09-12', value: 18_200, source: 'verified' }
   ] };
   assert.deepEqual(investmentPortfolioRangeProgress(store, { range: '1m' }), {
-    scope: 'portfolio', range: '1m', state: 'ready', points: 3,
+    scope: 'portfolio', range: '1m', state: 'ready', points: 3, basis: 'aggregate_snapshots',
     startDate: '2026-08-12', endDate: '2026-09-12', startValue: 17_968.64,
     endValue: 18_200, valueChange: 231.36, changeKind: 'balance'
   });
   const summary = investmentSummary({ ...store, accounts: [], positions: [], manual_holdings: [] }, { range: '1m' });
   assert.deepEqual(summary.progress, investmentPortfolioRangeProgress(store, { range: '1m' }));
+});
+
+test('portfolio and account performance share one complete verified snapshot window', () => {
+  const store = {
+    accounts: [
+      { plaid_account_id: 'roth', type: 'investment', current_balance: 1_100 },
+      { plaid_account_id: '401k', type: 'investment', current_balance: 1_900 }
+    ],
+    // This legacy aggregate is deliberately wrong. The visible summary must
+    // derive from the complete account ledger, not whichever aggregate row
+    // happened to be stored first.
+    investment_snapshots: [
+      { date: '2026-08-13', value: 3_400, source: 'verified' },
+      { date: '2026-09-12', value: 3_900, source: 'verified' }
+    ],
+    investment_position_snapshots: [
+      { date: '2026-08-13', kind: 'account', key: 'roth', account_id: 'roth', value: 1_000, source: 'verified' },
+      { date: '2026-08-13', kind: 'account', key: '401k', account_id: '401k', value: 2_000, source: 'verified' },
+      { date: '2026-09-12', kind: 'account', key: 'roth', account_id: 'roth', value: 1_100, source: 'verified' },
+      { date: '2026-09-12', kind: 'account', key: '401k', account_id: '401k', value: 1_900, source: 'verified' }
+    ],
+    positions: [], manual_holdings: []
+  };
+  const summary = investmentSummary(store, { range: '1m' });
+  assert.deepEqual(summary.snapshots, [
+    { date: '2026-08-13', value: 3_000, source: 'verified', basis: 'account_snapshots' },
+    { date: '2026-09-12', value: 3_000, source: 'verified', basis: 'account_snapshots' }
+  ]);
+  assert.equal(summary.progress.basis, 'account_snapshots');
+  assert.equal(summary.progress.valueChange, 0);
+  assert.deepEqual(summary.accounts.map((account) => account.rangeProgress.valueChange), [100, -100]);
+  assert.equal(summary.accounts.reduce((sum, account) => sum + account.rangeProgress.valueChange, 0), summary.progress.valueChange);
 });
 
 test('selected investment ranges never call deposits or account changes market performance', () => {

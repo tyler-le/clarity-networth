@@ -385,6 +385,44 @@ test('investment account and holding rows keep names and values independently sc
   expect(holdingsRemainLegible).toBe(true);
 });
 
+test('investment portfolio and account rows present one reconciled verified change window', async ({ page }) => {
+  await openSignedInScenario(page, (preview) => {
+    const [first, second] = preview.investments.accounts;
+    const startDate = '2026-08-29';
+    const endDate = '2026-09-12';
+    const ready = (valueChange) => ({
+      scope: 'account', range: 'all', state: 'ready', points: 2,
+      startDate, endDate, startValue: 0, endValue: 0, valueChange, changeKind: 'balance'
+    });
+    preview.investments = {
+      ...preview.investments,
+      range: 'all', total: 3_000,
+      snapshots: [
+        { date: startDate, value: 3_000, source: 'verified', basis: 'account_snapshots' },
+        { date: endDate, value: 3_000, source: 'verified', basis: 'account_snapshots' }
+      ],
+      progress: {
+        scope: 'portfolio', range: 'all', state: 'ready', points: 2,
+        startDate, endDate, startValue: 3_000, endValue: 3_000, valueChange: 0,
+        changeKind: 'balance', basis: 'account_snapshots'
+      },
+      accounts: [
+        { ...first, name: 'IRA', value: 1_100, rangeProgress: ready(100) },
+        { ...second, name: 'Brokerage', value: 1_900, rangeProgress: ready(-100) }
+      ],
+      positions: [], positionsAvailable: false, allocation: []
+    };
+  });
+
+  await goToView(page, 'investments');
+  await expect(page.locator('#investmentTotal')).toHaveText('$3,000');
+  await expect(page.locator('#investmentContext')).toHaveText('+$0 all history');
+  const rows = page.locator('#investmentAccounts .investment-account-row');
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toContainText('+$100 · all history');
+  await expect(rows.nth(1)).toContainText('−$100 · all history');
+});
+
 test('a member with debt receives one optional next step, not an alarming wall of payoff controls', async ({ page }) => {
   await openSignedInScenario(page, (preview) => {
     const credit = preview.dashboard.accounts.find((account) => account.type === 'credit');

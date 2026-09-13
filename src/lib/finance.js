@@ -236,18 +236,35 @@ export function investmentSummary(store, { range = 'all' } = {}) {
   const remaining = Math.max(0, total - holdingsValue);
   if (remaining > 1) allocation.set('Cash & unclassified', (allocation.get('Cash & unclassified') || 0) + remaining);
   const allocationRows = [...allocation.entries()].map(([name, value]) => ({ name, value, share: total ? value / total : 0 })).sort((a, b) => b.value - a.value);
+  const portfolioAccountIds = accounts.map((account) => account.plaid_account_id);
+  const portfolio = investmentPortfolioSnapshots(store, portfolioAccountIds);
+  const progress = investmentPortfolioRangeProgress(store, { range, accountIds: portfolioAccountIds });
+  const sharedWindow = progress.state === 'ready' && progress.basis === 'account_snapshots'
+    ? { startDate: progress.startDate, endDate: progress.endDate }
+    : null;
   return {
     range,
     total,
     // This is the canonical portfolio range result. The client must use its
-    // observed endpoints for the headline, the chart, and supporting copy;
-    // account and holding rows already follow the equivalent scoped result.
-    progress: investmentPortfolioRangeProgress(store, { range }),
-    accounts: accounts.map((account) => ({ id: account.id, account_id: account.plaid_account_id, name: account.nickname || account.name, institution_name: account.institution_name, subtype: account.subtype, value: Math.abs(Number(account.current_balance || 0)), rangeProgress: investmentRangeProgress(store, { accountId: account.plaid_account_id, range }) })),
+    // observed endpoints for the headline, chart, and account rows. A legacy
+    // aggregate can still show its verified chart, but it cannot safely claim
+    // row-level performance until shared account snapshots exist.
+    progress,
+    accounts: accounts.map((account) => ({
+      id: account.id,
+      account_id: account.plaid_account_id,
+      name: account.nickname || account.name,
+      institution_name: account.institution_name,
+      subtype: account.subtype,
+      value: Math.abs(Number(account.current_balance || 0)),
+      rangeProgress: sharedWindow
+        ? investmentRangeProgress(store, { accountId: account.plaid_account_id, range, window: sharedWindow })
+        : { scope: 'account', range, state: 'tracking', points: 0 }
+    })),
     allocation: allocationRows,
     unclassifiedAccounts,
     positions: positions.map((position) => ({ ...position, gain: position.cost_basis == null ? null : Number(position.value || 0) - Number(position.cost_basis), gain_pct: position.cost_basis ? (Number(position.value || 0) - Number(position.cost_basis)) / Number(position.cost_basis) : null, rangeProgress: position.manual || !position.ticker ? null : investmentRangeProgress(store, { ticker: position.ticker, holdingKeys: [positionSnapshotKey(position)], range }) })).sort((a, b) => Number(b.value || 0) - Number(a.value || 0)),
-    snapshots: (store.investment_snapshots || []).filter((snapshot) => snapshot.source === 'verified').slice(-3650),
+    snapshots: portfolio.snapshots.slice(-3650),
     historyStatus: investmentHistoryStatus(store, accounts),
     positionsAvailable: positions.length > 0
   };
@@ -393,7 +410,7 @@ function holdingMarketChange(first, last) {
 // identified holding whose quantities and prices reconcile at both endpoints.
 // Account-level changes deliberately remain balance changes: deposits,
 // withdrawals, and cash movement cannot be separated safely from a balance.
-export function investmentRangeProgress(store, { accountId = null, ticker = null, holdingKeys = null, range = 'all' } = {}) {
+export function investmentRangeProgress(store, { accountId = null, ticker = null, holdingKeys = null, range = 'all', window = null } = {}) {
   const selectedRange = investmentRanges.has(range) ? range : 'all';
   const normalizedTicker = String(ticker || '').trim().toUpperCase();
   const allowedHoldingKeys = holdingKeys?.length ? new Set(holdingKeys) : null;
@@ -404,9 +421,9 @@ export function investmentRangeProgress(store, { accountId = null, ticker = null
     return record.kind === 'holding' && record.ticker === normalizedTicker
       && (!allowedHoldingKeys || allowedHoldingKeys.has(record.key));
   });
-  const endDate = records.map((record) => record.date).filter(Boolean).sort().at(-1) || null;
+  const endDate = window?.endDate || records.map((record) => record.date).filter(Boolean).sort().at(-1) || null;
   if (!endDate) return { scope, range: selectedRange, state: 'tracking', points: 0 };
-  const startDate = investmentRangeStart(endDate, selectedRange);
+  const startDate = window?.startDate || investmentRangeStart(endDate, selectedRange);
   const byDate = new Map();
   for (const record of records) {
     if (!record.date || (startDate && record.date < startDate) || record.date > endDate) continue;
@@ -414,6 +431,12 @@ export function investmentRangeProgress(store, { accountId = null, ticker = null
     byDate.get(record.date).push(record);
   }
   const dates = [...byDate.keys()].sort();
+  // Account rows beneath the portfolio are meaningful only when they use the
+  // portfolio's exact observed endpoints. Do not silently choose another
+  // start or end day for an account with incomplete data.
+  if (window && (!byDate.has(startDate) || !byDate.has(endDate))) {
+    return { scope, range: selectedRange, state: 'tracking', points: dates.length, trackingSince: dates[0] || null };
+  }
   if (dates.length < 2) return {
     scope, range: selectedRange, state: 'tracking', points: dates.length,
     trackingSince: dates[0] || null
@@ -438,13 +461,50 @@ export function investmentRangeProgress(store, { accountId = null, ticker = null
 // Portfolio balances are observed separately from position snapshots. Keep
 // their range calculation in the same layer as account and holding progress
 // so no view has to invent a second calendar boundary in the browser.
-export function investmentPortfolioRangeProgress(store, { range = 'all' } = {}) {
+function verifiedPortfolioAccountSnapshots(store, accountIds) {
+  const ids = accountIds?.length
+    ? accountIds
+    : (store.accounts || []).filter((account) => !account.hidden && account.type === 'investment').map((account) => account.plaid_account_id);
+  if (!ids.length) return [];
+  const wanted = new Set(ids);
+  const byDate = new Map();
+  for (const record of store.investment_position_snapshots || []) {
+    if (record.source !== 'verified' || record.kind !== 'account' || !record.date || !wanted.has(record.account_id)) continue;
+    if (!byDate.has(record.date)) byDate.set(record.date, new Map());
+    // A retry can create more than one observation on a day; the final one is
+    // the daily snapshot and matches the convention used by every chart.
+    byDate.get(record.date).set(record.account_id, record);
+  }
+  return [...byDate.entries()]
+    .filter(([, records]) => records.size === wanted.size)
+    .map(([date, records]) => ({
+      date,
+      value: Math.round([...records.values()].reduce((sum, record) => sum + Math.abs(Number(record.value || 0)), 0) * 100) / 100,
+      source: 'verified',
+      basis: 'account_snapshots'
+    }))
+    .sort((left, right) => left.date.localeCompare(right.date));
+}
+
+function investmentPortfolioSnapshots(store, accountIds) {
+  const accountSnapshots = verifiedPortfolioAccountSnapshots(store, accountIds);
+  if (accountSnapshots.length) return { snapshots: accountSnapshots, basis: 'account_snapshots' };
+  // Compatibility for members whose aggregate daily snapshots predate
+  // account-level tracking. These cannot reconcile to account rows, so their
+  // account performance must stay hidden until common coverage exists.
+  return {
+    snapshots: (store.investment_snapshots || [])
+      .filter((record) => record.source === 'verified' && record.date)
+      .sort((left, right) => String(left.date).localeCompare(String(right.date))),
+    basis: 'aggregate_snapshots'
+  };
+}
+
+export function investmentPortfolioRangeProgress(store, { range = 'all', accountIds = null } = {}) {
   const selectedRange = investmentRanges.has(range) ? range : 'all';
-  const records = (store.investment_snapshots || [])
-    .filter((record) => record.source === 'verified' && record.date)
-    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const { snapshots: records, basis } = investmentPortfolioSnapshots(store, accountIds);
   const endDate = records.at(-1)?.date || null;
-  if (!endDate) return { scope: 'portfolio', range: selectedRange, state: 'tracking', points: 0 };
+  if (!endDate) return { scope: 'portfolio', range: selectedRange, state: 'tracking', points: 0, basis };
   const requestedStart = investmentRangeStart(endDate, selectedRange);
   // A sync can retry within a day. The last observed balance for that day is
   // the one that represents the daily snapshot, matching chart semantics.
@@ -455,7 +515,7 @@ export function investmentPortfolioRangeProgress(store, { range = 'all' } = {}) 
   }
   const dates = [...byDate.keys()].sort();
   if (dates.length < 2) return {
-    scope: 'portfolio', range: selectedRange, state: 'tracking', points: dates.length,
+    scope: 'portfolio', range: selectedRange, state: 'tracking', points: dates.length, basis,
     trackingSince: dates[0] || null
   };
   const opening = byDate.get(dates[0]);
@@ -463,7 +523,7 @@ export function investmentPortfolioRangeProgress(store, { range = 'all' } = {}) 
   const startValue = Math.abs(Number(opening.value || 0));
   const endValue = Math.abs(Number(closing.value || 0));
   return {
-    scope: 'portfolio', range: selectedRange, state: 'ready', points: dates.length,
+    scope: 'portfolio', range: selectedRange, state: 'ready', points: dates.length, basis,
     startDate: dates[0], endDate: dates.at(-1), startValue, endValue,
     valueChange: Math.round((endValue - startValue) * 100) / 100,
     changeKind: 'balance'

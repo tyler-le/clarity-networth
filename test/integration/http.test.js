@@ -276,6 +276,46 @@ integrationTest('investment history exposes range-safe verified progress without
   deleteStore(key);
 });
 
+integrationTest('portfolio and account performance reconcile from one verified daily snapshot window', async () => {
+  const email = 'reconciled-investment-summary@example.test';
+  const key = userStorageKey(email);
+  const today = new Date().toISOString().slice(0, 10);
+  const earlier = new Date(Date.parse(`${today}T00:00:00Z`) - 14 * 86_400_000).toISOString().slice(0, 10);
+  writeStore({
+    items: [{ id: 'reconciled-item' }],
+    accounts: [
+      { plaid_account_id: 'ira', item_id: 'reconciled-item', name: 'IRA', type: 'investment', current_balance: 1_100, hidden: false },
+      { plaid_account_id: 'brokerage', item_id: 'reconciled-item', name: 'Brokerage', type: 'investment', current_balance: 1_900, hidden: false }
+    ],
+    positions: [], investment_transactions: [], transactions: [], snapshots: [],
+    // A legacy aggregate can disagree with its historical account entries.
+    // The response must prefer the complete account ledger, not mix sources.
+    investment_snapshots: [
+      { date: earlier, value: 3_400, source: 'verified' },
+      { date: today, value: 3_900, source: 'verified' }
+    ],
+    investment_position_snapshots: [
+      { date: earlier, kind: 'account', key: 'ira', account_id: 'ira', value: 1_000, source: 'verified' },
+      { date: earlier, kind: 'account', key: 'brokerage', account_id: 'brokerage', value: 2_000, source: 'verified' },
+      { date: today, kind: 'account', key: 'ira', account_id: 'ira', value: 1_100, source: 'verified' },
+      { date: today, kind: 'account', key: 'brokerage', account_id: 'brokerage', value: 1_900, source: 'verified' }
+    ]
+  }, key);
+  const response = await request(app).get('/api/investments?range=1m').set('Cookie', signedTestCookie(email));
+  assert.equal(response.status, 200);
+  assert.equal(response.body.progress.basis, 'account_snapshots');
+  assert.equal(response.body.progress.valueChange, 0);
+  assert.deepEqual(response.body.snapshots.map(({ date, value, basis }) => ({ date, value, basis })), [
+    { date: earlier, value: 3_000, basis: 'account_snapshots' },
+    { date: today, value: 3_000, basis: 'account_snapshots' }
+  ]);
+  const rowChange = response.body.accounts.reduce((sum, account) => sum + Number(account.rangeProgress.valueChange || 0), 0);
+  assert.equal(rowChange, response.body.progress.valueChange);
+  assert.deepEqual(response.body.accounts.map((account) => account.rangeProgress.startDate), [earlier, earlier]);
+  assert.deepEqual(response.body.accounts.map((account) => account.rangeProgress.endDate), [today, today]);
+  deleteStore(key);
+});
+
 integrationTest('net worth returns only observed daily snapshots', async () => {
   const email = 'cash-history@example.test';
   const key = userStorageKey(email);
