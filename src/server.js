@@ -344,9 +344,106 @@ function developmentMockConnectionsEnabled(req) {
   return process.env.DEV_MOCK_CONNECTIONS === 'true' && isDevelopmentRequest(req);
 }
 
+function seedDevelopmentMockHistory(store, item, fixture) {
+  // This is deliberately only a development fixture. Its one-year observed
+  // ledger lets us test real range and drill-in behavior without calling a
+  // provider or presenting fabricated history as member data.
+  const earliest = new Date();
+  earliest.setDate(earliest.getDate() - 365);
+  const startDate = earliest.toISOString().slice(0, 10);
+  const targetAccounts = new Map((store.accounts || [])
+    .filter((account) => account.item_id === item.id)
+    .map((account) => [String(account.plaid_account_id || '').replace(/^development-mock-/, ''), account]));
+  const sourceIds = new Set(targetAccounts.keys());
+  const targetAccountIds = new Set([...targetAccounts.values()].map((account) => account.plaid_account_id));
+  const targetPositions = new Map((store.positions || [])
+    .filter((position) => {
+      const sourceId = [...targetAccounts.entries()].find(([, account]) => account.id === position.account_id)?.[0];
+      return Boolean(sourceId);
+    })
+    .map((position) => {
+      const sourceId = [...targetAccounts.entries()].find(([, account]) => account.id === position.account_id)?.[0];
+      return [`demo-position-${position.ticker}-${sourceId}`, position];
+    }));
+
+  // Reset only this explicit test institution before making a reproducible
+  // fixture. Real institutions and user-added records are never touched.
+  store.transactions = (store.transactions || []).filter((transaction) => transaction.item_id !== item.id);
+  store.transactions.push(...fixture.transactions
+    .filter((transaction) => transaction.date >= startDate && sourceIds.has(transaction.account_id))
+    .map((transaction) => ({
+      ...transaction,
+      id: crypto.randomUUID(),
+      plaid_transaction_id: `development-mock-${transaction.plaid_transaction_id || transaction.id}`,
+      item_id: item.id,
+      account_id: targetAccounts.get(transaction.account_id).id,
+      demo: false,
+      development_mock: true
+    })));
+  store.transactions.sort((left, right) => String(left.date).localeCompare(String(right.date)));
+
+  store.investment_position_snapshots = (store.investment_position_snapshots || [])
+    .filter((snapshot) => !targetAccountIds.has(snapshot.account_id));
+  const copiedSnapshots = fixture.investment_position_snapshots
+    .filter((snapshot) => snapshot.date >= startDate && sourceIds.has(snapshot.account_id))
+    .map((snapshot) => {
+      const target = targetAccounts.get(snapshot.account_id);
+      const key = snapshot.kind === 'account'
+        ? target.plaid_account_id
+        : targetPositions.get(snapshot.key)?.id;
+      if (!key) return null;
+      return {
+        ...snapshot,
+        key,
+        account_id: target.plaid_account_id,
+        item_id: item.id,
+        demo: false,
+        development_mock: true
+      };
+    })
+    .filter(Boolean);
+  store.investment_position_snapshots.push(...copiedSnapshots);
+  store.investment_position_snapshots.sort((left, right) => String(left.date).localeCompare(String(right.date)));
+
+  // For a mock-only test profile, build daily net-worth rows from the same
+  // copied account snapshot ledger. The dashboard, chart, and account detail
+  // therefore reconcile instead of each reading a separate canned series.
+  const mockOnlyProfile = (store.accounts || []).every((account) => account.item_id === item.id);
+  if (mockOnlyProfile) {
+    const investmentByDate = new Map();
+    for (const snapshot of copiedSnapshots) {
+      if (snapshot.kind !== 'account') continue;
+      investmentByDate.set(snapshot.date, (investmentByDate.get(snapshot.date) || 0) + Math.abs(Number(snapshot.value || 0)));
+    }
+    const cash = [...targetAccounts.values()]
+      .filter((account) => account.type === 'depository')
+      .reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
+    const debt = [...targetAccounts.values()]
+      .filter((account) => account.type === 'credit' || account.type === 'loan')
+      .reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
+    store.snapshots = [...investmentByDate.entries()].map(([date, investments]) => ({
+      date,
+      assets: Math.round((cash + investments) * 100) / 100,
+      liabilities: debt,
+      net_worth: Math.round((cash + investments - debt) * 100) / 100,
+      source: 'verified',
+      development_mock: true
+    })).sort((left, right) => left.date.localeCompare(right.date));
+    store.investment_snapshots = [...investmentByDate.entries()].map(([date, value]) => ({
+      date,
+      value: Math.round(value * 100) / 100,
+      source: 'verified',
+      development_mock: true
+    })).sort((left, right) => left.date.localeCompare(right.date));
+  }
+}
+
 function addDevelopmentMockInstitution(store) {
   const existing = store.items.find((item) => item.development_mock);
-  if (existing) return { item: existing, alreadyLinked: true };
+  if (existing) {
+    seedDevelopmentMockHistory(store, existing, demoPreviewStore());
+    return { item: existing, alreadyLinked: true };
+  }
 
   const fixture = demoPreviewStore();
   const now = new Date().toISOString();
@@ -391,6 +488,7 @@ function addDevelopmentMockInstitution(store) {
     account_id: accountIds.get(transaction.account_id) || accountIds.get('demo-checking'),
     demo: false
   })));
+  seedDevelopmentMockHistory(store, item, fixture);
   hideDuplicateAccounts(store);
   snapshotNetWorth(store);
   snapshotInvestments(store);

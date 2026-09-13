@@ -521,6 +521,19 @@ integrationTest('staging mock connection is explicitly gated, seeded, and remova
   assert.ok(stored.positions.length > 0);
   assert.ok(stored.transactions.length > 0);
   assert.ok(stored.snapshots.length > 0);
+  // The development connection is a testing fixture, but it must behave like
+  // a long-running linked member: ranges, charts, and drill-ins need daily
+  // records from one coherent source rather than a single connection-day dot.
+  assert.ok(stored.snapshots.length >= 365);
+  const mockInvestmentIds = new Set(stored.accounts.filter((account) => account.type === 'investment').map((account) => account.plaid_account_id));
+  const accountSnapshotsByDate = new Map();
+  for (const snapshot of stored.investment_position_snapshots) {
+    if (snapshot.kind !== 'account' || !mockInvestmentIds.has(snapshot.account_id)) continue;
+    if (!accountSnapshotsByDate.has(snapshot.date)) accountSnapshotsByDate.set(snapshot.date, new Set());
+    accountSnapshotsByDate.get(snapshot.date).add(snapshot.account_id);
+  }
+  assert.ok(accountSnapshotsByDate.size >= 365);
+  assert.ok([...accountSnapshotsByDate.values()].every((ids) => ids.size === mockInvestmentIds.size));
 
   const repeated = await request(app).post('/api/plaid/development_mock_connect').set('Cookie', cookie).send({});
   assert.equal(repeated.status, 200);
