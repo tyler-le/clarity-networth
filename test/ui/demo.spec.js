@@ -339,10 +339,13 @@ test('one cash-flow period control keeps the overview and monthly chart in sync'
   // hit-testing cannot make this synchronization test viewport-dependent.
   await month.evaluate((node) => node.dispatchEvent(new MouseEvent('click', { bubbles: true })));
   await expect(page.locator('#clearSpendingMonth')).toBeVisible();
-  await expect(page.locator('#spendingPeriodSummary')).toContainText(/selected/i);
+  await expect(page.locator('.spending-period-selector')).toHaveAttribute('data-month-selected', '');
+  await expect(month).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#spendingPeriodSummary')).toContainText(/20\d{2}/);
   await expect(page.locator('[data-spending-range="3m"]')).toHaveClass(/active/);
   await page.locator('#clearSpendingMonth').click();
   await expect(page.locator('#clearSpendingMonth')).toBeHidden();
+  await expect(page.locator('.spending-period-selector')).not.toHaveAttribute('data-month-selected', '');
   await expect(page.locator('#monthlyCashFlowPeriod')).toContainText('last 3 completed months');
 });
 
@@ -416,6 +419,10 @@ test('cash-flow diagram stays readable and opens transactions in-app @critical',
   await transactions.click();
   await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
   await expect(page.locator('#cashflowDialogContent .cashflow-activity-detail')).toContainText('Cash flow activity');
+  if (testInfo.project.name === 'phone') {
+    const sheetBox = await page.locator('#cashflowDialog').boundingBox();
+    expect(sheetBox && Math.abs(sheetBox.y + sheetBox.height - (await page.evaluate(() => window.innerHeight))) < 2).toBe(true);
+  }
   await page.locator('#cashflowDialogClose').click();
   await page.locator('#cashflowExpand').click();
   await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
@@ -433,6 +440,11 @@ test('cash-flow diagram stays readable and opens transactions in-app @critical',
   const amounts = (await page.locator('#cashflowDialogContent .cashflow-activity-rows b').allTextContents())
     .map((value) => Number(value.replace(/[^0-9.]/g, '')));
   expect(amounts.every((amount, index) => index === 0 || amounts[index - 1] >= amount)).toBe(true);
+  const activityCategory = page.locator('#cashflowDialogContent [data-cashflow-activity-category]');
+  await expect(activityCategory).toHaveValue('income_paychecks');
+  await activityCategory.selectOption('income_paychecks');
+  await expect(page.locator('#cashflowDialogContent #cashflowActivityTitle')).toHaveText('Paychecks');
+  await expect(page.locator('#cashflowDialogContent .cashflow-activity-rows b.positive')).not.toHaveCount(0);
   await page.locator('#cashflowDialogContent [data-cashflow-back]').click();
   await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
   await page.locator('#cashflowDialogClose').click();
@@ -497,8 +509,9 @@ test('the income source keeps its connected flow highlighted after a tap', async
   await goToView(page, 'spending');
   await page.locator('#cashflowSankey [data-cashflow-category="income_paychecks"]').click();
   await expect(page.locator('#cashflowSankey .cashflow-flow.is-connected')).not.toHaveCount(0);
-  await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
-  await expect(page.locator('#spendingCategoryFilter')).toHaveValue('income_paychecks');
+  await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
+  await expect(page.locator('[data-cashflow-activity-category]')).toHaveValue('income_paychecks');
+  await expect(page.locator('#spendingTransactionsPanel')).not.toHaveAttribute('open', '');
 });
 
 test('payroll contributions open their own cash-flow activity', async ({ page }) => {
@@ -506,10 +519,10 @@ test('payroll contributions open their own cash-flow activity', async ({ page })
   await goToView(page, 'spending');
   await expect(page.locator('#cashflowPreTax')).toBeVisible();
   await page.locator('#cashflowPreTax').click();
-  await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
-  await expect(page.locator('#spendingCategoryFilter')).toHaveValue('payroll_retirement');
-  await expect(page.locator('.payroll-transaction').first()).toContainText('401(k)');
-  await expect(page.locator('#spendingTransactionsPanel summary')).toBeFocused();
+  await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
+  await expect(page.locator('[data-cashflow-activity-category]')).toHaveValue('payroll_retirement');
+  await expect(page.locator('#cashflowDialogContent .cashflow-activity-rows')).toContainText('401(k)');
+  await expect(page.locator('#spendingTransactionsPanel')).not.toHaveAttribute('open', '');
 });
 
 test('net-worth history can be scrubbed and always identifies the selected date @critical', async ({ page }) => {
@@ -692,6 +705,10 @@ test('holding detail timeframes stay local to the drill-in chart', async ({ page
   await page.locator('[data-holding-history-range="1m"]').click();
   await expect(page.locator('[data-holding-history-range="1m"]')).toHaveClass(/active/);
   await expect(page.locator(`[data-investment-range="${portfolioRangeName}"]`)).toHaveClass(/active/);
+  await expect(page.getByTestId('investment-period-selector')).toHaveAttribute('data-timeframe-scope', 'portfolio');
+  await expect(page.getByTestId('holding-history-controls')).toHaveAttribute('data-timeframe-scope', 'detail');
+  await expect(page.locator(`[data-investment-range="${portfolioRangeName}"]`)).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-holding-history-range="1m"]')).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('account chart endpoints use the exact verified window behind its metric', async ({ page }) => {
@@ -838,7 +855,13 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await expect(page.locator('#retirementPath')).toContainText('Amount needed today to fund retirement by age 65 without further contributions');
   await expect(page.locator('#retirementPath .retirement-milestone')).toHaveCount(4);
   await expect(page.locator('#retirementProjectionContext')).toContainText(/On pace for \$[\d,]+ by age 65/);
-  await expect(page.getByText('Retirement spending targets')).toBeVisible();
+  await expect(page.locator('#retirementNextMilestone')).toBeVisible();
+  await page.locator('#retirementNextMilestone').click();
+  await expect(page.locator('#retirementInfoDialog')).toHaveAttribute('open', '');
+  await page.locator('#retirementInfoClose').click();
+  await expect(page.locator('#retirementCoverage')).toHaveText('12 mo. tracked');
+  await expect(page.locator('#retirementSpendingTargetsCard')).not.toHaveAttribute('open', '');
+  await page.locator('#retirementSpendingTargetsCard > summary').click();
   await expect(page.locator('#retirementSpendContext')).toContainText('Needed by age 65, in today’s dollars · Based on your last 12 months of spending.');
   await page.locator('#retirementAdjust summary').click();
   const retirementAgeInput = page.locator('#retirementRetireAgeValue');
@@ -859,7 +882,7 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   });
   expect(ladderTipBounds.top).toBeGreaterThanOrEqual(12);
   expect(ladderTipBounds.bottom).toBeLessThanOrEqual(ladderTipBounds.viewportHeight);
-  await page.getByText('Your freedom ladder').click();
+  await page.locator('.retirement-ladder-heading .card-label').click();
   await expect(page.locator('.retirement-method').first()).not.toHaveAttribute('open', '');
   await page.getByLabel('How the freedom ladder is calculated').click();
   await page.locator('[data-retirement-milestone="coast"]').click();
@@ -894,6 +917,7 @@ test('retirement spending help stays inside a phone viewport', async ({ page }, 
   test.skip(testInfo.project.name !== 'phone', 'Phone-specific help layout regression');
   await openDemo(page);
   await goToView(page, 'retirement');
+  await page.locator('#retirementSpendingTargetsCard > summary').click();
   await page.getByLabel('How lifestyle paths are calculated').click();
   const bounds = await page.locator('.retirement-lifestyles .retirement-method-popover').evaluate((popover) => {
     const rect = popover.getBoundingClientRect();

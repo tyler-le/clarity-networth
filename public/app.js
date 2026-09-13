@@ -856,7 +856,8 @@ function renderSpendingTrend(data) {
     const y = value >= 0 ? zeroY - barHeight : zeroY;
     const label = new Date(`${row.month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'short' });
     const title = `${row.month}: Money in ${fmt.format(row.income || 0)} · Money out ${fmt.format(row.amount || 0)} · ${value >= 0 ? 'Left' : 'Over'} ${fmt.format(Math.abs(value))}`;
-    return `<g class="trend-column ${state.spendingMonth === row.month ? 'active' : ''}" data-spending-month="${row.month}" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} cash flow activity" title="${escapeHtml(title)}"><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="5" fill="${value >= 0 ? 'var(--income)' : 'var(--outflow)'}"/><text x="${(x + barWidth / 2).toFixed(1)}" y="${height - 10}" text-anchor="middle" class="trend-month">${label}</text></g>`;
+    const selected = state.spendingMonth === row.month;
+    return `<g class="trend-column ${selected ? 'active' : ''}" data-spending-month="${row.month}" role="button" tabindex="0" aria-pressed="${selected}" aria-label="Select ${escapeHtml(label)} cash flow" title="${escapeHtml(title)}"><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="5" fill="${value >= 0 ? 'var(--income)' : 'var(--outflow)'}"/><text x="${(x + barWidth / 2).toFixed(1)}" y="${height - 10}" text-anchor="middle" class="trend-month">${label}</text></g>`;
   }).join('');
   chart.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Monthly cash flow. Green bars above zero show money left after cash outflow; coral bars below zero show months where cash outflow exceeded money in.">${ticks}${bars}</svg>`;
 }
@@ -877,6 +878,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const incomeSources = (data.incomeSources?.length ? data.incomeSources : [{ key: 'money_in', label: 'Money in', amount: income }])
     .map((source) => ({ ...source, label: source.label || source.name || 'Money in' }))
     .filter((source) => hasVisibleAmount(source.amount));
+  const transactionCategories = new Set((data.transactions || []).flatMap((transaction) => [transaction.flowKey, transaction.flowGroup]));
   // On a phone, keep the primary story to three readable columns. Spending
   // categories are secondary detail, revealed below in the expanded view.
   const actualCategories = compact ? [] : (expanded ? allSpendCategories : allSpendCategories.slice(0, 4));
@@ -947,6 +949,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     housing_bills: '#c87862', food_dining: '#c69656', shopping: '#9a78a2', transport: '#6996a7', health: '#6a9b88', insurance: '#728aac', services: '#8d87aa', entertainment: '#b47b92', travel: '#6499a0', education: '#8d9a5f', personal_care: '#b98675', home: '#739585', taxes: '#ab8066', civic: '#7d91a4', fees: '#9a8f81', uncategorized: '#9a8f81'
   }[key] || fallback);
   const block = (x, y, w, color, label, value, share, category = '', side = 'left') => {
+    const actionCategory = category && transactionCategories.has(category) ? category : '';
     const maxChars = Math.max(7, Math.floor((w - 19) / (compact ? 5.4 : 6.2)));
     const words = String(label).trim().split(/\s+/).filter(Boolean);
     const lines = [];
@@ -963,7 +966,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     const accentX = side === 'right' ? x + w - 6 : x;
     const shareMarkup = share == null ? '' : `<tspan dx="4" class="cashflow-share">${share}%</tspan>`;
     const description = `${label}: ${fmt.format(value)}${share == null ? '' : ` (${share}%)`}`;
-    return `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" data-cashflow-node="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><title>${escapeHtml(description)}</title><rect data-testid="cashflow-node-surface" x="${x}" y="${y}" width="${w}" height="${rowHeight}" rx="5" fill="${color}" fill-opacity=".10" stroke="${color}" stroke-opacity=".38"/><rect data-testid="cashflow-node-accent" x="${accentX}" y="${y}" width="6" height="${rowHeight}" rx="2" fill="${color}"/><text x="${x + 11}" y="${y + 14}" class="cashflow-label">${labelMarkup}</text><text x="${x + 11}" y="${valueY}" class="cashflow-value">${fmt.format(value)}${shareMarkup}</text></g>`;
+    return `<g ${actionCategory ? `data-cashflow-category="${escapeHtml(actionCategory)}" data-cashflow-node="${escapeHtml(actionCategory)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><title>${escapeHtml(description)}</title><rect data-testid="cashflow-node-surface" x="${x}" y="${y}" width="${w}" height="${rowHeight}" rx="5" fill="${color}" fill-opacity=".10" stroke="${color}" stroke-opacity=".38"/><rect data-testid="cashflow-node-accent" x="${accentX}" y="${y}" width="6" height="${rowHeight}" rx="2" fill="${color}"/><text x="${x + 11}" y="${y + 14}" class="cashflow-label">${labelMarkup}</text><text x="${x + 11}" y="${valueY}" class="cashflow-value">${fmt.format(value)}${shareMarkup}</text></g>`;
   };
   // Use perceptual (square-root) scaling. Exact dollars stay in each node,
   // while the flow still makes large categories visibly heavier without one
@@ -1003,7 +1006,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     ? `<button type="button" class="cashflow-transactions-action" data-cashflow-transactions>View transactions <span>${transactionCount} posted</span><b aria-hidden="true">›</b></button>`
     : '';
   const categoryList = compact && expanded && allSpendCategories.length
-    ? `<div class="cashflow-category-list" aria-label="Spending categories"><p>Tap a category to view its activity.</p>${withShare(allSpendCategories, actualSpend).map((row) => `<button type="button" data-cashflow-category="${escapeHtml(row.key)}" data-cashflow-node="${escapeHtml(row.key)}" aria-label="View ${escapeHtml(row.name)} activity" aria-pressed="false"><span><i style="background:${colorFor(row.key, 'var(--outflow-muted)')}"></i>${escapeHtml(row.name)}</span><strong>${fmt.format(row.amount)} <small>${row.share}%</small></strong><b aria-hidden="true">›</b></button>`).join('')}</div>`
+    ? `<div class="cashflow-category-list" aria-label="Spending categories">${withShare(allSpendCategories, actualSpend).map((row) => `<button type="button" data-cashflow-category="${escapeHtml(row.key)}" data-cashflow-node="${escapeHtml(row.key)}" aria-label="View ${escapeHtml(row.name)} activity" aria-pressed="false"><span><i style="background:${colorFor(row.key, 'var(--outflow-muted)')}"></i>${escapeHtml(row.name)}</span><strong>${fmt.format(row.amount)} <small>${row.share}%</small></strong><b aria-hidden="true">›</b></button>`).join('')}</div>`
     : '';
   const sourceBlocks = incomeNodes.map((source, index) => block(sourceX, sourceStart + index * rowStep, sourceW, source.color || colorFor(source.key, 'var(--income)'), source.label, source.amount, source.share, source.key, 'right')).join('');
   const bridgeBlock = sourceTotal >= .5 ? block(bridgeX, bridgeY, bridgeW, bridgeNode.color, bridgeNode.label, bridgeNode.value, null, bridgeNode.key, 'left') : '';
@@ -1023,7 +1026,11 @@ function renderSpending(data) {
   // The selected range remains visible when a person drills into one month;
   // it explains where that month belongs and keeps both cash-flow visuals in
   // one shared context.
-  $$('[data-spending-range]').forEach((control) => control.classList.toggle('active', control.dataset.spendingRange === state.spendingRange));
+  $$('[data-spending-range]').forEach((control) => {
+    const active = control.dataset.spendingRange === state.spendingRange;
+    control.classList.toggle('active', active);
+    control.setAttribute('aria-pressed', String(active));
+  });
   renderSpendingTrend(data);
   const selected = spendingForSelectedMonth(data);
   const total = Number(selected.total || 0);
@@ -1042,8 +1049,9 @@ function renderSpending(data) {
   const completedThrough = data.completedMonths ? new Date(`${data.endDate}T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '';
   const rangeLabel = ({ '1m': 'this month to date', '3m': 'last 3 completed months', '6m': 'last 6 completed months', ytd: `year to date through ${completedThrough}`, '1y': 'last 12 completed months', all: 'all available history' })[data.range] || 'this month to date';
   const selectedMonthLabel = state.spendingMonth && new Date(`${state.spendingMonth}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  $('#spendingPeriodSummary').textContent = selectedMonthLabel ? `${selectedMonthLabel} selected · ${rangeLabel}` : rangeLabel;
-  $('#monthlyCashFlowPeriod').textContent = selectedMonthLabel ? `Selected: ${selectedMonthLabel}` : `Showing ${rangeLabel}`;
+  $('#spendingPeriodSummary').textContent = selectedMonthLabel || rangeLabel;
+  $('#monthlyCashFlowPeriod').textContent = selectedMonthLabel || rangeLabel;
+  $('.spending-period-selector').toggleAttribute('data-month-selected', Boolean(selectedMonthLabel));
   $('#clearSpendingMonth').classList.toggle('hidden', !selectedMonthLabel);
   $('#spendingContext').textContent = total || income ? (selectedMonthLabel || rangeLabel) : `No posted cash flow for ${selectedMonthLabel || rangeLabel}. It can take a little time to arrive after connecting.`;
   renderCashFlowSankey(selected);
@@ -1142,7 +1150,9 @@ function syncPortfolioRangeControls(snapshots) {
     // rather than disabling the choice or pretending old data exists.
     control.disabled = false;
     control.title = '';
-    control.classList.toggle('active', control.dataset.investmentRange === state.investmentRange);
+    const active = control.dataset.investmentRange === state.investmentRange;
+    control.classList.toggle('active', active);
+    control.setAttribute('aria-pressed', String(active));
   });
   return changed;
 }
@@ -1719,6 +1729,10 @@ function renderRetirement(data) {
   $('#retirementProjection').textContent = projectedBalance;
   $('#retirementProjectionContext').textContent = `On pace for ${projectedBalance} by age ${data.retirementAge}`;
   $('#retirementAgeChip').textContent = `${data.yearsToRetirement} years to go`;
+  const coverage = $('#retirementCoverage');
+  const observedMonths = Number(data.monthsObserved || 0);
+  coverage.hidden = observedMonths < 1;
+  coverage.textContent = observedMonths ? `${observedMonths} mo. tracked` : '';
   $('#retirementSpendContext').textContent = data.monthsObserved ? `Needed by age ${data.retirementAge}, in today’s dollars · Based on your last ${data.monthsObserved} month${data.monthsObserved === 1 ? '' : 's'} of spending.` : `Needed by age ${data.retirementAge}, in today’s dollars.`;
   $('#retirementAssumption').textContent = `At retirement · ${data.withdrawalRate}% withdrawal`;
   const estimatedLabel = (months, complete) => {
@@ -1738,6 +1752,17 @@ function renderRetirement(data) {
     return `<${tag} class="retirement-milestone ${step.complete ? 'complete' : ''}"${action}><span class="retirement-milestone-name">${step.complete ? '✓ ' : ''}${escapeHtml(step.name)}</span><strong>${fmt.format(step.target || 0)}</strong><small class="retirement-milestone-detail">${escapeHtml(detail)}</small><i aria-label="${Math.round(Math.min(100, Number(step.progress || 0)))}% of target"><b style="width:${Math.min(100, Number(step.progress || 0)).toFixed(1)}%"></b></i><em>${escapeHtml(estimatedLabel(step.estimatedMonths, step.complete))}</em></${tag}>`;
   }).join('');
   $('#retirementPath').innerHTML = milestoneCards;
+  const nextMilestone = (data.ladder || []).find((step) => !step.complete);
+  const nextButton = $('#retirementNextMilestone');
+  nextButton.hidden = !nextMilestone;
+  if (nextMilestone) {
+    const remaining = Math.max(0, Number(nextMilestone.target || 0) * (1 - Math.min(100, Number(nextMilestone.progress || 0)) / 100));
+    nextButton.dataset.retirementNextMilestone = nextMilestone.key;
+    nextButton.innerHTML = `<span><small>Next milestone</small><strong>${escapeHtml(nextMilestone.name)}</strong></span><b>${remaining ? `${fmt.format(remaining)} to go` : 'View details'} <i aria-hidden="true">›</i></b>`;
+  } else {
+    delete nextButton.dataset.retirementNextMilestone;
+    nextButton.textContent = '';
+  }
   $('#retirementLifestylePaths').innerHTML = (data.lifestyles || []).map((path, index) => `<div class="retirement-lifestyle ${index === 1 ? 'featured' : ''}"><span>${escapeHtml(path.name)}</span><strong>${fmt.format(path.target || 0)}</strong><small>${escapeHtml(path.detail)} · By age ${data.retirementAge}</small></div>`).join('');
   const form = $('#retirementForm');
   form.age.value = data.age;
@@ -2147,6 +2172,10 @@ $('#retirementPath').addEventListener('click', (event) => {
   const milestone = event.target.closest('[data-retirement-milestone]');
   if (milestone) openRetirementMilestone(milestone.dataset.retirementMilestone);
 });
+$('#retirementNextMilestone').addEventListener('click', (event) => {
+  const milestone = event.currentTarget.dataset.retirementNextMilestone;
+  if (milestone) openRetirementMilestone(milestone);
+});
 $('#retirementInfoClose').addEventListener('click', () => $('#retirementInfoDialog').close());
 $('#accountGrid').addEventListener('click', (event) => {
   const groupButton = event.target.closest('[data-account-group]');
@@ -2340,7 +2369,11 @@ $$('[data-networth-range]').forEach((button) => button.addEventListener('click',
 $$('[data-spending-range]').forEach((button) => button.addEventListener('click', async () => {
   state.spendingRange = button.dataset.spendingRange;
   state.spendingMonth = null;
-  $$('[data-spending-range]').forEach((control) => control.classList.toggle('active', control === button));
+  $$('[data-spending-range]').forEach((control) => {
+    const active = control === button;
+    control.classList.toggle('active', active);
+    control.setAttribute('aria-pressed', String(active));
+  });
   $('#spendingView').setAttribute('aria-busy', 'true');
   $$('[data-spending-range]').forEach((control) => { control.disabled = true; });
   try {
@@ -2365,12 +2398,26 @@ function cashflowActivityLabel(data, category) {
   return transaction?.flowLabel || ({ actual_spend: 'Actual spend', save_invest: 'Save & invest', savings: 'Savings', investments: 'Investments', income: 'Money in' }[category] || 'Cash flow activity');
 }
 
+function cashflowActivityCategories(data) {
+  const categories = new Map();
+  for (const transaction of data.transactions || []) {
+    const key = transaction.flowKey || transaction.flowGroup;
+    if (!key || categories.has(key)) continue;
+    categories.set(key, transaction.flowLabel || cashflowActivityLabel(data, key));
+  }
+  return [...categories.entries()]
+    .map(([key, label]) => ({ key, label }))
+    .sort((left, right) => left.label.localeCompare(right.label));
+}
+
 function renderCashflowActivityDetail(category) {
   const data = spendingForSelectedMonth(state.spending);
   const rows = sortCashflowTransactions((data.transactions || [])
     .filter((transaction) => category === 'all' || transaction.flowKey === category || transaction.flowGroup === category), state.cashflowActivitySort);
   const label = cashflowActivityLabel(data, category);
-  $('#cashflowDialogContent').innerHTML = `<section class="cashflow-activity-detail" aria-labelledby="cashflowActivityTitle"><button class="cashflow-activity-back" type="button" data-cashflow-back>‹ All categories</button><div class="card-label">CASH FLOW ACTIVITY</div><div class="cashflow-activity-heading"><div><h2 id="cashflowActivityTitle">${escapeHtml(label)}</h2><p>${rows.length} posted transaction${rows.length === 1 ? '' : 's'} in this period.</p></div><label class="cashflow-activity-sort"><span>Sort by</span><select data-cashflow-activity-sort data-cashflow-category="${escapeHtml(category)}" aria-label="Sort ${escapeHtml(label)} transactions"><option value="recent" ${state.cashflowActivitySort === 'recent' ? 'selected' : ''}>Most recent</option><option value="largest" ${state.cashflowActivitySort === 'largest' ? 'selected' : ''}>Largest amount</option><option value="smallest" ${state.cashflowActivitySort === 'smallest' ? 'selected' : ''}>Smallest amount</option><option value="oldest" ${state.cashflowActivitySort === 'oldest' ? 'selected' : ''}>Oldest</option></select></label></div><div class="cashflow-activity-rows">${rows.length ? rows.map((transaction) => `<div><span><strong>${escapeHtml(transaction.name)}</strong><small>${new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</small></span><b class="${transaction.bucket === 'income' ? 'positive' : ''}">${transaction.bucket === 'income' ? '+' : ''}${fmt.format(Number(transaction.amount || 0))}</b></div>`).join('') : '<p class="spending-empty">No posted transactions in this category for this period.</p>'}</div></section>`;
+  const categories = cashflowActivityCategories(data);
+  const controls = `<div class="cashflow-activity-controls"><select data-cashflow-activity-category aria-label="Filter cash flow transactions">${[{ key: 'all', label: 'All activity' }, ...categories].map((option) => `<option value="${escapeHtml(option.key)}" ${option.key === category ? 'selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}</select><select data-cashflow-activity-sort data-cashflow-category="${escapeHtml(category)}" aria-label="Sort ${escapeHtml(label)} transactions"><option value="recent" ${state.cashflowActivitySort === 'recent' ? 'selected' : ''}>Most recent</option><option value="largest" ${state.cashflowActivitySort === 'largest' ? 'selected' : ''}>Largest amount</option><option value="smallest" ${state.cashflowActivitySort === 'smallest' ? 'selected' : ''}>Smallest amount</option><option value="oldest" ${state.cashflowActivitySort === 'oldest' ? 'selected' : ''}>Oldest</option></select></div>`;
+  $('#cashflowDialogContent').innerHTML = `<section class="cashflow-activity-detail" aria-labelledby="cashflowActivityTitle"><button class="cashflow-activity-back" type="button" data-cashflow-back aria-label="Back to cash flow diagram">‹</button><div class="card-label">CASH FLOW ACTIVITY</div><div class="cashflow-activity-heading"><div><h2 id="cashflowActivityTitle">${escapeHtml(label)}</h2><p>${rows.length} posted transaction${rows.length === 1 ? '' : 's'} in this period.</p></div>${controls}</div><div class="cashflow-activity-rows">${rows.length ? rows.map((transaction) => `<div><span><strong>${escapeHtml(transaction.name)}</strong><small>${new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</small></span><b class="${transaction.bucket === 'income' ? 'positive' : ''}">${transaction.bucket === 'income' ? '+' : ''}${fmt.format(Number(transaction.amount || 0))}</b></div>`).join('') : '<p class="spending-empty">No posted transactions in this category for this period.</p>'}</div></section>`;
 }
 
 function openCashflowCategoryActivity(category) {
@@ -2495,6 +2542,11 @@ $('#cashflowDialogContent').addEventListener('click', (event) => {
   openCashflowCategoryActivity(node.dataset.cashflowNode);
 });
 $('#cashflowDialogContent').addEventListener('change', (event) => {
+  const category = event.target.closest('[data-cashflow-activity-category]');
+  if (category) {
+    renderCashflowActivityDetail(category.value || 'all');
+    return;
+  }
   const sort = event.target.closest('[data-cashflow-activity-sort]');
   if (!sort) return;
   state.cashflowActivitySort = sort.value;
@@ -2507,7 +2559,7 @@ $('#cashflowDialogContent').addEventListener('keydown', (event) => {
   event.preventDefault();
   openCashflowCategoryActivity(target.dataset.cashflowNode);
 });
-$('#cashflowPreTax').addEventListener('click', () => openSpendingCategory('payroll_retirement'));
+$('#cashflowPreTax').addEventListener('click', () => openCashflowCategoryActivity('payroll_retirement'));
 function donutSelection(event, element, rows) {
   const rect = element.getBoundingClientRect();
   const x = event.clientX - rect.left - rect.width / 2;

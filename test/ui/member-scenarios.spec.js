@@ -582,5 +582,7 @@ test('long merchant names and mixed cash-flow categories remain readable and dri
   const staysWithinViewport = await row.evaluate((element) => element.getBoundingClientRect().right <= window.innerWidth + 1);
   expect(staysWithinViewport).toBe(true);
   await page.locator('#cashflowSankey [data-cashflow-category]').first().click();
-  await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
+  await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
+  await expect(page.locator('#cashflowDialogContent .cashflow-activity-detail')).toBeVisible();
+  await expect(page.locator('#spendingTransactionsPanel')).not.toHaveAttribute('open', '');
 });
