@@ -2210,7 +2210,6 @@ $('#accountGrid').addEventListener('click', (event) => {
   const investment = event.target.closest('[data-account-investment-history]');
   if (investment) {
     trackProductEvent('investment_account_opened');
-    setView('investments');
     openHoldingHistory({ accountId: investment.dataset.accountInvestmentHistory });
     return;
   }

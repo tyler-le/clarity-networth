@@ -194,6 +194,8 @@ test('an investment account in Accounts opens its verified performance detail', 
   await expect(investmentRow).toHaveAttribute('aria-label', /performance/i);
   await investmentRow.click();
   await expect(page.locator('#holdingHistoryDialog')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Accounts' })).toBeVisible();
+  await expect(page.locator('#accountsView')).toHaveClass(/active/);
   await expect(page.locator('#holdingHistoryEyebrow')).toHaveText('Your account');
   await expect(page.locator('#holdingHistoryNote')).toContainText('verified daily updates');
 });
