@@ -390,7 +390,7 @@ test('monthly cash-flow values stay self-labeled instead of relying on a detache
   expect(labelsStayWithValues).toBe(true);
 });
 
-test('cash-flow diagram stays readable on mobile and expands in-app', async ({ page }, testInfo) => {
+test('cash-flow diagram stays readable and opens transactions in-app @critical', async ({ page }, testInfo) => {
   await openDemo(page);
   await goToView(page, 'spending');
   await expect(page.locator('#cashflowSankey')).toContainText('Paychecks');
@@ -410,16 +410,23 @@ test('cash-flow diagram stays readable on mobile and expands in-app', async ({ p
     await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
     await page.locator('#cashflowDialogClose').click();
   }
+  // Transaction access is always explicit. A person need not infer that a
+  // diagram tap filtered a drawer farther down the page.
+  const transactions = page.locator('#cashflowSankey [data-cashflow-transactions]');
+  await expect(transactions).toBeVisible();
+  await transactions.click();
+  await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
+  await expect(page.locator('#cashflowDialogContent .cashflow-activity-detail')).toContainText('Cash flow activity');
+  await page.locator('#cashflowDialogClose').click();
   await page.locator('#cashflowExpand').click();
   await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
   await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
   const category = page.locator('#cashflowDialogContent [data-cashflow-category]').first();
-  const categoryKey = await category.getAttribute('data-cashflow-category');
   await category.click();
   await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
   await expect(page.locator('#cashflowDialogContent .cashflow-activity-detail')).toBeVisible();
-  await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
-  await expect(page.locator('#spendingCategoryFilter')).toHaveValue(categoryKey || 'all');
+  await expect(page.locator('#cashflowDialogContent .cashflow-activity-detail')).toContainText('posted transaction');
+  await expect(page.locator('#spendingTransactionsPanel')).not.toHaveAttribute('open', '');
   await page.locator('#cashflowDialogContent [data-cashflow-back]').click();
   await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
   await page.locator('#cashflowDialogClose').click();

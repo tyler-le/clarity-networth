@@ -929,7 +929,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     const accentX = side === 'right' ? x + w - 6 : x;
     const shareMarkup = share == null ? '' : `<tspan dx="4" class="cashflow-share">${share}%</tspan>`;
     const description = `${label}: ${fmt.format(value)}${share == null ? '' : ` (${share}%)`}`;
-    return `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" data-cashflow-node="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="Highlight flows for ${escapeHtml(label)}"` : ''}><title>${escapeHtml(description)}</title><rect data-testid="cashflow-node-surface" x="${x}" y="${y}" width="${w}" height="${rowHeight}" rx="5" fill="${color}" fill-opacity=".10" stroke="${color}" stroke-opacity=".38"/><rect data-testid="cashflow-node-accent" x="${accentX}" y="${y}" width="6" height="${rowHeight}" rx="2" fill="${color}"/><text x="${x + 11}" y="${y + 14}" class="cashflow-label">${labelMarkup}</text><text x="${x + 11}" y="${valueY}" class="cashflow-value">${fmt.format(value)}${shareMarkup}</text></g>`;
+    return `<g ${category ? `data-cashflow-category="${escapeHtml(category)}" data-cashflow-node="${escapeHtml(category)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><title>${escapeHtml(description)}</title><rect data-testid="cashflow-node-surface" x="${x}" y="${y}" width="${w}" height="${rowHeight}" rx="5" fill="${color}" fill-opacity=".10" stroke="${color}" stroke-opacity=".38"/><rect data-testid="cashflow-node-accent" x="${accentX}" y="${y}" width="6" height="${rowHeight}" rx="2" fill="${color}"/><text x="${x + 11}" y="${y + 14}" class="cashflow-label">${labelMarkup}</text><text x="${x + 11}" y="${valueY}" class="cashflow-value">${fmt.format(value)}${shareMarkup}</text></g>`;
   };
   // Use perceptual (square-root) scaling. Exact dollars stay in each node,
   // while the flow still makes large categories visibly heavier without one
@@ -963,7 +963,11 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     categories += block(destinationX, y, destinationW, categoryColor, row.name, row.amount, row.share, row.key, 'left');
   });
   const hiddenCategoryCount = allSpendCategories.length - actualCategories.length;
-  const more = !expanded && hiddenCategoryCount > 0 ? `<button type="button" class="cashflow-more" data-cashflow-expand aria-label="Show all ${hiddenCategoryCount + actualCategories.length} spending categories">View all ${allSpendCategories.length} spending categories <span>↗</span></button>` : '';
+  const more = !expanded && hiddenCategoryCount > 0 ? `<button type="button" class="cashflow-more" data-cashflow-expand aria-label="Explore all ${hiddenCategoryCount + actualCategories.length} spending categories and their transactions">Explore ${allSpendCategories.length} spending categories <span>›</span></button>` : '';
+  const transactionCount = (data.transactions || []).length;
+  const transactionAction = transactionCount
+    ? `<button type="button" class="cashflow-transactions-action" data-cashflow-transactions>View transactions <span>${transactionCount} posted</span><b aria-hidden="true">›</b></button>`
+    : '';
   const categoryList = compact && expanded && allSpendCategories.length
     ? `<div class="cashflow-category-list" aria-label="Spending categories"><p>Tap a category to view its activity.</p>${withShare(allSpendCategories, actualSpend).map((row) => `<button type="button" data-cashflow-category="${escapeHtml(row.key)}" data-cashflow-node="${escapeHtml(row.key)}" aria-label="View ${escapeHtml(row.name)} activity" aria-pressed="false"><span><i style="background:${colorFor(row.key, 'var(--outflow-muted)')}"></i>${escapeHtml(row.name)}</span><strong>${fmt.format(row.amount)} <small>${row.share}%</small></strong><b aria-hidden="true">›</b></button>`).join('')}</div>`
     : '';
@@ -973,7 +977,8 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const reconciliationNote = unmatchedOutflow >= .5
     ? `<p class="cashflow-reconciliation-note">${fmt.format(unmatchedOutflow)} more went out than entered connected accounts in this period. This is a timing or funding gap, not a transaction category.</p>`
     : '';
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="External money in flows into spending, saving, and investing">${paths}${sourceBlocks}${bridgeBlock}${middleBlocks}${categories}</svg>${categoryList}${reconciliationNote}${more}`;
+  el.classList.toggle('has-transaction-action', Boolean(transactionAction));
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="External money in flows into spending, saving, and investing">${paths}${sourceBlocks}${bridgeBlock}${middleBlocks}${categories}</svg>${categoryList}${reconciliationNote}${more}${transactionAction}`;
   // SVG focus delegation differs subtly across browsers. Bind directly as
   // well so keyboard focus always traces the same connected flow as hover.
   el.querySelectorAll('[data-cashflow-node]').forEach((node) => {
@@ -2286,6 +2291,7 @@ function openCashflowDialog() {
 }
 
 function cashflowActivityLabel(data, category) {
+  if (category === 'all') return 'Cash flow activity';
   const transaction = (data.transactions || []).find((row) => row.flowKey === category || row.flowGroup === category);
   return transaction?.flowLabel || ({ actual_spend: 'Actual spend', save_invest: 'Save & invest', savings: 'Savings', investments: 'Investments', income: 'Money in' }[category] || 'Cash flow activity');
 }
@@ -2293,21 +2299,19 @@ function cashflowActivityLabel(data, category) {
 function renderCashflowActivityDetail(category) {
   const data = spendingForSelectedMonth(state.spending);
   const rows = (data.transactions || [])
-    .filter((transaction) => transaction.flowKey === category || transaction.flowGroup === category)
+    .filter((transaction) => category === 'all' || transaction.flowKey === category || transaction.flowGroup === category)
     .sort((a, b) => String(b.date).localeCompare(String(a.date)) || Number(b.amount || 0) - Number(a.amount || 0));
   const label = cashflowActivityLabel(data, category);
-  const panel = $('#spendingTransactionsPanel');
-  state.spendingCategory = category;
-  panel.open = true;
-  renderSpendingTransactions(data);
   $('#cashflowDialogContent').innerHTML = `<section class="cashflow-activity-detail" aria-labelledby="cashflowActivityTitle"><button class="cashflow-activity-back" type="button" data-cashflow-back>‹ All categories</button><div class="card-label">CASH FLOW ACTIVITY</div><h2 id="cashflowActivityTitle">${escapeHtml(label)}</h2><p>${rows.length} posted transaction${rows.length === 1 ? '' : 's'} in this period.</p><div class="cashflow-activity-rows">${rows.length ? rows.map((transaction) => `<div><span><strong>${escapeHtml(transaction.name)}</strong><small>${new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</small></span><b class="${transaction.bucket === 'income' ? 'positive' : ''}">${transaction.bucket === 'income' ? '+' : ''}${fmt.format(Number(transaction.amount || 0))}</b></div>`).join('') : '<p class="spending-empty">No posted transactions in this category for this period.</p>'}</div></section>`;
 }
 
 function openCashflowCategoryActivity(category) {
   const data = spendingForSelectedMonth(state.spending);
   const transactionKeys = new Set((data.transactions || []).flatMap((transaction) => [transaction.flowKey, transaction.flowGroup]));
-  if (!transactionKeys.has(category)) return;
+  if (category !== 'all' && !transactionKeys.has(category)) return;
   trackProductEvent('cash_flow_drilldown');
+  const dialog = $('#cashflowDialog');
+  if (!dialog.open) dialog.showModal();
   renderCashflowActivityDetail(category);
 }
 
@@ -2356,19 +2360,16 @@ function filterCashflowActivityInPlace(category, selected) {
 $('#spendingLegend')?.addEventListener('click', (event) => openSpendingCategory(event.target.closest('[data-spending-category]')?.dataset.spendingCategory));
 $('#cashflowSankey').addEventListener('click', (event) => {
   if (event.target.closest('[data-cashflow-expand]')) { openCashflowDialog(); return; }
+  if (event.target.closest('[data-cashflow-transactions]')) { openCashflowCategoryActivity('all'); return; }
   const node = event.target.closest('[data-cashflow-node]');
-  if (node) {
-    const selected = toggleCashflowFlowSelection($('#cashflowSankey'), node.dataset.cashflowNode);
-    filterCashflowActivityInPlace(node.dataset.cashflowNode, selected);
-  }
+  if (node) openCashflowCategoryActivity(node.dataset.cashflowNode);
 });
 $('#cashflowSankey').addEventListener('keydown', (event) => {
   if (!['Enter', ' '].includes(event.key)) return;
   const target = event.target.closest('[data-cashflow-category]');
   if (!target) return;
   event.preventDefault();
-  const selected = toggleCashflowFlowSelection($('#cashflowSankey'), target.dataset.cashflowNode);
-  filterCashflowActivityInPlace(target.dataset.cashflowNode, selected);
+  openCashflowCategoryActivity(target.dataset.cashflowNode);
 });
 // Flows are deliberately not tap targets: once paths overlap, that interaction
 // becomes ambiguous. Instead, focusing or hovering a clear category block
