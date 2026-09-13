@@ -1967,7 +1967,7 @@ async function connectPlaid() {
       showNotice('Connecting a development test institution…');
       const result = await api('/api/plaid/development_mock_connect', { method: 'POST', body: '{}' });
       await loadAll();
-      showNotice(result.already_linked ? 'Your development test institution is already connected.' : 'Development test institution connected. No Plaid account was used.', 'success');
+      showNotice(result.already_linked ? 'Account already connected.' : 'Account connected.', 'success');
       showConnectionOnboarding();
       return;
     }

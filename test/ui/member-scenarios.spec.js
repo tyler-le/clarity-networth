@@ -147,6 +147,18 @@ test('a cash-first member sees what they have without being pushed into debt or 
   await expect(page.locator('#accountGrid .account-collection')).toHaveCount(2);
 });
 
+test('the development mock uses the same post-connection completion flow as Plaid Link', async ({ page }) => {
+  await openSignedInScenario(page);
+  await page.route('**/api/plaid/create_link_token', (route) => route.fulfill({ json: { development_mock: true } }));
+  await page.route('**/api/plaid/development_mock_connect', (route) => route.fulfill({ json: { ok: true, already_linked: false } }));
+
+  await page.locator('#connectButton').click();
+  await expect(page.locator('#connectionOnboardingDialog')).toBeVisible();
+  await expect(page.locator('#connectionOnboardingDialog')).toContainText('Your picture is ready to begin.');
+  await expect(page.locator('#connectionOnboardingDialog')).toContainText('Today');
+  await expect(page.locator('#connectionOnboardingDialog')).toContainText('Next few minutes');
+});
+
 test('accounts retain the established collection layout for each account type', async ({ page }) => {
   await openSignedInScenario(page, (preview) => {
     const [first, second, third] = preview.dashboard.accounts;
