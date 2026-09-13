@@ -14,6 +14,17 @@ async function goToView(page, view) {
   return page.locator(`.sidebar [data-view="${view}"]`).click();
 }
 
+async function trackingLabelPrecedesVerifiedLine(page, chartSelector) {
+  return page.locator(chartSelector).evaluate((chart) => {
+    const label = chart.querySelector('.chart-unavailable-label');
+    const line = chart.querySelector('.main-history-line');
+    const firstX = Number((line?.getAttribute('d') || '').match(/^M\s+([\d.]+)/)?.[1]);
+    if (!label || !Number.isFinite(firstX)) return false;
+    const box = label.getBBox();
+    return box.x + box.width <= firstX - 2;
+  });
+}
+
 // Uses the complete, realistic demo contract as a baseline, then makes one
 // meaningful change for a member situation. The UI is real; only the service
 // boundary is mocked. This catches rendering and interaction regressions
@@ -261,6 +272,7 @@ test('a newly connected portfolio shows the selected period before tracking bega
   await page.locator('[data-investment-range="1m"]').click();
   await expect(page.locator('#investmentChart .chart-unavailable-line')).toBeVisible();
   await expect(page.locator('#investmentChart .chart-unavailable-label')).toContainText('Tracking began Sep 2026');
+  expect(await trackingLabelPrecedesVerifiedLine(page, '#investmentChart')).toBe(true);
 });
 
 test('a short portfolio window spanning months still uses distinct calendar dates', async ({ page }) => {
@@ -302,6 +314,7 @@ test('a one-month net-worth view never repeats a calendar label @critical', asyn
   expect(labels.every((label) => /^[A-Z][a-z]{2} \d+$/.test(label))).toBe(true);
   expect(new Set(labels).size).toBe(labels.length);
   await expect(page.locator('#netWorthChart .chart-unavailable-label')).toHaveText(/Since|Tracking began/);
+  expect(await trackingLabelPrecedesVerifiedLine(page, '#netWorthChart')).toBe(true);
 });
 
 test('a long net-worth range with only recent history does not overlap right-edge dates @critical', async ({ page }) => {
