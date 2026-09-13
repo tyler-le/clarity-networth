@@ -465,8 +465,19 @@ integrationTest('staging mock connection is explicitly gated, seeded, and remova
   assert.equal(stored.items.length, 1);
   assert.equal(stored.items[0].development_mock, true);
   assert.equal(stored.items[0].access_token_enc, undefined);
-  assert.ok(stored.accounts.length >= 4);
+  assert.equal(stored.accounts.length, 6);
   assert.ok(stored.accounts.every((account) => account.demo === false));
+  assert.deepEqual(
+    stored.accounts.map((account) => [account.name, account.type, account.subtype]).sort((a, b) => a[0].localeCompare(b[0])),
+    [
+      ['401(k)', 'investment', '401k'],
+      ['Capital One Venture', 'credit', 'credit card'],
+      ['Chase Sapphire Preferred', 'credit', 'credit card'],
+      ['Checking', 'depository', 'checking'],
+      ['High Yield Savings', 'depository', 'savings'],
+      ['Roth IRA', 'investment', 'ira']
+    ].sort((a, b) => a[0].localeCompare(b[0]))
+  );
   assert.ok(stored.positions.length > 0);
   assert.ok(stored.transactions.length > 0);
   assert.ok(stored.snapshots.length > 0);

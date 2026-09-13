@@ -360,7 +360,14 @@ function addDevelopmentMockInstitution(store) {
     development_mock: true,
     demo: false
   };
-  const sourceAccounts = fixture.accounts.filter((account) => ['demo-checking', 'demo-hysa', 'demo-brokerage', 'demo-credit'].includes(account.id));
+  // A realistic, useful development fixture: everyday cash, two distinct
+  // retirement account types, and the cards already used to exercise debt
+  // flows. Deliberately exclude brokerage and loans so this remains a compact
+  // connection-lifecycle test rather than a copy of the full public demo.
+  const sourceAccounts = fixture.accounts.filter((account) => [
+    'demo-checking', 'demo-hysa', 'demo-roth', 'demo-401k',
+    'demo-credit', 'demo-venture'
+  ].includes(account.id));
   const accountIds = new Map();
   for (const source of sourceAccounts) accountIds.set(source.id, crypto.randomUUID());
   store.items.push(item);

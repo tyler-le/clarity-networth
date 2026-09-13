@@ -40,7 +40,11 @@ const state = {
   // A signed-in member with no connections sees the real product composition
   // populated by a clearly disclosed sample payload. Their actual dashboard
   // remains empty so actions such as Link always operate on their own account.
-  onboardingPreview: null
+  onboardingPreview: null,
+  // A member can have connected cash or debt without an investment account.
+  // Keep Investments useful as a muted product preview without replacing
+  // their real data in any other tab.
+  investmentPreview: null
 };
 
 const accountGroupOrder = ['Cash', 'Savings', 'Investments', 'Credit cards', 'Loans & debt', 'Other'];
@@ -1715,10 +1719,22 @@ function renderDashboard() {
 // actual empty dashboard separate for connection and privacy actions.
 function renderFreshAccountStates(data) {
   const isFresh = !state.demoPreview && !(data.accounts || []).length && !(data.items || []).length;
+  const needsInvestmentConnection = !state.demoPreview && !(data.accounts || []).some((account) => !account.hidden && account.type === 'investment');
   document.documentElement.dataset.freshAccount = String(isFresh);
   document.documentElement.dataset.onboardingPreview = String(isFresh);
+  document.documentElement.dataset.investmentPreview = String(needsInvestmentConnection && !isFresh);
+  $('#investmentsView').classList.toggle('investment-coverage-preview', needsInvestmentConnection && !isFresh);
+  // The preview is illustrative, not an empty investment account. Keep its
+  // controls out of the keyboard path as well as out of pointer interaction;
+  // the connection action remains the one purposeful next step.
+  [...$('#investmentsView').children]
+    .filter((child) => !child.classList.contains('onboarding-tab-cta'))
+    .forEach((child) => { child.inert = needsInvestmentConnection && !isFresh; });
   $('#onboardingPreviewBanner').classList.toggle('hidden', !isFresh);
-  $$('.onboarding-tab-cta').forEach((cta) => cta.classList.toggle('hidden', !isFresh));
+  $$('.onboarding-tab-cta').forEach((cta) => {
+    const isInvestmentCta = cta.closest('#investmentsView') != null;
+    cta.classList.toggle('hidden', !(isFresh || (needsInvestmentConnection && isInvestmentCta)));
+  });
   if (isFresh) $('#notice').classList.add('hidden');
   if (isFresh) requestAnimationFrame(applyOnboardingPreviewCopy);
   else $$('.preview-copy').forEach((element) => element.classList.remove('preview-copy'));
@@ -1750,6 +1766,7 @@ async function loadAll() {
     if (state.demoPreview) {
       const preview = await api(`/api/demo-preview?range=${state.spendingRange}`);
       state.onboardingPreview = null;
+      state.investmentPreview = null;
       state.dashboard = preview.dashboard;
       state.spending = preview.spending;
       state.investments = preview.investments;
@@ -1764,15 +1781,17 @@ async function loadAll() {
     const [dashboard, spending, investments, retirement] = await Promise.all([api('/api/dashboard'), api(`/api/spending?range=${state.spendingRange}`), api('/api/investments'), api('/api/retirement')]);
     state.dashboard = dashboard;
     const fresh = !(dashboard.accounts || []).length && !(dashboard.items || []).length;
-    const preview = fresh ? await api(`/api/demo-preview?range=${state.spendingRange}`) : null;
-    state.onboardingPreview = preview;
-    state.spending = preview?.spending || spending;
-    state.investments = preview?.investments || investments;
-    state.retirement = preview?.retirement || retirement;
+    const needsInvestmentConnection = !(dashboard.accounts || []).some((account) => !account.hidden && account.type === 'investment');
+    const preview = fresh || needsInvestmentConnection ? await api(`/api/demo-preview?range=${state.spendingRange}`) : null;
+    state.onboardingPreview = fresh ? preview : null;
+    state.investmentPreview = needsInvestmentConnection ? preview?.investments || null : null;
+    state.spending = fresh ? preview?.spending || spending : spending;
+    state.investments = investments;
+    state.retirement = fresh ? preview?.retirement || retirement : retirement;
     applyTheme(dashboard.appearance?.theme || 'light', false);
     renderDashboard();
     renderSpending(state.spending);
-    renderInvestments(state.investments);
+    renderInvestments(state.investmentPreview || state.investments);
     renderRetirement(state.retirement);
     observeCoreCardViews();
     $('#monthLabel').textContent = 'Account overview';
@@ -1895,6 +1914,7 @@ $('#demoToggle').addEventListener('click', async () => {
     // demo loading state.
     if (enteringDemo) {
       state.onboardingPreview = null;
+      state.investmentPreview = null;
       state.dashboard = null;
       state.spending = null;
       state.investments = null;
@@ -2770,6 +2790,7 @@ async function startDemoPreview() {
   button.textContent = 'Opening demo…';
   state.demoPreview = true;
   state.onboardingPreview = null;
+  state.investmentPreview = null;
   state.demoGoal = null;
   state.demoGoalInitialized = false;
   state.spendingMonth = null;
@@ -2791,6 +2812,7 @@ async function startDemoPreview() {
   } catch (error) {
     state.demoPreview = false;
     state.onboardingPreview = null;
+    state.investmentPreview = null;
     $('#appShell').classList.add('hidden');
     $('#authScreen').classList.remove('hidden');
     $('#authMessage').textContent = error.message;
@@ -2803,6 +2825,7 @@ async function startDemoPreview() {
 async function exitDemoPreview() {
   state.demoPreview = false;
   state.onboardingPreview = null;
+  state.investmentPreview = null;
   state.demoGoal = null;
   state.demoGoalInitialized = false;
   state.dashboard = null;
@@ -2941,6 +2964,7 @@ $('#signOutButton').addEventListener('click', async () => {
   await api('/api/auth/logout', { method: 'POST', body: '{}' });
   state.demoPreview = false;
   state.onboardingPreview = null;
+  state.investmentPreview = null;
   state.dashboard = null;
   state.spending = null;
   state.investments = null;

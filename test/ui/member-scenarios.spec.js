@@ -99,6 +99,26 @@ test('a newly signed-in member with no accounts gets a calm, truthful product pr
   await expect(page.locator('#connectionsList')).toContainText('No connected institutions yet.');
 });
 
+test('a cash-only member sees a muted investment preview with one relevant connection action', async ({ page }) => {
+  await openSignedInScenario(page, (preview) => {
+    const cashAccount = preview.dashboard.accounts.find((account) => account.type === 'depository');
+    preview.dashboard.accounts = [cashAccount];
+    preview.dashboard.items = preview.dashboard.items.filter((item) => item.id === cashAccount.item_id);
+    preview.investments = { ...preview.investments, total: 0, accounts: [], positions: [], allocation: [], snapshots: [], positionsAvailable: false, unclassifiedAccounts: [] };
+  });
+
+  await expect(page.locator('#onboardingPreviewBanner')).toBeHidden();
+  await goToView(page, 'investments');
+  const investments = page.locator('#investmentsView');
+  await expect(investments).toHaveClass(/investment-coverage-preview/);
+  await expect(investments.locator('.onboarding-tab-cta')).toBeVisible();
+  await expect(investments.locator('.onboarding-tab-cta')).toContainText('Connect an investment account');
+  await expect(investments.locator('.portfolio-card')).toBeVisible();
+  await expect(page.locator('#investmentTotal')).toHaveCSS('filter', 'blur(4px)');
+  await expect(page.locator('#spendingView .onboarding-tab-cta')).toBeHidden();
+  await expect(page.locator('#accountsView .onboarding-tab-cta')).toBeHidden();
+});
+
 test('a cash-first member sees what they have without being pushed into debt or investing features', async ({ page }) => {
   await openSignedInScenario(page, (preview) => {
     const cash = preview.dashboard.accounts.filter((account) => account.type === 'depository').slice(0, 2);
