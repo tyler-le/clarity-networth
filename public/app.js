@@ -19,6 +19,7 @@ const state = {
   allocationDisplay: 'percentage',
   spendingCategory: 'all',
   spendingSort: 'recent',
+  cashflowActivitySort: 'recent',
   // Set after the first verified portfolio payload arrives. Starting at "all"
   // avoids a transient 1Y selection that would turn a new connection into a
   // misleading vertical spike.
@@ -892,20 +893,26 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   // the bands appear to stop short of their labels on larger screens. Size
   // each column to its actual labels and render it as a quiet tinted block.
   const nodeWidth = (rows, minimum, maximum) => {
-    const longest = Math.max(...rows.map((row) => String(row.label || '').length), 0);
+    // A node has to fit both its label and its amount/share line. Measuring
+    // only labels let a large paycheck (for example "$37,200 99%") run into
+    // the colored edge rail on a phone.
+    const longest = Math.max(...rows.map((row) => Math.max(
+      String(row.label || '').length,
+      `${fmt.format(Number(row.value ?? row.amount ?? 0))}${row.share == null ? '' : ` ${row.share}%`}`.length
+    )), 0);
     const characterWidth = compact ? 5.4 : 6.2;
     return Math.max(minimum, Math.min(maximum, Math.ceil(25 + longest * characterWidth)));
   };
   // Four columns still need breathing room on a phone. Keep the labels
   // compact there rather than letting the allocation column collide with the
   // spending-category column.
-  const sourceW = nodeWidth(incomeNodes, compact ? 96 : 82, compact ? 104 : 132);
+  const sourceW = nodeWidth(incomeNodes, compact ? 116 : 82, compact ? 118 : 132);
   const bridgeW = nodeWidth([bridgeNode], compact ? 72 : 88, compact ? 84 : 120);
   const middleW = nodeWidth(allocationNodes, compact ? 100 : 86, compact ? 116 : 128);
   const destinationW = nodeWidth(categoryNodes.map((row) => ({ label: row.name })), 92, 142);
   const sourceX = compact ? 5 : tablet ? 8 : 20;
-  const bridgeX = compact ? 124 : tablet ? 166 : 230;
-  const middleX = compact ? 230 : tablet ? 330 : 482;
+  const bridgeX = compact ? 132 : tablet ? 166 : 230;
+  const middleX = compact ? 236 : tablet ? 330 : 482;
   const destinationX = compact ? 0 : tablet ? 488 : 758;
   const colorFor = (key, fallback) => ({
     income_paychecks: 'var(--income)', income_interest: '#b08a4a', income_dividends: '#8a71a5', income_benefits: '#5e91a2', income_business: '#5d9b81', money_in_other: '#7893a8',
@@ -1057,7 +1064,7 @@ function renderSpendingTransactions(data) {
     const matchesFilter = state.spendingCategory === 'all' || transaction.flowKey === state.spendingCategory || transaction.flowGroup === state.spendingCategory;
     return matchesFilter && (!state.spendingMonth || String(transaction.date).startsWith(state.spendingMonth));
   });
-  rows = [...rows].sort((a, b) => state.spendingSort === 'highest' ? b.amount - a.amount : String(b.date).localeCompare(String(a.date)) || b.amount - a.amount);
+  rows = sortCashflowTransactions(rows, state.spendingSort);
   $('#spendingTransactionCount').textContent = `${rows.length} posted`;
   const options = [['fixed', 'Fixed costs'], ['savings', 'Savings'], ['investments', 'Investments'], ['guilt_free', 'Guilt-free']];
   $('#spendingTransactions').innerHTML = rows.length ? rows.map((transaction) => {
@@ -1066,6 +1073,17 @@ function renderSpendingTransactions(data) {
       : `<select data-transaction-category="${escapeHtml(transaction.id)}" aria-label="Plan category for ${escapeHtml(transaction.name)}">${options.map(([value, label]) => `<option value="${value}" ${transaction.bucket === value ? 'selected' : ''}>${label}</option>`).join('')}</select>`;
     return `<div class="spending-transaction-row ${transaction.bucket === 'income' ? 'income-transaction' : ''} ${transaction.bucket === 'pre_tax_retirement' ? 'payroll-transaction' : ''}"><div><strong>${escapeHtml(transaction.name)}</strong><span>${new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span></div><div class="transaction-plan"><b>${transaction.bucket === 'income' ? '+' : ''}${fmt.format(transaction.amount)}</b>${categoryControl}</div></div>`;
   }).join('') : '<p class="spending-empty">No posted transactions in this category for this period.</p>';
+}
+
+function sortCashflowTransactions(rows, sort) {
+  const dateThenAmountDescending = (left, right) => String(right.date).localeCompare(String(left.date)) || Number(right.amount || 0) - Number(left.amount || 0);
+  const dateThenAmountAscending = (left, right) => String(left.date).localeCompare(String(right.date)) || Number(left.amount || 0) - Number(right.amount || 0);
+  return [...rows].sort((left, right) => {
+    if (sort === 'largest') return Number(right.amount || 0) - Number(left.amount || 0) || dateThenAmountDescending(left, right);
+    if (sort === 'smallest') return Number(left.amount || 0) - Number(right.amount || 0) || dateThenAmountDescending(left, right);
+    if (sort === 'oldest') return dateThenAmountAscending(left, right);
+    return dateThenAmountDescending(left, right);
+  });
 }
 
 function portfolioSnapshots(data) {
@@ -1128,7 +1146,17 @@ function investmentRangeLabel(range) {
 }
 
 function portfolioChangeLabel(snapshots, progress = null) {
-  if (progress?.state === 'ready') return investmentRangeLabel(progress.range);
+  if (progress?.state === 'ready') {
+    // “All history” is misleading when a connection has only been observed
+    // for a few days. Say when tracking began until there is enough verified
+    // history for that lens to mean something.
+    if (progress.range === 'all' && snapshots.length > 1) {
+      const first = new Date(`${snapshots[0].date}T12:00:00`);
+      const last = new Date(`${snapshots.at(-1).date}T12:00:00`);
+      if (last.getTime() - first.getTime() < 14 * 86400000) return `since ${first.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    }
+    return investmentRangeLabel(progress.range);
+  }
   const first = snapshots[0];
   const last = snapshots.at(-1);
   if (!first || !last) return investmentRangeLabel(state.investmentRange);
@@ -1163,7 +1191,10 @@ function renderPortfolioChart(data) {
   const plot = { left: 46, right: 6, top: 8, bottom: height - 23 };
   const firstObservedTime = new Date(`${snapshots[0].date}T12:00:00`).getTime();
   const lastObservedTime = new Date(`${snapshots.at(-1).date}T12:00:00`).getTime();
-  const selectedStartDate = data.progress?.startDate || netWorthRangeBounds(state.investmentRange, new Date(`${snapshots.at(-1).date}T12:00:00`)).startDate;
+  // The server owns the requested range boundary. `startDate` is the first
+  // available observation, while `requestedStartDate` preserves the part of
+  // the selected lens before tracking began.
+  const selectedStartDate = data.progress?.requestedStartDate ?? data.progress?.startDate ?? netWorthRangeBounds(state.investmentRange, new Date(`${snapshots.at(-1).date}T12:00:00`)).startDate;
   const requestedStartTime = selectedStartDate ? new Date(`${selectedStartDate}T12:00:00`).getTime() : firstObservedTime;
   const domainStart = Math.min(firstObservedTime, requestedStartTime);
   const domainEnd = Math.max(domainStart + 86_400_000, lastObservedTime);
@@ -2298,11 +2329,10 @@ function cashflowActivityLabel(data, category) {
 
 function renderCashflowActivityDetail(category) {
   const data = spendingForSelectedMonth(state.spending);
-  const rows = (data.transactions || [])
-    .filter((transaction) => category === 'all' || transaction.flowKey === category || transaction.flowGroup === category)
-    .sort((a, b) => String(b.date).localeCompare(String(a.date)) || Number(b.amount || 0) - Number(a.amount || 0));
+  const rows = sortCashflowTransactions((data.transactions || [])
+    .filter((transaction) => category === 'all' || transaction.flowKey === category || transaction.flowGroup === category), state.cashflowActivitySort);
   const label = cashflowActivityLabel(data, category);
-  $('#cashflowDialogContent').innerHTML = `<section class="cashflow-activity-detail" aria-labelledby="cashflowActivityTitle"><button class="cashflow-activity-back" type="button" data-cashflow-back>‹ All categories</button><div class="card-label">CASH FLOW ACTIVITY</div><h2 id="cashflowActivityTitle">${escapeHtml(label)}</h2><p>${rows.length} posted transaction${rows.length === 1 ? '' : 's'} in this period.</p><div class="cashflow-activity-rows">${rows.length ? rows.map((transaction) => `<div><span><strong>${escapeHtml(transaction.name)}</strong><small>${new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</small></span><b class="${transaction.bucket === 'income' ? 'positive' : ''}">${transaction.bucket === 'income' ? '+' : ''}${fmt.format(Number(transaction.amount || 0))}</b></div>`).join('') : '<p class="spending-empty">No posted transactions in this category for this period.</p>'}</div></section>`;
+  $('#cashflowDialogContent').innerHTML = `<section class="cashflow-activity-detail" aria-labelledby="cashflowActivityTitle"><button class="cashflow-activity-back" type="button" data-cashflow-back>‹ All categories</button><div class="card-label">CASH FLOW ACTIVITY</div><div class="cashflow-activity-heading"><div><h2 id="cashflowActivityTitle">${escapeHtml(label)}</h2><p>${rows.length} posted transaction${rows.length === 1 ? '' : 's'} in this period.</p></div><label class="cashflow-activity-sort"><span>Sort by</span><select data-cashflow-activity-sort data-cashflow-category="${escapeHtml(category)}" aria-label="Sort ${escapeHtml(label)} transactions"><option value="recent" ${state.cashflowActivitySort === 'recent' ? 'selected' : ''}>Most recent</option><option value="largest" ${state.cashflowActivitySort === 'largest' ? 'selected' : ''}>Largest amount</option><option value="smallest" ${state.cashflowActivitySort === 'smallest' ? 'selected' : ''}>Smallest amount</option><option value="oldest" ${state.cashflowActivitySort === 'oldest' ? 'selected' : ''}>Oldest</option></select></label></div><div class="cashflow-activity-rows">${rows.length ? rows.map((transaction) => `<div><span><strong>${escapeHtml(transaction.name)}</strong><small>${new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</small></span><b class="${transaction.bucket === 'income' ? 'positive' : ''}">${transaction.bucket === 'income' ? '+' : ''}${fmt.format(Number(transaction.amount || 0))}</b></div>`).join('') : '<p class="spending-empty">No posted transactions in this category for this period.</p>'}</div></section>`;
 }
 
 function openCashflowCategoryActivity(category) {
@@ -2425,6 +2455,12 @@ $('#cashflowDialogContent').addEventListener('click', (event) => {
   const node = event.target.closest('[data-cashflow-node]');
   if (!node) return;
   openCashflowCategoryActivity(node.dataset.cashflowNode);
+});
+$('#cashflowDialogContent').addEventListener('change', (event) => {
+  const sort = event.target.closest('[data-cashflow-activity-sort]');
+  if (!sort) return;
+  state.cashflowActivitySort = sort.value;
+  renderCashflowActivityDetail(sort.dataset.cashflowCategory || 'all');
 });
 $('#cashflowDialogContent').addEventListener('keydown', (event) => {
   if (!['Enter', ' '].includes(event.key)) return;

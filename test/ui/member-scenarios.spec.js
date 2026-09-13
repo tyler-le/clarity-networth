@@ -214,6 +214,11 @@ test('a recently connected member sees distinct portfolio dates, never repeated 
       { date: '2026-09-06', value: 216_450, source: 'verified' },
       { date: '2026-09-07', value: 217_745, source: 'verified' }
     ];
+    preview.investments.progress = {
+      scope: 'portfolio', range: 'all', state: 'ready', points: 3,
+      requestedStartDate: null, startDate: '2026-09-05', endDate: '2026-09-07',
+      startValue: 215_200, endValue: 217_745, valueChange: 2545, changeKind: 'balance'
+    };
   });
 
   await goToView(page, 'investments');
@@ -233,6 +238,31 @@ test('a recently connected member sees distinct portfolio dates, never repeated 
   expect(new Set(labels).size).toBe(labels.length);
 });
 
+test('a newly connected portfolio shows the selected period before tracking began @critical', async ({ page }) => {
+  let oneMonthPayload;
+  await openSignedInScenario(page, (preview) => {
+    preview.investments.snapshots = [
+      { date: '2026-09-11', value: 215_200, source: 'verified' },
+      { date: '2026-09-12', value: 215_430, source: 'verified' }
+    ];
+    oneMonthPayload = structuredClone(preview.investments);
+  });
+  await page.route('**/api/investments?range=1m', (route) => route.fulfill({ json: {
+    ...oneMonthPayload,
+    range: '1m',
+    progress: {
+      scope: 'portfolio', range: '1m', state: 'ready', points: 2,
+      requestedStartDate: '2026-08-12', startDate: '2026-09-11', endDate: '2026-09-12',
+      startValue: 215_200, endValue: 215_430, valueChange: 230, changeKind: 'balance'
+    }
+  } }));
+
+  await goToView(page, 'investments');
+  await page.locator('[data-investment-range="1m"]').click();
+  await expect(page.locator('#investmentChart .chart-unavailable-line')).toBeVisible();
+  await expect(page.locator('#investmentChart .chart-unavailable-label')).toContainText('Tracking began Sep 2026');
+});
+
 test('a short portfolio window spanning months still uses distinct calendar dates', async ({ page }) => {
   await openSignedInScenario(page, (preview) => {
     preview.investments.snapshots = [
@@ -240,6 +270,11 @@ test('a short portfolio window spanning months still uses distinct calendar date
       { date: '2026-09-05', value: 216_450, source: 'verified' },
       { date: '2026-09-07', value: 217_745, source: 'verified' }
     ];
+    preview.investments.progress = {
+      scope: 'portfolio', range: 'all', state: 'ready', points: 3,
+      requestedStartDate: null, startDate: '2026-08-30', endDate: '2026-09-07',
+      startValue: 215_200, endValue: 217_745, valueChange: 2545, changeKind: 'balance'
+    };
   });
 
   await goToView(page, 'investments');

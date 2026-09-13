@@ -320,7 +320,7 @@ test('selected holding range calls a change market performance only with unchang
   const result = investmentRangeProgress(store, { ticker: 'VTI', range: '1m' });
   assert.deepEqual(result, {
     scope: 'holding', range: '1m', state: 'ready', points: 2,
-    startDate: '2026-08-10', endDate: '2026-09-07', startValue: 1_000, endValue: 1_100, valueChange: 100,
+    requestedStartDate: '2026-08-07', startDate: '2026-08-10', endDate: '2026-09-07', startValue: 1_000, endValue: 1_100, valueChange: 100,
     marketChange: 100, marketChangePct: .1, changeKind: 'market'
   });
 });
@@ -334,7 +334,7 @@ test('portfolio range progress gives the overview one verified date window', () 
   ] };
   assert.deepEqual(investmentPortfolioRangeProgress(store, { range: '1m' }), {
     scope: 'portfolio', range: '1m', state: 'ready', points: 3, basis: 'aggregate_snapshots',
-    startDate: '2026-08-12', endDate: '2026-09-12', startValue: 17_968.64,
+    requestedStartDate: '2026-08-12', startDate: '2026-08-12', endDate: '2026-09-12', startValue: 17_968.64,
     endValue: 18_200, valueChange: 231.36, changeKind: 'balance'
   });
   const summary = investmentSummary({ ...store, accounts: [], positions: [], manual_holdings: [] }, { range: '1m' });

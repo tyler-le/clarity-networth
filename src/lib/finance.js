@@ -422,7 +422,7 @@ export function investmentRangeProgress(store, { accountId = null, ticker = null
       && (!allowedHoldingKeys || allowedHoldingKeys.has(record.key));
   });
   const endDate = window?.endDate || records.map((record) => record.date).filter(Boolean).sort().at(-1) || null;
-  if (!endDate) return { scope, range: selectedRange, state: 'tracking', points: 0 };
+  if (!endDate) return { scope, range: selectedRange, state: 'tracking', points: 0, requestedStartDate: null };
   const startDate = window?.startDate || investmentRangeStart(endDate, selectedRange);
   const byDate = new Map();
   for (const record of records) {
@@ -435,11 +435,11 @@ export function investmentRangeProgress(store, { accountId = null, ticker = null
   // portfolio's exact observed endpoints. Do not silently choose another
   // start or end day for an account with incomplete data.
   if (window && (!byDate.has(startDate) || !byDate.has(endDate))) {
-    return { scope, range: selectedRange, state: 'tracking', points: dates.length, trackingSince: dates[0] || null };
+    return { scope, range: selectedRange, state: 'tracking', points: dates.length, trackingSince: dates[0] || null, requestedStartDate: startDate };
   }
   if (dates.length < 2) return {
     scope, range: selectedRange, state: 'tracking', points: dates.length,
-    trackingSince: dates[0] || null
+    trackingSince: dates[0] || null, requestedStartDate: startDate
   };
   const opening = byDate.get(dates[0]);
   const closing = byDate.get(dates.at(-1));
@@ -449,7 +449,7 @@ export function investmentRangeProgress(store, { accountId = null, ticker = null
   const marketChange = scope === 'holding' ? holdingMarketChange(opening, closing) : null;
   return {
     scope, range: selectedRange, state: 'ready', points: dates.length,
-    startDate: dates[0], endDate: dates.at(-1), startValue, endValue, valueChange,
+    requestedStartDate: startDate, startDate: dates[0], endDate: dates.at(-1), startValue, endValue, valueChange,
     // `null` explicitly means that purchases, sales, transfers, or incomplete
     // provider facts prevent us from calling this investment performance.
     marketChange,
@@ -504,7 +504,7 @@ export function investmentPortfolioRangeProgress(store, { range = 'all', account
   const selectedRange = investmentRanges.has(range) ? range : 'all';
   const { snapshots: records, basis } = investmentPortfolioSnapshots(store, accountIds);
   const endDate = records.at(-1)?.date || null;
-  if (!endDate) return { scope: 'portfolio', range: selectedRange, state: 'tracking', points: 0, basis };
+  if (!endDate) return { scope: 'portfolio', range: selectedRange, state: 'tracking', points: 0, requestedStartDate: null, basis };
   const requestedStart = investmentRangeStart(endDate, selectedRange);
   // A sync can retry within a day. The last observed balance for that day is
   // the one that represents the daily snapshot, matching chart semantics.
@@ -516,7 +516,7 @@ export function investmentPortfolioRangeProgress(store, { range = 'all', account
   const dates = [...byDate.keys()].sort();
   if (dates.length < 2) return {
     scope: 'portfolio', range: selectedRange, state: 'tracking', points: dates.length, basis,
-    trackingSince: dates[0] || null
+    trackingSince: dates[0] || null, requestedStartDate: requestedStart
   };
   const opening = byDate.get(dates[0]);
   const closing = byDate.get(dates.at(-1));
@@ -524,7 +524,7 @@ export function investmentPortfolioRangeProgress(store, { range = 'all', account
   const endValue = Math.abs(Number(closing.value || 0));
   return {
     scope: 'portfolio', range: selectedRange, state: 'ready', points: dates.length, basis,
-    startDate: dates[0], endDate: dates.at(-1), startValue, endValue,
+    requestedStartDate: requestedStart, startDate: dates[0], endDate: dates.at(-1), startValue, endValue,
     valueChange: Math.round((endValue - startValue) * 100) / 100,
     changeKind: 'balance'
   };

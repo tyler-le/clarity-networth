@@ -246,6 +246,8 @@ integrationTest('investment history exposes range-safe verified progress without
   const key = userStorageKey(email);
   const today = new Date().toISOString().slice(0, 10);
   const earlier = new Date(Date.parse(`${today}T00:00:00Z`) - 2 * 86400000).toISOString().slice(0, 10);
+  const requestedStart = new Date(`${today}T12:00:00Z`);
+  requestedStart.setUTCMonth(requestedStart.getUTCMonth() - 1);
   writeStore({
     items: [{ id: 'progress-item' }],
     accounts: [{ plaid_account_id: 'ira', item_id: 'progress-item', name: 'IRA', type: 'investment', current_balance: 1_100, iso_currency_code: 'USD', hidden: false }],
@@ -263,7 +265,7 @@ integrationTest('investment history exposes range-safe verified progress without
   assert.equal(holding.status, 200);
   assert.deepEqual(holding.body.progress, {
     scope: 'holding', range: '1m', state: 'ready', points: 2,
-    startDate: earlier, endDate: today, startValue: 1_000, endValue: 1_100, valueChange: 100,
+    requestedStartDate: requestedStart.toISOString().slice(0, 10), startDate: earlier, endDate: today, startValue: 1_000, endValue: 1_100, valueChange: 100,
     marketChange: 100, marketChangePct: .1, changeKind: 'market'
   });
   assert.deepEqual(holding.body.holdingProgress['ira:vti'], holding.body.progress);

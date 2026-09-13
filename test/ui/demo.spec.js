@@ -156,7 +156,7 @@ test('net worth opens as a concise financial briefing', async ({ page }) => {
   expect(overflow).toBe(false);
 });
 
-test('cash flow shows identifiable income inlets that highlight their flow', async ({ page }) => {
+test('cash flow opens the matching category activity from an income inlet', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');
   const paychecks = page.locator('#cashflowSankey [data-cashflow-category="income_paychecks"]');
@@ -165,10 +165,14 @@ test('cash flow shows identifiable income inlets that highlight their flow', asy
   await expect(paychecks).toContainText('Paychecks');
   await expect(interest).toBeVisible();
   await expect(interest).toContainText('Interest');
+  await paychecks.focus();
+  await expect(page.locator('#cashflowSankey .cashflow-flow.is-connected')).not.toHaveCount(0);
+  await expect(page.locator('#cashflowSankey .cashflow-flow.is-muted')).not.toHaveCount(0);
   await paychecks.click();
-  await expect(paychecks).toHaveClass(/is-selected/);
-  await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
-  await expect(page.locator('#spendingCategoryFilter')).toHaveValue('income_paychecks');
+  await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
+  await expect(page.locator('#cashflowDialogContent')).toContainText('Paychecks');
+  await expect(page.locator('#cashflowDialogContent')).toContainText(/posted transaction/i);
+  await expect(page.locator('#spendingTransactionsPanel')).not.toHaveAttribute('open', '');
 });
 
 test('a demo visitor can exit from Profile and return to sign-in', async ({ page }) => {
@@ -246,7 +250,7 @@ test('debt rates remain editable after a first entry', async ({ page }) => {
   await expect(card.locator('[data-debt-rate="demo-credit"]')).toHaveValue('18.5');
 });
 
-test('cash-flow taps filter activity without moving the reader away from the diagram', async ({ page }) => {
+test('cash-flow taps show category activity without moving the reader away from the diagram', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');
   const node = page.locator('#cashflowSankey [data-cashflow-category="income_paychecks"]');
@@ -254,10 +258,9 @@ test('cash-flow taps filter activity without moving the reader away from the dia
   const before = await page.evaluate(() => scrollY);
 
   await node.click();
-  await expect(page.locator('#cashflowSankey .cashflow-flow.is-connected')).not.toHaveCount(0);
-  await expect(page.locator('#cashflowSankey .cashflow-flow.is-muted')).not.toHaveCount(0);
-  await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
-  await expect(page.locator('#spendingCategoryFilter')).toHaveValue('income_paychecks');
+  await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
+  await expect(page.locator('#cashflowDialogContent')).toContainText('Paychecks');
+  await expect(page.locator('#spendingTransactionsPanel')).not.toHaveAttribute('open', '');
   expect(await page.evaluate(() => scrollY)).toBe(before);
 });
 
@@ -285,20 +288,16 @@ test('selecting a cash-flow month keeps its income-source labels defined', async
   await expect(page.locator('#cashflowSankey [data-cashflow-category="income_paychecks"]')).toContainText('Paychecks');
 });
 
-test('cash-flow blocks trace their connected paths with a keyboard action', async ({ page }) => {
+test('cash-flow blocks open their category activity with a keyboard action', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');
   const paycheckBlock = page.locator('#cashflowSankey [data-cashflow-category="income_paychecks"]');
   // SVG focus events can be normalized differently by browser engines. Enter
-  // is the durable keyboard interaction the product promises: it selects the
-  // block and traces its paths without relying on a pointer hit target.
+  // is the durable keyboard interaction the product promises: it opens the
+  // relevant activity without relying on a pointer hit target.
   await paycheckBlock.press('Enter');
-  const focused = await page.locator('#cashflowSankey').evaluate((diagram) => ({
-    connected: diagram?.querySelectorAll('.cashflow-flow.is-connected').length || 0,
-    muted: diagram?.querySelectorAll('.cashflow-flow.is-muted').length || 0
-  }));
-  expect(focused.connected).toBeGreaterThan(0);
-  expect(focused.muted).toBeGreaterThan(0);
+  await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
+  await expect(page.locator('#cashflowDialogContent')).toContainText('Paychecks');
 });
 
 test('asset-allocation filters preserve the reader position', async ({ page }) => {
@@ -427,6 +426,13 @@ test('cash-flow diagram stays readable and opens transactions in-app @critical',
   await expect(page.locator('#cashflowDialogContent .cashflow-activity-detail')).toBeVisible();
   await expect(page.locator('#cashflowDialogContent .cashflow-activity-detail')).toContainText('posted transaction');
   await expect(page.locator('#spendingTransactionsPanel')).not.toHaveAttribute('open', '');
+  const activitySort = page.locator('#cashflowDialogContent [data-cashflow-activity-sort]');
+  await expect(activitySort).toHaveValue('recent');
+  await activitySort.selectOption('largest');
+  await expect(activitySort).toHaveValue('largest');
+  const amounts = (await page.locator('#cashflowDialogContent .cashflow-activity-rows b').allTextContents())
+    .map((value) => Number(value.replace(/[^0-9.]/g, '')));
+  expect(amounts.every((amount, index) => index === 0 || amounts[index - 1] >= amount)).toBe(true);
   await page.locator('#cashflowDialogContent [data-cashflow-back]').click();
   await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
   await page.locator('#cashflowDialogClose').click();
