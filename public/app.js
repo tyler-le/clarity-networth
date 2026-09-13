@@ -45,7 +45,8 @@ const state = {
   // A member can have connected cash or debt without an investment account.
   // Keep Investments useful as a muted product preview without replacing
   // their real data in any other tab.
-  investmentPreview: null
+  investmentPreview: null,
+  connectionFocus: null
 };
 
 const accountGroupOrder = ['Cash', 'Savings', 'Investments', 'Credit cards', 'Loans & debt', 'Other'];
@@ -634,6 +635,19 @@ function accountRow(a) {
   </div>`;
 }
 
+function accountConnectionHealth(account) {
+  if (account.manual || !account.item_id) return null;
+  return (state.dashboard?.connectionHealth || []).find((entry) => entry.id === account.item_id && entry.state !== 'healthy') || null;
+}
+
+function accountConnectionAction(account, health = accountConnectionHealth(account)) {
+  if (!health) return '';
+  const name = account.institution_name || 'This institution';
+  const label = health.action_required ? 'Reconnect' : 'Connection status';
+  const symbol = health.action_required ? '!' : '•';
+  return `<button class="account-connection-action ${escapeHtml(health.state)}" type="button" data-account-connection="${escapeHtml(account.item_id)}" aria-label="${escapeHtml(label)} for ${escapeHtml(name)}" title="${escapeHtml(label)} for ${escapeHtml(name)}"><i aria-hidden="true">${symbol}</i></button>`;
+}
+
 function renderAccounts(accounts) {
   const grouped = groupedAccounts(accounts);
   if (!grouped.length) {
@@ -654,9 +668,12 @@ function renderAccounts(accounts) {
     const previewCount = 2;
     return `<section class="account-collection ${debt ? 'debt' : 'asset'}">
       <div class="account-collection-head"><span class="account-collection-icon" aria-hidden="true">${accountGroupIcons[name] || '◇'}</span><div><h2>${name}</h2><p>${items.length} account${items.length === 1 ? '' : 's'}</p></div><div class="account-collection-total ${debt ? 'negative' : 'positive'}"><span>${debt ? 'Owed' : 'Held'}</span><strong>${fmt.format(total)}</strong></div></div>
-      <div class="account-collection-items">${sorted.map((account, index) => `<article class="account-item ${debt ? 'debt' : 'asset'} ${index >= previewCount && !expanded ? 'hidden' : ''}">
-        ${institutionMark(account)}<div class="account-copy"><div class="account-name">${escapeHtml(account.nickname || account.name)}</div><div class="account-inst">${escapeHtml(accountSubtitle(account))}</div><div class="account-inline-balance ${debt ? 'negative' : 'positive'}">${displayBalance(account)}</div></div>${account.manual ? `<button class="account-rename" data-manual-account="${escapeHtml(account.id)}" data-manual-name="${escapeHtml(account.name)}" data-manual-subtype="${escapeHtml(account.subtype || '')}" data-manual-value="${escapeHtml(account.current_balance)}" data-manual-kind="${debt ? 'liability' : 'asset'}" aria-label="Edit ${escapeHtml(account.name)}">✎</button>` : `<button class="account-rename" data-account-rename="${escapeHtml(account.id)}" data-account-name="${escapeHtml(account.nickname || account.name)}" aria-label="Rename ${escapeHtml(account.nickname || account.name)}">✎</button>`}
-      </article>`).join('')}</div>${items.length > previewCount ? `<button class="account-group-more" data-account-group="${escapeHtml(name)}">${expanded ? 'Show less' : `View ${items.length - previewCount} more`}</button>` : ''}
+      <div class="account-collection-items">${sorted.map((account, index) => {
+        const investment = account.type === 'investment' && account.plaid_account_id;
+        const actions = `${accountConnectionAction(account)}${account.manual ? `<button class="account-rename" data-manual-account="${escapeHtml(account.id)}" data-manual-name="${escapeHtml(account.name)}" data-manual-subtype="${escapeHtml(account.subtype || '')}" data-manual-value="${escapeHtml(account.current_balance)}" data-manual-kind="${debt ? 'liability' : 'asset'}" aria-label="Edit ${escapeHtml(account.name)}">✎</button>` : `<button class="account-rename" data-account-rename="${escapeHtml(account.id)}" data-account-name="${escapeHtml(account.nickname || account.name)}" aria-label="Rename ${escapeHtml(account.nickname || account.name)}">✎</button>`}`;
+        const content = `${institutionMark(account)}<div class="account-copy"><div class="account-name">${escapeHtml(account.nickname || account.name)}</div><div class="account-inst">${escapeHtml(accountSubtitle(account))}</div><div class="account-inline-balance ${debt ? 'negative' : 'positive'}">${displayBalance(account)}</div></div>`;
+        return `<article class="account-item ${investment ? 'account-item-investment' : ''} ${debt ? 'debt' : 'asset'} ${index >= previewCount && !expanded ? 'hidden' : ''}">${investment ? `<button class="account-investment-detail" type="button" data-account-investment-history="${escapeHtml(account.plaid_account_id)}" aria-label="View ${escapeHtml(account.nickname || account.name)} investment performance">${content}<i aria-hidden="true">›</i></button>` : content}<span class="account-item-actions">${actions}</span></article>`;
+      }).join('')}</div>${items.length > previewCount ? `<button class="account-group-more" data-account-group="${escapeHtml(name)}">${expanded ? 'Show less' : `View ${items.length - previewCount} more`}</button>` : ''}
     </section>`;
   }).join('');
 }
@@ -715,8 +732,20 @@ function renderConnections(items) {
           : status?.state === 'healthy' ? `${verified} · Updates automatically`
             : `${verified} · We’re checking again automatically`;
     const actions = item.demo ? '<span class="connection-demo-label">Demo</span>' : `${!item.development_mock && needsReconnect ? `<button class="reconnect-button" data-reconnect="${escapeHtml(item.id)}">Reconnect</button>` : ''}<button class="unlink-button" data-unlink="${escapeHtml(item.id)}">Unlink</button>`;
-    return `<div class="connection-row"><div>${item.institution_logo ? `<img class="connection-logo" src="${escapeHtml(item.institution_logo)}" alt="" />` : '<span class="connection-fallback" aria-hidden="true">⌂</span>'}<span>${escapeHtml(item.institution_name)}<small class="connection-status ${status?.state || ''}">${detail}</small></span></div><span class="connection-actions">${actions}</span></div>`;
+    return `<div class="connection-row ${state.connectionFocus === item.id ? 'connection-row-focused' : ''}" data-connection-id="${escapeHtml(item.id)}" tabindex="-1"><div>${item.institution_logo ? `<img class="connection-logo" src="${escapeHtml(item.institution_logo)}" alt="" />` : '<span class="connection-fallback" aria-hidden="true">⌂</span>'}<span>${escapeHtml(item.institution_name)}<small class="connection-status ${status?.state || ''}">${detail}</small></span></div><span class="connection-actions">${actions}</span></div>`;
   }).join('') : '<div class="empty">No connected institutions yet. Connect one when you’re ready.</div>';
+}
+
+function openConnectionManagement(itemId) {
+  state.connectionFocus = itemId || null;
+  setView('profile');
+  renderConnections(state.dashboard?.items || []);
+  requestAnimationFrame(() => {
+    const row = itemId ? $(`#connectionsList [data-connection-id="${CSS.escape(itemId)}"]`) : null;
+    if (!row) return;
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.focus({ preventScroll: true });
+  });
 }
 
 function renderProfileSettings(d) {
@@ -2142,6 +2171,20 @@ $('#accountGrid').addEventListener('click', (event) => {
     dialog.showModal();
     return;
   }
+  const connection = event.target.closest('[data-account-connection]');
+  if (connection) {
+    event.preventDefault();
+    event.stopPropagation();
+    openConnectionManagement(connection.dataset.accountConnection);
+    return;
+  }
+  const investment = event.target.closest('[data-account-investment-history]');
+  if (investment) {
+    trackProductEvent('investment_account_opened');
+    setView('investments');
+    openHoldingHistory({ accountId: investment.dataset.accountInvestmentHistory });
+    return;
+  }
   const button = event.target.closest('[data-account-rename]');
   if (!button) return;
   event.preventDefault();
@@ -2270,7 +2313,7 @@ $('#goalForm').addEventListener('submit', async (event) => {
     await api('/api/goals', { method: 'POST', body: JSON.stringify(goal) }); $('#goalDialog').close(); await loadAll(); showNotice('Goal added.', 'success');
   } catch (error) { showNotice(error.message); }
 });
-$('#connectionAttentionAction').addEventListener('click', () => setView('profile'));
+$('#connectionAttentionAction').addEventListener('click', () => openConnectionManagement());
 $('#clarityCheckinAction').addEventListener('click', () => setView($('#clarityCheckin').dataset.action || 'overview'));
 $('#connectionsList').addEventListener('click', async (event) => {
   const reconnect = event.target.closest('[data-reconnect]');

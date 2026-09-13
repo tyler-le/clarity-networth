@@ -362,6 +362,16 @@ html[data-theme="dark"] .fresh-feature-tour-grid { border-color: #395541; backgr
 .account-group-more { width: 100%; border: 0; border-top: 1px solid var(--line); padding: 11px 14px; background: #fbfcfa; color: var(--accent); text-align: left; font-size: 12px; font-weight: 700; }.account-group-more:hover { background: var(--accent-soft); }
 .account-item { display: flex; align-items: flex-start; gap: 11px; padding: 15px 16px; }
 .account-item + .account-item { border-top: 1px solid var(--line); }
+.account-investment-detail { display: flex; align-items: flex-start; flex: 1; min-width: 0; gap: 11px; margin: -6px; padding: 6px; border: 0; border-radius: 10px; color: var(--ink); background: transparent; text-align: left; cursor: pointer; font: inherit; }
+.account-investment-detail:hover { background: var(--accent-soft); }
+.account-investment-detail:focus-visible { outline: 3px solid rgba(31,111,74,.22); outline-offset: 1px; }
+.account-investment-detail > .account-copy { flex: 1; }
+.account-investment-detail > i { align-self: center; color: var(--muted); font-size: 20px; font-style: normal; line-height: 1; }
+.account-item-actions { display: inline-flex; align-self: center; align-items: center; gap: 2px; flex: 0 0 auto; }
+.account-connection-action { display: grid; width: 29px; height: 29px; place-items: center; border: 0; border-radius: 50%; color: #9a6b22; background: #fbf1dc; cursor: pointer; }
+.account-connection-action i { display: grid; width: 14px; height: 14px; place-items: center; border: 1.5px solid currentColor; border-radius: 50%; font-size: 10px; font-style: normal; font-weight: 800; line-height: 1; }
+.account-connection-action.attention { color: #aa554b; background: #f9e9e7; }
+.account-connection-action:hover, .account-connection-action:focus-visible { filter: brightness(.96); outline: 3px solid rgba(176,122,41,.18); outline-offset: 1px; }
 .institution-logo, .institution-fallback { display: grid; flex: 0 0 auto; width: 32px; height: 32px; place-items: center; border: 1px solid var(--line); border-radius: 9px; background: white; object-fit: contain; overflow: hidden; }
 .institution-logo { padding: 3px; }
 .institution-fallback { color: #68726a; background: #f7f9f6; }
@@ -384,6 +394,7 @@ html[data-theme="dark"] .fresh-feature-tour-grid { border-color: #395541; backgr
 .connection-fallback { padding: 0; color: var(--muted); background: #f5f7f4; font-size: 12px; }
 .connection-status { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; font-weight: 500; }.connection-status.stale, .connection-status.attention { color: #9a6b22; }
 .connection-demo-label { color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.connection-row-focused { border-radius: 10px; background: var(--accent-soft); outline: 2px solid rgba(31,111,74,.18); outline-offset: -2px; }
 .unlink-button { border: 0; border-radius: 8px; padding: 6px 8px; color: var(--red); background: var(--red-soft); font-size: 11px; font-weight: 700; }
 .unlink-button:disabled { opacity: .55; }
 .profile-button { height: 38px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 19px; padding: 0 11px; background: white; color: var(--muted); font-size: 15px; }.profile-button b { font-size: 12px; }
@@ -649,6 +660,9 @@ html[data-theme="dark"] .holding-detail, html[data-theme="dark"] .holding-accoun
 html[data-theme="dark"] .holding-account, html[data-theme="dark"] .holding-account-list { background: #1c231e; }
 html[data-theme="dark"] .investment-donut::before, html[data-theme="dark"] .spending-donut::before { background: var(--card); }
 html[data-theme="dark"] .account-collection, html[data-theme="dark"] .accounts-summary { background: var(--card); }
+html[data-theme="dark"] .account-investment-detail:hover, html[data-theme="dark"] .connection-row-focused { background: #253127; }
+html[data-theme="dark"] .account-connection-action { color: #dfb566; background: #3a3020; }
+html[data-theme="dark"] .account-connection-action.attention { color: #e49a91; background: #3a2726; }
 html[data-theme="dark"] .debt-payoff-card { border-color: var(--line); background: var(--card); }
 html[data-theme="dark"] .debt-plan-summary:hover { background: rgba(255,255,255,.025); }
 html[data-theme="dark"] .debt-plan-mark { background: #252d28; color: #aeb8af; }

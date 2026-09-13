@@ -177,6 +177,44 @@ test('accounts retain the established collection layout for each account type', 
   await expect(collections.nth(3).locator('.account-group-more')).toHaveCount(0);
 });
 
+test('an investment account in Accounts opens its verified performance detail', async ({ page }) => {
+  const history = [
+    { date: '2026-09-01', value: 9000, source: 'verified' },
+    { date: '2026-09-12', value: 9316, source: 'verified' }
+  ];
+  await openSignedInScenario(page);
+  await page.route('**/api/investments/history**', (route) => route.fulfill({ json: {
+    state: 'ready', label: 'Brokerage', value: 9316, history, market: [],
+    detail: 'Based on 2 verified daily updates from your connected institution.'
+  } }));
+
+  await goToView(page, 'accounts');
+  const investmentRow = page.locator('#accountGrid [data-account-investment-history]').first();
+  await expect(investmentRow).toBeVisible();
+  await expect(investmentRow).toHaveAttribute('aria-label', /performance/i);
+  await investmentRow.click();
+  await expect(page.locator('#holdingHistoryDialog')).toBeVisible();
+  await expect(page.locator('#holdingHistoryEyebrow')).toHaveText('Your account');
+  await expect(page.locator('#holdingHistoryNote')).toContainText('verified daily updates');
+});
+
+test('an account with a connection issue routes to its focused management row', async ({ page }) => {
+  await openSignedInScenario(page, (preview) => {
+    const item = preview.dashboard.items[0];
+    item.demo = false;
+    preview.dashboard.connectionHealth = [{ id: item.id, institution_name: item.institution_name, state: 'attention', requires_reconnect: true, action_required: true }];
+  });
+
+  await goToView(page, 'accounts');
+  const connectionAction = page.locator('#accountGrid [data-account-connection]').first();
+  await expect(connectionAction).toBeVisible();
+  await expect(connectionAction).toHaveAttribute('aria-label', /Reconnect/i);
+  await connectionAction.click();
+  await expect(page.getByRole('heading', { name: 'Profile' })).toBeVisible();
+  await expect(page.locator('#connectionsList .connection-row-focused')).toHaveCount(1);
+  await expect(page.locator('#connectionsList .connection-row-focused')).toContainText('Reconnect');
+});
+
 test('historical charts use only observed snapshots @critical', async ({ page }) => {
   const today = new Date().toISOString().slice(0, 10);
   const ago = (days) => new Date(Date.parse(`${today}T00:00:00Z`) - days * 86400000).toISOString().slice(0, 10);
