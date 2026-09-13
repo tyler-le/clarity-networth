@@ -200,6 +200,35 @@ test('an investment account in Accounts opens its verified performance detail', 
   await expect(page.locator('#holdingHistoryNote')).toContainText('verified daily updates');
 });
 
+test('a connected cash or debt account opens its own verified detail without leaving Accounts', async ({ page }) => {
+  const history = [
+    { date: '2026-09-01', value: 1200, source: 'verified' },
+    { date: '2026-09-12', value: 1450, source: 'verified' }
+  ];
+  await openSignedInScenario(page);
+  await page.route('**/api/accounts/history**', (route) => route.fulfill({ json: {
+    state: 'ready',
+    account: { id: 'cash-detail', name: 'Daily checking', institutionName: 'Example Bank', type: 'depository', subtype: 'checking', value: 1450 },
+    history,
+    progress: { state: 'ready', range: '1m', points: 2, startDate: '2026-09-01', endDate: '2026-09-12', valueChange: 250 },
+    detail: 'Based on 2 verified daily updates from your connected institution.',
+    activity: [{ id: 'paycheck', name: 'Paycheck', date: '2026-09-12', amount: -250 }]
+  } }));
+
+  await goToView(page, 'accounts');
+  const accountRow = page.locator('#accountGrid [data-account-history]').first();
+  await expect(accountRow).toBeVisible();
+  await expect(accountRow).toHaveAttribute('aria-label', /account detail/i);
+  await accountRow.click();
+  await expect(page.locator('#accountHistoryDialog')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Accounts' })).toBeVisible();
+  await expect(page.locator('#accountHistoryTitle')).toHaveText('Daily checking');
+  await expect(page.locator('#accountHistoryNote')).toContainText('verified daily updates');
+  await expect(page.locator('#accountHistoryActivity')).toContainText('Paycheck');
+  await page.locator('#accountHistoryRange [data-account-history-range="3m"]').click();
+  await expect(page.locator('#accountHistoryRange [data-account-history-range="3m"]')).toHaveAttribute('aria-pressed', 'true');
+});
+
 test('an account with a connection issue routes to its focused management row', async ({ page }) => {
   await openSignedInScenario(page, (preview) => {
     const item = preview.dashboard.items[0];

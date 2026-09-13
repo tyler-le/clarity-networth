@@ -362,11 +362,11 @@ html[data-theme="dark"] .fresh-feature-tour-grid { border-color: #395541; backgr
 .account-group-more { width: 100%; border: 0; border-top: 1px solid var(--line); padding: 11px 14px; background: #fbfcfa; color: var(--accent); text-align: left; font-size: 12px; font-weight: 700; }.account-group-more:hover { background: var(--accent-soft); }
 .account-item { display: flex; align-items: flex-start; gap: 11px; padding: 15px 16px; }
 .account-item + .account-item { border-top: 1px solid var(--line); }
-.account-investment-detail { display: flex; align-items: flex-start; flex: 1; min-width: 0; gap: 11px; margin: -6px; padding: 6px; border: 0; border-radius: 10px; color: var(--ink); background: transparent; text-align: left; cursor: pointer; font: inherit; }
-.account-investment-detail:hover { background: var(--accent-soft); }
-.account-investment-detail:focus-visible { outline: 3px solid rgba(31,111,74,.22); outline-offset: 1px; }
-.account-investment-detail > .account-copy { flex: 1; }
-.account-investment-detail > i { align-self: center; color: var(--muted); font-size: 20px; font-style: normal; line-height: 1; }
+.account-investment-detail, .account-detail { display: flex; align-items: flex-start; flex: 1; min-width: 0; gap: 11px; margin: -6px; padding: 6px; border: 0; border-radius: 10px; color: var(--ink); background: transparent; text-align: left; cursor: pointer; font: inherit; }
+.account-investment-detail:hover, .account-detail:hover { background: var(--accent-soft); }
+.account-investment-detail:focus-visible, .account-detail:focus-visible { outline: 3px solid rgba(31,111,74,.22); outline-offset: 1px; }
+.account-investment-detail > .account-copy, .account-detail > .account-copy { flex: 1; }
+.account-investment-detail > i, .account-detail > i { align-self: center; color: var(--muted); font-size: 20px; font-style: normal; line-height: 1; }
 .account-item-actions { display: inline-flex; align-self: center; align-items: center; gap: 2px; flex: 0 0 auto; }
 .account-connection-action { display: grid; width: 29px; height: 29px; place-items: center; border: 0; border-radius: 50%; color: #9a6b22; background: #fbf1dc; cursor: pointer; }
 .account-connection-action i { display: grid; width: 14px; height: 14px; place-items: center; border: 1.5px solid currentColor; border-radius: 50%; font-size: 10px; font-style: normal; font-weight: 800; line-height: 1; }
@@ -662,7 +662,7 @@ html[data-theme="dark"] .holding-detail, html[data-theme="dark"] .holding-accoun
 html[data-theme="dark"] .holding-account, html[data-theme="dark"] .holding-account-list { background: #1c231e; }
 html[data-theme="dark"] .investment-donut::before, html[data-theme="dark"] .spending-donut::before { background: var(--card); }
 html[data-theme="dark"] .account-collection, html[data-theme="dark"] .accounts-summary { background: var(--card); }
-html[data-theme="dark"] .account-investment-detail:hover, html[data-theme="dark"] .connection-row-focused { background: #253127; }
+html[data-theme="dark"] .account-investment-detail:hover, html[data-theme="dark"] .account-detail:hover, html[data-theme="dark"] .connection-row-focused { background: #253127; }
 html[data-theme="dark"] .account-connection-action { color: #dfb566; background: #3a3020; }
 html[data-theme="dark"] .account-connection-action.attention { color: #e49a91; background: #3a2726; }
 html[data-theme="dark"] .debt-payoff-card { border-color: var(--line); background: var(--card); }
@@ -858,3 +858,12 @@ html[data-theme="dark"] .retirement-milestone.complete, html[data-theme="dark"] 
 .holding-history-controls { position: sticky; z-index: 3; top: 0; margin: 0 -4px; padding: 8px 4px; background: var(--card); border-bottom: 1px solid var(--line); }
 .holding-history-controls[data-timeframe-scope="detail"] .holding-history-range { border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--card) 58%, transparent); }
 @media (max-width: 560px) { .holding-history-controls { top: 94px; margin-inline: -4px; } }
+@media (max-width: 560px) { .account-history-dialog .holding-history-head .dialog-close { display: grid; } }
+
+.account-history-activity { display: grid; gap: 0; margin-top: 18px; }
+.account-history-activity h3 { margin: 0 0 7px; color: var(--muted); font-size: 11px; font-weight: 720; }
+.account-history-activity > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.account-history-activity span { display: grid; min-width: 0; gap: 2px; }
+.account-history-activity b { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.account-history-activity small { color: var(--muted); font-size: 10px; }
+.account-history-activity strong { flex: 0 0 auto; font-size: 12px; font-variant-numeric: tabular-nums; }

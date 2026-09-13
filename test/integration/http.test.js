@@ -278,6 +278,39 @@ integrationTest('investment history exposes range-safe verified progress without
   deleteStore(key);
 });
 
+integrationTest('connected account detail is isolated and reports only verified balance history', async () => {
+  const email = 'account-history@example.test';
+  const key = userStorageKey(email);
+  const today = new Date().toISOString().slice(0, 10);
+  const earlier = new Date(Date.parse(`${today}T00:00:00Z`) - 10 * 86_400_000).toISOString().slice(0, 10);
+  writeStore({
+    items: [{ id: 'bank' }],
+    accounts: [
+      { id: 'cash', plaid_account_id: 'cash', item_id: 'bank', type: 'depository', subtype: 'checking', name: 'Checking', current_balance: 700, hidden: false },
+      { id: 'card', plaid_account_id: 'card', item_id: 'bank', type: 'credit', subtype: 'credit card', name: 'Card', current_balance: 250, hidden: false }
+    ],
+    account_balance_snapshots: [
+      { account_id: 'cash', date: earlier, value: 500, source: 'verified' },
+      { account_id: 'cash', date: today, value: 700, source: 'verified' },
+      { account_id: 'cash', date: today, value: 999, source: 'estimated' },
+      { account_id: 'card', date: today, value: 250, source: 'verified' }
+    ],
+    transactions: [
+      { id: 'deposit', account_id: 'cash', date: today, name: 'Deposit', amount: -200, pending: false },
+      { id: 'pending', account_id: 'cash', date: today, name: 'Pending', amount: 50, pending: true }
+    ]
+  }, key);
+  const response = await request(app).get('/api/accounts/history?account_id=cash&range=1m').set('Cookie', signedTestCookie(email));
+  assert.equal(response.status, 200);
+  assert.equal(response.body.account.name, 'Checking');
+  assert.deepEqual(response.body.history.map((row) => row.value), [500, 700]);
+  assert.equal(response.body.progress.valueChange, 200);
+  assert.deepEqual(response.body.activity.map((row) => row.name), ['Deposit']);
+  const other = await request(app).get('/api/accounts/history?account_id=cash').set('Cookie', signedTestCookie('other-account-history@example.test'));
+  assert.equal(other.status, 404);
+  deleteStore(key);
+});
+
 integrationTest('portfolio and account performance reconcile from one verified daily snapshot window', async () => {
   const email = 'reconciled-investment-summary@example.test';
   const key = userStorageKey(email);
@@ -507,16 +540,19 @@ integrationTest('staging mock connection is explicitly gated, seeded, and remova
   assert.equal(stored.items.length, 1);
   assert.equal(stored.items[0].development_mock, true);
   assert.equal(stored.items[0].access_token_enc, undefined);
-  assert.equal(stored.accounts.length, 6);
+  assert.equal(stored.accounts.length, 9);
   assert.ok(stored.accounts.every((account) => account.demo === false));
   assert.deepEqual(
     stored.accounts.map((account) => [account.name, account.type, account.subtype]).sort((a, b) => a[0].localeCompare(b[0])),
     [
       ['401(k)', 'investment', '401k'],
+      ['Auto loan', 'loan', 'auto'],
+      ['Brokerage', 'investment', 'brokerage'],
       ['Capital One Venture', 'credit', 'credit card'],
       ['Chase Sapphire Preferred', 'credit', 'credit card'],
       ['Checking', 'depository', 'checking'],
       ['High Yield Savings', 'depository', 'savings'],
+      ['Rewards balance', 'other', 'other'],
       ['Roth IRA', 'investment', 'ira']
     ].sort((a, b) => a[0].localeCompare(b[0]))
   );
@@ -527,6 +563,9 @@ integrationTest('staging mock connection is explicitly gated, seeded, and remova
   // a long-running linked member: ranges, charts, and drill-ins need daily
   // records from one coherent source rather than a single connection-day dot.
   assert.ok(stored.snapshots.length >= 365);
+  const mockNonInvestmentIds = new Set(stored.accounts.filter((account) => account.type !== 'investment').map((account) => account.plaid_account_id));
+  assert.ok(stored.account_balance_snapshots.length >= 365 * mockNonInvestmentIds.size);
+  assert.ok(mockNonInvestmentIds.size >= 6);
   const mockInvestmentIds = new Set(stored.accounts.filter((account) => account.type === 'investment').map((account) => account.plaid_account_id));
   const accountSnapshotsByDate = new Map();
   for (const snapshot of stored.investment_position_snapshots) {

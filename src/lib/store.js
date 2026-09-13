@@ -52,6 +52,10 @@ const emptyStore = () => ({
   market_prices: {},
   investment_snapshots: [],
   investment_position_snapshots: [],
+  // Daily provider-observed balances for connected non-investment accounts.
+  // Keep this separate from aggregate net-worth and investment ledgers so a
+  // detail view never has to reconstruct an account's past from transactions.
+  account_balance_snapshots: [],
   transactions: [],
   snapshots: [],
   settings: {
@@ -75,6 +79,13 @@ export function normalizeStore(parsed) {
   return {
     ...defaults,
     ...parsed,
+    // Plaid calls the current investment family `investment`; `brokerage` is
+    // a legacy API value. Normalize once at the storage boundary so every
+    // downstream surface handles it as an investment rather than silently
+    // dropping it into an unsupported "Other" bucket.
+    accounts: Array.isArray(parsed.accounts)
+      ? parsed.accounts.map((account) => account?.type === 'brokerage' ? { ...account, type: 'investment' } : account)
+      : defaults.accounts,
     settings: {
       ...defaults.settings,
       ...(parsed.settings || {}),

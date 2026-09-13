@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { combinedHistory, mergeReportedHistory, priceAt, reconstructCashAccount, reconstructInvestmentAccount, reconstructedNetWorth } from '../src/lib/history.js';
-import { investmentDetailHistory, refreshReconstructedInvestmentSnapshots } from '../src/lib/finance.js';
+import { accountBalanceHistory, investmentDetailHistory, refreshReconstructedInvestmentSnapshots } from '../src/lib/finance.js';
 import { investmentLedgerPages } from '../src/lib/plaid.js';
 import { loadHistoricalPrices } from '../src/lib/market-data.js';
 
@@ -216,6 +216,29 @@ test('cash history rejects missing currency, unknown balances, stale anchors and
     const store = bankFixture(); mutate(store);
     assert.equal(reconstructCashAccount(store, store.accounts[0], options).state, 'unavailable');
   }
+});
+
+test('connected account detail uses only its own verified balance snapshots and posted activity', () => {
+  const store = bankFixture();
+  store.accounts[0].name = 'Checking';
+  store.accounts[0].institution_name = 'Example Bank';
+  store.account_balance_snapshots = [
+    { account_id: 'checking', date: '2026-08-20', value: 800, source: 'verified' },
+    { account_id: 'checking', date: '2026-09-01', value: 850, source: 'estimated' },
+    { account_id: 'checking', date: '2026-09-01', value: 875, source: 'verified' },
+    { account_id: 'checking', date: '2026-09-07', value: 900, source: 'verified' },
+    { account_id: 'card', date: '2026-09-07', value: 200, source: 'verified' }
+  ];
+  const detail = accountBalanceHistory(store, { accountId: 'checking', range: '1m' });
+  assert.equal(detail.account.name, 'Checking');
+  assert.deepEqual(detail.history, [
+    { date: '2026-08-20', value: 800, source: 'verified' },
+    { date: '2026-09-01', value: 875, source: 'verified' },
+    { date: '2026-09-07', value: 900, source: 'verified' }
+  ]);
+  assert.equal(detail.progress.valueChange, 100);
+  assert.deepEqual(detail.activity.map((row) => row.name), ['Transaction']);
+  assert.equal(accountBalanceHistory(store, { accountId: 'missing', range: '1m' }), null);
 });
 
 test('a mixed investment/cash/debt total never substitutes current balances for missing history', () => {

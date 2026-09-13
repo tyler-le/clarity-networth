@@ -30,6 +30,8 @@ const state = {
   holdingHistory: null,
   holdingHistoryMode: 'position',
   holdingHistoryRange: '1y',
+  accountHistory: null,
+  accountHistoryRange: '1m',
   expandedAccountGroups: new Set(),
   holdingsExpanded: false,
   demoGoal: null,
@@ -670,9 +672,14 @@ function renderAccounts(accounts) {
       <div class="account-collection-head"><span class="account-collection-icon" aria-hidden="true">${accountGroupIcons[name] || '◇'}</span><div><h2>${name}</h2><p>${items.length} account${items.length === 1 ? '' : 's'}</p></div><div class="account-collection-total ${debt ? 'negative' : 'positive'}"><span>${debt ? 'Owed' : 'Held'}</span><strong>${fmt.format(total)}</strong></div></div>
       <div class="account-collection-items">${sorted.map((account, index) => {
         const investment = account.type === 'investment' && account.plaid_account_id;
+        const detail = !account.manual && account.plaid_account_id;
         const actions = `${accountConnectionAction(account)}${account.manual ? `<button class="account-rename" data-manual-account="${escapeHtml(account.id)}" data-manual-name="${escapeHtml(account.name)}" data-manual-subtype="${escapeHtml(account.subtype || '')}" data-manual-value="${escapeHtml(account.current_balance)}" data-manual-kind="${debt ? 'liability' : 'asset'}" aria-label="Edit ${escapeHtml(account.name)}">✎</button>` : `<button class="account-rename" data-account-rename="${escapeHtml(account.id)}" data-account-name="${escapeHtml(account.nickname || account.name)}" aria-label="Rename ${escapeHtml(account.nickname || account.name)}">✎</button>`}`;
         const content = `${institutionMark(account)}<div class="account-copy"><div class="account-name">${escapeHtml(account.nickname || account.name)}</div><div class="account-inst">${escapeHtml(accountSubtitle(account))}</div><div class="account-inline-balance ${debt ? 'negative' : 'positive'}">${displayBalance(account)}</div></div>`;
-        return `<article class="account-item ${investment ? 'account-item-investment' : ''} ${debt ? 'debt' : 'asset'} ${index >= previewCount && !expanded ? 'hidden' : ''}">${investment ? `<button class="account-investment-detail" type="button" data-account-investment-history="${escapeHtml(account.plaid_account_id)}" aria-label="View ${escapeHtml(account.nickname || account.name)} investment performance">${content}<i aria-hidden="true">›</i></button>` : content}<span class="account-item-actions">${actions}</span></article>`;
+        const detailControl = investment
+          ? `<button class="account-detail" type="button" data-account-investment-history="${escapeHtml(account.plaid_account_id)}" aria-label="View ${escapeHtml(account.nickname || account.name)} investment performance">${content}<i aria-hidden="true">›</i></button>`
+          : detail ? `<button class="account-detail" type="button" data-account-history="${escapeHtml(account.plaid_account_id)}" aria-label="View ${escapeHtml(account.nickname || account.name)} account detail">${content}<i aria-hidden="true">›</i></button>`
+            : content;
+        return `<article class="account-item ${investment ? 'account-item-investment' : ''} ${debt ? 'debt' : 'asset'} ${index >= previewCount && !expanded ? 'hidden' : ''}">${detailControl}<span class="account-item-actions">${actions}</span></article>`;
       }).join('')}</div>${items.length > previewCount ? `<button class="account-group-more" data-account-group="${escapeHtml(name)}">${expanded ? 'Show less' : `View ${items.length - previewCount} more`}</button>` : ''}
     </section>`;
   }).join('');
@@ -1378,8 +1385,8 @@ function historyForRange(history, range = state.holdingHistoryRange, progress = 
   return filtered.length ? filtered : history.slice(-1);
 }
 
-function renderHoldingHistoryChart(history, kind, emptyMessage = null, historyState = 'ready', progress = null) {
-  const el = $('#holdingHistoryChart');
+function renderHoldingHistoryChart(history, kind, emptyMessage = null, historyState = 'ready', progress = null, target = null) {
+  const el = target || $('#holdingHistoryChart');
   if (historyState === 'loading') {
     el.innerHTML = `<div class="holding-history-state holding-history-skeleton" data-history-state="loading" role="status"><b>Loading history</b><span>Checking the latest reported activity.</span><i></i><i></i></div>`;
     return;
@@ -1599,6 +1606,60 @@ async function openHoldingHistory({ ticker = '', accountId = '' } = {}, { preser
     renderHoldingHistoryDetail();
   } finally {
     if (request === holdingHistoryRequest) setHoldingHistoryRangeLoading(false);
+  }
+}
+
+let accountHistoryRequest = 0;
+function accountHistoryMetric(progress) {
+  if (progress?.state !== 'ready') return null;
+  const change = Number(progress.valueChange);
+  if (!Number.isFinite(change) || Math.round(Math.abs(change) * 100) === 0) return null;
+  return { value: `${change >= 0 ? '+' : '−'}${fmt.format(Math.abs(change))}`, tone: change >= 0 ? 'positive' : 'negative' };
+}
+
+function renderAccountHistoryDetail() {
+  const data = state.accountHistory;
+  if (!data) return;
+  const account = data.account || {};
+  const debt = ['credit', 'loan'].includes(account.type);
+  const metric = accountHistoryMetric(data.progress);
+  $('#accountHistoryTitle').textContent = account.name || 'Connected account';
+  $('#accountHistorySubtitle').textContent = account.institutionName
+    ? `${account.institutionName} · ${account.subtype || account.type || 'Connected account'}`
+    : (account.subtype || account.type || 'Connected account');
+  $('#accountHistoryMetrics').classList.toggle('single', !metric);
+  $('#accountHistoryMetrics').innerHTML = `<div><span>${debt ? 'Amount owed' : 'Current balance'}</span><strong class="${debt ? 'negative' : ''}">${fmt.format(Math.abs(Number(account.value || 0)))}</strong></div>${metric ? `<div><span>Balance change</span><strong class="${metric.tone}">${metric.value}</strong><small>${escapeHtml(investmentRangeLabel(data.progress.range))}</small></div>` : ''}`;
+  const ranges = [['1m', '1M'], ['3m', '3M'], ['6m', '6M'], ['ytd', 'YTD'], ['1y', '1Y'], ['all', 'All']];
+  $('#accountHistoryRange').innerHTML = ranges.map(([value, label]) => `<button type="button" class="${state.accountHistoryRange === value ? 'active' : ''}" data-account-history-range="${value}" aria-pressed="${state.accountHistoryRange === value}">${label}</button>`).join('');
+  $('#accountHistoryNote').textContent = data.detail || data.reason || 'Your balance history is unavailable.';
+  $('#accountHistoryActivity').innerHTML = data.activity?.length ? `<h3>Recent activity</h3>${data.activity.map((transaction) => `<div><span><b>${escapeHtml(transaction.name)}</b><small>${escapeHtml(new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))}</small></span><strong class="${transaction.amount > 0 ? 'negative' : 'positive'}">${transaction.amount > 0 ? '−' : '+'}${fmt.format(Math.abs(transaction.amount))}</strong></div>`).join('')}` : '';
+  requestAnimationFrame(() => renderHoldingHistoryChart(data.history || [], 'position', data.reason, data.state, data.progress, $('#accountHistoryChart')));
+}
+
+async function openAccountHistory(accountId, { preserveRange = false } = {}) {
+  const dialog = $('#accountHistoryDialog');
+  const account = (state.dashboard?.accounts || []).find((entry) => entry.plaid_account_id === accountId);
+  if (!account) return;
+  const request = ++accountHistoryRequest;
+  if (!preserveRange) {
+    state.accountHistoryRange = state.investmentRange === 'all' ? '1m' : state.investmentRange;
+    state.accountHistory = { state: 'loading', account: { id: accountId, name: account.nickname || account.name, institutionName: account.institution_name, type: account.type, subtype: account.subtype, value: account.current_balance }, history: [], activity: [] };
+  }
+  if (!dialog.open) { dialog.showModal(); dialog.focus({ preventScroll: true }); }
+  renderAccountHistoryDetail();
+  try {
+    const base = state.demoPreview || state.onboardingPreview || state.dashboard?.demoMode ? '/api/demo-accounts/history' : '/api/accounts/history';
+    const response = await api(`${base}?account_id=${encodeURIComponent(accountId)}&range=${encodeURIComponent(state.accountHistoryRange)}`);
+    if (request !== accountHistoryRequest) return;
+    // The detail scope belongs to the row the person opened, not to a
+    // provider display field. Retain it even if a partial response omits or
+    // changes the identifier so range changes cannot lose their target.
+    state.accountHistory = { ...response, account: { ...(response.account || {}), id: accountId } };
+    renderAccountHistoryDetail();
+  } catch (error) {
+    if (request !== accountHistoryRequest) return;
+    state.accountHistory = { state: 'unavailable', account: { id: accountId, name: account.nickname || account.name, institutionName: account.institution_name, type: account.type, subtype: account.subtype, value: account.current_balance }, history: [], activity: [], reason: error.message || 'We could not load this account history right now.' };
+    renderAccountHistoryDetail();
   }
 }
 
@@ -2213,6 +2274,12 @@ $('#accountGrid').addEventListener('click', (event) => {
     openHoldingHistory({ accountId: investment.dataset.accountInvestmentHistory });
     return;
   }
+  const accountHistory = event.target.closest('[data-account-history]');
+  if (accountHistory) {
+    trackProductEvent('account_detail_opened');
+    openAccountHistory(accountHistory.dataset.accountHistory);
+    return;
+  }
   const button = event.target.closest('[data-account-rename]');
   if (!button) return;
   event.preventDefault();
@@ -2737,6 +2804,13 @@ $('#holdingHistoryWhere').addEventListener('change', async (event) => {
   }
 });
 $('#holdingHistoryClose').addEventListener('click', () => $('#holdingHistoryDialog').close());
+$('#accountHistoryClose').addEventListener('click', () => $('#accountHistoryDialog').close());
+$('#accountHistoryRange').addEventListener('click', (event) => {
+  const range = event.target.closest('[data-account-history-range]')?.dataset.accountHistoryRange;
+  if (!range || !state.accountHistory?.account?.id) return;
+  state.accountHistoryRange = range;
+  void openAccountHistory(state.accountHistory.account.id, { preserveRange: true });
+});
 // On phones the bottom-sheet handle is the single close affordance. It is a
 // real drag target, not decorative chrome; desktop retains its conventional
 // close button. Keep the threshold deliberate so chart scrubbing or a short

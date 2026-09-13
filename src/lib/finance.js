@@ -458,6 +458,63 @@ export function investmentRangeProgress(store, { accountId = null, ticker = null
   };
 }
 
+// Connected cash, credit, loan, and provider-defined accounts use the same
+// verified-snapshot principle as investment accounts. A balance timeline is
+// useful even when an institution cannot provide transactions or liability
+// terms; it must never be reverse-engineered from activity.
+export function accountBalanceHistory(store, { accountId, range = 'all' } = {}) {
+  const selectedRange = investmentRanges.has(range) ? range : 'all';
+  const account = (store.accounts || []).find((entry) => entry.plaid_account_id === accountId
+    && !entry.hidden && !entry.manual && entry.type !== 'investment');
+  if (!account) return null;
+  const byDate = new Map();
+  for (const snapshot of store.account_balance_snapshots || []) {
+    if (snapshot.account_id !== accountId || snapshot.source !== 'verified' || !snapshot.date) continue;
+    // A same-day provider refresh replaces the prior observed value.
+    byDate.set(snapshot.date, Number(snapshot.value));
+  }
+  const allHistory = [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, value]) => ({ date, value, source: 'verified' }));
+  const endDate = allHistory.at(-1)?.date || null;
+  const requestedStartDate = endDate ? investmentRangeStart(endDate, selectedRange) : null;
+  const history = requestedStartDate ? allHistory.filter((row) => row.date >= requestedStartDate) : allHistory;
+  const progress = history.length >= 2 ? {
+    state: 'ready', range: selectedRange, points: history.length, requestedStartDate,
+    startDate: history[0].date, endDate: history.at(-1).date,
+    startValue: history[0].value, endValue: history.at(-1).value,
+    valueChange: Math.round((history.at(-1).value - history[0].value) * 100) / 100
+  } : {
+    state: 'tracking', range: selectedRange, points: history.length, requestedStartDate,
+    trackingSince: history[0]?.date || null
+  };
+  const activity = (store.transactions || [])
+    .filter((transaction) => transaction.account_id === accountId && !transaction.pending && !transaction.excluded)
+    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+    .slice(0, 3)
+    .map((transaction) => ({
+      id: transaction.id,
+      date: transaction.date,
+      name: transaction.merchant_name || transaction.name || 'Transaction',
+      amount: Number(transaction.amount || 0)
+    }));
+  return {
+    state: progress.state,
+    account: {
+      id: account.plaid_account_id,
+      name: account.nickname || account.name || 'Connected account',
+      institutionName: account.institution_name || '',
+      type: account.type || 'other',
+      subtype: account.subtype || '',
+      value: Number(account.current_balance || 0),
+      interestRate: account.interest_rate != null && Number.isFinite(Number(account.interest_rate)) ? Number(account.interest_rate) : null
+    },
+    history,
+    progress,
+    activity,
+    detail: history.length ? `Based on ${history.length} verified daily update${history.length === 1 ? '' : 's'} from your connected institution.` : undefined,
+    reason: 'Daily account tracking will begin with your next verified update.'
+  };
+}
+
 // Portfolio balances are observed separately from position snapshots. Keep
 // their range calculation in the same layer as account and holding progress
 // so no view has to invent a second calendar boundary in the browser.

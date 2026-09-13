@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { assertSafeFinancialStoreWrite, chooseSaferStore, hasConnectedFinancialData } from '../src/lib/store-safety.js';
+import { normalizeStore } from '../src/lib/store.js';
 
 const linked = { items: [{ id: 'item-1', demo: false }], accounts: [{ id: 'account-1', demo: false }] };
 const empty = { items: [], accounts: [] };
@@ -22,4 +23,9 @@ test('demo-only records do not block a normal cleanup write', () => {
 test('a populated encrypted mirror wins over an empty database row and can heal it', () => {
   assert.equal(chooseSaferStore(empty, linked), linked);
   assert.equal(chooseSaferStore(linked, empty), linked);
+});
+
+test('legacy Plaid brokerage records normalize into the supported investment family', () => {
+  const store = normalizeStore({ accounts: [{ plaid_account_id: 'legacy-brokerage', type: 'brokerage' }] });
+  assert.equal(store.accounts[0].type, 'investment');
 });

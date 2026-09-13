@@ -8,7 +8,7 @@ import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './lib/store.js';
 import { assertSafeFinancialStoreWrite, chooseSaferStore, hasConnectedFinancialData } from './lib/store-safety.js';
 import { consumeRateLimit, databaseEnabled, databaseHealthy, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, recordDependencyEvent, recordLaunchEvent, writeDatabaseStore } from './lib/database.js';
-import { calculateFire, cashFlowType, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentSummary, monthlyReview, recurringCharges, removeEstimatedNetWorthHistory, repairIncomingClassifications, repairTransferClassifications, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './lib/finance.js';
+import { accountBalanceHistory, calculateFire, cashFlowType, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentSummary, monthlyReview, recurringCharges, removeEstimatedNetWorthHistory, repairIncomingClassifications, repairTransferClassifications, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './lib/finance.js';
 import { investmentLedgerPages, plaidConfigured, plaidPost } from './lib/plaid.js';
 import { loadHistoricalPrices } from './lib/market-data.js';
 import { historyStart } from './lib/history.js';
@@ -405,6 +405,27 @@ function seedDevelopmentMockHistory(store, item, fixture) {
   store.investment_position_snapshots.push(...copiedSnapshots);
   store.investment_position_snapshots.sort((left, right) => String(left.date).localeCompare(String(right.date)));
 
+  // The development fixture deliberately exercises cash, cards, loans, and
+  // provider-defined accounts too. These are clearly marked test records,
+  // but use the same daily ledger contract as production detail sheets.
+  store.account_balance_snapshots = (store.account_balance_snapshots || [])
+    .filter((snapshot) => !targetAccountIds.has(snapshot.account_id));
+  const nonInvestmentAccounts = [...targetAccounts.values()].filter((account) => account.type !== 'investment');
+  const today = new Date();
+  for (let offset = 365; offset >= 0; offset -= 1) {
+    const date = new Date(today); date.setDate(today.getDate() - offset);
+    const progress = (365 - offset) / 365;
+    for (const account of nonInvestmentAccounts) {
+      const end = Math.abs(Number(account.current_balance || 0));
+      const start = account.type === 'loan' ? end * 1.2 : account.type === 'credit' ? Math.max(0, end * .72) : end * .76;
+      // Small, deterministic variation makes range and density states useful
+      // without creating sharp, alarming test-data jumps.
+      const variation = Math.sin((365 - offset) * .13 + end) * Math.max(4, end * .012);
+      const value = Math.max(0, Math.round((start + (end - start) * progress + variation) * 100) / 100);
+      store.account_balance_snapshots.push({ date: date.toISOString().slice(0, 10), account_id: account.plaid_account_id, value, source: 'verified', development_mock: true });
+    }
+  }
+
   // For a mock-only test profile, build daily net-worth rows from the same
   // copied account snapshot ledger. The dashboard, chart, and account detail
   // therefore reconcile instead of each reading a separate canned series.
@@ -415,17 +436,19 @@ function seedDevelopmentMockHistory(store, item, fixture) {
       if (snapshot.kind !== 'account') continue;
       investmentByDate.set(snapshot.date, (investmentByDate.get(snapshot.date) || 0) + Math.abs(Number(snapshot.value || 0)));
     }
-    const cash = [...targetAccounts.values()]
-      .filter((account) => account.type === 'depository')
-      .reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
-    const debt = [...targetAccounts.values()]
-      .filter((account) => account.type === 'credit' || account.type === 'loan')
-      .reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
+    const balancesByDate = new Map();
+    for (const snapshot of store.account_balance_snapshots) {
+      if (!targetAccountIds.has(snapshot.account_id)) continue;
+      if (!balancesByDate.has(snapshot.date)) balancesByDate.set(snapshot.date, { cash: 0, debt: 0 });
+      const account = [...targetAccounts.values()].find((entry) => entry.plaid_account_id === snapshot.account_id);
+      if (account?.type === 'depository' || account?.type === 'other') balancesByDate.get(snapshot.date).cash += Math.abs(Number(snapshot.value || 0));
+      if (account?.type === 'credit' || account?.type === 'loan') balancesByDate.get(snapshot.date).debt += Math.abs(Number(snapshot.value || 0));
+    }
     store.snapshots = [...investmentByDate.entries()].map(([date, investments]) => ({
       date,
-      assets: Math.round((cash + investments) * 100) / 100,
-      liabilities: debt,
-      net_worth: Math.round((cash + investments - debt) * 100) / 100,
+      assets: Math.round(((balancesByDate.get(date)?.cash || 0) + investments) * 100) / 100,
+      liabilities: balancesByDate.get(date)?.debt || 0,
+      net_worth: Math.round((((balancesByDate.get(date)?.cash || 0) + investments) - (balancesByDate.get(date)?.debt || 0)) * 100) / 100,
       source: 'verified',
       development_mock: true
     })).sort((left, right) => left.date.localeCompare(right.date));
@@ -457,14 +480,11 @@ function addDevelopmentMockInstitution(store) {
     development_mock: true,
     demo: false
   };
-  // A realistic, useful development fixture: everyday cash, two distinct
-  // retirement account types, and the cards already used to exercise debt
-  // flows. Deliberately exclude brokerage and loans so this remains a compact
-  // connection-lifecycle test rather than a copy of the full public demo.
-  const sourceAccounts = fixture.accounts.filter((account) => [
-    'demo-checking', 'demo-hysa', 'demo-roth', 'demo-401k',
-    'demo-credit', 'demo-venture'
-  ].includes(account.id));
+  // The development fixture is intentionally dense: it covers every current
+  // Plaid account family represented by Clarity, multiple accounts per group,
+  // investment holdings, cards, a loan, and a provider-defined account.
+  const sourceAccounts = fixture.accounts.map((account) => ({ ...account }));
+  sourceAccounts.push({ id: 'development-other', plaid_account_id: 'development-other', institution_name: 'Clarity Test Bank', name: 'Rewards balance', type: 'other', subtype: 'other', current_balance: 375, updated_at: now, demo: true });
   const accountIds = new Map();
   for (const source of sourceAccounts) accountIds.set(source.id, crypto.randomUUID());
   store.items.push(item);
@@ -576,7 +596,7 @@ async function refreshAccountsForItem(store, item) {
       nickname: existing?.nickname || null,
       official_name: account.official_name,
       mask: account.mask,
-      type: account.type,
+      type: account.type === 'brokerage' ? 'investment' : account.type,
       subtype: account.subtype,
       current_balance: account.balances?.current ?? account.balances?.available ?? 0,
       available_balance: account.balances?.available ?? null,
@@ -935,7 +955,7 @@ async function syncTransactionsForItem(store, item) {
   item.transactions_history_version = 1;
   item.transactions_history_complete = historyComplete || item.transactions_history_complete === true;
   originalStore.account_balance_snapshots ||= [];
-  for (const account of originalStore.accounts.filter((row) => row.item_id === item.id && ['depository', 'credit'].includes(row.type))) {
+  for (const account of originalStore.accounts.filter((row) => row.item_id === item.id && row.type !== 'investment' && !row.manual)) {
     const balance = balances.get(account.plaid_account_id);
     if (balance?.current == null || !Number.isFinite(Number(balance.current))) continue;
     const date = new Date().toISOString().slice(0, 10);
@@ -1330,6 +1350,25 @@ app.get('/api/demo-investments/history', demoLimiter, (req, res) => {
   const range = ['1m', '3m', '6m', 'ytd', '1y', 'all'].includes(String(req.query.range || '')) ? String(req.query.range) : 'all';
   if (!accountId && !ticker) return res.status(400).json({ error: 'Choose an investment account or holding.' });
   res.json(investmentDetailHistory(demoPreviewStore(), { accountId: accountId || null, ticker: ticker || null, range, years: 1 }));
+});
+
+app.get('/api/accounts/history', async (req, res) => {
+  const accountId = String(req.query.account_id || '').trim().slice(0, 180);
+  const range = ['1m', '3m', '6m', 'ytd', '1y', 'all'].includes(String(req.query.range || '')) ? String(req.query.range) : 'all';
+  if (!accountId) return res.status(400).json({ error: 'Choose a connected account.' });
+  const store = activeStore(await loadStore(req.user));
+  const detail = accountBalanceHistory(store, { accountId, range });
+  if (!detail) return res.status(404).json({ error: 'This account history is unavailable.' });
+  res.json(detail);
+});
+
+app.get('/api/demo-accounts/history', demoLimiter, (req, res) => {
+  const accountId = String(req.query.account_id || '').trim().slice(0, 180);
+  const range = ['1m', '3m', '6m', 'ytd', '1y', 'all'].includes(String(req.query.range || '')) ? String(req.query.range) : 'all';
+  if (!accountId) return res.status(400).json({ error: 'Choose a connected account.' });
+  const detail = accountBalanceHistory(demoPreviewStore(), { accountId, range });
+  if (!detail) return res.status(404).json({ error: 'This account history is unavailable.' });
+  res.json(detail);
 });
 
 app.get('/api/retirement', async (req, res) => {
