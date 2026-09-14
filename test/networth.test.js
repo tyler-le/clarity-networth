@@ -951,16 +951,18 @@ test('retirement presets calculate coast, lean, standard, fat, and a projected r
   assert.ok(Number.isFinite(noPortfolioWithdrawals.projectedAtRetirement));
   assert.ok(Number.isFinite(noPortfolioWithdrawals.lifestyles[0].target), '0% withdrawal does not produce an infinite essentials target');
 
-  const annualizedFromObservedHistory = calculateFire({
+  const outlierResistantPlan = calculateFire({
     ...store,
     transactions: [
       ...Array.from({ length: 12 }, (_, index) => ({ date: `2025-${String(index + 1).padStart(2, '0')}-15`, amount: 100, bucket: 'fixed' })),
-      { date: '2025-06-20', amount: 1200, bucket: 'investments' }
+      ...Array.from({ length: 12 }, (_, index) => ({ date: `2025-${String(index + 1).padStart(2, '0')}-20`, amount: index === 5 ? 1300 : 100, bucket: 'investments' })),
+      { date: '2025-06-25', amount: 10000, bucket: 'fixed' }
     ]
   }, 100000);
-  assert.equal(annualizedFromObservedHistory.contributionMonthsObserved, 12);
-  assert.equal(annualizedFromObservedHistory.monthlyContributions, 100, 'contributions use every observed month, not only the month with a deposit');
-  assert.equal(annualizedFromObservedHistory.annualContributions, 1200);
+  assert.equal(outlierResistantPlan.contributionMonthsObserved, 12);
+  assert.equal(outlierResistantPlan.monthlyContributions, 100, 'a one-off contribution does not drive the saving pace');
+  assert.equal(outlierResistantPlan.annualContributions, 1200);
+  assert.equal(outlierResistantPlan.essentialMonthlySpend, 100, 'a one-off essential expense does not drive the retirement target');
 
   const fasterSaver = calculateFire({
     ...store,

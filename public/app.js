@@ -1835,7 +1835,7 @@ function renderRetirement(data) {
     ? `Based on ${fmt.format(data.essentialMonthlySpend || 0)} a month in essentials`
     : 'Your essentials will shape these targets.';
   $('#retirementSpendContext').textContent = data.monthsObserved
-    ? `We use your ${fmt.format(data.essentialMonthlySpend || 0)} monthly essentials average from the past ${data.monthsObserved} month${data.monthsObserved === 1 ? '' : 's'} to calculate your retirement targets.`
+    ? `We use your ${fmt.format(data.essentialMonthlySpend || 0)} monthly essentials from the past ${data.monthsObserved} month${data.monthsObserved === 1 ? '' : 's'} to calculate your retirement targets.`
     : 'Your targets will reflect your spending once there is enough history.';
   $('#retirementAssumption').textContent = `At retirement · ${data.withdrawalRate}% withdrawal`;
   const estimatedLabel = (months, complete) => {

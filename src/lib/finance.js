@@ -1369,56 +1369,63 @@ function monthId(dateString) {
   return String(dateString || '').slice(0, 7);
 }
 
-export function annualizedLivingSpend(store) {
-  const eligible = store.transactions
-    .filter((t) => !t.pending && !t.excluded && Number(t.amount || 0) > 0 && (t.bucket === 'fixed' || t.bucket === 'guilt_free'))
-    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
-
-  if (!eligible.length) return { annualSpend: 0, monthlyAverage: 0, monthsObserved: 0 };
-
-  const latest = new Date(`${monthId(eligible.at(-1).date)}-01T12:00:00`);
-  const start = new Date(latest);
-  start.setMonth(start.getMonth() - 11);
-  const startMonth = start.toISOString().slice(0, 7);
-  const latestMonth = latest.toISOString().slice(0, 7);
-
-  const trailing = eligible.filter((t) => {
-    const m = monthId(t.date);
-    return m >= startMonth && m <= latestMonth;
-  });
-  const observedMonths = [...new Set(trailing.map((t) => monthId(t.date)))];
-  const total = trailing.reduce((sum, t) => sum + Number(t.amount || 0), 0);
-  const essentialTotal = trailing.filter((transaction) => transaction.bucket === 'fixed').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
-  const monthsObserved = Math.max(observedMonths.length, 1);
-  const monthlyAverage = total / monthsObserved;
-  return { annualSpend: monthlyAverage * 12, monthlyAverage, essentialAnnualSpend: essentialTotal / monthsObserved * 12, essentialMonthlySpend: essentialTotal / monthsObserved, monthsObserved };
-}
-
-function annualizedContributions(store, buckets = ['savings', 'investments']) {
+function trailingPostedTransactionWindow(store) {
   const posted = (store.transactions || [])
-    .filter((t) => !t.pending && !t.excluded && /^\d{4}-\d{2}-\d{2}$/.test(String(t.date || '')))
+    .filter((transaction) => !transaction.pending && !transaction.excluded && /^\d{4}-\d{2}-\d{2}$/.test(String(transaction.date || '')))
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  const eligible = posted
-    .filter((t) => Number(t.amount || 0) > 0 && buckets.includes(t.bucket));
-  if (!eligible.length) return { annualContributions: 0, monthsObserved: 0 };
+  if (!posted.length) return { transactions: [], months: [] };
 
-  // Divide by every month with verified, posted activity—not only the months
-  // in which someone made a contribution. Otherwise, one deposit could look
-  // like a recurring monthly saving habit and inflate the retirement forecast.
   const latest = new Date(`${monthId(posted.at(-1).date)}-01T12:00:00`);
   const start = new Date(latest);
   start.setMonth(start.getMonth() - 11);
   const startMonth = start.toISOString().slice(0, 7);
   const latestMonth = latest.toISOString().slice(0, 7);
-  const isInObservedWindow = (transaction) => {
+  const transactions = posted.filter((transaction) => {
     const month = monthId(transaction.date);
     return month >= startMonth && month <= latestMonth;
-  };
-  const trailing = eligible.filter(isInObservedWindow);
-  const monthsObserved = new Set(posted.filter(isInObservedWindow).map((transaction) => monthId(transaction.date))).size;
-  const total = trailing.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
-  const monthlyContributions = monthsObserved ? total / monthsObserved : 0;
-  return { annualContributions: monthlyContributions * 12, monthlyContributions, monthsObserved };
+  });
+  return { transactions, months: [...new Set(transactions.map((transaction) => monthId(transaction.date)))].sort() };
+}
+
+function median(values) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function trimmedMean(values) {
+  if (!values.length) return 0;
+  // With five or more observed months, remove one high and low month for
+  // every ten. This preserves a normal contribution cadence while preventing
+  // a bonus, rollover, or one-off transfer from driving a long-term forecast.
+  const sorted = [...values].sort((a, b) => a - b);
+  const trim = sorted.length >= 5 ? Math.max(1, Math.floor(sorted.length / 10)) : 0;
+  const retained = sorted.slice(trim, sorted.length - trim);
+  return retained.reduce((sum, value) => sum + value, 0) / retained.length;
+}
+
+export function annualizedLivingSpend(store) {
+  const { transactions, months } = trailingPostedTransactionWindow(store);
+  if (!months.length) return { annualSpend: 0, monthlyAverage: 0, monthsObserved: 0 };
+  const monthlySpend = months.map((month) => transactions
+    .filter((transaction) => monthId(transaction.date) === month && Number(transaction.amount || 0) > 0 && (transaction.bucket === 'fixed' || transaction.bucket === 'guilt_free'))
+    .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0));
+  const monthlyEssentials = months.map((month) => transactions
+    .filter((transaction) => monthId(transaction.date) === month && Number(transaction.amount || 0) > 0 && transaction.bucket === 'fixed')
+    .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0));
+  const monthlyAverage = median(monthlySpend);
+  const essentialMonthlySpend = median(monthlyEssentials);
+  return { annualSpend: monthlyAverage * 12, monthlyAverage, essentialAnnualSpend: essentialMonthlySpend * 12, essentialMonthlySpend, monthsObserved: months.length };
+}
+
+function annualizedContributions(store, buckets = ['savings', 'investments']) {
+  const { transactions, months } = trailingPostedTransactionWindow(store);
+  if (!months.length) return { annualContributions: 0, monthlyContributions: 0, monthsObserved: 0 };
+  const monthlyContributions = trimmedMean(months.map((month) => transactions
+    .filter((transaction) => monthId(transaction.date) === month && Number(transaction.amount || 0) > 0 && buckets.includes(transaction.bucket))
+    .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0)));
+  return { annualContributions: monthlyContributions * 12, monthlyContributions, monthsObserved: months.length };
 }
 
 function monthsToTarget({ balance, target, annualContribution = 0, annualReturn = 0 }) {
