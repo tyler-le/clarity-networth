@@ -1819,7 +1819,7 @@ function renderRetirement(data) {
   state.retirement = data;
   const projectedBalance = fmt.format(data.projectedAtRetirement || 0);
   $('#retirementProjection').textContent = projectedBalance;
-  $('#retirementProjectionContext').textContent = `On pace for ${projectedBalance} by age ${data.retirementAge}`;
+  $('#retirementProjectionContext').textContent = `By age ${data.retirementAge}`;
   const monthlyContributions = Math.max(0, Number(data.monthlyContributions || 0));
   const essentialMonthlySpend = Math.max(0, Number(data.essentialMonthlySpend || 0));
   const retirementInputs = $('#retirementInputs');
