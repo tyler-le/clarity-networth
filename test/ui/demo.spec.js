@@ -893,7 +893,7 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await page.getByLabel('How the freedom ladder is calculated').click();
   await page.locator('[data-retirement-milestone="coast"]').click();
   await expect(page.locator('#retirementInfoDialog')).toHaveAttribute('open', '');
-  await expect(page.locator('#retirementInfoTitle')).toHaveText('What is Coast independence?');
+  await expect(page.locator('#retirementInfoTitle')).toHaveText('Coast Financial Independence');
   await expect(page.locator('#retirementInfoDescription')).toHaveText('The amount you need invested today so that, without contributing any more, it can grow enough to fund your retirement by your target age.');
   await expect(page.locator('#retirementInfoTargetLabel')).toHaveText('To stop contributing today');
   await expect(page.locator('#retirementInfoTimingLabel')).toHaveText(/At your current saving pace|Your Coast FI status/);
@@ -910,14 +910,12 @@ test('the retirement ladder remains legible and usable on a phone', async ({ pag
     return {
       overflows: path.scrollWidth > path.clientWidth + 1,
       cardCount: cards.length,
-      usableCardWidth: cards.every((card) => card.getBoundingClientRect().width >= pathRect.width * .9),
-      pathColumns: getComputedStyle(path).gridTemplateColumns.trim().split(/\s+/).length
+      usableCardWidth: cards.every((card) => card.getBoundingClientRect().width >= pathRect.width * .42)
     };
   });
   expect(layout.overflows).toBe(false);
   expect(layout.cardCount).toBe(4);
   expect(layout.usableCardWidth).toBe(true);
-  expect(layout.pathColumns).toBe(1);
   await page.locator('[data-retirement-milestone="coast"]').click();
   await expect(page.locator('#retirementInfoDialog')).toHaveAttribute('open', '');
 });

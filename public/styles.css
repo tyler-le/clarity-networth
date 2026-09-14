@@ -687,7 +687,7 @@ html[data-theme="dark"] .data-controls { border-color: var(--line); background: 
 html[data-theme="dark"] .theme-toggle i { border-color: #4a554b; background: #303a32; }
 html[data-theme="dark"] .theme-toggle i::after { background: #dfe8e0; }
 html[data-theme="dark"] dialog, html[data-theme="dark"] .nickname-dialog, html[data-theme="dark"] .retirement-info-dialog { border-color: #374239; background: #1b211d; }
-html[data-theme="dark"] .retirement-info-head, html[data-theme="dark"] .retirement-info-footer { border-color: var(--line); background: #202720; }
+html[data-theme="dark"] .retirement-info-head, html[data-theme="dark"] .retirement-info-footer { border-color: var(--line); background: transparent; }
 html[data-theme="dark"] .retirement-info-metrics { border-color: var(--line); }
 html[data-theme="dark"] .dialog-close:hover { background: #2a332c; }
 html[data-theme="dark"] .connection-onboarding-dialog { border-color: #374239; background: #1b211d; }html[data-theme="dark"] .onboarding-steps > div { border-color: var(--line); background: #202720; }html[data-theme="dark"] .update-toast { border-color: #3b4b3e; background: #202820; color: var(--ink); }
@@ -696,21 +696,21 @@ html[data-theme="dark"] .connection-onboarding-dialog { border-color: #374239; b
 /* Tapping a milestone teaches the term without making the retirement view denser. */
 .retirement-milestone[data-retirement-milestone] { cursor: pointer; transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease; }
 .retirement-milestone[data-retirement-milestone]:hover { transform: translateY(-2px); border-color: #bcd6c2; box-shadow: 0 8px 18px rgba(31,111,74,.09); }
-.retirement-info-dialog { width: min(410px, calc(100vw - 32px)); overflow: hidden; padding: 0; border: 1px solid #dbe4dc; border-radius: 18px; color: var(--ink); background: #fff; box-shadow: 0 20px 60px rgba(22,34,24,.18); }
+.retirement-info-dialog { width: min(430px, calc(100vw - 32px)); overflow: hidden; padding: 0; border: 1px solid var(--line); border-radius: 20px; color: var(--ink); background: var(--card); box-shadow: 0 26px 80px rgba(19,31,22,.2); }
 .retirement-info-dialog::backdrop { background: rgba(25,34,26,.24); backdrop-filter: blur(2px); }
 .retirement-info-dialog form { display: grid; }
-.retirement-info-head { position: relative; display: flex; align-items: center; min-height: 54px; padding: 0 20px; border-bottom: 1px solid #e8ede8; background: #fbfcfa; }
-.retirement-info-head .card-label { color: #607163; }
+.retirement-info-head { position: relative; display: flex; align-items: center; min-height: 52px; padding: 16px 20px 0; background: transparent; }
+.retirement-info-head .card-label { color: var(--muted); }
 .retirement-info-head .dialog-close { position: static; margin-left: auto; width: 30px; height: 30px; border: 1px solid transparent; border-radius: 50%; font-size: 20px; }
-.retirement-info-head .dialog-close:hover { border-color: var(--line); background: white; color: var(--ink); }
-.retirement-info-body { padding: 22px 20px 19px; }
-.retirement-info-dialog h2 { margin: 0 0 9px; font-size: 24px; font-weight: 710; letter-spacing: -.045em; }
-.retirement-info-dialog #retirementInfoDescription { margin: 0; color: #657067; font-size: 14px; line-height: 1.55; }
-.retirement-info-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 21px; padding: 13px 0; border-top: 1px solid #e8ede8; border-bottom: 1px solid #e8ede8; }.retirement-info-metrics > div { display: grid; gap: 4px; min-width: 0; }.retirement-info-metrics span { color: var(--muted); font-size: 11px; font-weight: 650; }.retirement-info-metrics strong { overflow: hidden; color: #155a39; font-size: 18px; font-weight: 730; letter-spacing: -.035em; text-overflow: ellipsis; white-space: nowrap; }.retirement-info-metrics > div:last-child strong { color: var(--ink); font-size: 14px; letter-spacing: -.02em; }
-.retirement-info-note { margin: 13px 0 0; color: #7b847c; font-size: 11px; line-height: 1.45; }
-.retirement-info-footer { display: flex; justify-content: flex-end; padding: 13px 20px; border-top: 1px solid #e8ede8; background: #fbfcfa; }
+.retirement-info-head .dialog-close:hover { border-color: var(--line); background: var(--surface-subtle); color: var(--ink); }
+.retirement-info-body { padding: 14px 20px 16px; }
+.retirement-info-dialog h2 { margin: 0 0 8px; font-size: 26px; font-weight: 720; letter-spacing: -.045em; }
+.retirement-info-dialog #retirementInfoDescription { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.retirement-info-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-top: 20px; padding: 13px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-subtle); }.retirement-info-metrics > div { display: grid; gap: 4px; min-width: 0; }.retirement-info-metrics > div + div { padding-left: 14px; border-left: 1px solid var(--line); }.retirement-info-metrics span { color: var(--muted); font-size: 10px; font-weight: 700; }.retirement-info-metrics strong { overflow: hidden; color: var(--accent); font-size: 18px; font-weight: 730; letter-spacing: -.035em; text-overflow: ellipsis; white-space: nowrap; }.retirement-info-metrics > div:last-child strong { font-size: 14px; letter-spacing: -.02em; }
+.retirement-info-note { margin: 13px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.retirement-info-footer { display: flex; justify-content: flex-end; padding: 0 20px 20px; background: transparent; }
 .retirement-info-footer .primary { min-width: 88px; padding-block: 9px; border-radius: 10px; }
-@media (max-width: 560px) { .retirement-info-dialog { width: min(410px, calc(100vw - 24px)); border-radius: 17px; }.retirement-info-head { padding-inline: 18px; }.retirement-info-body { padding-inline: 18px; }.retirement-info-metrics { gap: 10px; }.retirement-info-footer { padding-inline: 18px; }.retirement-info-footer .primary { width: 100%; } }
+@media (max-width: 560px) { .retirement-info-dialog { width: 100vw; max-width: 100vw; margin: auto 0 0; border-right: 0; border-bottom: 0; border-left: 0; border-radius: 22px 22px 0 0; }.retirement-info-head { min-height: 50px; padding: 16px 18px 0; }.retirement-info-body { padding: 14px 18px 16px; }.retirement-info-dialog h2 { font-size: 25px; }.retirement-info-metrics { padding: 12px 13px; }.retirement-info-metrics > div + div { padding-left: 12px; }.retirement-info-footer { padding: 0 18px calc(18px + env(safe-area-inset-bottom)); }.retirement-info-footer .primary { width: 100%; } }
 
 /* A short post-connection explanation prevents a blank or one-point chart from
    feeling like an error. It appears once, then stays out of the way. */
@@ -723,7 +723,7 @@ html[data-theme="dark"] .investment-card .card-label { color: #a8b5aa; }
 html[data-theme="dark"] .allocation-card { border-color: var(--line); background: var(--card); }
 html[data-theme="dark"] .holdings-card summary:hover { background: #222a24; }
 html[data-theme="dark"] .retirement-info-dialog { border-color: #374239; background: #1b211d; }
-html[data-theme="dark"] .retirement-info-head, html[data-theme="dark"] .retirement-info-footer { border-color: var(--line); background: #202720; }
+html[data-theme="dark"] .retirement-info-head, html[data-theme="dark"] .retirement-info-footer { border-color: var(--line); background: transparent; }
 html[data-theme="dark"] .retirement-info-head .card-label, html[data-theme="dark"] .retirement-info-dialog #retirementInfoDescription, html[data-theme="dark"] .retirement-info-note { color: var(--muted); }
 html[data-theme="dark"] .retirement-info-head .dialog-close:hover { background: #2a332c; }
 
@@ -925,16 +925,6 @@ html[data-theme="dark"] .retirement-milestone[data-retirement-milestone]:hover {
 html[data-theme="dark"] .retirement-milestone-name { color: #aeb9b0; }
 html[data-theme="dark"] .retirement-milestone i { background: #343d36; }
 html[data-theme="dark"] .retirement-milestone em { background: #27362d; color: #a7cfb1; }
-
-/* The retirement path is supporting detail inside one outlook card, not a
-   second grid of competing cards. Keep its hierarchy aligned with grouped
-   account and holding rows: one surface, quiet dividers, and one clear value
-   per step. */
-.retirement-path { grid-template-columns: 1fr; gap: 0; margin-top: 12px; border-top: 1px solid var(--line); }
-.retirement-milestone { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name value" "detail value" "progress timing"; column-gap: 20px; row-gap: 4px; min-height: 0; padding: 16px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; }
-.retirement-milestone-name { grid-area: name; padding-top: 0; color: var(--ink); font-size: 13px; }.retirement-milestone strong { grid-area: value; align-self: start; font-size: 18px; }.retirement-milestone-detail { grid-area: detail; min-height: 0; font-size: 11px; }.retirement-milestone i { grid-area: progress; align-self: end; width: min(260px, 100%); margin-top: 8px; }.retirement-milestone em { grid-area: timing; align-self: end; justify-self: end; padding: 0; background: transparent; color: var(--accent); font-size: 11px; white-space: nowrap; }.retirement-milestone.complete { border-color: var(--line); background: transparent; }.retirement-milestone.complete .retirement-milestone-name { color: var(--accent); }.retirement-milestone[data-retirement-milestone] { cursor: pointer; }.retirement-milestone[data-retirement-milestone] .retirement-milestone-name::after { margin-left: 6px; color: var(--muted); content: '›'; }.retirement-milestone[data-retirement-milestone]:hover { transform: none; border-color: var(--line); background: color-mix(in srgb, var(--accent) 4%, transparent); box-shadow: none; }
-html[data-theme="dark"] .retirement-milestone, html[data-theme="dark"] .retirement-milestone.complete { border-color: var(--line); background: transparent; }.retirement-milestone[data-retirement-milestone]:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
-@media (max-width: 560px) { .retirement-milestone { grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; padding: 15px 0; }.retirement-milestone-detail { line-height: 1.35; }.retirement-milestone i { width: min(180px, 100%); }.retirement-milestone em { font-size: 10px; } }
 
 /* App-wide dark-surface hierarchy. Neutral layers do the organizational work;
    green, coral, and blue remain reserved for meaning rather than decoration. */

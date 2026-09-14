@@ -2236,7 +2236,7 @@ function openRetirementMilestone(name) {
   if (!plan) return;
   const details = {
     coast: {
-      label: 'COAST RETIREMENT', title: 'What is Coast independence?', value: plan.coast,
+      label: 'RETIREMENT MILESTONE', title: 'Coast Financial Independence', value: plan.coast,
       description: 'The amount you need invested today so that, without contributing any more, it can grow enough to fund your retirement by your target age.'
     },
     lean: {
