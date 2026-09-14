@@ -856,6 +856,7 @@ test('retirement milestones explain the planning terms on demand @critical', asy
   await expect(page.locator('#retirementPath .retirement-milestone')).toHaveCount(4);
   await expect(page.locator('#retirementProjectionContext')).toContainText(/On pace for \$[\d,]+ by age 65/);
   await expect(page.locator('#retirementContributionPace')).toContainText(/Saving & investing · \$[\d,]+\/mo/);
+  await expect(page.locator('#retirementEssentialPace')).toContainText(/Essential spend · \$[\d,]+\/mo/);
   await expect(page.locator('#retirementNextMilestone')).toBeVisible();
   await page.locator('#retirementNextMilestone').click();
   await expect(page.locator('#retirementInfoDialog')).toHaveAttribute('open', '');
@@ -899,7 +900,6 @@ test('retirement milestones explain the planning terms on demand @critical', asy
   await expect(page.locator('#retirementInfoTargetLabel')).toHaveText('Amount needed now');
   await expect(page.locator('#retirementInfoTargetContext')).toHaveText(/Current lifestyle · \$[\d,]+\/mo/);
   await expect(page.locator('#retirementInfoTimingLabel')).toHaveText(/At your current pace|Your Coast FI status/);
-  await expect(page.locator('#retirementInfoTimingContext')).toHaveText(/Saving & investing · \$[\d,]+\/mo/);
   await expect(page.locator('#retirementInfoTiming')).toHaveText(/Already reached|Est\. [A-Z][a-z]{2} \d{4}|Set a saving pace/);
 });
 

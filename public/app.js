@@ -1821,10 +1821,15 @@ function renderRetirement(data) {
   $('#retirementProjection').textContent = projectedBalance;
   $('#retirementProjectionContext').textContent = `On pace for ${projectedBalance} by age ${data.retirementAge}`;
   const monthlyContributions = Math.max(0, Number(data.monthlyContributions || 0));
+  const essentialMonthlySpend = Math.max(0, Number(data.essentialMonthlySpend || 0));
+  const retirementInputs = $('#retirementInputs');
   const contributionPace = $('#retirementContributionPace');
-  contributionPace.hidden = monthlyContributions <= 0;
+  retirementInputs.hidden = monthlyContributions <= 0 && essentialMonthlySpend <= 0;
   contributionPace.textContent = monthlyContributions
     ? `Saving & investing · ${fmt.format(monthlyContributions)}/mo`
+    : '';
+  $('#retirementEssentialPace').textContent = essentialMonthlySpend
+    ? `Essential spend · ${fmt.format(essentialMonthlySpend)}/mo`
     : '';
   $('#retirementAgeChip').textContent = `${data.yearsToRetirement} years to go`;
   const coverage = $('#retirementCoverage');
@@ -2241,7 +2246,6 @@ function openRetirementMilestone(name) {
   const plan = state.retirement;
   if (!plan) return;
   const monthlySpend = Math.max(0, Number(plan.monthlySpend || 0));
-  const monthlyContributions = Math.max(0, Number(plan.monthlyContributions || 0));
   const details = {
     coast: {
       label: 'RETIREMENT MILESTONE', title: 'Coast Financial Independence', value: plan.coast,
@@ -2280,9 +2284,6 @@ function openRetirementMilestone(name) {
   const targetContext = $('#retirementInfoTargetContext');
   targetContext.hidden = !connectsTargetAndPace || monthlySpend <= 0;
   targetContext.textContent = monthlySpend ? `Current lifestyle · ${fmt.format(monthlySpend)}/mo` : '';
-  const timingContext = $('#retirementInfoTimingContext');
-  timingContext.hidden = !connectsTargetAndPace || monthlyContributions <= 0;
-  timingContext.textContent = monthlyContributions ? `Saving & investing · ${fmt.format(monthlyContributions)}/mo` : '';
   $('#retirementInfoTimingLabel').textContent = connectsTargetAndPace
     ? (milestone?.complete ? (name === 'coast' ? 'Your Coast FI status' : 'Your FI status') : 'At your current pace')
     : 'Estimated timing';
