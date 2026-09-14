@@ -12,6 +12,7 @@ import { accountBalanceHistory, calculateFire, cashFlowType, cashRunway, classif
 import { investmentLedgerPages, plaidConfigured, plaidPost } from './lib/plaid.js';
 import { loadHistoricalPrices } from './lib/market-data.js';
 import { historyStart } from './lib/history.js';
+import { plaidErrorCode, publicErrorPayload } from '../public/customer-error.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
@@ -106,15 +107,16 @@ function plaidCostLimiter({ scope, userLimit, ipLimit, windowMs }) {
         consumeProviderLimit(`${scope}.ip`, opaqueRateLimitKey(req.ip || req.socket.remoteAddress), windowMs, ipLimit)
       ]);
       if (!userAllowed || !ipAllowed) {
-        res.setHeader('Retry-After', Math.ceil(windowMs / 1000));
-        return res.status(429).json({ error: 'Too many account-connection attempts. Please try again later.' });
+        const retryAfterSeconds = Math.ceil(windowMs / 1000);
+        res.setHeader('Retry-After', retryAfterSeconds);
+        return res.status(429).json(publicErrorPayload('rate_limited', { retryAfterSeconds }));
       }
       next();
     } catch (error) {
       // Fail closed: a missing cost-control store must never permit billable
       // provider calls without a limit.
       console.error('Provider rate-limit check unavailable:', error.message);
-      res.status(503).json({ error: 'Account connection is temporarily unavailable. Please try again later.' });
+      res.status(503).json(publicErrorPayload('connection_unavailable'));
     }
   };
 }
@@ -122,12 +124,9 @@ function plaidCostLimiter({ scope, userLimit, ipLimit, windowMs }) {
 // Provider diagnostics belong in server logs, never in a browser response.
 // This prevents credentials, provider request details, and opaque error codes
 // from becoming part of a customer's connection experience.
-function publicPlaidError(error, fallback = 'We could not start a secure connection right now. Please try again shortly.') {
-  const code = String(error?.plaid?.error_code || '');
-  if (code === 'ITEM_LOGIN_REQUIRED') return 'Your institution needs you to sign in again to resume updates.';
-  if (code === 'INSTITUTION_NOT_RESPONDING') return 'Your institution is temporarily unavailable. Please try again later.';
-  if (code === 'PRODUCT_NOT_READY') return 'Your institution is still preparing this data. We’ll keep trying automatically.';
-  return fallback;
+function publicPlaidError(error, fallback) {
+  const code = plaidErrorCode(error?.plaid?.error_code);
+  return publicErrorPayload(code, code === 'connection_unavailable' && fallback ? { message: fallback } : {});
 }
 
 app.set('trust proxy', 1);
@@ -216,7 +215,7 @@ app.get('/manifest.webmanifest', (req, res) => {
 app.use(express.static(path.join(projectRoot, 'public'), {
   setHeaders(res, filePath) {
     // The PWA intentionally serves no cached shell or financial data.
-    if (/\/(index\.html|app\.js|styles\.css|chart-utils\.js|sw\.js|manifest\.webmanifest)$/.test(filePath)) {
+    if (/\/(index\.html|app\.js|styles\.css|chart-utils\.js|customer-error\.js|sw\.js|manifest\.webmanifest)$/.test(filePath)) {
       res.setHeader('Cache-Control', 'private, no-store, no-cache, max-age=0, must-revalidate');
       res.setHeader('CDN-Cache-Control', 'no-store');
       res.setHeader('Surrogate-Control', 'no-store');
@@ -1246,7 +1245,8 @@ app.use('/api', async (req, res, next) => {
     if (store.settings?.demo_mode) return res.status(409).json({ error: 'Exit demo to change your personal financial data.' });
     next();
   } catch (error) {
-    res.status(503).json({ error: error.message || 'Your financial store is temporarily unavailable.' });
+    console.error('Protected API store check failed:', error.message);
+    res.status(503).json(publicErrorPayload('financial_data_unavailable'));
   }
 });
 
@@ -1302,6 +1302,7 @@ app.get('/api/dashboard', async (req, res) => {
     snapshots,
     items: visibleStore.items.map(publicItem),
     plaidConfigured: plaidConfigured(),
+    developmentTesting: developmentMockConnectionsEnabled(req),
     demoMode: Boolean(store.settings?.demo_mode) || visibleStore.accounts.some((a) => a.demo),
     appearance: store.settings?.appearance || { theme: 'light' }
   });
@@ -1654,7 +1655,7 @@ app.post('/api/items/:id/create_reconnect_token', plaidCostLimiter({ scope: 'pla
     res.json({ link_token: data.link_token, reconnect_session: reconnectSession });
   } catch (error) {
     console.warn('Plaid reconnect token failed:', error.message);
-    res.status(error.status || 500).json({ error: publicPlaidError(error) });
+    res.status(error.status || 500).json(publicPlaidError(error));
   }
 });
 
@@ -1702,7 +1703,7 @@ app.post('/api/plaid/create_link_token', plaidCostLimiter({ scope: 'plaid_link_t
     trackLaunchEvent(req.user, 'account_link_started');
   } catch (error) {
     console.warn('Plaid link token failed:', error.message);
-    res.status(error.status || 500).json({ error: publicPlaidError(error) });
+    res.status(error.status || 500).json(publicPlaidError(error));
   }
 });
 
@@ -1760,7 +1761,7 @@ app.post('/api/plaid/exchange_public_token', plaidCostLimiter({ scope: 'plaid_it
     trackLaunchEvent(req.user, 'account_link_completed');
   } catch (error) {
     console.warn('Plaid item exchange failed:', error.message);
-    res.status(error.status || 500).json({ error: publicPlaidError(error, 'We could not finish connecting this institution. Please try again shortly.') });
+    res.status(error.status || 500).json(publicPlaidError(error, 'We could not finish connecting this institution. Please try again shortly.'));
   }
 });
 
@@ -1838,6 +1839,17 @@ app.post('/api/clear-demo', async (_req, res) => {
 });
 
 app.use((_req, res) => res.sendFile(path.join(projectRoot, 'public', 'index.html')));
+
+// A dependency can still fail outside an individual route's try/catch (for
+// example, while loading an encrypted store). Keep diagnostics in our logs and
+// give customers one safe, recoverable API response rather than an Express
+// stack trace, provider message, or a blank application shell.
+app.use((error, req, res, next) => {
+  console.error('Unhandled application request failed:', error?.message || error);
+  if (res.headersSent) return next(error);
+  if (req.path.startsWith('/api/')) return res.status(503).json(publicErrorPayload('financial_data_unavailable'));
+  res.status(503).type('html').send('<!doctype html><title>Clarity is temporarily unavailable</title><p>Clarity is temporarily unavailable. Please try again shortly.</p>');
+});
 
 export { app };
 

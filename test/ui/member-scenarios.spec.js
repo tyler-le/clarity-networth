@@ -159,6 +159,34 @@ test('the development mock uses the same post-connection completion flow as Plai
   await expect(page.locator('#connectionOnboardingDialog')).toContainText('Next few minutes');
 });
 
+test('a rate-limited connection gives a safe wait time and prevents repeated attempts', async ({ page }) => {
+  await openSignedInScenario(page);
+  await page.route('**/api/plaid/create_link_token', (route) => route.fulfill({
+    status: 429,
+    headers: { 'Retry-After': '90' },
+    json: {
+      error: 'Please wait before trying again. Try again in 2 minutes.',
+      error_code: 'rate_limited',
+      recovery: 'wait',
+      retry_after_seconds: 90
+    }
+  }));
+
+  await page.locator('#connectButton').click();
+  await expect(page.locator('#notice')).toHaveText('Please wait before trying again. Try again in 2 minutes.');
+  await expect(page.locator('#connectButton')).toBeDisabled();
+  await expect(page.locator('#connectButton')).toHaveText('Try again in 2 min');
+});
+
+test('development exposes deterministic connection-recovery states without provider calls', async ({ page }) => {
+  await openSignedInScenario(page, (preview) => { preview.dashboard.developmentTesting = true; });
+  await goToView(page, 'profile');
+  await expect(page.locator('#developmentRecoveryTesting')).toBeVisible();
+  await page.locator('#developmentRecoveryScenario').selectOption('institution_unavailable');
+  await page.locator('#developmentRecoveryTrigger').click();
+  await expect(page.locator('#notice')).toHaveText('Your institution is temporarily unavailable. Please try again later.');
+});
+
 test('accounts retain the established collection layout for each account type', async ({ page }) => {
   await openSignedInScenario(page, (preview) => {
     const [first, second, third] = preview.dashboard.accounts;

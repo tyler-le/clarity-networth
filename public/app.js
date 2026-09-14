@@ -1,4 +1,5 @@
 import { filterSnapshots, netWorthRangeBounds, preferredNetWorthRange, uniqueDailySnapshots } from '/chart-utils.js';
+import { customerError, httpErrorCode, plaidErrorCode } from '/customer-error.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -50,6 +51,7 @@ const state = {
   investmentPreview: null,
   connectionFocus: null
 };
+let connectionRetryTimer;
 
 const accountGroupOrder = ['Cash', 'Savings', 'Investments', 'Credit cards', 'Loans & debt', 'Other'];
 const accountGroupIcons = { Cash: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M6 9h1M17 15h1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>', Savings: '◒', Investments: '↗', 'Credit cards': '▣', 'Loans & debt': '−', Other: '◇' };
@@ -74,15 +76,18 @@ async function api(url, options = {}) {
       const response = await fetch(url, { headers: { 'content-type': 'application/json', ...(options.headers || {}) }, ...options });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const message = response.status === 401 ? 'Your session has expired. Please sign in again.'
-          : response.status === 429 && url.startsWith('/api/plaid/')
-            ? (data.error || 'Too many connection attempts. Please wait a few minutes and try again.')
-            : response.status === 429 ? 'You’ve refreshed recently. Please wait a few minutes and try again.'
-          : response.status >= 500 ? 'We couldn’t reach your financial data right now. Your saved data is still here—please try again shortly.'
-          : data.error && !/request failed|gateway|server error/i.test(data.error) ? data.error
-          : 'Something went wrong. Please try again.';
-        const error = new Error(message);
+        const retryAfterSeconds = Number(data.retry_after_seconds || response.headers.get('retry-after'));
+        const knownCode = httpErrorCode({ status: response.status, errorCode: data.error_code });
+        // Validation copy is authored by Clarity. Dependency failures always
+        // use the shared catalog, never a provider-supplied error string.
+        const recovery = response.status < 500 && response.status !== 429 && !data.error_code && data.error
+          ? { code: 'action_unavailable', recovery: 'retry_later', retryAfterSeconds: null, message: data.error }
+          : customerError(knownCode, { retryAfterSeconds });
+        const error = new Error(recovery.message);
         error.status = response.status;
+        error.code = recovery.code;
+        error.recovery = recovery.recovery;
+        error.retryAfterSeconds = recovery.retryAfterSeconds;
         throw error;
       }
       return data;
@@ -94,6 +99,31 @@ async function api(url, options = {}) {
   }
   if (lastError instanceof TypeError) throw new Error('We couldn’t connect right now. Check your internet connection and try again.');
   throw lastError;
+}
+
+function connectionButtons() {
+  return [...new Set([...$$('[data-connect-account]'), $('#connectButton')].filter(Boolean))];
+}
+
+function applyConnectionCooldown(seconds) {
+  const until = Date.now() + Math.max(1, Number(seconds || 0)) * 1000;
+  const render = () => {
+    const remaining = Math.max(0, Math.ceil((until - Date.now()) / 1000));
+    connectionButtons().forEach((button) => {
+      if (!button.dataset.connectionLabel) button.dataset.connectionLabel = button.textContent.trim();
+      button.disabled = remaining > 0;
+      button.textContent = remaining > 0 ? `Try again in ${remaining >= 60 ? `${Math.ceil(remaining / 60)} min` : `${remaining}s`}` : button.dataset.connectionLabel;
+    });
+    if (!remaining) { clearInterval(connectionRetryTimer); connectionRetryTimer = null; }
+  };
+  clearInterval(connectionRetryTimer);
+  render();
+  connectionRetryTimer = setInterval(render, 1000);
+}
+
+function presentConnectionError(error) {
+  if (error?.recovery === 'wait' && error.retryAfterSeconds) applyConnectionCooldown(error.retryAfterSeconds);
+  showNotice(error?.message || customerError('connection_unavailable').message);
 }
 
 // Private-beta success telemetry is intentionally tiny and invisible: no
@@ -766,6 +796,7 @@ function renderProfileSettings(d) {
   $('#profileEmail').textContent = email || 'Signed in securely';
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
   $('#profileMonogram').textContent = initials || 'C';
+  $('#developmentRecoveryTesting').classList.toggle('hidden', !d?.developmentTesting);
 }
 
 const spendingColors = ['#1f6f4a', '#7ea98b', '#d5a75f', '#b88692', '#9ca9bd', '#c4c9c1'];
@@ -1972,7 +2003,7 @@ async function connectPlaid() {
       return;
     }
     const { link_token } = link;
-    if (!window.Plaid) throw new Error('Plaid Link failed to load. Check your internet connection.');
+    if (!window.Plaid) throw new Error(customerError('offline').message);
     const handler = window.Plaid.create({
       token: link_token,
       onSuccess: async (public_token, metadata) => {
@@ -1985,11 +2016,11 @@ async function connectPlaid() {
         showNotice(result.sync_pending ? 'Account connected. We’re finishing its first update and will keep trying automatically.' : 'Account connected.', 'success');
         showConnectionOnboarding();
       },
-      onExit: (err) => { if (err) showNotice(err.display_message || err.error_message || 'Plaid Link closed with an error.'); }
+      onExit: (err) => { if (err) presentConnectionError(customerError(plaidErrorCode(err.error_code))); }
     });
     handler.open();
   } catch (error) {
-    showNotice(error.message);
+    presentConnectionError(error);
   }
 }
 
@@ -1997,7 +2028,7 @@ async function reconnectPlaid(itemId) {
   if (isDemoExperience()) { showNotice('Exit demo to reconnect your own accounts.'); return; }
   try {
     const { link_token, reconnect_session } = await api(`/api/items/${itemId}/create_reconnect_token`, { method: 'POST', body: '{}' });
-    if (!window.Plaid) throw new Error('Plaid Link failed to load. Check your internet connection.');
+    if (!window.Plaid) throw new Error(customerError('offline').message);
     const handler = window.Plaid.create({
       token: link_token,
       onSuccess: async () => {
@@ -2006,10 +2037,10 @@ async function reconnectPlaid(itemId) {
         await loadAll();
         showNotice('Institution reconnected.', 'success');
       },
-      onExit: (err) => { if (err) showNotice(err.display_message || err.error_message || 'Reconnect closed before it was completed.'); }
+      onExit: (err) => { if (err) presentConnectionError(customerError(plaidErrorCode(err.error_code))); }
     });
     handler.open();
-  } catch (error) { showNotice(error.message); }
+  } catch (error) { presentConnectionError(error); }
 }
 
 function showConnectionOnboarding() {
@@ -2072,6 +2103,13 @@ $('#demoToggle').addEventListener('click', async () => {
     showNotice(state.dashboard?.demoMode ? 'Demo sandbox is on. Your real data is safely hidden.' : 'Your personal financial picture is back.', 'success');
   } catch (error) { showNotice(error.message); }
   finally { button.disabled = false; }
+});
+$('#developmentRecoveryTrigger').addEventListener('click', () => {
+  // This control is rendered only when the server has explicitly enabled the
+  // staging test fixture. It never makes a network call or alters a link.
+  if (!state.dashboard?.developmentTesting) return;
+  const code = $('#developmentRecoveryScenario').value;
+  presentConnectionError(customerError(code, code === 'rate_limited' ? { retryAfterSeconds: 90 } : {}));
 });
 $('#exportDataButton').addEventListener('click', async () => {
   if (isDemoExperience()) { showNotice(state.demoPreview ? 'Sign in to export your own data.' : 'Exit demo to download your personal data.'); return; }

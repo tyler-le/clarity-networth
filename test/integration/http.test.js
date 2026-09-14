@@ -70,6 +70,10 @@ integrationTest('serves the app shell with defensive browser headers', async () 
   assert.equal(runtimeApp.status, 200);
   assert.match(runtimeApp.text, /retirement-milestone/);
   assert.match(runtimeApp.headers['cache-control'], /no-store/);
+  const errorContract = await request(app).get('/customer-error.js');
+  assert.equal(errorContract.status, 200);
+  assert.match(errorContract.text, /rate_limited/);
+  assert.match(errorContract.headers['cache-control'], /no-store/);
 });
 
 integrationTest('serves public legal, support, and dependency-aware health pages', async () => {
@@ -513,7 +517,11 @@ integrationTest('caps cost-sensitive Plaid link-token attempts before provider c
   }
   const blocked = await request(app).post('/api/plaid/create_link_token').set('Cookie', cookie).send({});
   assert.equal(blocked.status, 429);
-  assert.match(blocked.body.error, /Too many account-connection attempts/);
+  assert.equal(blocked.body.error_code, 'rate_limited');
+  assert.equal(blocked.body.recovery, 'wait');
+  assert.equal(blocked.body.retry_after_seconds, 15 * 60);
+  assert.match(blocked.body.error, /Try again in 15 minutes/);
+  assert.doesNotMatch(blocked.body.error, /Plaid|provider|secret/i);
 });
 
 integrationTest('staging mock connection is explicitly gated, seeded, and removable without Plaid', async (t) => {
@@ -583,6 +591,7 @@ integrationTest('staging mock connection is explicitly gated, seeded, and remova
 
   const dashboard = await request(app).get('/api/dashboard').set('Cookie', cookie);
   assert.equal(dashboard.status, 200);
+  assert.equal(dashboard.body.developmentTesting, true);
   assert.equal(dashboard.body.demoMode, false);
   assert.equal(dashboard.body.items[0].development_mock, true);
   assert.equal(dashboard.body.connectionHealth[0].state, 'healthy');
