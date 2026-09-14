@@ -2245,7 +2245,6 @@ $('#retirementForm').addEventListener('submit', async (event) => {
 function openRetirementMilestone(name) {
   const plan = state.retirement;
   if (!plan) return;
-  const monthlySpend = Math.max(0, Number(plan.monthlySpend || 0));
   const details = {
     coast: {
       label: 'RETIREMENT MILESTONE', title: 'Coast Financial Independence', value: plan.coast,
@@ -2281,9 +2280,6 @@ function openRetirementMilestone(name) {
   $('#retirementInfoValue').textContent = fmt.format(details.value || 0);
   $('#retirementInfoTargetLabel').textContent = name === 'coast' ? 'Amount needed now' : `Needed by age ${plan.retirementAge}`;
   const connectsTargetAndPace = name === 'coast' || name === 'standard';
-  const targetContext = $('#retirementInfoTargetContext');
-  targetContext.hidden = !connectsTargetAndPace || monthlySpend <= 0;
-  targetContext.textContent = monthlySpend ? `Current lifestyle · ${fmt.format(monthlySpend)}/mo` : '';
   $('#retirementInfoTimingLabel').textContent = connectsTargetAndPace
     ? (milestone?.complete ? (name === 'coast' ? 'Your Coast FI status' : 'Your FI status') : 'At your current pace')
     : 'Estimated timing';
