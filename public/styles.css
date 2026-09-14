@@ -988,3 +988,19 @@ html[data-theme="dark"] .profile-shell .sign-out-button:hover {
   background: #263128;
   box-shadow: inset 0 0 0 1px #3c5141;
 }
+
+/* Accounts are an inventory, not a performance report. In dark mode their
+   values stay calm and neutral; green and coral retain their meaning for a
+   genuine gain or money owed. */
+html[data-theme="dark"] .accounts-summary strong:not(.negative),
+html[data-theme="dark"] .account-collection.asset .account-collection-total strong,
+html[data-theme="dark"] .account-item.asset .account-inline-balance { color: #bdc8c0; }
+html[data-theme="dark"] .account-collection-head h2 { color: #cbd5cd; }
+html[data-theme="dark"] .account-item .account-name { color: #c3cdc5; }
+html[data-theme="dark"] :is(
+  .account-collection-head p,
+  .account-collection-total span,
+  .account-inst,
+  .account-detail > i,
+  .account-rename
+) { color: var(--muted); }

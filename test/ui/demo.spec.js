@@ -951,6 +951,10 @@ test('dark mode is a calm, persistent profile setting', async ({ page }) => {
   await expect(page.locator('#retirementNextMilestone')).toHaveCSS('background-color', 'rgb(34, 42, 36)');
   await expect(page.locator('#retirementCoverage')).toHaveCSS('background-color', 'rgb(38, 45, 39)');
   await goToView(page, 'accounts');
+  // Account balances describe where money is, not investment performance.
+  // Keep those neutral so green remains a useful signal for an actual gain.
+  await expect(page.locator('.account-collection.asset .account-inline-balance').first()).not.toHaveClass(/positive/);
+  await expect(page.locator('.account-collection.asset .account-inline-balance').first()).toHaveCSS('color', 'rgb(189, 200, 192)');
   await expect(page.locator('#connectButton')).toHaveCSS('background-color', 'rgb(45, 116, 74)');
   await expect(page.locator('#profileButton')).toHaveCSS('background-color', 'rgb(32, 39, 32)');
   await page.locator('#profileButton').click();

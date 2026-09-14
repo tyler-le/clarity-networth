@@ -661,7 +661,7 @@ function renderAccounts(accounts) {
   const cashAndSavings = accounts.filter((account) => ['Cash', 'Savings'].includes(accountGroup(account))).reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
   const invested = accounts.filter((account) => accountGroup(account) === 'Investments').reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
   const totalDebt = accounts.filter(isDebt).reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
-  $('#accountsSummary').innerHTML = `<div><span>Cash & savings</span><strong>${fmt.format(cashAndSavings)}</strong></div><div><span>Invested</span><strong class="positive">${fmt.format(invested)}</strong></div><div><span>Debt owed</span><strong class="negative">${fmt.format(totalDebt)}</strong></div>`;
+  $('#accountsSummary').innerHTML = `<div><span>Cash & savings</span><strong>${fmt.format(cashAndSavings)}</strong></div><div><span>Invested</span><strong>${fmt.format(invested)}</strong></div><div><span>Debt owed</span><strong class="negative">${fmt.format(totalDebt)}</strong></div>`;
   $('#accountGrid').innerHTML = grouped.map(([name, items]) => {
     const debt = items.every(isDebt);
     const total = items.reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
@@ -669,12 +669,12 @@ function renderAccounts(accounts) {
     const expanded = state.expandedAccountGroups.has(name);
     const previewCount = 2;
     return `<section class="account-collection ${debt ? 'debt' : 'asset'}">
-      <div class="account-collection-head"><span class="account-collection-icon" aria-hidden="true">${accountGroupIcons[name] || '◇'}</span><div><h2>${name}</h2><p>${items.length} account${items.length === 1 ? '' : 's'}</p></div><div class="account-collection-total ${debt ? 'negative' : 'positive'}"><span>${debt ? 'Owed' : 'Held'}</span><strong>${fmt.format(total)}</strong></div></div>
+      <div class="account-collection-head"><span class="account-collection-icon" aria-hidden="true">${accountGroupIcons[name] || '◇'}</span><div><h2>${name}</h2><p>${items.length} account${items.length === 1 ? '' : 's'}</p></div><div class="account-collection-total ${debt ? 'negative' : ''}"><span>${debt ? 'Owed' : 'Held'}</span><strong>${fmt.format(total)}</strong></div></div>
       <div class="account-collection-items">${sorted.map((account, index) => {
         const investment = account.type === 'investment' && account.plaid_account_id;
         const detail = !account.manual && account.plaid_account_id;
         const actions = `${accountConnectionAction(account)}${account.manual ? `<button class="account-rename" data-manual-account="${escapeHtml(account.id)}" data-manual-name="${escapeHtml(account.name)}" data-manual-subtype="${escapeHtml(account.subtype || '')}" data-manual-value="${escapeHtml(account.current_balance)}" data-manual-kind="${debt ? 'liability' : 'asset'}" aria-label="Edit ${escapeHtml(account.name)}">✎</button>` : `<button class="account-rename" data-account-rename="${escapeHtml(account.id)}" data-account-name="${escapeHtml(account.nickname || account.name)}" aria-label="Rename ${escapeHtml(account.nickname || account.name)}">✎</button>`}`;
-        const content = `${institutionMark(account)}<div class="account-copy"><div class="account-name">${escapeHtml(account.nickname || account.name)}</div><div class="account-inst">${escapeHtml(accountSubtitle(account))}</div><div class="account-inline-balance ${debt ? 'negative' : 'positive'}">${displayBalance(account)}</div></div>`;
+        const content = `${institutionMark(account)}<div class="account-copy"><div class="account-name">${escapeHtml(account.nickname || account.name)}</div><div class="account-inst">${escapeHtml(accountSubtitle(account))}</div><div class="account-inline-balance ${debt ? 'negative' : ''}">${displayBalance(account)}</div></div>`;
         const detailControl = investment
           ? `<button class="account-detail" type="button" data-account-investment-history="${escapeHtml(account.plaid_account_id)}" aria-label="View ${escapeHtml(account.nickname || account.name)} investment performance">${content}<i aria-hidden="true">›</i></button>`
           : detail ? `<button class="account-detail" type="button" data-account-history="${escapeHtml(account.plaid_account_id)}" aria-label="View ${escapeHtml(account.nickname || account.name)} account detail">${content}<i aria-hidden="true">›</i></button>`
