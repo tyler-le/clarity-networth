@@ -855,6 +855,7 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await expect(page.locator('#retirementPath')).toContainText('Amount needed today to fund retirement by age 65 without further contributions');
   await expect(page.locator('#retirementPath .retirement-milestone')).toHaveCount(4);
   await expect(page.locator('#retirementProjectionContext')).toContainText(/On pace for \$[\d,]+ by age 65/);
+  await expect(page.locator('#retirementContributionPace')).toContainText(/Based on \$[\d,]+ a month going toward savings & investments/);
   await expect(page.locator('#retirementNextMilestone')).toBeVisible();
   await page.locator('#retirementNextMilestone').click();
   await expect(page.locator('#retirementInfoDialog')).toHaveAttribute('open', '');
@@ -896,7 +897,7 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await expect(page.locator('#retirementInfoTitle')).toHaveText('Coast Financial Independence');
   await expect(page.locator('#retirementInfoDescription')).toHaveText('The amount you need invested today so that, without contributing any more, it can grow enough to fund your retirement by your target age.');
   await expect(page.locator('#retirementInfoTargetLabel')).toHaveText('Amount needed now');
-  await expect(page.locator('#retirementInfoTimingLabel')).toHaveText(/At your current saving pace|Your Coast FI status/);
+  await expect(page.locator('#retirementInfoTimingLabel')).toHaveText(/At your current pace · \$[\d,]+\/mo|At your current saving pace|Your Coast FI status/);
   await expect(page.locator('#retirementInfoTiming')).toHaveText(/Already reached|Est\. [A-Z][a-z]{2} \d{4}|Set a saving pace/);
 });
 

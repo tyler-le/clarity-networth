@@ -925,6 +925,7 @@ test('retirement presets calculate coast, lean, standard, fat, and a projected r
   assert.equal(plan.lean, 840000);
   assert.equal(plan.fat, 1800000);
   assert.equal(plan.essentialAnnualSpend, 36000);
+  assert.equal(plan.monthlyContributions, 750);
   assert.equal(plan.lifestyles[0].target, 900000);
   assert.equal(plan.ladder[0].target, 9000);
   assert.equal(plan.ladder[1].target, 18000);
@@ -948,6 +949,18 @@ test('retirement presets calculate coast, lean, standard, fat, and a projected r
   assert.equal(noPortfolioWithdrawals.realReturn, 0);
   assert.equal(noPortfolioWithdrawals.standard, 0, '0% means the plan does not assume portfolio-funded spending');
   assert.ok(Number.isFinite(noPortfolioWithdrawals.projectedAtRetirement));
+  assert.ok(Number.isFinite(noPortfolioWithdrawals.lifestyles[0].target), '0% withdrawal does not produce an infinite essentials target');
+
+  const annualizedFromObservedHistory = calculateFire({
+    ...store,
+    transactions: [
+      ...Array.from({ length: 12 }, (_, index) => ({ date: `2025-${String(index + 1).padStart(2, '0')}-15`, amount: 100, bucket: 'fixed' })),
+      { date: '2025-06-20', amount: 1200, bucket: 'investments' }
+    ]
+  }, 100000);
+  assert.equal(annualizedFromObservedHistory.contributionMonthsObserved, 12);
+  assert.equal(annualizedFromObservedHistory.monthlyContributions, 100, 'contributions use every observed month, not only the month with a deposit');
+  assert.equal(annualizedFromObservedHistory.annualContributions, 1200);
 
   const fasterSaver = calculateFire({
     ...store,

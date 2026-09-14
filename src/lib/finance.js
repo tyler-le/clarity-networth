@@ -1395,19 +1395,30 @@ export function annualizedLivingSpend(store) {
 }
 
 function annualizedContributions(store, buckets = ['savings', 'investments']) {
-  const eligible = store.transactions
-    .filter((t) => !t.pending && !t.excluded && Number(t.amount || 0) > 0 && buckets.includes(t.bucket))
+  const posted = (store.transactions || [])
+    .filter((t) => !t.pending && !t.excluded && /^\d{4}-\d{2}-\d{2}$/.test(String(t.date || '')))
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const eligible = posted
+    .filter((t) => Number(t.amount || 0) > 0 && buckets.includes(t.bucket));
   if (!eligible.length) return { annualContributions: 0, monthsObserved: 0 };
 
-  const latest = new Date(`${monthId(eligible.at(-1).date)}-01T12:00:00`);
+  // Divide by every month with verified, posted activity—not only the months
+  // in which someone made a contribution. Otherwise, one deposit could look
+  // like a recurring monthly saving habit and inflate the retirement forecast.
+  const latest = new Date(`${monthId(posted.at(-1).date)}-01T12:00:00`);
   const start = new Date(latest);
   start.setMonth(start.getMonth() - 11);
   const startMonth = start.toISOString().slice(0, 7);
-  const trailing = eligible.filter((transaction) => monthId(transaction.date) >= startMonth && monthId(transaction.date) <= monthId(latest.toISOString()));
-  const monthsObserved = Math.max(new Set(trailing.map((transaction) => monthId(transaction.date))).size, 1);
+  const latestMonth = latest.toISOString().slice(0, 7);
+  const isInObservedWindow = (transaction) => {
+    const month = monthId(transaction.date);
+    return month >= startMonth && month <= latestMonth;
+  };
+  const trailing = eligible.filter(isInObservedWindow);
+  const monthsObserved = new Set(posted.filter(isInObservedWindow).map((transaction) => monthId(transaction.date))).size;
   const total = trailing.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
-  return { annualContributions: total / monthsObserved * 12, monthsObserved };
+  const monthlyContributions = monthsObserved ? total / monthsObserved : 0;
+  return { annualContributions: monthlyContributions * 12, monthlyContributions, monthsObserved };
 }
 
 function monthsToTarget({ balance, target, annualContribution = 0, annualReturn = 0 }) {
@@ -1462,7 +1473,7 @@ export function calculateFire(store, netWorth) {
   const standard = withdrawalRate > 0 && spend.annualSpend > 0 ? spend.annualSpend / withdrawalRate : 0;
   const lean = standard * leanMultiplier;
   const fat = standard * fatMultiplier;
-  const essential = spend.essentialAnnualSpend > 0 ? spend.essentialAnnualSpend / withdrawalRate : lean;
+  const essential = withdrawalRate > 0 && spend.essentialAnnualSpend > 0 ? spend.essentialAnnualSpend / withdrawalRate : lean;
   const yearsToRetirement = Math.max(0, retirementAge - age);
   const coast = standard > 0 ? standard / Math.pow(1 + realReturn, yearsToRetirement) : 0;
   const futureValueFactor = realReturn === 0 ? yearsToRetirement : (Math.pow(1 + realReturn, yearsToRetirement) - 1) / realReturn;
@@ -1487,6 +1498,7 @@ export function calculateFire(store, netWorth) {
     essentialMonthlySpend: spend.essentialMonthlySpend,
     monthsObserved: spend.monthsObserved,
     annualContributions: contributions.annualContributions,
+    monthlyContributions: contributions.monthlyContributions,
     contributionMonthsObserved: contributions.monthsObserved,
     investedAssets,
     freedomBalance,
