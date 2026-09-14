@@ -943,6 +943,12 @@ test('retirement presets calculate coast, lean, standard, fat, and a projected r
   const lowerWithdrawalRate = calculateFire({ ...store, settings: { fire: { ...store.settings.fire, withdrawal_rate: 3.5 } } }, 100000);
   assert.ok(lowerWithdrawalRate.standard > plan.standard, 'a more conservative withdrawal rate raises the lifestyle target');
 
+  const noPortfolioWithdrawals = calculateFire({ ...store, settings: { fire: { ...store.settings.fire, withdrawal_rate: 0, real_return: 0 } } }, 100000);
+  assert.equal(noPortfolioWithdrawals.withdrawalRate, 0);
+  assert.equal(noPortfolioWithdrawals.realReturn, 0);
+  assert.equal(noPortfolioWithdrawals.standard, 0, '0% means the plan does not assume portfolio-funded spending');
+  assert.ok(Number.isFinite(noPortfolioWithdrawals.projectedAtRetirement));
+
   const fasterSaver = calculateFire({
     ...store,
     transactions: store.transactions.map((transaction) => transaction.bucket === 'investments' ? { ...transaction, amount: 1000 } : transaction)

@@ -455,6 +455,12 @@ integrationTest('previews a retirement plan without changing the saved assumptio
   assert.ok(preview.body.projectedAtRetirement > current.body.projectedAtRetirement);
   assert.ok(preview.body.standard > current.body.standard);
   assert.equal(readStore(key).settings.fire.retirement_age, 60);
+  const broadAssumptions = await request(app).post('/api/retirement/preview').set('Cookie', cookie).send({ age: 100, retirement_age: 100, withdrawal_rate: 20, real_return: 15 });
+  assert.equal(broadAssumptions.status, 200);
+  assert.equal(broadAssumptions.body.withdrawalRate, 20);
+  assert.equal(broadAssumptions.body.realReturn, 15);
+  const rejectedAssumptions = await request(app).post('/api/retirement/preview').set('Cookie', cookie).send({ withdrawal_rate: 20.1, real_return: 15.1 });
+  assert.equal(rejectedAssumptions.status, 400);
   deleteStore(key);
 });
 

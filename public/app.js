@@ -1865,7 +1865,7 @@ function renderRetirement(data) {
   $('#retirementRetireAgeValue').value = data.retirementAge;
   $('#retirementWithdrawalValue').value = data.withdrawalRate;
   $('#retirementReturnValue').value = data.realReturn;
-  form.retirement_age.min = String(Math.min(80, Number(data.age) + 1));
+  form.retirement_age.min = String(Math.min(100, Number(data.age) + 1));
   $('#retirementRetireAgeValue').min = form.retirement_age.min;
   if (state.onboardingPreview) applyOnboardingPreviewCopy();
 }
@@ -2178,7 +2178,7 @@ function syncRetirementAgeBounds() {
   const form = $('#retirementForm');
   const age = Number(form.age.value);
   const retirementAge = form.retirement_age;
-  const minimumRetirementAge = Math.min(80, age + 1);
+  const minimumRetirementAge = Math.min(100, age + 1);
   retirementAge.min = String(minimumRetirementAge);
   $('#retirementRetireAgeValue').min = retirementAge.min;
   if (Number(retirementAge.value) < minimumRetirementAge) {

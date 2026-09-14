@@ -1446,7 +1446,7 @@ export function calculateFire(store, netWorth) {
   const settings = store.settings?.fire || {};
   const age = Math.max(18, Number(settings.age || 27));
   const retirementAge = Math.max(age, Number(settings.retirement_age || 65));
-  const withdrawalRate = Math.max(0.1, Number(settings.withdrawal_rate || 4)) / 100;
+  const withdrawalRate = Math.max(0, Number(settings.withdrawal_rate ?? 4)) / 100;
   const realReturn = Math.max(-0.9, Number(settings.real_return ?? 5)) / 100;
   const leanMultiplier = Math.max(1, Number(settings.lean_multiplier || 70)) / 100;
   const fatMultiplier = Math.max(1, Number(settings.fat_multiplier || 150)) / 100;
@@ -1457,7 +1457,9 @@ export function calculateFire(store, netWorth) {
   const freedomBalance = investedAssets || Math.max(0, Number(netWorth || 0));
   const cashBalance = (store.accounts || []).filter((account) => !account.hidden && account.type === 'depository').reduce((sum, account) => sum + Math.max(0, Number(account.current_balance || 0)), 0);
 
-  const standard = spend.annualSpend > 0 ? spend.annualSpend / withdrawalRate : 0;
+  // A 0% withdrawal rate intentionally models a plan that does not draw from
+  // this portfolio. Do not silently substitute a small rate or return Infinity.
+  const standard = withdrawalRate > 0 && spend.annualSpend > 0 ? spend.annualSpend / withdrawalRate : 0;
   const lean = standard * leanMultiplier;
   const fat = standard * fatMultiplier;
   const essential = spend.essentialAnnualSpend > 0 ? spend.essentialAnnualSpend / withdrawalRate : lean;

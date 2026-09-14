@@ -1379,11 +1379,19 @@ app.get('/api/retirement', async (req, res) => {
 
 function retirementSettingsFrom(body, existing = {}) {
   const fields = ['age', 'retirement_age', 'withdrawal_rate', 'real_return', 'lean_multiplier', 'fat_multiplier'];
+  const limits = {
+    age: [18, 100],
+    retirement_age: [19, 100],
+    withdrawal_rate: [0, 20],
+    real_return: [0, 15]
+  };
   const settings = { ...existing };
   for (const field of fields) {
     if (body?.[field] === undefined) continue;
     const value = Number(body[field]);
     if (!Number.isFinite(value)) throw new Error(`Invalid ${field}.`);
+    const range = limits[field];
+    if (range && (value < range[0] || value > range[1])) throw new Error(`${field.replace('_', ' ')} must be between ${range[0]} and ${range[1]}.`);
     settings[field] = value;
   }
   if (Number(settings.retirement_age) < Number(settings.age)) throw new Error('Retirement age must be after current age.');

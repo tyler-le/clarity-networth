@@ -864,6 +864,10 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await page.locator('#retirementSpendingTargetsCard > summary').click();
   await expect(page.locator('#retirementSpendContext')).toContainText('Needed by age 65, in today’s dollars · Based on your last 12 months of spending.');
   await page.locator('#retirementAdjust summary').click();
+  await expect(page.locator('#retirementForm [name="withdrawal_rate"]')).toHaveAttribute('min', '0');
+  await expect(page.locator('#retirementForm [name="withdrawal_rate"]')).toHaveAttribute('max', '20');
+  await expect(page.locator('#retirementForm [name="real_return"]')).toHaveAttribute('min', '0');
+  await expect(page.locator('#retirementForm [name="real_return"]')).toHaveAttribute('max', '15');
   const retirementAgeInput = page.locator('#retirementRetireAgeValue');
   await retirementAgeInput.fill('66');
   await retirementAgeInput.press('Enter');
