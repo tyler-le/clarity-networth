@@ -442,9 +442,9 @@ integrationTest('previews a retirement plan without changing the saved assumptio
     accounts: [{ id: 'investment', type: 'investment', current_balance: 100000 }],
     items: [], snapshots: [],
     transactions: [
-      { date: '2026-09-01', amount: 3000, bucket: 'fixed' },
-      { date: '2026-09-02', amount: 1000, bucket: 'guilt_free' },
-      { date: '2026-09-03', amount: 500, bucket: 'investments' }
+      { date: '2026-08-01', amount: 3000, bucket: 'fixed' },
+      { date: '2026-08-02', amount: 1000, bucket: 'guilt_free' },
+      { date: '2026-08-03', amount: 500, bucket: 'investments' }
     ]
   }, key);
   const cookie = signedTestCookie(email);

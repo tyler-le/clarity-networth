@@ -2240,6 +2240,8 @@ $('#retirementForm').addEventListener('submit', async (event) => {
 function openRetirementMilestone(name) {
   const plan = state.retirement;
   if (!plan) return;
+  const monthlySpend = Math.max(0, Number(plan.monthlySpend || 0));
+  const monthlyContributions = Math.max(0, Number(plan.monthlyContributions || 0));
   const details = {
     coast: {
       label: 'RETIREMENT MILESTONE', title: 'Coast Financial Independence', value: plan.coast,
@@ -2274,12 +2276,10 @@ function openRetirementMilestone(name) {
   $('#retirementInfoDescription').textContent = details.description;
   $('#retirementInfoValue').textContent = fmt.format(details.value || 0);
   $('#retirementInfoTargetLabel').textContent = name === 'coast' ? 'Amount needed now' : `Needed by age ${plan.retirementAge}`;
-  const monthlyContributions = Math.max(0, Number(plan.monthlyContributions || 0));
-  const monthlySpend = Math.max(0, Number(plan.monthlySpend || 0));
   const connectsTargetAndPace = name === 'coast' || name === 'standard';
   const targetContext = $('#retirementInfoTargetContext');
   targetContext.hidden = !connectsTargetAndPace || monthlySpend <= 0;
-  targetContext.textContent = monthlySpend ? `${fmt.format(monthlySpend)}/mo current lifestyle` : '';
+  targetContext.textContent = monthlySpend ? `Current lifestyle · ${fmt.format(monthlySpend)}/mo` : '';
   const timingContext = $('#retirementInfoTimingContext');
   timingContext.hidden = !connectsTargetAndPace || monthlyContributions <= 0;
   timingContext.textContent = monthlyContributions ? `Saving & investing · ${fmt.format(monthlyContributions)}/mo` : '';

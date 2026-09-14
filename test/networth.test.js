@@ -911,10 +911,10 @@ test('retirement presets calculate coast, lean, standard, fat, and a projected r
   const store = {
     settings: { fire: { age: 35, retirement_age: 65, withdrawal_rate: 4, real_return: 5, lean_multiplier: 70, fat_multiplier: 150 } },
     transactions: [
-      { date: '2026-09-01', amount: 3000, bucket: 'fixed' },
-      { date: '2026-09-02', amount: 1000, bucket: 'guilt_free' },
-      { date: '2026-09-03', amount: 500, bucket: 'investments' },
-      { date: '2026-09-04', amount: 250, bucket: 'savings' }
+      { date: '2026-08-01', amount: 3000, bucket: 'fixed' },
+      { date: '2026-08-02', amount: 1000, bucket: 'guilt_free' },
+      { date: '2026-08-03', amount: 500, bucket: 'investments' },
+      { date: '2026-08-04', amount: 250, bucket: 'savings' }
     ]
   };
   const plan = calculateFire(store, 100000);
@@ -963,6 +963,20 @@ test('retirement presets calculate coast, lean, standard, fat, and a projected r
   assert.equal(outlierResistantPlan.monthlyContributions, 100, 'a one-off contribution does not drive the saving pace');
   assert.equal(outlierResistantPlan.annualContributions, 1200);
   assert.equal(outlierResistantPlan.essentialMonthlySpend, 100, 'a one-off essential expense does not drive the retirement target');
+
+  const now = new Date();
+  const completedMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 7);
+  const currentMonth = now.toISOString().slice(0, 7);
+  const partialMonthPlan = calculateFire({
+    ...store,
+    transactions: [
+      { date: `${completedMonth}-15`, amount: 100, bucket: 'fixed' },
+      { date: `${completedMonth}-20`, amount: 100, bucket: 'investments' },
+      { date: `${currentMonth}-01`, amount: 10000, bucket: 'investments' }
+    ]
+  }, 100000);
+  assert.equal(partialMonthPlan.contributionMonthsObserved, 1, 'an in-progress month is not treated as a completed retirement input');
+  assert.equal(partialMonthPlan.monthlyContributions, 100);
 
   const fasterSaver = calculateFire({
     ...store,

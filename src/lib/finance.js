@@ -1373,16 +1373,23 @@ function trailingPostedTransactionWindow(store) {
   const posted = (store.transactions || [])
     .filter((transaction) => !transaction.pending && !transaction.excluded && /^\d{4}-\d{2}-\d{2}$/.test(String(transaction.date || '')))
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  if (!posted.length) return { transactions: [], months: [] };
+  // A partial current month has not had a full chance to receive paychecks,
+  // bills, or contributions. Retirement inputs use only completed months.
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const mostRecentPostedMonth = monthId(posted.at(-1).date);
+  const completed = mostRecentPostedMonth === currentMonth
+    ? posted.filter((transaction) => monthId(transaction.date) < currentMonth)
+    : posted;
+  if (!completed.length) return { transactions: [], months: [] };
 
-  const latest = new Date(`${monthId(posted.at(-1).date)}-01T12:00:00`);
+  const latest = new Date(`${monthId(completed.at(-1).date)}-01T12:00:00`);
   const start = new Date(latest);
   start.setMonth(start.getMonth() - 11);
   const startMonth = start.toISOString().slice(0, 7);
-  const latestMonth = latest.toISOString().slice(0, 7);
-  const transactions = posted.filter((transaction) => {
+  const windowEndMonth = latest.toISOString().slice(0, 7);
+  const transactions = completed.filter((transaction) => {
     const month = monthId(transaction.date);
-    return month >= startMonth && month <= latestMonth;
+    return month >= startMonth && month <= windowEndMonth;
   });
   return { transactions, months: [...new Set(transactions.map((transaction) => monthId(transaction.date)))].sort() };
 }
@@ -1392,17 +1399,6 @@ function median(values) {
   const sorted = [...values].sort((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);
   return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
-}
-
-function trimmedMean(values) {
-  if (!values.length) return 0;
-  // With five or more observed months, remove one high and low month for
-  // every ten. This preserves a normal contribution cadence while preventing
-  // a bonus, rollover, or one-off transfer from driving a long-term forecast.
-  const sorted = [...values].sort((a, b) => a - b);
-  const trim = sorted.length >= 5 ? Math.max(1, Math.floor(sorted.length / 10)) : 0;
-  const retained = sorted.slice(trim, sorted.length - trim);
-  return retained.reduce((sum, value) => sum + value, 0) / retained.length;
 }
 
 export function annualizedLivingSpend(store) {
@@ -1422,7 +1418,9 @@ export function annualizedLivingSpend(store) {
 function annualizedContributions(store, buckets = ['savings', 'investments']) {
   const { transactions, months } = trailingPostedTransactionWindow(store);
   if (!months.length) return { annualContributions: 0, monthlyContributions: 0, monthsObserved: 0 };
-  const monthlyContributions = trimmedMean(months.map((month) => transactions
+  // Median describes a typical observed month. It intentionally avoids
+  // presenting a bonus, rollover, or irregular transfer as a recurring pace.
+  const monthlyContributions = median(months.map((month) => transactions
     .filter((transaction) => monthId(transaction.date) === month && Number(transaction.amount || 0) > 0 && buckets.includes(transaction.bucket))
     .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0)));
   return { annualContributions: monthlyContributions * 12, monthlyContributions, monthsObserved: months.length };

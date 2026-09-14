@@ -897,7 +897,7 @@ test('retirement milestones explain the planning terms on demand @critical', asy
   await expect(page.locator('#retirementInfoTitle')).toHaveText('Coast Financial Independence');
   await expect(page.locator('#retirementInfoDescription')).toHaveText('The amount you need invested today so that, without contributing any more, it can grow enough to fund your retirement by your target age.');
   await expect(page.locator('#retirementInfoTargetLabel')).toHaveText('Amount needed now');
-  await expect(page.locator('#retirementInfoTargetContext')).toHaveText(/\$[\d,]+\/mo current lifestyle/);
+  await expect(page.locator('#retirementInfoTargetContext')).toHaveText(/Current lifestyle · \$[\d,]+\/mo/);
   await expect(page.locator('#retirementInfoTimingLabel')).toHaveText(/At your current pace|Your Coast FI status/);
   await expect(page.locator('#retirementInfoTimingContext')).toHaveText(/Saving & investing · \$[\d,]+\/mo/);
   await expect(page.locator('#retirementInfoTiming')).toHaveText(/Already reached|Est\. [A-Z][a-z]{2} \d{4}|Set a saving pace/);
