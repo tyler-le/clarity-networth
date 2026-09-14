@@ -1004,3 +1004,6 @@ html[data-theme="dark"] :is(
   .account-detail > i,
   .account-rename
 ) { color: var(--muted); }
+
+/* Keep the two retirement planning inputs easy to scan independently. */
+.retirement-inputs { display: grid; gap: 2px; }
