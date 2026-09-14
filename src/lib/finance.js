@@ -1375,6 +1375,7 @@ function trailingPostedTransactionWindow(store) {
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
   // A partial current month has not had a full chance to receive paychecks,
   // bills, or contributions. Retirement inputs use only completed months.
+  if (!posted.length) return { transactions: [], months: [] };
   const currentMonth = new Date().toISOString().slice(0, 7);
   const mostRecentPostedMonth = monthId(posted.at(-1).date);
   const completed = mostRecentPostedMonth === currentMonth
@@ -1403,7 +1404,15 @@ function median(values) {
 
 export function annualizedLivingSpend(store) {
   const { transactions, months } = trailingPostedTransactionWindow(store);
-  if (!months.length) return { annualSpend: 0, monthlyAverage: 0, monthsObserved: 0 };
+  if (!months.length) {
+    return {
+      annualSpend: 0,
+      monthlyAverage: 0,
+      essentialAnnualSpend: 0,
+      essentialMonthlySpend: 0,
+      monthsObserved: 0
+    };
+  }
   const monthlySpend = months.map((month) => transactions
     .filter((transaction) => monthId(transaction.date) === month && Number(transaction.amount || 0) > 0 && (transaction.bucket === 'fixed' || transaction.bucket === 'guilt_free'))
     .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0));

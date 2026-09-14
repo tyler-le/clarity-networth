@@ -951,6 +951,10 @@ test('retirement presets calculate coast, lean, standard, fat, and a projected r
   assert.ok(Number.isFinite(noPortfolioWithdrawals.projectedAtRetirement));
   assert.ok(Number.isFinite(noPortfolioWithdrawals.lifestyles[0].target), '0% withdrawal does not produce an infinite essentials target');
 
+  const noHistoryPlan = calculateFire({ ...store, transactions: [] }, 100000);
+  assert.equal(noHistoryPlan.monthlyContributions, 0, 'an account without posted transactions has no observed saving pace');
+  assert.equal(noHistoryPlan.essentialMonthlySpend, 0, 'an account without posted transactions has no observed essential spending');
+
   const outlierResistantPlan = calculateFire({
     ...store,
     transactions: [
