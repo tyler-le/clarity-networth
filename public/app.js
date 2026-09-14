@@ -2267,7 +2267,7 @@ function openRetirementMilestone(name) {
   $('#retirementInfoTitle').textContent = details.title;
   $('#retirementInfoDescription').textContent = details.description;
   $('#retirementInfoValue').textContent = fmt.format(details.value || 0);
-  $('#retirementInfoTargetLabel').textContent = name === 'coast' ? 'To stop contributing today' : `Needed by age ${plan.retirementAge}`;
+  $('#retirementInfoTargetLabel').textContent = name === 'coast' ? 'Amount needed now' : `Needed by age ${plan.retirementAge}`;
   $('#retirementInfoTimingLabel').textContent = name === 'coast'
     ? (milestone?.complete ? 'Your Coast FI status' : 'At your current saving pace')
     : 'Estimated timing';

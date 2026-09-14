@@ -895,7 +895,7 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await expect(page.locator('#retirementInfoDialog')).toHaveAttribute('open', '');
   await expect(page.locator('#retirementInfoTitle')).toHaveText('Coast Financial Independence');
   await expect(page.locator('#retirementInfoDescription')).toHaveText('The amount you need invested today so that, without contributing any more, it can grow enough to fund your retirement by your target age.');
-  await expect(page.locator('#retirementInfoTargetLabel')).toHaveText('To stop contributing today');
+  await expect(page.locator('#retirementInfoTargetLabel')).toHaveText('Amount needed now');
   await expect(page.locator('#retirementInfoTimingLabel')).toHaveText(/At your current saving pace|Your Coast FI status/);
   await expect(page.locator('#retirementInfoTiming')).toHaveText(/Already reached|Est\. [A-Z][a-z]{2} \d{4}|Set a saving pace/);
 });
