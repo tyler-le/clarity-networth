@@ -2275,10 +2275,16 @@ function openRetirementMilestone(name) {
   $('#retirementInfoValue').textContent = fmt.format(details.value || 0);
   $('#retirementInfoTargetLabel').textContent = name === 'coast' ? 'Amount needed now' : `Needed by age ${plan.retirementAge}`;
   const monthlyContributions = Math.max(0, Number(plan.monthlyContributions || 0));
-  $('#retirementInfoTimingLabel').textContent = name === 'coast'
-    ? (milestone?.complete
-      ? 'Your Coast FI status'
-      : (monthlyContributions ? `At your current pace · ${fmt.format(monthlyContributions)}/mo` : 'At your current saving pace'))
+  const monthlySpend = Math.max(0, Number(plan.monthlySpend || 0));
+  const connectsTargetAndPace = name === 'coast' || name === 'standard';
+  const targetContext = $('#retirementInfoTargetContext');
+  targetContext.hidden = !connectsTargetAndPace || monthlySpend <= 0;
+  targetContext.textContent = monthlySpend ? `${fmt.format(monthlySpend)}/mo current lifestyle` : '';
+  const timingContext = $('#retirementInfoTimingContext');
+  timingContext.hidden = !connectsTargetAndPace || monthlyContributions <= 0;
+  timingContext.textContent = monthlyContributions ? `Saving & investing · ${fmt.format(monthlyContributions)}/mo` : '';
+  $('#retirementInfoTimingLabel').textContent = connectsTargetAndPace
+    ? (milestone?.complete ? (name === 'coast' ? 'Your Coast FI status' : 'Your FI status') : 'At your current pace')
     : 'Estimated timing';
   $('#retirementInfoTiming').textContent = timing;
   $('#retirementInfoDialog').showModal();
