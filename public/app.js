@@ -1824,7 +1824,7 @@ function renderRetirement(data) {
   const contributionPace = $('#retirementContributionPace');
   contributionPace.hidden = monthlyContributions <= 0;
   contributionPace.textContent = monthlyContributions
-    ? `Based on ${fmt.format(monthlyContributions)} a month going toward savings & investments`
+    ? `Saving & investing · ${fmt.format(monthlyContributions)}/mo`
     : '';
   $('#retirementAgeChip').textContent = `${data.yearsToRetirement} years to go`;
   const coverage = $('#retirementCoverage');
