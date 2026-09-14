@@ -861,8 +861,10 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await page.locator('#retirementInfoClose').click();
   await expect(page.locator('#retirementCoverage')).toHaveText('12 mo. tracked');
   await expect(page.locator('#retirementSpendingTargetsCard')).not.toHaveAttribute('open', '');
+  await expect(page.locator('#retirementSpendingSummary')).toContainText('Based on $');
   await page.locator('#retirementSpendingTargetsCard > summary').click();
-  await expect(page.locator('#retirementSpendContext')).toContainText('Needed by age 65, in today’s dollars · Based on your last 12 months of spending.');
+  await expect(page.locator('#retirementSpendContext')).toContainText('We use your $');
+  await expect(page.locator('#retirementSpendContext')).toContainText('to calculate your retirement targets.');
   await page.locator('#retirementAdjust summary').click();
   await expect(page.locator('#retirementForm [name="withdrawal_rate"]')).toHaveAttribute('min', '0');
   await expect(page.locator('#retirementForm [name="withdrawal_rate"]')).toHaveAttribute('max', '20');
@@ -893,7 +895,8 @@ test('retirement milestones explain the planning terms on demand', async ({ page
   await expect(page.locator('#retirementInfoDialog')).toHaveAttribute('open', '');
   await expect(page.locator('#retirementInfoTitle')).toHaveText('What is Coast independence?');
   await expect(page.locator('#retirementInfoDescription')).toHaveText('The amount you need invested today so that, without contributing any more, it can grow enough to fund your retirement by your target age.');
-  await expect(page.locator('#retirementInfoTargetLabel')).toHaveText('Needed today · Can grow to age 65');
+  await expect(page.locator('#retirementInfoTargetLabel')).toHaveText('To stop contributing today');
+  await expect(page.locator('#retirementInfoTimingLabel')).toHaveText(/At your current saving pace|Your Coast FI status/);
   await expect(page.locator('#retirementInfoTiming')).toHaveText(/Already reached|Est\. [A-Z][a-z]{2} \d{4}|Set a saving pace/);
 });
 
@@ -907,12 +910,14 @@ test('the retirement ladder remains legible and usable on a phone', async ({ pag
     return {
       overflows: path.scrollWidth > path.clientWidth + 1,
       cardCount: cards.length,
-      usableCardWidth: cards.every((card) => card.getBoundingClientRect().width >= pathRect.width * .42)
+      usableCardWidth: cards.every((card) => card.getBoundingClientRect().width >= pathRect.width * .9),
+      pathColumns: getComputedStyle(path).gridTemplateColumns.trim().split(/\s+/).length
     };
   });
   expect(layout.overflows).toBe(false);
   expect(layout.cardCount).toBe(4);
   expect(layout.usableCardWidth).toBe(true);
+  expect(layout.pathColumns).toBe(1);
   await page.locator('[data-retirement-milestone="coast"]').click();
   await expect(page.locator('#retirementInfoDialog')).toHaveAttribute('open', '');
 });

@@ -1825,7 +1825,12 @@ function renderRetirement(data) {
   const observedMonths = Number(data.monthsObserved || 0);
   coverage.hidden = observedMonths < 1;
   coverage.textContent = observedMonths ? `${observedMonths} mo. tracked` : '';
-  $('#retirementSpendContext').textContent = data.monthsObserved ? `Needed by age ${data.retirementAge}, in today’s dollars · Based on your last ${data.monthsObserved} month${data.monthsObserved === 1 ? '' : 's'} of spending.` : `Needed by age ${data.retirementAge}, in today’s dollars.`;
+  $('#retirementSpendingSummary').textContent = data.monthsObserved
+    ? `Based on ${fmt.format(data.essentialMonthlySpend || 0)} a month in essentials`
+    : 'Your essentials will shape these targets.';
+  $('#retirementSpendContext').textContent = data.monthsObserved
+    ? `We use your ${fmt.format(data.essentialMonthlySpend || 0)} monthly essentials average from the past ${data.monthsObserved} month${data.monthsObserved === 1 ? '' : 's'} to calculate your retirement targets.`
+    : 'Your targets will reflect your spending once there is enough history.';
   $('#retirementAssumption').textContent = `At retirement · ${data.withdrawalRate}% withdrawal`;
   const estimatedLabel = (months, complete) => {
     if (complete) return 'Reached';
@@ -2262,7 +2267,10 @@ function openRetirementMilestone(name) {
   $('#retirementInfoTitle').textContent = details.title;
   $('#retirementInfoDescription').textContent = details.description;
   $('#retirementInfoValue').textContent = fmt.format(details.value || 0);
-  $('#retirementInfoTargetLabel').textContent = name === 'coast' ? `Needed today · Can grow to age ${plan.retirementAge}` : `Needed by age ${plan.retirementAge}`;
+  $('#retirementInfoTargetLabel').textContent = name === 'coast' ? 'To stop contributing today' : `Needed by age ${plan.retirementAge}`;
+  $('#retirementInfoTimingLabel').textContent = name === 'coast'
+    ? (milestone?.complete ? 'Your Coast FI status' : 'At your current saving pace')
+    : 'Estimated timing';
   $('#retirementInfoTiming').textContent = timing;
   $('#retirementInfoDialog').showModal();
 }
