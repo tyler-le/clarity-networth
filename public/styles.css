@@ -16,6 +16,10 @@
   --sankey-surface: #ffffff;
   --sankey-border: #e4e9e4;
   --danger: #a84444;
+  --warning: #9a6b22;
+  --warning-soft: #fbf1dc;
+  --surface-subtle: #fbfcfa;
+  --control: #f4f6f2;
   --shadow: 0 10px 30px rgba(30, 38, 31, 0.05);
 }
 html[data-theme="dark"] {
@@ -41,6 +45,10 @@ html[data-theme="dark"] {
   --sankey-surface: #202720;
   --sankey-border: #354238;
   --danger: #eb9691;
+  --warning: #dfb566;
+  --warning-soft: #3a3020;
+  --surface-subtle: #222522;
+  --control: #262d27;
   --shadow: 0 10px 30px rgba(0,0,0,.16);
 }
 * { box-sizing: border-box; }
@@ -799,6 +807,35 @@ html[data-theme="dark"] :is(.onboarding-preview-banner, .onboarding-tab-cta) > d
 html[data-theme="dark"] :is(.onboarding-preview-banner, .onboarding-tab-cta) strong { color: var(--ink); }
 html[data-theme="dark"] :is(.onboarding-preview-banner, .onboarding-tab-cta) span { color: #aeb9b0; }
 html[data-theme="dark"] :is(.onboarding-preview-banner, .onboarding-tab-cta) .primary { background: #287a4d; color: #fff; }
+
+/* Keep infrequent dark states inside the same token system as the app shell.
+   These rules are deliberately last: several legacy component rules carry
+   light-only literals with equal specificity. */
+html[data-theme="dark"] .networth-movement-inline[data-tone="watch"] strong,
+html[data-theme="dark"] .overview-movement[data-tone="watch"] strong,
+html[data-theme="dark"] .connection-status.stale,
+html[data-theme="dark"] .connection-status.attention,
+html[data-theme="dark"] .account-connection-action { color: var(--warning); }
+html[data-theme="dark"] .account-connection-action { background: var(--warning-soft); }
+html[data-theme="dark"] .connection-status.stale::before,
+html[data-theme="dark"] .connection-status.attention::before { background: var(--warning); }
+html[data-theme="dark"] .investment-account-value small.negative { color: var(--outflow); }
+html[data-theme="dark"] .spending-transaction-controls { background: var(--surface-subtle); }
+html[data-theme="dark"] .spending-transaction-controls select { background: var(--card); color: var(--ink); }
+html[data-theme="dark"] .holding-history-metrics > div { background: var(--surface-subtle); }
+html[data-theme="dark"] .holding-history-tabs,
+html[data-theme="dark"] .holding-history-range,
+html[data-theme="dark"] .range-control,
+html[data-theme="dark"] .allocation-toggle { background: var(--control); }
+html[data-theme="dark"] .holding-history-tabs button.active,
+html[data-theme="dark"] .holding-history-range button.active,
+html[data-theme="dark"] .range-control button.active,
+html[data-theme="dark"] .allocation-toggle button.active { background: var(--card); color: var(--ink); }
+html[data-theme="dark"] .holding-history-skeleton i {
+  background: linear-gradient(90deg, var(--control) 25%, var(--surface-subtle) 42%, var(--control) 58%);
+}
+html[data-theme="dark"] .debt-rate-list input { color: var(--ink); }
+
 /* Public legal pages deliberately use the same quiet visual system as the app. */
 .legal-page { width: min(680px, calc(100% - 40px)); margin: clamp(44px, 10vh, 96px) auto; color: var(--ink); line-height: 1.65; }
 .legal-page h1 { margin: 16px 0 28px; font-size: clamp(2rem, 6vw, 3.4rem); letter-spacing: -.055em; }
@@ -867,3 +904,87 @@ html[data-theme="dark"] .retirement-milestone.complete, html[data-theme="dark"] 
 .account-history-activity b { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .account-history-activity small { color: var(--muted); font-size: 10px; }
 .account-history-activity strong { flex: 0 0 auto; font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* These follow the retirement component's late light-mode refinements so
+   their dark equivalents cannot be displaced by CSS order. */
+html[data-theme="dark"] .retirement-next-milestone {
+  border-color: #39453d;
+  background: #222a24;
+  color: var(--ink);
+  box-shadow: none;
+}
+html[data-theme="dark"] .retirement-next-milestone:hover { border-color: #52705a; background: #263128; }
+html[data-theme="dark"] .retirement-next-milestone small { color: var(--muted); }
+html[data-theme="dark"] .retirement-next-milestone > b { color: #a7cfb1; }
+html[data-theme="dark"] .retirement-age-chip,
+html[data-theme="dark"] .retirement-coverage-chip,
+html[data-theme="dark"] .retirement-assumption { background: #262d27; color: #aeb9b0; }
+html[data-theme="dark"] .retirement-milestone,
+html[data-theme="dark"] .retirement-milestone.complete { border-color: #353e37; background: #1f2521; box-shadow: none; }
+html[data-theme="dark"] .retirement-milestone[data-retirement-milestone]:hover { border-color: #4c6653; background: #222a24; box-shadow: none; }
+html[data-theme="dark"] .retirement-milestone-name { color: #aeb9b0; }
+html[data-theme="dark"] .retirement-milestone i { background: #343d36; }
+html[data-theme="dark"] .retirement-milestone em { background: #27362d; color: #a7cfb1; }
+
+/* App-wide dark-surface hierarchy. Neutral layers do the organizational work;
+   green, coral, and blue remain reserved for meaning rather than decoration. */
+html[data-theme="dark"] :is(
+  .monthly-review,
+  .connection-attention,
+  .retirement-form,
+  .transaction-toolbar,
+  .spending-transaction-controls,
+  .holding-detail,
+  .holdings-more,
+  .account-preview-group,
+  .account-group-head,
+  .account-group-more,
+  .profile-shell .sign-out-button,
+  .holding-history-metrics > div
+) {
+  border-color: var(--line);
+  background: var(--surface-subtle);
+  color: var(--ink);
+  box-shadow: none;
+}
+html[data-theme="dark"] :is(
+  .range-control,
+  .allocation-toggle,
+  .holding-history-tabs,
+  .holding-history-range,
+  .theme-toggle i
+) { background: var(--control); }
+html[data-theme="dark"] :is(
+  .range-control button.active,
+  .allocation-toggle button.active,
+  .holding-history-tabs button.active,
+  .holding-history-range button.active
+) { background: var(--card); color: var(--ink); }
+html[data-theme="dark"] :is(
+  input[type="month"],
+  .search,
+  .holdings-head select,
+  .holding-detail select,
+  .spending-transaction-controls select,
+  .manual-holding-dialog input,
+  .manual-holding-dialog select,
+  #manualAccountDialog input,
+  #manualAccountDialog select,
+  #goalDialog input,
+  #goalDialog select
+) { border-color: var(--line); background: var(--surface-subtle); color: var(--ink); }
+html[data-theme="dark"] :is(
+  .goal-progress,
+  .retirement-milestone i,
+  .holding-weight > i,
+  .allocation-row i
+) { background: #343d36; }
+html[data-theme="dark"] :is(
+  .retirement-coverage-chip,
+  .demo-setting-status
+) { background: #262d27; color: #aeb9b0; }
+html[data-theme="dark"] .profile-shell .sign-out-button:hover {
+  color: #a7cfb1;
+  background: #263128;
+  box-shadow: inset 0 0 0 1px #3c5141;
+}

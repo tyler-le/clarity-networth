@@ -946,7 +946,10 @@ test('dark mode is a calm, persistent profile setting', async ({ page }) => {
   // Dark surfaces are deliberately neutral rather than green-tinted, so the
   // accent color keeps its visual meaning.
   await expect(page.locator('.investment-card')).toHaveCSS('background-color', 'rgb(28, 31, 29)');
-  await expect(page.locator('#investmentTotal')).toHaveCSS('color', 'rgb(240, 244, 240)');
+  await expect(page.locator('#investmentTotal')).toHaveCSS('color', 'rgb(217, 224, 218)');
+  await goToView(page, 'retirement');
+  await expect(page.locator('#retirementNextMilestone')).toHaveCSS('background-color', 'rgb(34, 42, 36)');
+  await expect(page.locator('#retirementCoverage')).toHaveCSS('background-color', 'rgb(38, 45, 39)');
   await goToView(page, 'accounts');
   await expect(page.locator('#connectButton')).toHaveCSS('background-color', 'rgb(45, 116, 74)');
   await expect(page.locator('#profileButton')).toHaveCSS('background-color', 'rgb(32, 39, 32)');
