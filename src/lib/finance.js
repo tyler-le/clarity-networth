@@ -1203,8 +1203,12 @@ function spendingCategory(transaction) {
 }
 
 function cashFlowDetail(transaction) {
-  if (transaction.bucket === 'savings') return { key: 'savings', label: 'Save', group: 'savings' };
-  if (transaction.bucket === 'investments') return { key: 'investments', label: 'Invest', group: 'investments' };
+  // Savings and investing are one post-tax allocation in the Sankey. Keep
+  // the underlying bucket for summaries, but expose one canonical flow key so
+  // the activity filter cannot drift into separate “Save” and “Invest” nodes.
+  if (transaction.bucket === 'savings' || transaction.bucket === 'investments') {
+    return { key: 'save_invest', label: 'Saved & invested', group: 'save_invest' };
+  }
   const primary = String(transaction.pfc_primary || '').toUpperCase();
   const detailed = String(transaction.pfc_detailed || '').toUpperCase();
   const labels = {
@@ -1338,6 +1342,44 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
       flowGroup: flow.group
     });
   }
+  // Provider-confirmed transfers do not belong in take-home spending, but
+  // they are still real saving/investing activity. Surface them in the
+  // activity drawer and Sankey branch without adding them to actual spend.
+  const transactionRowIds = new Set(transactionRows.map((row) => row.id).filter(Boolean));
+  const accountById = new Map((store.accounts || []).map((account) => [String(account.plaid_account_id || account.id), account]));
+  const contributionTransactions = store.transactions.filter((transaction) => {
+    if (transaction.pending || transaction.excluded || transaction.date < startDate || transaction.date > endDate) return false;
+    return (Number(transaction.amount || 0) > 0 && ['savings', 'investments'].includes(transaction.bucket))
+      || Number(transaction.investment_contribution_amount || 0) > 0;
+  });
+  let savedInvested = 0;
+  for (const transaction of contributionTransactions) {
+    // The Sankey is a take-home cash-flow view. Payroll deferrals and moves
+    // within an already-invested account belong in the investment ledger, not
+    // in post-tax money-in / money-out reconciliation.
+    const sourceAccount = accountById.get(String(transaction.account_id || ''));
+    const sourceIsInvestment = transaction.source === 'investment_transaction'
+      || sourceAccount?.type === 'investment'
+      || (String(sourceAccount?.subtype || '').toLowerCase() === 'hsa' && !transaction.investment_contribution_account_id);
+    if (sourceIsInvestment) continue;
+    const amount = Number(transaction.investment_contribution_amount || transaction.amount || 0);
+    if (!(amount > 0)) continue;
+    savedInvested += amount;
+    const id = transaction.id || transaction.plaid_transaction_id;
+    if (id && transactionRowIds.has(id)) continue;
+    if (id) transactionRowIds.add(id);
+    transactionRows.push({
+      id,
+      name: transaction.merchant_name || transaction.name || 'Saved or invested',
+      date: transaction.date,
+      amount,
+      category: 'Saved & invested',
+      bucket: transaction.source === 'investment_transaction' ? 'pre_tax_retirement' : transaction.bucket || 'investments',
+      flowKey: 'save_invest',
+      flowLabel: 'Saved & invested',
+      flowGroup: 'save_invest'
+    });
+  }
   const total = [...categories.values()].reduce((sum, amount) => sum + amount, 0);
   const categoryRows = [...categories.entries()]
     .map(([name, amount]) => ({ name, amount, share: total ? amount / total : 0 }))
@@ -1362,7 +1404,7 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
   const incomeSources = [...incomeSourceMap.values()].sort((a, b) => b.amount - a.amount);
   const preTaxRetirement = [...monthlyPreTaxRetirement.values()].reduce((sum, amount) => sum + amount, 0);
   const actualSpendCategories = [...actualSpendCategoryMap.values()].sort((a, b) => b.amount - a.amount);
-  return { range, startDate, endDate, completedMonths, total, income, incomeSources, actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, preTaxRetirement, monthlyAverage: total / monthCount, categories: categoryRows, topMerchants, monthly: monthlyRows, transactions: transactionRows };
+  return { range, startDate, endDate, completedMonths, total, income, incomeSources, actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, savedInvested, preTaxRetirement, monthlyAverage: total / monthCount, categories: categoryRows, topMerchants, monthly: monthlyRows, transactions: transactionRows };
 }
 
 function monthId(dateString) {

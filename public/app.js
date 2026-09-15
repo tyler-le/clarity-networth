@@ -830,10 +830,10 @@ function spendingForSelectedMonth(data) {
   const actualSpend = planTransactions.filter((transaction) => !['savings', 'investments'].includes(transaction.bucket)).reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const savings = planTransactions.filter((transaction) => transaction.bucket === 'savings').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const investments = planTransactions.filter((transaction) => transaction.bucket === 'investments').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
-  const savingsAndInvestments = planTransactions.filter((transaction) => ['savings', 'investments'].includes(transaction.bucket)).reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  const savingsAndInvestments = transactions.filter((transaction) => transaction.flowGroup === 'save_invest').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const actualSpendCategories = flowCategoryRows(planTransactions.filter((transaction) => transaction.flowGroup === 'actual_spend'));
   const preTaxRetirement = Number((data.monthly || []).find((row) => row.month === state.spendingMonth)?.pre_tax_retirement || 0);
-  return { ...data, total, income, incomeSources, actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, preTaxRetirement, monthlyAverage: total, categories: allocationRows(planTransactions), transactions };
+  return { ...data, total, income, incomeSources, actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, savedInvested: savingsAndInvestments, preTaxRetirement, monthlyAverage: total, categories: allocationRows(planTransactions), transactions };
 }
 
 function flowCategoryRows(transactions) {
@@ -901,12 +901,12 @@ function renderSpendingTrend(data) {
 }
 
 function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false) {
-  const income = Number(data.income || 0), actualSpend = Number(data.actualSpend || 0), savings = Number(data.savings || 0), investments = Number(data.investments || 0);
+  const income = Number(data.income || 0), actualSpend = Number(data.actualSpend || 0), savedInvested = Number(data.savedInvested ?? data.savingsAndInvestments ?? 0);
   // The interface rounds amounts to whole dollars. Do not render a node that
   // would read as "$0" after that rounding; it adds visual noise and implies
   // a meaningful flow where there is none.
   const hasVisibleAmount = (value) => Math.abs(Number(value || 0)) >= .5;
-  if (![income, actualSpend, savings, investments].some(hasVisibleAmount)) { el.innerHTML = ''; return; }
+  if (![income, actualSpend, savedInvested].some(hasVisibleAmount)) { el.innerHTML = ''; return; }
   // Use the chart's actual container, not a device label. This survives
   // tablets, split-screen, zoom, sidebars, and window resizing.
   const availableWidth = el.clientWidth;
@@ -926,8 +926,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const rowHeight = compact ? 50 : 46, rowStep = compact ? 57 : 53;
   const middleNodes = [
     { key: 'actual_spend', label: 'Actual spend', value: actualSpend, color: 'var(--outflow)' },
-    { key: 'savings', label: 'Save', value: savings, color: 'var(--save)' },
-    { key: 'investments', label: 'Invest', value: investments, color: 'var(--invest)' }
+    { key: 'save_invest', label: 'Saved & invested', value: savedInvested, color: 'var(--invest)' }
   ].filter((node) => hasVisibleAmount(node.value));
   const withShare = (rows, total, valueKey = 'amount') => rows.map((row) => ({
     ...row,
@@ -983,7 +982,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const destinationX = compact ? 0 : tablet ? 488 : 758;
   const colorFor = (key, fallback) => ({
     income_paychecks: 'var(--income)', income_interest: '#b08a4a', income_dividends: '#8a71a5', income_benefits: '#5e91a2', income_business: '#5d9b81', money_in_other: '#7893a8',
-    actual_spend: 'var(--outflow)', savings: 'var(--save)', investments: 'var(--invest)',
+    actual_spend: 'var(--outflow)', save_invest: 'var(--invest)', savings: 'var(--save)', investments: 'var(--invest)',
     housing_bills: '#c87862', food_dining: '#c69656', shopping: '#9a78a2', transport: '#6996a7', health: '#6a9b88', insurance: '#728aac', services: '#8d87aa', entertainment: '#b47b92', travel: '#6499a0', education: '#8d9a5f', personal_care: '#b98675', home: '#739585', taxes: '#ab8066', civic: '#7d91a4', fees: '#9a8f81', uncategorized: '#9a8f81'
   }[key] || fallback);
   const block = (x, y, w, color, label, value, share, category = '', side = 'left') => {
@@ -1127,7 +1126,7 @@ function renderSpendingTransactions(data) {
   const categories = [...new Map((data.transactions || []).map((transaction) => [transaction.flowKey || transaction.category, transaction.flowLabel || transaction.category])).entries()];
   const filterKeys = new Set(categories.map(([key]) => key));
   if (state.spendingCategory !== 'all' && !['actual_spend', 'save_invest'].includes(state.spendingCategory) && !filterKeys.has(state.spendingCategory)) state.spendingCategory = 'all';
-  filter.innerHTML = `<option value="all">All activity</option><option value="actual_spend">Actual spend</option><option value="save_invest">Save & invest</option>${categories.map(([key, name]) => `<option value="${escapeHtml(key)}">${escapeHtml(name)}</option>`).join('')}`;
+  filter.innerHTML = `<option value="all">All activity</option><option value="actual_spend">Actual spend</option><option value="save_invest">Saved & invested</option>${categories.map(([key, name]) => `<option value="${escapeHtml(key)}">${escapeHtml(name)}</option>`).join('')}`;
   filter.value = state.spendingCategory;
   $('#spendingSort').value = state.spendingSort;
   let rows = (data.transactions || []).filter((transaction) => {
@@ -2519,7 +2518,7 @@ function openCashflowDialog() {
 function cashflowActivityLabel(data, category) {
   if (category === 'all') return 'Cash flow activity';
   const transaction = (data.transactions || []).find((row) => row.flowKey === category || row.flowGroup === category);
-  return transaction?.flowLabel || ({ actual_spend: 'Actual spend', save_invest: 'Save & invest', savings: 'Savings', investments: 'Investments', income: 'Money in' }[category] || 'Cash flow activity');
+  return transaction?.flowLabel || ({ actual_spend: 'Actual spend', save_invest: 'Saved & invested', savings: 'Saved & invested', investments: 'Saved & invested', income: 'Money in' }[category] || 'Cash flow activity');
 }
 
 function cashflowActivityCategories(data) {

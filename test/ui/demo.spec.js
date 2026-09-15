@@ -315,10 +315,14 @@ test('cash-flow diagram pairs dollar amounts with meaningful secondary percentag
   await openDemo(page);
   await goToView(page, 'spending');
   await expect(page.locator('#cashflowSankey')).toContainText('Paychecks');
+  // Savings and investing are one post-tax allocation in the primary flow;
+  // the detail drawer should not expose separate Save/Invest nodes.
+  await expect(page.locator('#cashflowSankey')).toContainText('Saved');
+  await expect(page.locator('#cashflowSankey')).not.toContainText(/\bSave\b(?!d)/);
+  await expect(page.locator('#cashflowSankey')).not.toContainText(/\bInvest\b(?!ed)/);
   await expect(page.locator('#cashflowSankey')).toContainText('Interest');
   await expect(page.locator('#cashflowSankey')).toContainText('$');
-  await expect(page.locator('#cashflowSankey [data-cashflow-category="savings"]')).toBeVisible();
-  await expect(page.locator('#cashflowSankey [data-cashflow-category="investments"]')).toBeVisible();
+  await expect(page.locator('#cashflowSankey [data-cashflow-category="save_invest"]')).toBeVisible();
   const percentages = await page.locator('#cashflowSankey .cashflow-share').allTextContents();
   expect(percentages.length).toBeGreaterThan(0);
   expect(percentages.every((value) => /^\d{1,3}%$/.test(value) && Number(value.slice(0, -1)) <= 100)).toBe(true);

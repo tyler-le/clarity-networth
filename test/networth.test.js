@@ -235,7 +235,25 @@ test('cash flow separates actual spending details from saving and investing', ()
   assert.equal(result.savings, 250);
   assert.equal(result.investments, 500);
   assert.equal(result.savingsAndInvestments, 750);
+  assert.equal(result.savedInvested, 750);
   assert.deepEqual(result.actualSpendCategories.map((row) => [row.key, row.amount]), [['housing_bills', 1800], ['food_dining', 240], ['shopping', 90]]);
+});
+
+test('post-tax Sankey saving excludes payroll deferrals and moves within invested accounts', () => {
+  const store = {
+    accounts: [
+      { id: 'checking', type: 'depository', subtype: 'checking' },
+      { id: 'brokerage', type: 'investment', subtype: 'brokerage' }
+    ],
+    transactions: [
+      { id: 'cash-to-brokerage', date: '2026-09-01', account_id: 'checking', amount: 500, bucket: 'investments', pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS' },
+      { id: 'brokerage-rebalance', date: '2026-09-02', account_id: 'brokerage', amount: 800, bucket: 'investments', pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS' },
+      { id: 'payroll-deferral', date: '2026-09-03', account_id: 'brokerage', amount: 1000, bucket: 'investments', source: 'investment_transaction' }
+    ]
+  };
+  const result = spendingSummary(store, '1m', new Date('2026-09-05T12:00:00'));
+  assert.equal(result.savedInvested, 500);
+  assert.deepEqual(result.transactions.filter((row) => row.flowGroup === 'save_invest').map((row) => [row.id, row.amount]), [['cash-to-brokerage', 500]]);
 });
 
 test('investment contribution activity includes bank deposits and payroll retirement contributions', () => {
@@ -754,7 +772,7 @@ test('pre-tax retirement contributions remain visible without distorting take-ho
   assert.equal(result.savingsAndInvestments, 7000);
   assert.equal(result.preTaxRetirement, 7000);
   assert.equal(result.transactions.length, 2);
-  assert.equal(result.transactions.find((transaction) => transaction.name === 'Fidelity transfer').flowGroup, 'investments');
+  assert.equal(result.transactions.find((transaction) => transaction.name === 'Fidelity transfer').flowGroup, 'save_invest');
   assert.deepEqual(result.transactions.find((transaction) => transaction.flowKey === 'payroll_retirement'), {
     id: 'ira', name: 'IRA contribution', date: '2026-09-02', amount: 7000,
     category: 'Payroll retirement', bucket: 'pre_tax_retirement', flowKey: 'payroll_retirement', flowLabel: 'Payroll retirement', flowGroup: 'payroll_retirement'
