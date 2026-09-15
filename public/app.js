@@ -1034,7 +1034,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     paths += flow(bridgeX + bridgeW, bridgeY + rowHeight / 2, middleX, middleY.get(node.key) + rowHeight / 2, node.value, node.color, [bridgeNode.key, node.key]);
   });
   if (hasVisibleAmount(preTaxRetirement)) {
-    paths += flow(sourceX + sourceW, preTaxY + rowHeight / 2, middleX, preTaxY + rowHeight / 2, preTaxRetirement, 'var(--muted)').replace('class="cashflow-flow"', 'class="cashflow-flow cashflow-pretax-flow"');
+    paths += flow(sourceX + sourceW, preTaxY + rowHeight / 2, middleX, preTaxY + rowHeight / 2, preTaxRetirement, 'var(--muted)', ['payroll_retirement', 'pre_tax_retirement']).replace('class="cashflow-flow"', 'class="cashflow-flow cashflow-pretax-flow"');
   }
   let categories = '';
   categoryNodes.forEach((row, index) => {
