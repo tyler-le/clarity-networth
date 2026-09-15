@@ -531,7 +531,6 @@ html[data-theme="dark"] .profile-settings-panel { border-color: var(--line); bac
 .cashflow-sankey { height: 270px; gap: 10px; }
 .cashflow-sankey svg { overflow: visible; }
 .cashflow-flow { vector-effect: non-scaling-stroke; transition: stroke-opacity .16s ease, filter .16s ease; }
-.cashflow-pretax-flow { stroke-dasharray: 4 3; stroke-opacity: .38; }
 .cashflow-flow.is-muted { stroke-opacity: .055 !important; }
 .cashflow-flow.is-connected { stroke-opacity: .58 !important; filter: saturate(1.12); }
 .cashflow-target { transition: opacity .16s ease; }
