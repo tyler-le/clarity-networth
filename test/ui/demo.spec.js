@@ -318,6 +318,7 @@ test('cash-flow diagram pairs dollar amounts with meaningful secondary percentag
   // Savings and investing are one post-tax allocation in the primary flow;
   // the detail drawer should not expose separate Save/Invest nodes.
   await expect(page.locator('#cashflowSankey')).toContainText('Saved');
+  await expect(page.locator('#cashflowSankey')).toContainText('Pre-tax retirement');
   await expect(page.locator('#cashflowSankey')).not.toContainText(/\bSave\b(?!d)/);
   await expect(page.locator('#cashflowSankey')).not.toContainText(/\bInvest\b(?!ed)/);
   await expect(page.locator('#cashflowSankey')).toContainText('Interest');

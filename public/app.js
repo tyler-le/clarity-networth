@@ -901,12 +901,12 @@ function renderSpendingTrend(data) {
 }
 
 function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false) {
-  const income = Number(data.income || 0), actualSpend = Number(data.actualSpend || 0), savedInvested = Number(data.savedInvested ?? data.savingsAndInvestments ?? 0);
+  const income = Number(data.income || 0), actualSpend = Number(data.actualSpend || 0), savedInvested = Number(data.savedInvested ?? data.savingsAndInvestments ?? 0), preTaxRetirement = Number(data.preTaxRetirement || 0);
   // The interface rounds amounts to whole dollars. Do not render a node that
   // would read as "$0" after that rounding; it adds visual noise and implies
   // a meaningful flow where there is none.
   const hasVisibleAmount = (value) => Math.abs(Number(value || 0)) >= .5;
-  if (![income, actualSpend, savedInvested].some(hasVisibleAmount)) { el.innerHTML = ''; return; }
+  if (![income, actualSpend, savedInvested, preTaxRetirement].some(hasVisibleAmount)) { el.innerHTML = ''; return; }
   // Use the chart's actual container, not a device label. This survives
   // tablets, split-screen, zoom, sidebars, and window resizing.
   const availableWidth = el.clientWidth;
@@ -954,7 +954,11 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const categoryNodes = withShare(actualCategories, actualSpend);
   const bridgeNode = { key: 'period_funds', label: 'Money in', value: bridgeTotal, color: 'var(--income)' };
   const contentHeight = (rows) => rows.length ? (rows.length - 1) * rowStep + rowHeight : 0;
-  const height = Math.max(224, contentHeight(incomeNodes) + 16, contentHeight(allocationNodes) + 16, contentHeight(categoryNodes) + 16);
+  const primaryHeight = Math.max(224, contentHeight(incomeNodes) + 16, contentHeight(allocationNodes) + 16, contentHeight(categoryNodes) + 16);
+  // Pre-tax payroll deductions are real saving, but they are not take-home
+  // money. Give them a separate lane instead of forcing them into the main
+  // allocation percentages or implying that they came from net pay.
+  const height = primaryHeight + (hasVisibleAmount(preTaxRetirement) ? rowStep : 0);
   // A node must visibly meet its flow. Fixed wide, transparent hit areas made
   // the bands appear to stop short of their labels on larger screens. Size
   // each column to its actual labels and render it as a quiet tinted block.
@@ -1020,6 +1024,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const categoryStart = verticallyCenter(categoryNodes);
   const bridgeY = Math.max(8, (height - rowHeight) / 2);
   const middleY = new Map(allocationNodes.map((node, index) => [node.key, middleStart + index * rowStep]));
+  const preTaxY = primaryHeight + 2;
   let paths = '';
   incomeNodes.forEach((source, index) => {
     const y = sourceStart + index * rowStep;
@@ -1028,6 +1033,9 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   if (sourceTotal >= .5) allocationNodes.forEach((node) => {
     paths += flow(bridgeX + bridgeW, bridgeY + rowHeight / 2, middleX, middleY.get(node.key) + rowHeight / 2, node.value, node.color, [bridgeNode.key, node.key]);
   });
+  if (hasVisibleAmount(preTaxRetirement)) {
+    paths += flow(sourceX + sourceW, preTaxY + rowHeight / 2, middleX, preTaxY + rowHeight / 2, preTaxRetirement, 'var(--muted)').replace('class="cashflow-flow"', 'class="cashflow-flow cashflow-pretax-flow"');
+  }
   let categories = '';
   categoryNodes.forEach((row, index) => {
     const y = categoryStart + index * rowStep;
@@ -1048,8 +1056,11 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const sourceBlocks = incomeNodes.map((source, index) => block(sourceX, sourceStart + index * rowStep, sourceW, source.color || colorFor(source.key, 'var(--income)'), source.label, source.amount, source.share, source.key, 'right')).join('');
   const bridgeBlock = sourceTotal >= .5 ? block(bridgeX, bridgeY, bridgeW, bridgeNode.color, bridgeNode.label, bridgeNode.value, null, bridgeNode.key, 'left') : '';
   const middleBlocks = allocationNodes.map((node) => block(middleX, middleY.get(node.key), middleW, node.color, node.label, node.value, node.share, node.key, 'left')).join('');
+  const preTaxBlocks = hasVisibleAmount(preTaxRetirement)
+    ? `${block(sourceX, preTaxY, sourceW, 'var(--muted)', 'Payroll deductions', preTaxRetirement, null, 'payroll_retirement', 'right')}${block(middleX, preTaxY, middleW, 'var(--muted)', 'Pre-tax retirement', preTaxRetirement, null, 'payroll_retirement', 'left')}`
+    : '';
   el.classList.toggle('has-transaction-action', Boolean(transactionAction));
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="External money in flows into spending, saving, and investing">${paths}${sourceBlocks}${bridgeBlock}${middleBlocks}${categories}</svg>${categoryList}${more}${transactionAction}`;
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Take-home cash flow with separately reported pre-tax retirement contributions">${paths}${sourceBlocks}${bridgeBlock}${middleBlocks}${preTaxBlocks}${categories}</svg>${categoryList}${more}${transactionAction}`;
   // SVG focus delegation differs subtly across browsers. Bind directly as
   // well so keyboard focus always traces the same connected flow as hover.
   el.querySelectorAll('[data-cashflow-node]').forEach((node) => {
