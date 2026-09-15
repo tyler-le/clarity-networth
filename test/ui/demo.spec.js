@@ -439,6 +439,10 @@ test('cash-flow diagram stays readable and opens transactions in-app @critical',
   await expect(page.locator('#spendingTransactionsPanel')).not.toHaveAttribute('open', '');
   const activitySort = page.locator('#cashflowDialogContent [data-cashflow-activity-sort]');
   await expect(activitySort).toHaveValue('recent');
+  const activityCategories = page.locator('#cashflowDialogContent [data-cashflow-activity-category] option');
+  const activityCategoryLabels = await activityCategories.allTextContents();
+  expect(activityCategoryLabels.slice(1)).toEqual([...activityCategoryLabels.slice(1)].sort((left, right) => left.localeCompare(right)));
+  expect(activityCategoryLabels.filter((label) => label === 'Saved & invested')).toHaveLength(1);
   await activitySort.selectOption('largest');
   await expect(activitySort).toHaveValue('largest');
   const amounts = (await page.locator('#cashflowDialogContent .cashflow-activity-rows b').allTextContents())

@@ -1123,7 +1123,13 @@ function renderSpending(data) {
 
 function renderSpendingTransactions(data) {
   const filter = $('#spendingCategoryFilter');
-  const categories = [...new Map((data.transactions || []).map((transaction) => [transaction.flowKey || transaction.category, transaction.flowLabel || transaction.category])).entries()];
+  const categories = [...new Map((data.transactions || []).map((transaction) => {
+    const key = transaction.flowGroup === 'save_invest' ? 'save_invest' : transaction.flowKey || transaction.category;
+    const label = key === 'save_invest' ? 'Saved & invested' : transaction.flowLabel || transaction.category;
+    return [key, label];
+  })).entries()]
+    .filter(([key]) => !['actual_spend', 'save_invest'].includes(key))
+    .sort((left, right) => left[1].localeCompare(right[1]));
   const filterKeys = new Set(categories.map(([key]) => key));
   if (state.spendingCategory !== 'all' && !['actual_spend', 'save_invest'].includes(state.spendingCategory) && !filterKeys.has(state.spendingCategory)) state.spendingCategory = 'all';
   filter.innerHTML = `<option value="all">All activity</option><option value="actual_spend">Actual spend</option><option value="save_invest">Saved & invested</option>${categories.map(([key, name]) => `<option value="${escapeHtml(key)}">${escapeHtml(name)}</option>`).join('')}`;
@@ -2524,9 +2530,9 @@ function cashflowActivityLabel(data, category) {
 function cashflowActivityCategories(data) {
   const categories = new Map();
   for (const transaction of data.transactions || []) {
-    const key = transaction.flowKey || transaction.flowGroup;
+    const key = transaction.flowGroup === 'save_invest' ? 'save_invest' : transaction.flowKey || transaction.flowGroup;
     if (!key || categories.has(key)) continue;
-    categories.set(key, transaction.flowLabel || cashflowActivityLabel(data, key));
+    categories.set(key, key === 'save_invest' ? 'Saved & invested' : transaction.flowLabel || cashflowActivityLabel(data, key));
   }
   return [...categories.entries()]
     .map(([key, label]) => ({ key, label }))
