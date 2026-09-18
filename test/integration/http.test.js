@@ -185,7 +185,7 @@ integrationTest('repairs a miscategorized posted inbound credit before serving c
   writeStore({
     items: [], accounts: [], snapshots: [],
     transactions: [
-      { id: 'external-credit', plaid_transaction_id: 'external-credit', date: today, amount: -10_440.38, bucket: 'guilt_free', pfc_primary: 'GENERAL_MERCHANDISE', pfc_detailed: 'GENERAL_MERCHANDISE_ONLINE_MARKETPLACES', pending: false },
+      { id: 'external-credit', plaid_transaction_id: 'external-credit', date: today, amount: -10_440.38, bucket: 'guilt_free', pfc_primary: 'GENERAL_MERCHANDISE', pfc_detailed: 'GENERAL_MERCHANDISE_ONLINE_MARKETPLACES', merchant_name: 'Employer bonus', pending: false },
       { id: 'internal-transfer', plaid_transaction_id: 'internal-transfer', date: today, amount: -500, bucket: 'guilt_free', pfc_primary: 'TRANSFER_IN', pfc_detailed: 'TRANSFER_IN_INVESTMENT_AND_RETIREMENT_FUNDS', pending: false },
       { id: 'brokerage-contribution', plaid_transaction_id: 'brokerage-contribution', date: today, amount: 8_000, bucket: 'investments', pending: false }
     ]
