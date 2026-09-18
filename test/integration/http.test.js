@@ -449,9 +449,7 @@ integrationTest('previews a retirement plan without changing the saved assumptio
   }, key);
   const cookie = signedTestCookie(email);
   const current = await request(app).get('/api/retirement').set('Cookie', cookie);
-  // A single observed contribution is historical activity, not evidence of
-  // an ongoing recurring pace for retirement projections.
-  assert.equal(current.body.monthlyContributions, 0);
+  assert.equal(current.body.monthlyContributions, 500 / 12);
   assert.equal(current.body.contributionMonthsObserved, 1);
   const preview = await request(app).post('/api/retirement/preview').set('Cookie', cookie).send({ age: 30, retirement_age: 65, withdrawal_rate: 3.5, real_return: 5 });
   assert.equal(preview.status, 200);

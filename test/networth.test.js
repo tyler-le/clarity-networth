@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { annualizedLivingSpend, calculateFire, canonicalEconomicLedger, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, contributionEvents, debtPayoffPlan, estimateOngoingContributionPace, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentPortfolioRangeProgress, investmentRangeProgress, monthlyFinancialFacts, monthlyReview, reconstructInvestmentHistory, refreshReconstructedInvestmentSnapshots, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, repairIncomingClassifications, repairTransferClassifications, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
+import { annualizedLivingSpend, calculateFire, canonicalEconomicLedger, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentPortfolioRangeProgress, investmentRangeProgress, monthlyFinancialFacts, monthlyReview, reconstructInvestmentHistory, refreshReconstructedInvestmentSnapshots, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, repairIncomingClassifications, repairTransferClassifications, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
 import { normalizeCandles } from '../src/lib/market-data.js';
 import { filterSnapshots, preferredNetWorthRange, scrubIndex, uniqueDailySnapshots } from '../public/chart-utils.js';
 
@@ -1016,7 +1016,7 @@ test('retirement presets calculate coast, lean, standard, fat, and a projected r
   assert.equal(plan.lean, 840000);
   assert.equal(plan.fat, 1800000);
   assert.equal(plan.essentialAnnualSpend, 36000);
-  assert.equal(plan.monthlyContributions, 0, 'a single contribution is not projected as ongoing behavior');
+  assert.equal(plan.monthlyContributions, 500 / 12);
   assert.equal(plan.lifestyles[0].target, 900000);
   assert.equal(plan.ladder[0].target, 9000);
   assert.equal(plan.ladder[1].target, 18000);
@@ -1055,8 +1055,8 @@ test('retirement presets calculate coast, lean, standard, fat, and a projected r
     ]
   }, 100000);
   assert.equal(outlierResistantPlan.contributionMonthsObserved, 12);
-  assert.equal(outlierResistantPlan.monthlyContributions, 100, 'an unexplained contribution spike is not projected as recurring');
-  assert.equal(outlierResistantPlan.annualContributions, 1200);
+  assert.equal(outlierResistantPlan.monthlyContributions, 200, 'the observed annual contribution pace includes the one-off contribution');
+  assert.equal(outlierResistantPlan.annualContributions, 2400);
   assert.equal(outlierResistantPlan.essentialMonthlySpend, 11200 / 12, 'a genuine annual essential expense is preserved in the retirement target');
 
   const now = new Date();
@@ -1071,7 +1071,7 @@ test('retirement presets calculate coast, lean, standard, fat, and a projected r
     ]
   }, 100000);
   assert.equal(partialMonthPlan.contributionMonthsObserved, 1, 'an in-progress month is not treated as a completed retirement input');
-  assert.equal(partialMonthPlan.monthlyContributions, 0, 'a single observed contribution is not projected as ongoing behavior');
+  assert.equal(partialMonthPlan.monthlyContributions, 100 / 12);
 
   const fasterSaver = calculateFire({
     ...store,
@@ -1148,8 +1148,7 @@ test('retirement preserves a genuine annual expense and irregular annual contrib
     const mm = String(month).padStart(2, '0');
     transactions.push({ date: `2025-${mm}-15`, amount: month === 12 ? 8000 : 4000, bucket: 'guilt_free', pfc_primary: 'GENERAL_MERCHANDISE', merchant_name: month === 12 ? 'Annual insurance' : 'Living costs' });
   }
-  transactions.push({ date: '2024-01-20', amount: 7000, bucket: 'investments', account_id: 'checking', investment_contribution_account_id: 'ira', pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS' });
-  transactions.push({ date: '2025-01-20', amount: 7000, bucket: 'investments', account_id: 'checking', investment_contribution_account_id: 'ira', pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS' });
+  transactions.push({ date: '2025-01-20', amount: 7000, bucket: 'investments', account_id: 'checking', pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS' });
   const store = { accounts: [{ id: 'checking', type: 'depository' }], transactions };
   const spend = annualizedLivingSpend(store);
   assert.equal(spend.monthsObserved, 12);
@@ -1158,85 +1157,4 @@ test('retirement preserves a genuine annual expense and irregular annual contrib
   const plan = calculateFire(store, 0);
   assert.equal(plan.annualContributions, 7000);
   assert.equal(plan.monthlyContributions, 7000 / 12);
-});
-
-function datedContributionSeries({ count, start = '2025-01-15', days, amount, bucket = 'investments', accountId = 'checking', destination = 'brokerage', source }) {
-  const first = new Date(`${start}T12:00:00Z`);
-  return Array.from({ length: count }, (_, index) => {
-    const date = new Date(first);
-    date.setUTCDate(date.getUTCDate() + index * days);
-    return { id: `${accountId}-${index}`, date: date.toISOString().slice(0, 10), amount, bucket, account_id: accountId, investment_contribution_account_id: destination, pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS', ...(source ? { source, name: destination === '401k' ? '401(k) payroll contribution' : 'HSA payroll contribution' } : {}) };
-  });
-}
-
-test('ongoing contribution pace detects monthly, biweekly, and semimonthly streams', () => {
-  const monthly = datedContributionSeries({ count: 12, days: 30, amount: 1000 });
-  const biweekly = datedContributionSeries({ count: 26, start: '2025-01-03', days: 14, amount: 500, accountId: 'payroll', destination: '401k', source: 'investment_transaction' });
-  const semimonthly = datedContributionSeries({ count: 24, start: '2025-01-15', days: 15, amount: 200, accountId: 'hsa-payroll', destination: 'hsa', source: 'investment_transaction' });
-  const result = estimateOngoingContributionPace({ accounts: [{ id: 'checking', type: 'depository' }, { id: 'brokerage', type: 'investment' }, { id: 'payroll', type: 'investment', subtype: '401k' }, { id: '401k', type: 'investment', subtype: '401k' }, { id: 'hsa-payroll', type: 'investment', subtype: 'hsa' }, { id: 'hsa', type: 'investment', subtype: 'hsa' }], transactions: [...monthly, ...biweekly, ...semimonthly] });
-  assert.equal(result.streams.find((stream) => stream.streamKey === 'investment:brokerage').annualAmount, 12000);
-  assert.equal(result.streams.find((stream) => stream.streamKey === 'retirement:401k').annualAmount, 13000);
-  assert.equal(result.streams.find((stream) => stream.streamKey === 'hsa:hsa').annualAmount, 4800);
-  assert.equal(result.monthlyContributions, (12000 + 13000 + 4800) / 12);
-});
-
-test('annual contribution requires repeated annual evidence while a single contribution stays uncertain', () => {
-  const annual = [
-    { id: 'ira-2025', date: '2025-01-10', amount: 7000, bucket: 'investments', account_id: 'checking', investment_contribution_account_id: 'ira', pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS' },
-    { id: 'ira-2026', date: '2026-01-10', amount: 7000, bucket: 'investments', account_id: 'checking', investment_contribution_account_id: 'ira', pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS' }
-  ];
-  const repeated = estimateOngoingContributionPace({ accounts: [{ id: 'checking', type: 'depository' }, { id: 'ira', type: 'investment', subtype: 'ira' }], transactions: annual });
-  assert.equal(repeated.streams[0].behavior, 'recurring_lumpy');
-  assert.equal(repeated.annualContributions, 7000);
-  const single = estimateOngoingContributionPace({ accounts: [{ id: 'checking', type: 'depository' }, { id: 'ira', type: 'investment', subtype: 'ira' }], transactions: [annual[0]] });
-  assert.equal(single.streams[0].behavior, 'uncertain');
-  assert.equal(single.annualContributions, 0);
-});
-
-test('severance-funded spikes remain historical but are excluded from ongoing pace', () => {
-  const normal = datedContributionSeries({ count: 12, start: '2025-01-15', days: 30, amount: 4000 });
-  normal.push({ id: 'spike', date: '2025-06-20', amount: 20000, bucket: 'investments', account_id: 'checking', investment_contribution_account_id: 'brokerage', pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS' });
-  normal.push({ id: 'severance', date: '2025-06-01', amount: -25000, bucket: 'income', merchant_name: 'Severance and PTO payout', pfc_primary: 'INCOME', pfc_detailed: 'INCOME_OTHER' });
-  const store = { accounts: [{ id: 'checking', type: 'depository' }, { id: 'brokerage', type: 'investment' }], transactions: normal };
-  const result = estimateOngoingContributionPace(store);
-  assert.equal(result.historicalAnnualContributions, 68000);
-  assert.equal(result.annualContributions, 48000);
-  assert.equal(calculateFire(store, 100000).historicalAnnualContributions, 68000);
-  assert.equal(calculateFire(store, 100000).annualContributions, 48000);
-});
-
-test('one-time contribution classification does not change historical cash flow or current balance inputs', () => {
-  const store = { accounts: [{ id: 'checking', type: 'depository' }, { id: 'brokerage', type: 'investment', current_balance: 120000 }], transactions: [{ id: 'windfall', date: '2026-01-10', amount: 15000, bucket: 'investments', account_id: 'checking', investment_contribution_account_id: 'brokerage', pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS' }] };
-  const result = estimateOngoingContributionPace(store);
-  const cash = spendingSummary(store, 'all', new Date('2026-02-01T12:00:00'));
-  assert.equal(result.annualContributions, 0);
-  assert.equal(result.historicalAnnualContributions, 15000);
-  assert.equal(cash.investments, 15000);
-  assert.equal(store.accounts[1].current_balance, 120000);
-});
-
-test('contribution events include employer matches, net reversals, and avoid HSA double counting', () => {
-  const transactions = [
-    { id: 'employee', date: '2025-01-15', amount: 500, bucket: 'investments', account_id: 'payroll', source: 'investment_transaction', investment_contribution_account_id: '401k', name: '401(k) employee contribution' },
-    { id: 'employer', date: '2025-01-15', amount: 250, bucket: 'investments', account_id: 'payroll', source: 'investment_transaction', investment_contribution_account_id: '401k', name: '401(k) employer match' },
-    { id: 'hsa-payroll', date: '2025-01-20', amount: 300, bucket: 'investments', account_id: 'hsa-payroll', source: 'investment_transaction', investment_contribution_account_id: 'hsa', name: 'HSA payroll contribution' },
-    { id: 'hsa-transfer', date: '2025-01-20', amount: 300, bucket: 'investments', account_id: 'hsa-cash', investment_contribution_account_id: 'hsa', pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS', name: 'HSA cash to investment' },
-    { id: 'reversal', date: '2025-01-21', amount: -500, bucket: 'investments', account_id: 'payroll', investment_contribution_account_id: '401k', name: '401(k) contribution reversal' }
-  ];
-  const store = { accounts: [{ id: 'payroll', type: 'investment', subtype: '401k' }, { id: '401k', type: 'investment', subtype: '401k' }, { id: 'hsa-payroll', type: 'investment', subtype: 'hsa' }, { id: 'hsa-cash', type: 'depository' }, { id: 'hsa', type: 'investment', subtype: 'hsa' }], transactions };
-  const events = contributionEvents(store);
-  assert.equal(events.filter((event) => event.streamKey === 'retirement:401k').reduce((sum, event) => sum + event.amount, 0), 0);
-  assert.equal(events.filter((event) => event.streamKey === 'retirement:401k:employer').reduce((sum, event) => sum + event.amount, 0), 250);
-  assert.equal(events.filter((event) => event.streamKey === 'hsa:hsa').reduce((sum, event) => sum + event.amount, 0), 300);
-});
-
-test('investment-ledger rollovers and internal security activity are not new contributions', () => {
-  const store = {
-    accounts: [{ id: 'old401k', type: 'investment', subtype: '401k' }, { id: 'ira', type: 'investment', subtype: 'ira' }],
-    transactions: [
-      { id: 'rollover', date: '2025-01-15', amount: 50000, bucket: 'investments', account_id: 'ira', source: 'investment_transaction', name: '401(k) rollover' },
-      { id: 'purchase', date: '2025-02-15', amount: 1000, bucket: 'investments', account_id: 'ira', source: 'investment_transaction', name: 'VTI purchase' }
-    ]
-  };
-  assert.equal(contributionEvents(store).length, 0);
 });

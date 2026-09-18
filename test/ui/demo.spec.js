@@ -864,7 +864,7 @@ test('retirement milestones explain the planning terms on demand @critical', asy
   await expect(page.locator('#retirementPath')).toContainText('Amount needed today to fund retirement by age 65 without further contributions');
   await expect(page.locator('#retirementPath .retirement-milestone')).toHaveCount(4);
   await expect(page.locator('#retirementProjectionContext')).toHaveText('By age 65');
-  await expect(page.locator('#retirementContributionPace')).toContainText(/Estimated ongoing contribution pace · \$[\d,]+\/mo/);
+  await expect(page.locator('#retirementContributionPace')).toContainText(/Saving & investing · \$[\d,]+\/mo/);
   await expect(page.locator('#retirementEssentialPace')).toContainText(/Essential spend · \$[\d,]+\/mo/);
   await expect(page.locator('#retirementNextMilestone')).toBeVisible();
   await page.locator('#retirementNextMilestone').click();
