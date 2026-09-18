@@ -39,7 +39,14 @@ function isConfirmedIncome(tx) {
 // accounts. Keep the two concepts separate so a provider category correction
 // cannot turn an employer credit into a shopping transaction.
 export function cashFlowType(tx) {
-  if (tx.source === 'investment_transaction' && tx.bucket === 'investments') return 'pre_tax_retirement';
+  // Investment-ledger rows are only payroll contributions when the provider
+  // gives contribution/deferral evidence. A rollover, sale, rebalance, or
+  // ordinary investment-account movement must remain investment activity.
+  const investmentText = `${tx.merchant_name || ''} ${tx.name || ''} ${tx.pfc_primary || ''} ${tx.pfc_detailed || ''}`.toUpperCase();
+  const isContributionRecord = !/ROLLOVER|REBALANC|SALE|SOLD|DIVIDEND|INTEREST/.test(investmentText)
+    && /CONTRIBUT|DEFERRAL|PAYROLL|401\s*\(?K\)?|403\s*\(?B\)?|457\s*\(?B\)?|HSA/.test(investmentText);
+  if (tx.source === 'investment_transaction' && tx.bucket === 'investments' && isContributionRecord) return 'pre_tax_retirement';
+  if (tx.source === 'investment_transaction' && tx.bucket === 'investments') return 'investment_activity';
   if (isProviderTransfer(tx) || tx.bucket === 'transfer') return 'internal_transfer';
   const amount = Number(tx.amount || 0);
   if (amount < 0) return 'external_inflow';
@@ -1335,6 +1342,127 @@ export function monthlyFinancialFacts(store, options = {}) {
   return [...facts.values()].sort((a, b) => a.month.localeCompare(b.month));
 }
 
+function dateDistanceDays(left, right) {
+  return Math.round((Date.parse(`${right}T00:00:00Z`) - Date.parse(`${left}T00:00:00Z`)) / 86_400_000);
+}
+
+function oneTimeIncomeEvidence(row) {
+  const text = `${row.merchant_name || ''} ${row.name || ''} ${row.pfc_primary || ''} ${row.pfc_detailed || ''}`.toUpperCase();
+  return /SEVERANCE|PTO|VACATION PAY|TERMINATION|SETTLEMENT|INHERITANCE|ASSET SALE|SALE OF ASSET/.test(text);
+}
+
+function contributionStreamKey(row, accounts) {
+  const destination = row.investment_contribution_account_id || row.account_id || 'unknown';
+  const account = accounts.get(String(destination));
+  const text = `${row.merchant_name || ''} ${row.name || ''}`.toLowerCase();
+  const role = /employer|match(?:ing)?/.test(text) ? ':employer' : '';
+  if (/401\(?k\)?|403\(?b\)?|457/.test(text) || /401\(?k\)?|403\(?b\)?|457/.test(String(account?.subtype || account?.name || '').toLowerCase())) return `retirement:${destination}${role}`;
+  if (/hsa|health savings/.test(text) || /hsa|health savings/.test(String(account?.subtype || account?.name || '').toLowerCase())) return `hsa:${destination}${role}`;
+  if (/ira|roth/.test(text) || /ira|roth/.test(String(account?.subtype || account?.name || '').toLowerCase())) return `ira:${destination}`;
+  return `investment:${destination}`;
+}
+
+function cadenceForIntervals(intervals) {
+  if (intervals.length < 1) return null;
+  const medianInterval = median(intervals);
+  if (medianInterval >= 5 && medianInterval <= 9) return { cadence: 'weekly', occurrencesPerYear: 52 };
+  if (medianInterval >= 11 && medianInterval < 14.5) return { cadence: 'biweekly', occurrencesPerYear: 26 };
+  if (medianInterval >= 14.5 && medianInterval <= 25) return { cadence: 'semimonthly', occurrencesPerYear: 24 };
+  if (medianInterval >= 25 && medianInterval <= 35) return { cadence: 'monthly', occurrencesPerYear: 12 };
+  if (medianInterval >= 75 && medianInterval <= 110) return { cadence: 'quarterly', occurrencesPerYear: 4 };
+  if (medianInterval >= 300 && medianInterval <= 430) return { cadence: 'annual', occurrencesPerYear: 1 };
+  return null;
+}
+
+// Contribution events are the canonical, auditable inputs to the forward
+// looking retirement estimate. Cash Flow never consumes this forecast; it
+// continues to use the exact economic ledger for historical reporting.
+export function contributionEvents(store) {
+  const accounts = new Map((store.accounts || []).map((account) => [String(account.plaid_account_id || account.id), account]));
+  const rows = canonicalEconomicLedger(store);
+  const oneTimeIncome = rows.filter((row) => row.economicType === 'income' && oneTimeIncomeEvidence(row));
+  const rawEvents = rows
+    .filter((row) => row.economicType === 'investment_funding' || row.economicType === 'payroll_retirement_contribution')
+    .map((row) => ({
+      id: row.transaction_id,
+      date: row.date,
+      amount: Math.max(0, Number(row.value || 0)),
+      streamKey: contributionStreamKey(row, accounts),
+      kind: row.economicType === 'payroll_retirement_contribution' ? 'payroll' : 'post_tax',
+      source: row,
+      oneTime: oneTimeIncome.some((income) => Math.abs(dateDistanceDays(income.date, row.date)) <= 45)
+    }))
+    .filter((event) => event.amount > 0);
+
+  // A payroll/HSA contribution can be represented once by payroll and again
+  // by an HSA cash-to-investment transfer. Keep the economic event once.
+  const payrollEvents = rawEvents.filter((event) => event.kind === 'payroll');
+  const events = rawEvents.filter((event) => {
+    if (event.kind !== 'post_tax' || !event.streamKey.startsWith('hsa:')) return true;
+    return !payrollEvents.some((payroll) => payroll.streamKey.startsWith('hsa:') && payroll.date === event.date && payroll.amount === event.amount);
+  });
+
+  // Provider corrections/reversals are negative inflows and therefore are not
+  // emitted as positive contribution events by the ledger. Apply them against
+  // the most recent matching contribution so historical and forecast totals
+  // reflect the net economic contribution.
+  const reversals = rows.filter((row) => {
+    const text = `${row.merchant_name || ''} ${row.name || ''} ${row.pfc_primary || ''} ${row.pfc_detailed || ''}`.toUpperCase();
+    return row.amount < 0 && /REVERSAL|CORRECTION/.test(text);
+  });
+  for (const reversal of reversals) {
+    let remaining = Math.abs(Number(reversal.amount || 0));
+    const key = contributionStreamKey(reversal, accounts);
+    for (const event of events.filter((candidate) => candidate.streamKey === key && candidate.date <= reversal.date).sort((a, b) => b.date.localeCompare(a.date))) {
+      if (!(remaining > 0)) break;
+      const applied = Math.min(remaining, event.amount);
+      event.amount -= applied;
+      remaining -= applied;
+    }
+  }
+  return events.filter((event) => event.amount > 0);
+}
+
+export function estimateOngoingContributionPace(store) {
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const allEvents = contributionEvents(store);
+  const events = allEvents.filter((event) => event.date.slice(0, 7) < currentMonth);
+  const grouped = new Map();
+  for (const event of events) {
+    if (!grouped.has(event.streamKey)) grouped.set(event.streamKey, []);
+    grouped.get(event.streamKey).push(event);
+  }
+  const streams = [];
+  let ongoingAnnual = 0;
+  for (const [streamKey, streamEvents] of grouped) {
+    streamEvents.sort((a, b) => a.date.localeCompare(b.date));
+    const baseline = median(streamEvents.map((event) => event.amount));
+    const usable = streamEvents.filter((event) => !event.oneTime || event.amount <= baseline * 1.75);
+    const intervals = usable.slice(1).map((event, index) => dateDistanceDays(usable[index].date, event.date)).filter((days) => days > 0);
+    const cadence = cadenceForIntervals(intervals);
+    const historySpanDays = usable.length > 1 ? dateDistanceDays(usable[0].date, usable.at(-1).date) : 0;
+    const annualEvidence = cadence?.cadence === 'annual' && usable.length >= 2 && historySpanDays >= 300;
+    const recurring = cadence && usable.length >= 3 && cadence.cadence !== 'annual';
+    const behavior = annualEvidence ? 'recurring_lumpy' : recurring ? (streamEvents.some((event) => event.oneTime) ? 'recurring_lumpy' : 'recurring') : 'uncertain';
+    const confidence = behavior === 'recurring' && usable.length >= 6 ? 'high' : behavior === 'recurring_lumpy' && usable.length >= 2 ? 'medium' : 'low';
+    const annualAmount = behavior === 'recurring' || behavior === 'recurring_lumpy'
+      ? median(usable.map((event) => event.amount)) * cadence.occurrencesPerYear
+      : 0;
+    if (annualAmount > 0) ongoingAnnual += annualAmount;
+    streams.push({ streamKey, behavior, confidence, cadence: cadence?.cadence || null, annualAmount, monthlyAmount: annualAmount / 12, eventCount: streamEvents.length, includedEventCount: usable.length, excludedOneTimeAmount: streamEvents.filter((event) => event.oneTime && event.amount > baseline * 1.75).reduce((sum, event) => sum + event.amount, 0) });
+  }
+  const dates = events.map((event) => event.date).sort();
+  const monthsObserved = dates.length ? new Set(dates.map((date) => date.slice(0, 7))).size : 0;
+  const relevantAccounts = new Set(events.flatMap((event) => [event.source.account_id, event.source.investment_contribution_account_id].filter(Boolean).map(String)));
+  const incomplete = [...relevantAccounts].some((accountId) => {
+    const account = [...(store.accounts || [])].find((row) => String(row.plaid_account_id || row.id) === accountId);
+    const item = (store.items || []).find((row) => row.id === account?.item_id);
+    return item && (item.transactions_history_complete === false || item.investment_ledger?.complete === false);
+  });
+  const quality = !events.length || monthsObserved < 3 ? 'limited' : incomplete ? 'medium' : streams.some((stream) => stream.confidence === 'low') ? 'medium' : monthsObserved >= 12 ? 'high' : 'medium';
+  return { annualContributions: ongoingAnnual, monthlyContributions: ongoingAnnual / 12, monthsObserved, quality, streams, events, historicalAnnualContributions: allEvents.reduce((sum, event) => sum + event.amount, 0) };
+}
+
 // Plaid's income category is intentionally broad. Keep the main cash-flow
 // calculation broad too, but retain the source so a paycheck is not made to
 // look indistinguishable from HYSA interest, benefits, or self-employment.
@@ -1399,7 +1527,7 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
   // account, so including them in money out would compare gross savings with
   // net take-home income. Keep them visible, but outside cash flow.
   const preTaxRetirementTransactions = store.transactions.filter((transaction) => {
-    if (transaction.pending || transaction.excluded || transaction.source !== 'investment_transaction' || transaction.bucket !== 'investments') return false;
+    if (transaction.pending || transaction.excluded || cashFlowType(transaction) !== 'pre_tax_retirement') return false;
     return transaction.date >= startDate && transaction.date <= endDate;
   });
   for (const transaction of preTaxRetirementTransactions) {
@@ -1682,6 +1810,19 @@ export function annualizedLivingSpend(store) {
 }
 
 function annualizedContributions(store, buckets = ['savings', 'investments']) {
+  if (buckets.length > 1) {
+    const forecast = estimateOngoingContributionPace(store);
+    return {
+      annualContributions: forecast.annualContributions,
+      monthlyContributions: forecast.monthlyContributions,
+      monthsObserved: forecast.monthsObserved,
+      completeMonthsObserved: forecast.monthsObserved,
+      annualizedFromFullYear: forecast.monthsObserved >= 12,
+      quality: forecast.quality,
+      historicalAnnualContributions: forecast.historicalAnnualContributions,
+      streams: forecast.streams
+    };
+  }
   const { transactions, months } = trailingPostedTransactionWindow(store);
   if (!months.length) return { annualContributions: 0, monthlyContributions: 0, monthsObserved: 0 };
   const factsByMonth = new Map(monthlyFinancialFacts(store).map((fact) => [fact.month, fact]));
@@ -1777,6 +1918,9 @@ export function calculateFire(store, netWorth) {
     annualContributions: contributions.annualContributions,
     monthlyContributions: contributions.monthlyContributions,
     contributionMonthsObserved: contributions.monthsObserved,
+    historicalAnnualContributions: contributions.historicalAnnualContributions ?? 0,
+    contributionEstimateQuality: contributions.quality || 'limited',
+    contributionStreams: contributions.streams || [],
     investedAssets,
     freedomBalance,
     yearsToRetirement,

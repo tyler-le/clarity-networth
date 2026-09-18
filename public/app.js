@@ -1838,7 +1838,7 @@ function renderRetirement(data) {
   const contributionPace = $('#retirementContributionPace');
   retirementInputs.hidden = monthlyContributions <= 0 && essentialMonthlySpend <= 0;
   contributionPace.textContent = monthlyContributions
-    ? `Saving & investing · ${fmt.format(monthlyContributions)}/mo`
+    ? `Estimated ongoing contribution pace · ${fmt.format(monthlyContributions)}/mo`
     : '';
   $('#retirementEssentialPace').textContent = essentialMonthlySpend
     ? `Essential spend · ${fmt.format(essentialMonthlySpend)}/mo`
@@ -1852,7 +1852,7 @@ function renderRetirement(data) {
     ? `Based on ${fmt.format(data.monthlySpend || 0)} a month in total spending`
     : 'Your spending will shape these targets.';
   $('#retirementSpendContext').textContent = data.monthsObserved
-    ? `${data.annualizedFromFullYear ? 'Based on 12 complete months' : `Based on ${data.monthsObserved} complete month${data.monthsObserved === 1 ? '' : 's'}`}. Full spending sets your Financial Independence target; essentials set your safety-net milestones.`
+    ? `${data.annualizedFromFullYear ? 'Based on 12 complete months' : `Based on ${data.monthsObserved} complete month${data.monthsObserved === 1 ? '' : 's'}`}. Full spending sets your Financial Independence target; essentials set your safety-net milestones. ${data.contributionEstimateQuality === 'high' ? 'Contribution pace reflects recurring patterns.' : 'Contribution pace is based on currently available history.'}`
     : 'Your targets will reflect your spending once there is enough history.';
   $('#retirementAssumption').textContent = `At retirement · ${data.withdrawalRate}% withdrawal`;
   const estimatedLabel = (months, complete) => {
