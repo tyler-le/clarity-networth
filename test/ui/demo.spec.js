@@ -874,8 +874,8 @@ test('retirement milestones explain the planning terms on demand @critical', asy
   await expect(page.locator('#retirementSpendingTargetsCard')).not.toHaveAttribute('open', '');
   await expect(page.locator('#retirementSpendingSummary')).toContainText('Based on $');
   await page.locator('#retirementSpendingTargetsCard > summary').click();
-  await expect(page.locator('#retirementSpendContext')).toContainText('We use your $');
-  await expect(page.locator('#retirementSpendContext')).toContainText('to calculate your retirement targets.');
+  await expect(page.locator('#retirementSpendContext')).toContainText('Based on 12 complete months');
+  await expect(page.locator('#retirementSpendContext')).toContainText('Full spending sets your Financial Independence target');
   await page.locator('#retirementAdjust summary').click();
   await expect(page.locator('#retirementForm [name="withdrawal_rate"]')).toHaveAttribute('min', '0');
   await expect(page.locator('#retirementForm [name="withdrawal_rate"]')).toHaveAttribute('max', '20');
