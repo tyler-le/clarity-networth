@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { calculateFire, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentPortfolioRangeProgress, investmentRangeProgress, monthlyReview, reconstructInvestmentHistory, refreshReconstructedInvestmentSnapshots, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, repairIncomingClassifications, repairTransferClassifications, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
+import { annualizedLivingSpend, calculateFire, canonicalEconomicLedger, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentPortfolioRangeProgress, investmentRangeProgress, monthlyFinancialFacts, monthlyReview, reconstructInvestmentHistory, refreshReconstructedInvestmentSnapshots, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, repairIncomingClassifications, repairTransferClassifications, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
 import { normalizeCandles } from '../src/lib/market-data.js';
 import { filterSnapshots, preferredNetWorthRange, scrubIndex, uniqueDailySnapshots } from '../public/chart-utils.js';
 
@@ -1016,11 +1016,11 @@ test('retirement presets calculate coast, lean, standard, fat, and a projected r
   assert.equal(plan.lean, 840000);
   assert.equal(plan.fat, 1800000);
   assert.equal(plan.essentialAnnualSpend, 36000);
-  assert.equal(plan.monthlyContributions, 750);
+  assert.equal(plan.monthlyContributions, 500 / 12);
   assert.equal(plan.lifestyles[0].target, 900000);
   assert.equal(plan.ladder[0].target, 9000);
   assert.equal(plan.ladder[1].target, 18000);
-  assert.equal(plan.ladder[0].estimatedMonths, 36);
+  assert.equal(plan.ladder[0].estimatedMonths, 433);
   assert.equal(plan.ladder[2].estimatedMonths, null, 'a Coast FI date is not shown when this saving pace cannot catch the moving target before retirement');
   assert.ok(plan.coast < plan.standard);
   assert.ok(plan.projectedAtRetirement > 100000);
@@ -1055,9 +1055,9 @@ test('retirement presets calculate coast, lean, standard, fat, and a projected r
     ]
   }, 100000);
   assert.equal(outlierResistantPlan.contributionMonthsObserved, 12);
-  assert.equal(outlierResistantPlan.monthlyContributions, 100, 'a one-off contribution does not drive the saving pace');
-  assert.equal(outlierResistantPlan.annualContributions, 1200);
-  assert.equal(outlierResistantPlan.essentialMonthlySpend, 100, 'a one-off essential expense does not drive the retirement target');
+  assert.equal(outlierResistantPlan.monthlyContributions, 200, 'a genuine one-off contribution is preserved in the annual pace');
+  assert.equal(outlierResistantPlan.annualContributions, 2400);
+  assert.equal(outlierResistantPlan.essentialMonthlySpend, 11200 / 12, 'a genuine annual essential expense is preserved in the retirement target');
 
   const now = new Date();
   const completedMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 7);
@@ -1071,11 +1071,15 @@ test('retirement presets calculate coast, lean, standard, fat, and a projected r
     ]
   }, 100000);
   assert.equal(partialMonthPlan.contributionMonthsObserved, 1, 'an in-progress month is not treated as a completed retirement input');
-  assert.equal(partialMonthPlan.monthlyContributions, 100);
+  assert.equal(partialMonthPlan.monthlyContributions, 100 / 12);
 
   const fasterSaver = calculateFire({
     ...store,
-    transactions: store.transactions.map((transaction) => transaction.bucket === 'investments' ? { ...transaction, amount: 1000 } : transaction)
+    transactions: [
+      ...store.transactions.map((transaction) => transaction.bucket === 'investments' ? { ...transaction, amount: 1000 } : transaction),
+      ...Array.from({ length: 11 }, (_, index) => ({ date: `2025-${String(index + 9).padStart(2, '0')}-20`, amount: 1000, bucket: 'investments' })),
+      ...Array.from({ length: 11 }, (_, index) => ({ date: `2025-${String(index + 9).padStart(2, '0')}-10`, amount: 4000, bucket: 'guilt_free' }))
+    ]
   }, 100000);
   const coastMonths = fasterSaver.ladder.find((step) => step.key === 'coast').estimatedMonths;
   assert.ok(coastMonths > 0 && coastMonths <= fasterSaver.yearsToRetirement * 12, 'Coast FI is estimated only within the retirement horizon');
@@ -1102,4 +1106,55 @@ test('each signed-in identity has an isolated persistent store', async () => {
   assert.notEqual(ownerKey, partnerKey);
   fs.rmSync(tempDir, { recursive: true, force: true });
   if (previousDataDir === undefined) delete process.env.DATA_DIR; else process.env.DATA_DIR = previousDataDir;
+});
+
+test('cash flow and retirement share canonical spend, refunds, and contributions', () => {
+  const store = {
+    accounts: [
+      { id: 'checking', type: 'depository', subtype: 'checking' },
+      { id: 'brokerage', type: 'investment', subtype: 'brokerage' }
+    ],
+    transactions: [
+      { id: 'rent', date: '2026-08-01', amount: 2000, bucket: 'fixed', merchant_name: 'Rent', pfc_primary: 'RENT_AND_UTILITIES' },
+      { id: 'food', date: '2026-08-02', amount: 100, bucket: 'guilt_free', merchant_name: 'Market', pfc_primary: 'FOOD_AND_DRINK' },
+      { id: 'refund', date: '2026-08-03', amount: -40, bucket: 'guilt_free', merchant_name: 'Market refund', pfc_primary: 'GENERAL_MERCHANDISE', pfc_detailed: 'GENERAL_MERCHANDISE_REFUND' },
+      { id: 'saving', date: '2026-08-04', amount: 1000, bucket: 'savings', account_id: 'checking', pfc_detailed: 'TRANSFER_OUT_SAVINGS' },
+      { id: 'investing', date: '2026-08-05', amount: 500, bucket: 'investments', account_id: 'checking', pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS' },
+      { id: 'payroll-deferral', date: '2026-08-06', amount: 300, bucket: 'investments', account_id: 'brokerage', source: 'investment_transaction' },
+      { id: 'paycheck', date: '2026-08-07', amount: -5000, bucket: 'income', merchant_name: 'Employer payroll', pfc_primary: 'INCOME', pfc_detailed: 'INCOME_PAYCHECK' }
+    ]
+  };
+  const cash = spendingSummary(store, '1m', new Date('2026-08-31T12:00:00'));
+  const facts = monthlyFinancialFacts(store);
+  const ledger = canonicalEconomicLedger(store);
+  assert.equal(cash.income, 5000);
+  assert.equal(cash.actualSpend, 2060);
+  assert.equal(cash.savings, 1000);
+  assert.equal(cash.investments, 500);
+  assert.equal(cash.netCashFlow, 2940);
+  assert.equal(facts[0].actualSpend, 2060);
+  assert.equal(facts[0].essentialSpend, 2000);
+  assert.equal(facts[0].investmentContributions, 800);
+  assert.equal(ledger.find((row) => row.id === 'payroll-deferral').economicType, 'payroll_retirement_contribution');
+  assert.equal(ledger.find((row) => row.id === 'refund').economicType, 'refund');
+  const retirement = annualizedLivingSpend(store);
+  assert.equal(retirement.monthsObserved, 1);
+  assert.equal(retirement.monthlyAverage, 2060);
+});
+
+test('retirement preserves a genuine annual expense and irregular annual contribution', () => {
+  const transactions = [];
+  for (let month = 1; month <= 12; month += 1) {
+    const mm = String(month).padStart(2, '0');
+    transactions.push({ date: `2025-${mm}-15`, amount: month === 12 ? 8000 : 4000, bucket: 'guilt_free', pfc_primary: 'GENERAL_MERCHANDISE', merchant_name: month === 12 ? 'Annual insurance' : 'Living costs' });
+  }
+  transactions.push({ date: '2025-01-20', amount: 7000, bucket: 'investments', account_id: 'checking', pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS' });
+  const store = { accounts: [{ id: 'checking', type: 'depository' }], transactions };
+  const spend = annualizedLivingSpend(store);
+  assert.equal(spend.monthsObserved, 12);
+  assert.equal(spend.annualSpend, 52000);
+  assert.equal(spend.monthlyAverage, 52000 / 12);
+  const plan = calculateFire(store, 0);
+  assert.equal(plan.annualContributions, 7000);
+  assert.equal(plan.monthlyContributions, 7000 / 12);
 });

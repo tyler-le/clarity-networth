@@ -1849,10 +1849,10 @@ function renderRetirement(data) {
   coverage.hidden = observedMonths < 1;
   coverage.textContent = observedMonths ? `${observedMonths} mo. tracked` : '';
   $('#retirementSpendingSummary').textContent = data.monthsObserved
-    ? `Based on ${fmt.format(data.essentialMonthlySpend || 0)} a month in essentials`
-    : 'Your essentials will shape these targets.';
+    ? `Based on ${fmt.format(data.monthlySpend || 0)} a month in total spending`
+    : 'Your spending will shape these targets.';
   $('#retirementSpendContext').textContent = data.monthsObserved
-    ? `We use your ${fmt.format(data.essentialMonthlySpend || 0)} monthly essentials from the past ${data.monthsObserved} month${data.monthsObserved === 1 ? '' : 's'} to calculate your retirement targets.`
+    ? `${data.annualizedFromFullYear ? 'Based on 12 complete months' : `Based on ${data.monthsObserved} complete month${data.monthsObserved === 1 ? '' : 's'}`}. Full spending sets your Financial Independence target; essentials set your safety-net milestones.`
     : 'Your targets will reflect your spending once there is enough history.';
   $('#retirementAssumption').textContent = `At retirement · ${data.withdrawalRate}% withdrawal`;
   const estimatedLabel = (months, complete) => {

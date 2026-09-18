@@ -1245,6 +1245,96 @@ function cashFlowDetail(transaction) {
   return { key, label, group: 'actual_spend' };
 }
 
+function transactionKey(transaction, index) {
+  return transaction.id || transaction.plaid_transaction_id || `${transaction.date}:${index}`;
+}
+
+// This is the one economic interpretation used by both Cash Flow and
+// Retirement. Feature-specific code may choose a date window or an
+// aggregation statistic, but it must not reinterpret a row here.
+export function canonicalEconomicLedger(store) {
+  const accounts = new Map((store.accounts || []).map((account) => [String(account.plaid_account_id || account.id), account]));
+  const posted = (store.transactions || [])
+    .map((transaction, index) => ({ transaction, index }))
+    .filter(({ transaction }) => !transaction.pending && !transaction.excluded && /^\d{4}-\d{2}-\d{2}$/.test(String(transaction.date || '')))
+    .sort((left, right) => String(left.transaction.date).localeCompare(String(right.transaction.date)) || left.index - right.index);
+  const expenses = posted.filter(({ transaction }) => cashFlowType(transaction) === 'external_outflow' && Number(transaction.amount || 0) > 0 && !['savings', 'investments'].includes(transaction.bucket));
+  const remaining = new Map(expenses.map(({ transaction, index }) => [transactionKey(transaction, index), Number(transaction.amount || 0)]));
+  const normalizedMerchant = (transaction) => String(transaction.merchant_name || transaction.name || '').toLowerCase().replace(/\b(refund|return|reversal|credit)\b/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  const allocations = new Map();
+  const refundRows = posted.filter(({ transaction }) => cashFlowType(transaction) === 'external_inflow' && inflowClassification(transaction) === 'refund');
+  for (const { transaction: refund, index } of refundRows) {
+    let left = Math.abs(Number(refund.amount || 0));
+    if (!(left > 0)) continue;
+    const refundFlow = cashFlowDetail({ ...refund, bucket: 'guilt_free' });
+    const merchant = normalizedMerchant(refund);
+    const candidates = expenses
+      .filter(({ transaction: expense, index }) => expense.date <= refund.date && (remaining.get(transactionKey(expense, index)) || 0) > 0)
+      .sort((a, b) => String(b.transaction.date).localeCompare(String(a.transaction.date)));
+    const merchantCandidates = merchant ? candidates.filter(({ transaction: expense }) => normalizedMerchant(expense) === merchant) : [];
+    const categoryCandidates = candidates.filter(({ transaction: expense }) => cashFlowDetail(expense).key === refundFlow.key);
+    for (const candidate of [...merchantCandidates, ...categoryCandidates.filter((row) => !merchantCandidates.includes(row)), ...candidates.filter((row) => !merchantCandidates.includes(row) && !categoryCandidates.includes(row))]) {
+      if (!(left > 0)) break;
+      const expense = candidate.transaction;
+      const expenseId = transactionKey(expense, candidate.index);
+      const available = remaining.get(expenseId) || 0;
+      if (!(available > 0)) continue;
+      const amount = Math.min(left, available);
+      remaining.set(expenseId, available - amount);
+      allocations.set(transactionKey(refund, index), (allocations.get(transactionKey(refund, index)) || 0) + amount);
+      left -= amount;
+    }
+  }
+  return posted.map(({ transaction, index }) => {
+    const flowType = cashFlowType(transaction);
+    const account = accounts.get(String(transaction.account_id || ''));
+    const sourceIsInvestment = transaction.source === 'investment_transaction' || account?.type === 'investment';
+    let economicType = 'ambiguous';
+    if (flowType === 'external_inflow') {
+      const incoming = inflowClassification(transaction);
+      economicType = incoming === 'income' && isConfirmedIncome(transaction) ? 'income' : incoming;
+      if (incoming === 'refund' && allocations.has(transactionKey(transaction, index))) economicType = 'refund';
+    } else if (flowType === 'pre_tax_retirement') economicType = 'payroll_retirement_contribution';
+    else if (flowType === 'internal_transfer') {
+      const detailed = String(transaction.pfc_detailed || transaction.personal_finance_category?.detailed || '').toUpperCase();
+      if (detailed.includes('CREDIT_CARD_PAYMENT') || /PAYMENT THANK YOU|AUTOPAY PAYMENT/.test(String(transaction.name || '').toUpperCase())) economicType = 'credit_card_payment';
+      else if (transaction.bucket === 'savings') economicType = 'savings_transfer';
+      else if (transaction.bucket === 'investments' && !sourceIsInvestment) economicType = 'investment_funding';
+      else economicType = 'internal_transfer';
+    } else if (flowType === 'external_outflow') {
+      if (transaction.bucket === 'savings') economicType = 'savings_transfer';
+      else if (transaction.bucket === 'investments') economicType = sourceIsInvestment ? 'investment_activity' : 'investment_funding';
+      else economicType = 'expense';
+    }
+    const refundAmount = allocations.get(transactionKey(transaction, index)) || 0;
+    const flow = cashFlowDetail(transaction);
+    const essential = economicType === 'expense' && transaction.bucket === 'fixed';
+    return { ...transaction, transaction_id: transactionKey(transaction, index), economicType, amount: Number(transaction.amount || 0), value: economicType === 'refund' ? -refundAmount : Math.abs(Number(transaction.amount || 0)), refundAmount, flowKey: flow.key, flowLabel: flow.label, essential };
+  });
+}
+
+export function monthlyFinancialFacts(store, options = {}) {
+  const rows = canonicalEconomicLedger(store).filter((row) => (!options.startDate || row.date >= options.startDate) && (!options.endDate || row.date <= options.endDate));
+  const facts = new Map();
+  const ensure = (month) => {
+    if (!facts.has(month)) facts.set(month, { month, income: 0, actualSpend: 0, essentialSpend: 0, discretionarySpend: 0, refunds: 0, cashSavings: 0, investmentContributions: 0, postTaxInvestmentContributions: 0, payrollRetirementContributions: 0 });
+    return facts.get(month);
+  };
+  for (const row of rows) {
+    const fact = ensure(String(row.date).slice(0, 7));
+    if (row.economicType === 'income') fact.income += row.value;
+    else if (row.economicType === 'expense' || row.economicType === 'refund') {
+      fact.actualSpend += row.value;
+      if (row.economicType === 'refund') fact.refunds += Math.abs(row.value);
+      if (row.essential) fact.essentialSpend += row.value;
+      else fact.discretionarySpend += row.value;
+    } else if (row.economicType === 'savings_transfer') fact.cashSavings += row.value;
+    else if (row.economicType === 'investment_funding') { fact.investmentContributions += row.value; fact.postTaxInvestmentContributions += row.value; }
+    else if (row.economicType === 'payroll_retirement_contribution') { fact.investmentContributions += row.value; fact.payrollRetirementContributions += row.value; }
+  }
+  return [...facts.values()].sort((a, b) => a.month.localeCompare(b.month));
+}
+
 // Plaid's income category is intentionally broad. Keep the main cash-flow
 // calculation broad too, but retain the source so a paycheck is not made to
 // look indistinguishable from HYSA interest, benefits, or self-employment.
@@ -1452,6 +1542,44 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
       flowGroup: 'save_invest'
     });
   }
+  // All feature-facing totals are derived from the canonical ledger. The
+  // older loops above still build activity rows and display categories, but
+  // they must not become a second economic interpretation of a transaction.
+  const canonicalRows = canonicalEconomicLedger(store).filter((row) => row.date >= startDate && row.date <= endDate);
+  const canonicalFacts = monthlyFinancialFacts(store, { startDate, endDate });
+  actualSpend = 0;
+  savings = 0;
+  investments = 0;
+  savingsAndInvestments = 0;
+  monthlyIncome.clear();
+  monthlyPreTaxRetirement.clear();
+  monthlyActualSpend.clear();
+  monthlySavedInvested.clear();
+  actualSpendCategoryMap.clear();
+  incomeSourceMap.clear();
+  for (const row of canonicalRows) {
+    const month = String(row.date).slice(0, 7);
+    if (row.economicType === 'income') {
+      monthlyIncome.set(month, (monthlyIncome.get(month) || 0) + row.value);
+      const source = incomeSource(row);
+      incomeSourceMap.set(source.key, { ...source, amount: (incomeSourceMap.get(source.key)?.amount || 0) + row.value });
+    } else if (row.economicType === 'expense' || row.economicType === 'refund') {
+      actualSpend += row.value;
+      const flow = cashFlowDetail(row);
+      actualSpendCategoryMap.set(flow.key, { name: flow.label, key: flow.key, amount: (actualSpendCategoryMap.get(flow.key)?.amount || 0) + row.value });
+      monthlyActualSpend.set(month, (monthlyActualSpend.get(month) || 0) + row.value);
+    } else if (row.economicType === 'savings_transfer') {
+      savings += row.value;
+      savingsAndInvestments += row.value;
+      monthlySavedInvested.set(month, (monthlySavedInvested.get(month) || 0) + row.value);
+    } else if (row.economicType === 'investment_funding') {
+      investments += row.value;
+      savingsAndInvestments += row.value;
+      monthlySavedInvested.set(month, (monthlySavedInvested.get(month) || 0) + row.value);
+    } else if (row.economicType === 'payroll_retirement_contribution') {
+      monthlyPreTaxRetirement.set(month, (monthlyPreTaxRetirement.get(month) || 0) + row.value);
+    }
+  }
   const total = [...categories.values()].reduce((sum, amount) => sum + amount, 0);
   const categoryRows = [...actualSpendCategoryMap.values()]
     .filter(({ amount }) => amount > 0)
@@ -1473,7 +1601,7 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
   const monthlyRows = [...new Set([...monthly.keys(), ...monthlyIncome.keys(), ...monthlyPreTaxRetirement.keys()])]
     .map((month) => ({ month, amount: monthlyActualSpend.get(month) || 0, actual_spend: monthlyActualSpend.get(month) || 0, saved_invested: monthlySavedInvested.get(month) || 0, income: monthlyIncome.get(month) || 0, pre_tax_retirement: monthlyPreTaxRetirement.get(month) || 0 }))
     .sort((a, b) => a.month.localeCompare(b.month));
-  const income = [...monthlyIncome.values()].reduce((sum, amount) => sum + amount, 0);
+  const income = canonicalFacts.reduce((sum, fact) => sum + fact.income, 0);
   const incomeSources = [...incomeSourceMap.values()].sort((a, b) => b.amount - a.amount);
   const preTaxRetirement = [...monthlyPreTaxRetirement.values()].reduce((sum, amount) => sum + amount, 0);
   const actualSpendCategories = [...actualSpendCategoryMap.values()].filter((row) => row.amount > 0).sort((a, b) => b.amount - a.amount);
@@ -1499,15 +1627,23 @@ function trailingPostedTransactionWindow(store) {
   if (!completed.length) return { transactions: [], months: [] };
 
   const latest = new Date(`${monthId(completed.at(-1).date)}-01T12:00:00`);
+  const earliest = new Date(`${monthId(completed[0].date)}-01T12:00:00`);
+  const spanMonths = (latest.getFullYear() - earliest.getFullYear()) * 12 + latest.getMonth() - earliest.getMonth() + 1;
   const start = new Date(latest);
-  start.setMonth(start.getMonth() - 11);
+  start.setMonth(start.getMonth() - Math.min(11, spanMonths - 1));
   const startMonth = start.toISOString().slice(0, 7);
   const windowEndMonth = latest.toISOString().slice(0, 7);
   const transactions = completed.filter((transaction) => {
     const month = monthId(transaction.date);
     return month >= startMonth && month <= windowEndMonth;
   });
-  return { transactions, months: [...new Set(transactions.map((transaction) => monthId(transaction.date)))].sort() };
+  const months = [];
+  const cursor = new Date(`${startMonth}-01T12:00:00`);
+  while (cursor <= latest) {
+    months.push(cursor.toISOString().slice(0, 7));
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return { transactions, months };
 }
 
 function median(values) {
@@ -1528,26 +1664,36 @@ export function annualizedLivingSpend(store) {
       monthsObserved: 0
     };
   }
-  const monthlySpend = months.map((month) => transactions
-    .filter((transaction) => monthId(transaction.date) === month && Number(transaction.amount || 0) > 0 && (transaction.bucket === 'fixed' || transaction.bucket === 'guilt_free'))
-    .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0));
-  const monthlyEssentials = months.map((month) => transactions
-    .filter((transaction) => monthId(transaction.date) === month && Number(transaction.amount || 0) > 0 && transaction.bucket === 'fixed')
-    .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0));
-  const monthlyAverage = median(monthlySpend);
-  const essentialMonthlySpend = median(monthlyEssentials);
-  return { annualSpend: monthlyAverage * 12, monthlyAverage, essentialAnnualSpend: essentialMonthlySpend * 12, essentialMonthlySpend, monthsObserved: months.length };
+  const factsByMonth = new Map(monthlyFinancialFacts(store).map((fact) => [fact.month, fact]));
+  const monthlySpend = months.map((month) => Number(factsByMonth.get(month)?.actualSpend || 0));
+  const monthlyEssentials = months.map((month) => Number(factsByMonth.get(month)?.essentialSpend || 0));
+  const fullYear = months.length >= 12;
+  const annualSpend = fullYear ? monthlySpend.reduce((sum, value) => sum + value, 0) : median(monthlySpend) * 12;
+  const essentialAnnualSpend = fullYear ? monthlyEssentials.reduce((sum, value) => sum + value, 0) : median(monthlyEssentials) * 12;
+  return {
+    annualSpend,
+    monthlyAverage: annualSpend / 12,
+    essentialAnnualSpend,
+    essentialMonthlySpend: essentialAnnualSpend / 12,
+    monthsObserved: months.length,
+    completeMonthsObserved: months.length,
+    annualizedFromFullYear: fullYear
+  };
 }
 
 function annualizedContributions(store, buckets = ['savings', 'investments']) {
   const { transactions, months } = trailingPostedTransactionWindow(store);
   if (!months.length) return { annualContributions: 0, monthlyContributions: 0, monthsObserved: 0 };
-  // Median describes a typical observed month. It intentionally avoids
-  // presenting a bonus, rollover, or irregular transfer as a recurring pace.
-  const monthlyContributions = median(months.map((month) => transactions
-    .filter((transaction) => monthId(transaction.date) === month && Number(transaction.amount || 0) > 0 && buckets.includes(transaction.bucket))
-    .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0)));
-  return { annualContributions: monthlyContributions * 12, monthlyContributions, monthsObserved: months.length };
+  const factsByMonth = new Map(monthlyFinancialFacts(store).map((fact) => [fact.month, fact]));
+  const useCashSavings = buckets.length === 1 && buckets[0] === 'savings';
+  const monthlyValues = months.map((month) => Number(factsByMonth.get(month)?.[useCashSavings ? 'cashSavings' : 'investmentContributions'] || 0));
+  const observedTotal = monthlyValues.reduce((sum, value) => sum + value, 0);
+  const fullYear = months.length >= 12;
+  // With fewer than twelve complete months, retain the observed contribution
+  // total and expose its normalized monthly pace. Annualizing a one-off IRA
+  // contribution would manufacture money that was never observed.
+  const annualContributions = observedTotal;
+  return { annualContributions, monthlyContributions: annualContributions / 12, monthsObserved: months.length, completeMonthsObserved: months.length, annualizedFromFullYear: fullYear };
 }
 
 function monthsToTarget({ balance, target, annualContribution = 0, annualReturn = 0 }) {
@@ -1626,6 +1772,8 @@ export function calculateFire(store, netWorth) {
     essentialAnnualSpend: spend.essentialAnnualSpend,
     essentialMonthlySpend: spend.essentialMonthlySpend,
     monthsObserved: spend.monthsObserved,
+    completeMonthsObserved: spend.completeMonthsObserved || spend.monthsObserved,
+    annualizedFromFullYear: Boolean(spend.annualizedFromFullYear),
     annualContributions: contributions.annualContributions,
     monthlyContributions: contributions.monthlyContributions,
     contributionMonthsObserved: contributions.monthsObserved,
