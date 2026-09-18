@@ -18,6 +18,22 @@ function isProviderTransfer(tx) {
   return transactionCode === 'transfer' || primary.includes('TRANSFER') || detailed.includes('TRANSFER') || detailed.includes('CREDIT_CARD_PAYMENT') || name.includes('PAYMENT THANK YOU') || name.includes('AUTOPAY PAYMENT');
 }
 
+function inflowClassification(tx) {
+  const primary = (tx.personal_finance_category?.primary || tx.pfc_primary || '').toUpperCase();
+  const detailed = (tx.personal_finance_category?.detailed || tx.pfc_detailed || '').toUpperCase();
+  const name = `${tx.merchant_name || ''} ${tx.name || ''}`.toUpperCase();
+  const context = `${primary} ${detailed} ${name}`;
+  if (/REFUND|REIMBURSE|RETURN|MERCHANT_CREDIT|CREDIT_RECEIVED/.test(context)) return 'refund';
+  if (/INVESTMENT.*(SALE|PROCEED)|SECURITIES?_SOLD|STOCK_SALE|SALE_PROCEEDS|BROKERAGE.*(SALE|SOLD)|\bSELL\b/.test(context)) return 'investment_proceeds';
+  if (/LOAN|CASH_ADVANCE|LINE_OF_CREDIT|HELOC/.test(context)) return 'loan_proceeds';
+  if (primary === 'INCOME' || detailed.startsWith('INCOME_') || /PAYROLL|SALARY|WAGE|EMPLOYER|BONUS|SEVERANCE|PAYOUT|FREELANCE|CONTRACT|BUSINESS|GIG|BENEFIT|UNEMPLOYMENT|SOCIAL_SECURITY|PENSION|INTEREST|DIVIDEND/.test(context)) return 'income';
+  return 'ambiguous';
+}
+
+function isConfirmedIncome(tx) {
+  return inflowClassification(tx) === 'income' || (tx.category_overridden && tx.bucket === 'income');
+}
+
 // Cash flow is a signed, posted ledger. A category describes the purpose of a
 // transaction; it does not decide whether money entered or left a person's
 // accounts. Keep the two concepts separate so a provider category correction
@@ -47,7 +63,7 @@ export function classifyTransaction(tx) {
   // the transaction direction is the durable cash-flow fact: money entering
   // an account is an inflow, not discretionary spending. This also makes
   // refunds and credits reconcile rather than silently disappearing.
-  if (cashFlowType(tx) === 'external_inflow') return 'income';
+  if (cashFlowType(tx) === 'external_inflow') return inflowClassification(tx);
 
   if (detailed.includes('INVESTMENT') || detailed.includes('RETIREMENT')) return 'investments';
   if (detailed.includes('SAVINGS')) return 'savings';
@@ -119,7 +135,7 @@ export function repairIncomingClassifications(store) {
       repaired += 1;
     }
     if (transaction.category_overridden || transaction.source === 'investment_transaction') continue;
-    if (flowType !== 'external_inflow' || transaction.bucket === 'income') continue;
+    if (flowType !== 'external_inflow' || !isConfirmedIncome(transaction) || transaction.bucket === 'income') continue;
     transaction.bucket = 'income';
     repaired += 1;
   }
@@ -1255,6 +1271,8 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
   const monthly = new Map();
   const monthlyIncome = new Map();
   const monthlyPreTaxRetirement = new Map();
+  const monthlyActualSpend = new Map();
+  const monthlySavedInvested = new Map();
   const incomeSourceMap = new Map();
   const transactionRows = [];
   const actualSpendCategoryMap = new Map();
@@ -1266,7 +1284,7 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
     // Cash flow follows the posted signed ledger, not a spending category.
     // Categories can change; whether external money entered the connected
     // accounts cannot. Provider-confirmed transfers remain outside cash flow.
-    if (transaction.pending || transaction.excluded || cashFlowType(transaction) !== 'external_inflow') return false;
+    if (transaction.pending || transaction.excluded || cashFlowType(transaction) !== 'external_inflow' || !isConfirmedIncome(transaction)) return false;
     return transaction.date >= startDate && transaction.date <= endDate;
   });
   for (const transaction of incomeTransactions) {
@@ -1317,6 +1335,37 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
     if (transaction.pending || transaction.excluded || cashFlowType(transaction) !== 'external_outflow') return false;
     return transaction.date >= startDate && transaction.date <= endDate;
   });
+  const postedTransactions = store.transactions.filter((transaction) => !transaction.pending && !transaction.excluded && transaction.date >= startDate && transaction.date <= endDate);
+  const positiveExpenses = postedTransactions.filter((transaction) => cashFlowType(transaction) === 'external_outflow' && Number(transaction.amount || 0) > 0 && !['savings', 'investments'].includes(transaction.bucket));
+  const expenseRemaining = new Map(positiveExpenses.map((expense, index) => [expense.id || expense.plaid_transaction_id || `${expense.date}:${index}`, Number(expense.amount || 0)]));
+  const normalizedMerchant = (transaction) => String(transaction.merchant_name || transaction.name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const refundRows = postedTransactions.filter((transaction) => cashFlowType(transaction) === 'external_inflow' && inflowClassification(transaction) === 'refund');
+  const attributableRefunds = new Map();
+  for (const refund of refundRows) {
+    const refundFlow = cashFlowDetail({ ...refund, bucket: 'guilt_free' });
+    const merchant = normalizedMerchant(refund);
+    const match = positiveExpenses.find((expense, index) => {
+      if (expense.date > refund.date) return false;
+      const expenseId = expense.id || expense.plaid_transaction_id || `${expense.date}:${index}`;
+      if ((expenseRemaining.get(expenseId) || 0) <= 0) return false;
+      const expenseFlow = cashFlowDetail(expense);
+      if (expenseFlow.key !== refundFlow.key) return false;
+      return merchant && normalizedMerchant(expense) === merchant;
+    }) || positiveExpenses.find((expense, index) => {
+      if (expense.date > refund.date || cashFlowDetail(expense).key !== refundFlow.key) return false;
+      const expenseId = expense.id || expense.plaid_transaction_id || `${expense.date}:${index}`;
+      return (expenseRemaining.get(expenseId) || 0) > 0;
+    });
+    if (match) {
+      const matchIndex = positiveExpenses.indexOf(match);
+      const expenseId = match.id || match.plaid_transaction_id || `${match.date}:${matchIndex}`;
+      const amount = Math.min(Math.abs(Number(refund.amount || 0)), expenseRemaining.get(expenseId) || 0);
+      if (amount > 0) {
+        expenseRemaining.set(expenseId, (expenseRemaining.get(expenseId) || 0) - amount);
+        attributableRefunds.set(refund.id || refund.plaid_transaction_id || `${refund.date}:${merchant}`, { refund, flow: refundFlow, amount });
+      }
+    }
+  }
   for (const transaction of eligibleTransactions) {
     const amount = Number(transaction.amount);
     if (transaction.bucket === 'savings') { savings += amount; savingsAndInvestments += amount; }
@@ -1330,6 +1379,8 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
     merchants.set(merchant, (merchants.get(merchant) || 0) + amount);
     const month = String(transaction.date).slice(0, 7);
     monthly.set(month, (monthly.get(month) || 0) + amount);
+    if (transaction.bucket === 'savings' || transaction.bucket === 'investments') monthlySavedInvested.set(month, (monthlySavedInvested.get(month) || 0) + amount);
+    else monthlyActualSpend.set(month, (monthlyActualSpend.get(month) || 0) + amount);
     transactionRows.push({
       id: transaction.id || transaction.plaid_transaction_id,
       name: merchant,
@@ -1340,6 +1391,27 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
       flowKey: flow.key,
       flowLabel: flow.label,
       flowGroup: flow.group
+    });
+  }
+  for (const { refund, flow, amount: refundAmount } of attributableRefunds.values()) {
+    const amount = -Math.abs(Number(refundAmount || 0));
+    const month = String(refund.date).slice(0, 7);
+    actualSpend += amount;
+    actualSpendCategoryMap.set(flow.key, { name: flow.label, key: flow.key, amount: (actualSpendCategoryMap.get(flow.key)?.amount || 0) + amount });
+    categories.set(flow.label, (categories.get(flow.label) || 0) + amount);
+    merchants.set(refund.merchant_name || refund.name || 'Unrecognized merchant', (merchants.get(refund.merchant_name || refund.name || 'Unrecognized merchant') || 0) + amount);
+    monthly.set(month, (monthly.get(month) || 0) + amount);
+    monthlyActualSpend.set(month, (monthlyActualSpend.get(month) || 0) + amount);
+    transactionRows.push({
+      id: refund.id || refund.plaid_transaction_id,
+      name: refund.merchant_name || refund.name || 'Refund',
+      date: refund.date,
+      amount,
+      category: flow.label,
+      bucket: 'refund',
+      flowKey: flow.key,
+      flowLabel: flow.label,
+      flowGroup: 'actual_spend'
     });
   }
   // Provider-confirmed transfers do not belong in take-home spending, but
@@ -1381,8 +1453,9 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
     });
   }
   const total = [...categories.values()].reduce((sum, amount) => sum + amount, 0);
-  const categoryRows = [...categories.entries()]
-    .map(([name, amount]) => ({ name, amount, share: total ? amount / total : 0 }))
+  const categoryRows = [...actualSpendCategoryMap.values()]
+    .filter(({ amount }) => amount > 0)
+    .map(({ name, amount }) => ({ name, amount, share: actualSpend ? amount / actualSpend : 0 }))
     .sort((a, b) => b.amount - a.amount);
   // Allocate the leftover percentage points by largest remainder so the UI
   // always reconciles to 100%, rather than showing independently rounded values.
@@ -1391,20 +1464,20 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
   [...categoryRows.keys()].sort((a, b) => (categoryRows[b].share * 100 % 1) - (categoryRows[a].share * 100 % 1)).forEach((index) => {
     if (remainingPercent > 0) { wholePercent[index] += 1; remainingPercent -= 1; }
   });
-  categoryRows.forEach((row, index) => { row.percentage = total ? wholePercent[index] : 0; });
+  categoryRows.forEach((row, index) => { row.percentage = actualSpend ? wholePercent[index] : 0; });
   const topMerchants = [...merchants.entries()]
     .map(([name, amount]) => ({ name, amount }))
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 3);
   const monthCount = Math.max(1, (new Date(`${endDate}T12:00:00`).getFullYear() - new Date(`${startDate}T12:00:00`).getFullYear()) * 12 + new Date(`${endDate}T12:00:00`).getMonth() - new Date(`${startDate}T12:00:00`).getMonth() + 1);
   const monthlyRows = [...new Set([...monthly.keys(), ...monthlyIncome.keys(), ...monthlyPreTaxRetirement.keys()])]
-    .map((month) => ({ month, amount: monthly.get(month) || 0, income: monthlyIncome.get(month) || 0, pre_tax_retirement: monthlyPreTaxRetirement.get(month) || 0 }))
+    .map((month) => ({ month, amount: monthlyActualSpend.get(month) || 0, actual_spend: monthlyActualSpend.get(month) || 0, saved_invested: monthlySavedInvested.get(month) || 0, income: monthlyIncome.get(month) || 0, pre_tax_retirement: monthlyPreTaxRetirement.get(month) || 0 }))
     .sort((a, b) => a.month.localeCompare(b.month));
   const income = [...monthlyIncome.values()].reduce((sum, amount) => sum + amount, 0);
   const incomeSources = [...incomeSourceMap.values()].sort((a, b) => b.amount - a.amount);
   const preTaxRetirement = [...monthlyPreTaxRetirement.values()].reduce((sum, amount) => sum + amount, 0);
-  const actualSpendCategories = [...actualSpendCategoryMap.values()].sort((a, b) => b.amount - a.amount);
-  return { range, startDate, endDate, completedMonths, total, income, incomeSources, actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, savedInvested, preTaxRetirement, monthlyAverage: total / monthCount, categories: categoryRows, topMerchants, monthly: monthlyRows, transactions: transactionRows };
+  const actualSpendCategories = [...actualSpendCategoryMap.values()].filter((row) => row.amount > 0).sort((a, b) => b.amount - a.amount);
+  return { range, startDate, endDate, completedMonths, total, income, incomeSources, actualSpend, netCashFlow: income - actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, savedInvested, preTaxRetirement, monthlyAverage: total / monthCount, categories: categoryRows, topMerchants, monthly: monthlyRows, transactions: transactionRows };
 }
 
 function monthId(dateString) {

@@ -833,7 +833,7 @@ function spendingForSelectedMonth(data) {
   const savingsAndInvestments = transactions.filter((transaction) => transaction.flowGroup === 'save_invest').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const actualSpendCategories = flowCategoryRows(planTransactions.filter((transaction) => transaction.flowGroup === 'actual_spend'));
   const preTaxRetirement = Number((data.monthly || []).find((row) => row.month === state.spendingMonth)?.pre_tax_retirement || 0);
-  return { ...data, total, income, incomeSources, actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, savedInvested: savingsAndInvestments, preTaxRetirement, monthlyAverage: total, categories: allocationRows(planTransactions), transactions };
+  return { ...data, total, income, incomeSources, actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, savedInvested: savingsAndInvestments, preTaxRetirement, monthlyAverage: total, categories: allocationRows(planTransactions.filter((transaction) => transaction.flowGroup === 'actual_spend')), transactions };
 }
 
 function flowCategoryRows(transactions) {
@@ -853,8 +853,9 @@ function renderSpendingTrend(data) {
   const detail = months.find((row) => row.month === state.spendingMonth) || months.at(-1);
   if (detail) {
     const label = new Date(`${detail.month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-    const remaining = Number(detail.income || 0) - Number(detail.amount || 0);
-    $('#trendDetail').innerHTML = `<span>${state.spendingMonth ? label : `Latest · ${label}`}</span><strong><i class="income"></i><small>Money in</small>${fmt.format(detail.income || 0)}</strong><strong><i class="spend"></i><small>Spent</small>${fmt.format(detail.amount || 0)}</strong><b class="${remaining >= 0 ? 'positive' : 'negative'}">${remaining >= 0 ? 'Left' : 'Over'} ${fmt.format(Math.abs(remaining))}</b>`;
+    const actualSpend = Number(detail.actual_spend ?? detail.amount ?? 0);
+    const remaining = Number(detail.income || 0) - actualSpend;
+    $('#trendDetail').innerHTML = `<span>${state.spendingMonth ? label : `Latest · ${label}`}</span><strong><i class="income"></i><small>Money in</small>${fmt.format(detail.income || 0)}</strong><strong><i class="spend"></i><small>Actual spend</small>${fmt.format(actualSpend)}</strong><b class="${remaining >= 0 ? 'positive' : 'negative'}">${remaining >= 0 ? 'More money in' : 'More spent'} ${fmt.format(Math.abs(remaining))}</b>`;
   } else $('#trendDetail').innerHTML = '';
   const chart = $('#spendingTrend');
   if (!months.length) { chart.innerHTML = '<p class="spending-empty">Monthly patterns will appear once transactions arrive.</p>'; return; }
@@ -863,7 +864,7 @@ function renderSpendingTrend(data) {
   // the underlying income and outflow values without making the bars overlap.
   const compact = chart.clientWidth < 480;
   const width = compact ? 390 : 720, height = 210, plot = { left: compact ? 39 : 48, right: 10, top: 12, bottom: 174 };
-  const values = months.map((row) => Number(row.income || 0) - Number(row.amount || 0));
+  const values = months.map((row) => Number(row.income || 0) - Number(row.actual_spend ?? row.amount ?? 0));
   const maxAbs = Math.max(...values.map((value) => Math.abs(value)), 1);
   // Round the symmetric domain to a useful amount. Exact maxima create
   // awkward labels (for example $3,143 / $1,572) and make the visual feel
@@ -893,11 +894,12 @@ function renderSpendingTrend(data) {
     const barHeight = Math.max(value ? 6 : 0, Math.abs(value) * scale);
     const y = value >= 0 ? zeroY - barHeight : zeroY;
     const label = new Date(`${row.month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'short' });
-    const title = `${row.month}: Money in ${fmt.format(row.income || 0)} · Money out ${fmt.format(row.amount || 0)} · ${value >= 0 ? 'Left' : 'Over'} ${fmt.format(Math.abs(value))}`;
+    const actualSpend = Number(row.actual_spend ?? row.amount ?? 0);
+    const title = `${row.month}: Money in ${fmt.format(row.income || 0)} · Actual spend ${fmt.format(actualSpend)} · ${value >= 0 ? 'More money in' : 'More spent'} ${fmt.format(Math.abs(value))}`;
     const selected = state.spendingMonth === row.month;
     return `<g class="trend-column ${selected ? 'active' : ''}" data-spending-month="${row.month}" role="button" tabindex="0" aria-pressed="${selected}" aria-label="Select ${escapeHtml(label)} cash flow" title="${escapeHtml(title)}"><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="5" fill="${value >= 0 ? 'var(--income)' : 'var(--outflow)'}"/><text x="${(x + barWidth / 2).toFixed(1)}" y="${height - 10}" text-anchor="middle" class="trend-month">${label}</text></g>`;
   }).join('');
-  chart.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Monthly cash flow. Green bars above zero show money left after cash outflow; coral bars below zero show months where cash outflow exceeded money in.">${ticks}${bars}</svg>`;
+  chart.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Monthly cash flow. Green bars above zero show more money in than actual spend; coral bars below zero show more spent than money in.">${ticks}${bars}</svg>`;
 }
 
 function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false) {
@@ -1075,9 +1077,9 @@ function renderSpending(data) {
   const actualSpend = Number(selected.actualSpend || 0);
   const savingsAndInvestments = Number(selected.savingsAndInvestments || 0);
   const preTaxRetirement = Number(selected.preTaxRetirement || 0);
-  const remaining = income - total;
+  const remaining = income - actualSpend;
   $('#spendingTotal').textContent = fmt.format(Math.abs(remaining));
-  $('#cashflowHeadline').textContent = remaining >= 0 ? 'Left after spending and saving' : 'More allocated than money in';
+  $('#cashflowHeadline').textContent = remaining >= 0 ? 'More money in than spent' : 'More spent than money in';
   $('#cashflowHeadline').className = `cashflow-headline ${remaining >= 0 ? 'positive' : 'negative'}`;
   const preTaxNote = $('#cashflowPreTax');
   preTaxNote.innerHTML = preTaxRetirement ? `<span class="cashflow-payroll-mark" aria-hidden="true">↗</span><div><span>PAYROLL CONTRIBUTIONS</span><strong>${fmt.format(preTaxRetirement)}</strong><p>401(k), HSA, and similar contributions saved before reaching your bank account.</p></div><i class="cashflow-payroll-chevron" aria-hidden="true">›</i>` : '';

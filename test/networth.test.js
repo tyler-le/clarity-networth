@@ -101,7 +101,7 @@ test('spending summary excludes transfers and groups only transactions in the se
   ] };
   const result = spendingSummary(store, '1m', new Date('2026-09-05T12:00:00'));
   assert.equal(result.total, 80);
-  assert.deepEqual(result.categories, [{ name: 'Guilt-free spending', amount: 80, share: 1, percentage: 100 }]);
+  assert.deepEqual(result.categories, [{ name: 'Food & dining', amount: 80, share: 1, percentage: 100 }]);
   assert.deepEqual(result.topMerchants, [{ name: 'Cafe', amount: 80 }]);
 });
 
@@ -114,7 +114,7 @@ test('monthly spending keeps income separate for comparison', () => {
   const result = spendingSummary(store, '1m', new Date('2026-09-05T12:00:00'));
   assert.equal(result.total, 900);
   assert.equal(result.income, 4200);
-  assert.deepEqual(result.monthly, [{ month: '2026-09', amount: 900, income: 4200, pre_tax_retirement: 0 }]);
+  assert.deepEqual(result.monthly, [{ month: '2026-09', amount: 900, actual_spend: 900, saved_invested: 0, income: 4200, pre_tax_retirement: 0 }]);
   assert.deepEqual(result.transactions.find((transaction) => transaction.category === 'Paychecks'), {
     id: undefined, name: 'Payroll', date: '2026-09-01', amount: 4200, category: 'Paychecks', bucket: 'income', flowKey: 'income_paychecks', flowLabel: 'Paychecks', flowGroup: 'income'
   });
@@ -237,6 +237,79 @@ test('cash flow separates actual spending details from saving and investing', ()
   assert.equal(result.savingsAndInvestments, 750);
   assert.equal(result.savedInvested, 750);
   assert.deepEqual(result.actualSpendCategories.map((row) => [row.key, row.amount]), [['housing_bills', 1800], ['food_dining', 240], ['shopping', 90]]);
+});
+
+test('cash-flow headline subtracts actual spend only', () => {
+  const store = { transactions: [
+    { date: '2026-09-01', amount: -5000, bucket: 'income', merchant_name: 'Payroll', pfc_primary: 'INCOME', pfc_detailed: 'INCOME_PAYCHECK' },
+    { date: '2026-09-02', amount: 2000, bucket: 'fixed', merchant_name: 'Rent' },
+    { date: '2026-09-03', amount: 500, bucket: 'guilt_free', merchant_name: 'Food' },
+    { date: '2026-09-04', amount: 1000, bucket: 'savings', merchant_name: 'Savings transfer' },
+    { date: '2026-09-05', amount: 1000, bucket: 'investments', merchant_name: 'Brokerage transfer' }
+  ] };
+  const result = spendingSummary(store, '1m', new Date('2026-09-05T12:00:00'));
+  assert.equal(result.income, 5000);
+  assert.equal(result.actualSpend, 2500);
+  assert.equal(result.savingsAndInvestments, 2000);
+  assert.equal(result.netCashFlow, 2500);
+});
+
+test('credit-card purchase and payment count as one economic expense', () => {
+  const store = { transactions: [
+    { date: '2026-09-01', amount: 100, bucket: 'guilt_free', merchant_name: 'Restaurant', pfc_primary: 'FOOD_AND_DRINK' },
+    { date: '2026-09-02', amount: 100, bucket: 'transfer', merchant_name: 'Payment Thank You', pfc_primary: 'LOAN_PAYMENTS', pfc_detailed: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT' }
+  ] };
+  const result = spendingSummary(store, '1m', new Date('2026-09-05T12:00:00'));
+  assert.equal(result.actualSpend, 100);
+  assert.equal(result.total, 100);
+});
+
+test('attributable refunds reduce spending and never become income', () => {
+  const store = { transactions: [
+    { date: '2026-09-01', amount: 100, bucket: 'guilt_free', merchant_name: 'Store', pfc_primary: 'GENERAL_MERCHANDISE', pfc_detailed: 'GENERAL_MERCHANDISE_ONLINE_MARKETPLACES' },
+    { date: '2026-09-03', amount: -40, bucket: 'guilt_free', merchant_name: 'Store refund', pfc_primary: 'GENERAL_MERCHANDISE', pfc_detailed: 'GENERAL_MERCHANDISE_REFUND' },
+    { date: '2026-09-04', amount: -5000, bucket: 'income', merchant_name: 'Payroll', pfc_primary: 'INCOME', pfc_detailed: 'INCOME_PAYCHECK' }
+  ] };
+  const result = spendingSummary(store, '1m', new Date('2026-09-05T12:00:00'));
+  assert.equal(result.income, 5000);
+  assert.equal(result.actualSpend, 60);
+  assert.equal(result.netCashFlow, 4940);
+  assert.deepEqual(result.actualSpendCategories.map((row) => [row.key, row.amount]), [['shopping', 60]]);
+});
+
+test('a full attributable refund brings the category and spend to zero', () => {
+  const store = { transactions: [
+    { date: '2026-09-01', amount: 100, bucket: 'guilt_free', merchant_name: 'Store', pfc_primary: 'GENERAL_MERCHANDISE', pfc_detailed: 'GENERAL_MERCHANDISE_ONLINE_MARKETPLACES' },
+    { date: '2026-09-02', amount: -100, bucket: 'guilt_free', merchant_name: 'Store refund', pfc_primary: 'GENERAL_MERCHANDISE', pfc_detailed: 'GENERAL_MERCHANDISE_REFUND' }
+  ] };
+  const result = spendingSummary(store, '1m', new Date('2026-09-05T12:00:00'));
+  assert.equal(result.income, 0);
+  assert.equal(result.actualSpend, 0);
+  assert.equal(result.netCashFlow, 0);
+  assert.deepEqual(result.actualSpendCategories, []);
+});
+
+test('unknown inflows and investment sale proceeds are not silently counted as income', () => {
+  const store = { transactions: [
+    { date: '2026-09-01', amount: -1000, bucket: 'guilt_free', merchant_name: 'Unknown deposit' },
+    { date: '2026-09-02', amount: -2500, bucket: 'guilt_free', merchant_name: 'Sell VTI', pfc_primary: 'GENERAL', pfc_detailed: 'GENERAL_OTHER' }
+  ] };
+  const result = spendingSummary(store, '1m', new Date('2026-09-05T12:00:00'));
+  assert.equal(result.income, 0);
+  assert.equal(result.actualSpend, 0);
+  assert.equal(result.netCashFlow, 0);
+  assert.equal(classifyTransaction(store.transactions[1]), 'investment_proceeds');
+});
+
+test('pending transactions are excluded from finalized cash flow', () => {
+  const store = { transactions: [
+    { date: '2026-09-01', amount: -5000, bucket: 'income', merchant_name: 'Payroll', pfc_primary: 'INCOME', pfc_detailed: 'INCOME_PAYCHECK' },
+    { date: '2026-09-02', amount: 300, bucket: 'guilt_free', merchant_name: 'Pending store', pending: true }
+  ] };
+  const result = spendingSummary(store, '1m', new Date('2026-09-05T12:00:00'));
+  assert.equal(result.income, 5000);
+  assert.equal(result.actualSpend, 0);
+  assert.equal(result.transactions.some((row) => row.name === 'Pending store'), false);
 });
 
 test('post-tax Sankey saving excludes payroll deferrals and moves within invested accounts', () => {
