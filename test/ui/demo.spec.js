@@ -391,8 +391,9 @@ test('monthly cash-flow values stay self-labeled instead of relying on a detache
   const detail = page.locator('#trendDetail');
   await expect(detail).toContainText('Money in');
   await expect(detail).toContainText('Actual spend');
+  await expect(detail).toContainText('Saved & invested');
   await expect(detail).toContainText(/more money in than spent|more spent than money in/);
-  const labelsStayWithValues = await detail.locator('strong').evaluateAll((items) => items.every((item) => /Money in|Actual spend/.test(item.textContent || '') && item.getBoundingClientRect().width > 0));
+  const labelsStayWithValues = await detail.locator('strong').evaluateAll((items) => items.every((item) => /Money in|Actual spend|Saved & invested/.test(item.textContent || '') && item.getBoundingClientRect().width > 0));
   expect(labelsStayWithValues).toBe(true);
 });
 
