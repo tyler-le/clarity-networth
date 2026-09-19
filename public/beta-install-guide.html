@@ -44,7 +44,11 @@
     .app-name { grid-column:1; margin-top:-9px; color:#334034; font-size:7px; text-align:center; }
     .tap { position:absolute; right:23px; top:47px; width:41px; height:41px; border:2px solid var(--green); border-radius:50%; }
     .tap::after { content:''; position:absolute; inset:8px; border-radius:50%; background:rgba(31,111,74,.13); }
-    .ios-install-shot { position:absolute; right:19px; bottom:18px; left:19px; height:205px; overflow:hidden; margin:0; border-radius:16px; background:#2e3034; box-shadow:0 12px 25px rgba(20,25,21,.16); }
+    .ios-install-flow { position:absolute; right:19px; bottom:18px; left:19px; display:grid; grid-template-columns:minmax(0,.8fr) 18px minmax(0,1.45fr); gap:8px; align-items:center; min-height:126px; padding:12px; border:1px solid #e0e8e1; border-radius:16px; background:linear-gradient(135deg,#f4faf5,#fff); }
+    .safari-share-cue { display:grid; justify-items:center; gap:4px; color:#5f6e61; font-size:8px; font-weight:760; text-align:center; }
+    .safari-share-cue i { display:grid; width:37px; height:37px; place-items:center; border-radius:12px; color:var(--green); background:var(--soft); font-size:23px; font-style:normal; line-height:1; }
+    .safari-share-cue strong { color:var(--ink); font-size:9px; }.ios-flow-arrow { color:#86a18d; font-size:18px; text-align:center; }
+    .ios-install-shot { position:static; height:78px; overflow:hidden; margin:0; border-radius:11px; background:#2e3034; box-shadow:0 7px 16px rgba(20,25,21,.12); }
     .ios-install-shot img { display:block; width:100%; height:100%; object-fit:cover; object-position:center bottom; }
     .signin { margin:23px 13px; padding:15px; border:1px solid #e0e7e0; border-radius:14px; }
     .signin strong { display:block; font-size:15px; letter-spacing:-.04em; }
@@ -57,7 +61,7 @@
     .link-card { margin-top:12px; padding:11px; border:1px solid #e1e7e1; border-radius:10px; }
     .link-logo { display:flex; align-items:center; justify-content:center; width:21px; height:21px; border-radius:6px; color:var(--green); background:var(--soft); font-size:11px; font-weight:900; }
     .link-card strong { display:block; margin-top:7px; font-size:9px; }.link-card span { color:#778077; font-size:7px; }
-    .choices { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .choices { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
     .choice { display:flex; align-items:center; gap:15px; padding:21px; border:1px solid var(--line); border-radius:20px; background:rgba(255,255,255,.74); }
     .choice-icon { display:grid; width:45px; height:45px; flex:0 0 auto; place-items:center; border-radius:14px; color:var(--green); background:var(--soft); font-size:22px; }
     h3 { margin:0 0 3px; font-size:16px; letter-spacing:-.025em; }.choice p { margin:0; color:var(--muted); font-size:13px; }
@@ -78,13 +82,14 @@
 
     <section class="steps" aria-label="Install Clarity in three steps">
       <article class="step"><div class="number">1</div><h2>Open Clarity</h2><p>Open the link above in Safari on iPhone or Chrome on Android.</p><div class="phone"><div class="phone-bar">9:41</div><div class="browser-address"><i></i> claritynetworth.com</div><div class="mini-screen"><div class="mini-label">NET WORTH, SIMPLIFIED</div><div class="mini-title">See your money<br><span>more clearly.</span></div><div class="mini-chart"><svg viewBox="0 0 210 72" preserveAspectRatio="none"><path d="M0 64L24 55 46 58 69 42 92 47 118 30 145 35 170 16 210 7V72H0Z" fill="currentColor" opacity=".12"/><path d="M0 64L24 55 46 58 69 42 92 47 118 30 145 35 170 16 210 7" fill="none" stroke="currentColor" stroke-width="2.5"/></svg></div></div><div class="share">⇧</div></div></article>
-      <article class="step"><div class="number">2</div><h2>Add it to your phone</h2><p>On iPhone, tap Share then <b>Add to Home Screen</b>. On Android, open Chrome’s ⋮ menu then choose <b>Install app</b>.</p><figure class="ios-install-shot"><img src="assets/ios-add-to-home-screen.png" alt="iPhone Safari share sheet showing the Add to Home Screen option" /></figure></article>
+      <article class="step"><div class="number">2</div><h2>Add it to your phone</h2><p>On iPhone, tap Share then <b>Add to Home Screen</b>. On Android, open Chrome’s ⋮ menu then choose <b>Install app</b>.</p><div class="ios-install-flow" aria-label="In Safari, use Share, then choose Add to Home Screen"><div class="safari-share-cue"><i>⇧</i><strong>Share</strong><span>in Safari</span></div><span class="ios-flow-arrow">→</span><figure class="ios-install-shot"><img src="assets/ios-add-to-home-screen.png" alt="iPhone Safari share sheet showing the Add to Home Screen option" /></figure></div></article>
       <article class="step"><div class="number">3</div><h2>Make it yours</h2><p>Enter access code <b>TYLER2026</b>, sign in, then choose <b>Connect account</b>. Select your institution and continue securely through Plaid.</p><div class="phone"><div class="phone-bar">Clarity</div><div class="signin"><strong>See your money<br>more clearly.</strong><p>A calm view of your accounts and progress.</p><div class="code">TYLER2026</div><div class="google">Continue with Google</div></div><div class="connect-screen"><h3>Net Worth</h3><div class="connect-button">+ Connect account</div><div class="link-card"><div class="link-logo">P</div><strong>Choose your institution</strong><span>Connect securely with Plaid</span></div></div></div></article>
     </section>
 
     <section class="choices" aria-label="Installation help">
       <article class="choice"><div class="choice-icon">↑</div><div><h3>iPhone / iPad</h3><p>Install from Safari using Share → Add to Home Screen.</p></div></article>
       <article class="choice"><div class="choice-icon">⋮</div><div><h3>Android</h3><p>Install from Chrome using the menu → Install app.</p></div></article>
+      <article class="choice"><div class="choice-icon">⌘</div><div><h3>Laptop / desktop</h3><p>Open Clarity in your browser—nothing to install.</p></div></article>
     </section>
     <section class="finish"><div><h2>That’s it.</h2><p>After you connect, Clarity organizes your accounts, net worth, cash flow, investments, and retirement picture in one place.</p></div><a class="open" href="https://claritynetworth.com">Get started <b>→</b></a></section>
   </main>
