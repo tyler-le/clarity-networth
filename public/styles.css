@@ -1020,6 +1020,16 @@ html[data-theme="dark"] :is(
 /* Keep chart value/date bubbles readable on narrow screens. */
 .holding-history-dialog .chart-tooltip { max-width: calc(100% - 18px); overflow: visible; text-overflow: clip; }
 
+/* Account groups share one disclosure pattern: the header controls whether
+   the group is open, while the existing footer reveals additional rows. */
+.account-collection-head { width: 100%; border: 0; color: inherit; background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.account-collection-head:hover { background: color-mix(in srgb, var(--accent) 4%, transparent); }
+.account-collection-head:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 28%, transparent); outline-offset: -3px; }
+.account-collection-head { grid-template-columns: 32px minmax(0, 1fr) auto 20px; }
+.account-collection-chevron { color: var(--muted); font-size: 19px; font-style: normal; line-height: 1; transform: rotate(0deg); transition: transform .16s ease; }
+.account-collection-head.is-collapsed .account-collection-chevron { transform: rotate(-90deg); }
+.account-collection-head .account-collection-total { padding-right: 0; }
+
 /* Give the longer first timeframe a little more room on phones so its
    selected pill never crowds the label. */
 @media (max-width: 560px) {

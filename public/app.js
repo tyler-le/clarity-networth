@@ -34,6 +34,7 @@ const state = {
   accountHistory: null,
   accountHistoryRange: '1m',
   expandedAccountGroups: new Set(),
+  collapsedAccountGroups: new Set(),
   holdingsExpanded: false,
   demoGoal: null,
   demoGoalInitialized: false,
@@ -699,10 +700,11 @@ function renderAccounts(accounts) {
     const total = items.reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
     const sorted = [...items].sort((a, b) => Math.abs(Number(b.current_balance || 0)) - Math.abs(Number(a.current_balance || 0)));
     const expanded = state.expandedAccountGroups.has(name);
+    const collapsed = state.collapsedAccountGroups?.has(name) || false;
     const previewCount = 2;
     return `<section class="account-collection ${debt ? 'debt' : 'asset'}">
-      <div class="account-collection-head"><span class="account-collection-icon" aria-hidden="true">${accountGroupIcons[name] || '◇'}</span><div><h2>${name}</h2><p>${items.length} account${items.length === 1 ? '' : 's'}</p></div><div class="account-collection-total ${debt ? 'negative' : ''}"><span>${debt ? 'Owed' : 'Held'}</span><strong>${fmt.format(total)}</strong></div></div>
-      <div class="account-collection-items">${sorted.map((account, index) => {
+      <button type="button" class="account-collection-head ${collapsed ? 'is-collapsed' : ''}" data-account-collapse="${escapeHtml(name)}" aria-expanded="${String(!collapsed)}"><span class="account-collection-icon" aria-hidden="true">${accountGroupIcons[name] || '◇'}</span><span><h2>${name}</h2><p>${items.length} account${items.length === 1 ? '' : 's'}</p></span><span class="account-collection-total ${debt ? 'negative' : ''}"><span>${debt ? 'Owed' : 'Held'}</span><strong>${fmt.format(total)}</strong></span><i class="account-collection-chevron" aria-hidden="true">⌄</i></button>
+      <div class="account-collection-items ${collapsed ? 'is-collapsed' : ''}">${sorted.map((account, index) => {
         const investment = account.type === 'investment' && account.plaid_account_id;
         const detail = !account.manual && account.plaid_account_id;
         const actions = `${accountConnectionAction(account)}${account.manual ? `<button class="account-rename" data-manual-account="${escapeHtml(account.id)}" data-manual-name="${escapeHtml(account.name)}" data-manual-subtype="${escapeHtml(account.subtype || '')}" data-manual-value="${escapeHtml(account.current_balance)}" data-manual-kind="${debt ? 'liability' : 'asset'}" aria-label="Edit ${escapeHtml(account.name)}">✎</button>` : `<button class="account-rename" data-account-rename="${escapeHtml(account.id)}" data-account-name="${escapeHtml(account.nickname || account.name)}" aria-label="Rename ${escapeHtml(account.nickname || account.name)}">✎</button>`}`;
@@ -711,8 +713,8 @@ function renderAccounts(accounts) {
           ? `<button class="account-detail" type="button" data-account-investment-history="${escapeHtml(account.plaid_account_id)}" aria-label="View ${escapeHtml(account.nickname || account.name)} investment performance">${content}<i aria-hidden="true">›</i></button>`
           : detail ? `<button class="account-detail" type="button" data-account-history="${escapeHtml(account.plaid_account_id)}" aria-label="View ${escapeHtml(account.nickname || account.name)} account detail">${content}<i aria-hidden="true">›</i></button>`
             : content;
-        return `<article class="account-item ${investment ? 'account-item-investment' : ''} ${debt ? 'debt' : 'asset'} ${index >= previewCount && !expanded ? 'hidden' : ''}">${detailControl}<span class="account-item-actions">${actions}</span></article>`;
-      }).join('')}</div>${items.length > previewCount ? `<button class="account-group-more" data-account-group="${escapeHtml(name)}">${expanded ? 'Show less' : `View ${items.length - previewCount} more`}</button>` : ''}
+        return `<article class="account-item ${investment ? 'account-item-investment' : ''} ${debt ? 'debt' : 'asset'} ${collapsed || (index >= previewCount && !expanded) ? 'hidden' : ''}">${detailControl}<span class="account-item-actions">${actions}</span></article>`;
+      }).join('')}</div>${items.length > previewCount && !collapsed ? `<button class="account-group-more" data-account-group="${escapeHtml(name)}">${expanded ? 'Show less' : `View ${items.length - previewCount} more`}</button>` : ''}
     </section>`;
   }).join('');
 }
@@ -2332,6 +2334,15 @@ $('#retirementNextMilestone').addEventListener('click', (event) => {
 });
 $('#retirementInfoClose').addEventListener('click', () => $('#retirementInfoDialog').close());
 $('#accountGrid').addEventListener('click', (event) => {
+  const collapseButton = event.target.closest('[data-account-collapse]');
+  if (collapseButton) {
+    const group = collapseButton.dataset.accountCollapse;
+    if (!state.collapsedAccountGroups) state.collapsedAccountGroups = new Set();
+    if (state.collapsedAccountGroups.has(group)) state.collapsedAccountGroups.delete(group);
+    else state.collapsedAccountGroups.add(group);
+    renderAccounts(state.dashboard?.accounts || []);
+    return;
+  }
   const groupButton = event.target.closest('[data-account-group]');
   if (groupButton) {
     trackProductEvent('account_group_opened');
