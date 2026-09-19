@@ -3361,6 +3361,7 @@ $('#inviteCode').addEventListener('input', () => {
 $('#inviteCode').addEventListener('keydown', (event) => {
   if (event.key === 'Enter') { event.preventDefault(); validateAccessCode(); }
 });
+$('#accessCodeSubmit').addEventListener('click', validateAccessCode);
 
 $('#signOutButton').addEventListener('click', async () => {
   if (state.demoPreview) { await exitDemoPreview(); return; }
