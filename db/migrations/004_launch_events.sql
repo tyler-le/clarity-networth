@@ -10,9 +10,9 @@ CREATE TABLE launch_events (
   CHECK (user_key IS NULL OR user_key ~ '^[a-f0-9]{64}$')
 );
 
--- A member can count once per event per day. This avoids turning normal use
--- into clickstream surveillance while still supporting activation and
--- retention metrics.
+-- Historical deployments used this index to coalesce member/event/day rows.
+-- Migration 008 removes it so product-use reporting can retain every
+-- allowlisted occurrence; unique-member metrics use COUNT(DISTINCT user_key).
 CREATE UNIQUE INDEX launch_events_daily_member_event_idx
   ON launch_events (user_key, event_name, event_date)
   WHERE user_key IS NOT NULL;

@@ -1,6 +1,6 @@
--- Keep launch measurement privacy-preserving while retaining aggregate
--- interaction volume. A row remains one member/event/day; the counter records
--- repeated use without storing a clickstream or event-level timestamps.
+-- Keep the interaction count available for historical rows created before
+-- migration 008. New rows are written one per occurrence after that
+-- migration, so SUM(interaction_count) remains the durable total-use metric.
 ALTER TABLE launch_events
   ADD COLUMN IF NOT EXISTS interaction_count integer NOT NULL DEFAULT 1;
 

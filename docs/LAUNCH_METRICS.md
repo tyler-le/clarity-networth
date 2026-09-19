@@ -19,7 +19,7 @@ Do not combine these into an in-app analytics surface or grant the reporting ser
 
 ## What is collected
 
-One opaque account key and one allowlisted event name are retained in one aggregate row per account per event per day. That row has a positive interaction counter, so the owner can compare unique-member reach, active member-days, and total uses without retaining individual click records or event-level timestamps. A valid authenticated dashboard visit establishes a signed-in member, so people with an existing persistent session are counted without needing to sign out and back in. Demo opens are anonymous aggregate counts. Events contain no balances, transactions, merchant names, account names, financial inputs, routes, device fingerprinting, raw IP address, or click replay.
+One opaque account key and one allowlisted event name are retained for each accepted occurrence. Each row has a count of one, so the owner dashboard can rank tabs and cards by every use without deduplicating by member or day. Unique-member metrics remain available as optional secondary context, but they are not the usage ranking. A valid authenticated dashboard visit establishes a signed-in member, so people with an existing persistent session are counted without needing to sign out and back in. Demo opens are anonymous aggregate counts. Events contain no balances, transactions, merchant names, account names, financial inputs, routes, device fingerprinting, raw IP address, or click replay.
 
 Events are retained for 90 days and are removed when the corresponding account is deleted.
 

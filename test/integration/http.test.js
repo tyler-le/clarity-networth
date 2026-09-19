@@ -162,6 +162,8 @@ integrationTest('accepts only minimal allowlisted launch telemetry', async () =>
   const cookie = signedTestCookie('launch-event@example.com');
   const valid = await request(app).post('/api/launch-event').set('Cookie', cookie).send({ event: 'retirement_outlook_viewed' });
   assert.equal(valid.status, 204);
+  const accountCard = await request(app).post('/api/launch-event').set('Cookie', cookie).send({ event: 'account_detail_opened' });
+  assert.equal(accountCard.status, 204);
   const invalid = await request(app).post('/api/launch-event').set('Cookie', cookie).send({ event: 'screen_recording_or_balance' });
   assert.equal(invalid.status, 400);
   assert.equal(invalid.body.error, 'Invalid launch event.');
