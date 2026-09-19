@@ -1558,7 +1558,7 @@ function renderHoldingHistoryDetail() {
   metrics.innerHTML = `<div><span>Current value</span><strong>${fmt.format(Number(data.value || 0))}</strong></div>${rangeMetric ? `<div><span>${rangeMetric.label}</span><strong class="${rangeMetric.tone}">${rangeMetric.value}</strong><small>${rangeMetric.detail}</small></div>` : ''}`;
   const hasMarket = (data.market || []).length > 1;
   $('#holdingHistoryTabs').innerHTML = `<button type="button" class="${!isMarket ? 'active' : ''}" data-holding-history-mode="position" role="tab" aria-selected="${!isMarket}">Your position</button>${hasMarket ? `<button type="button" class="${isMarket ? 'active' : ''}" data-holding-history-mode="market" role="tab" aria-selected="${isMarket}">Market price</button>` : ''}`;
-  const ranges = [['1m', '1M'], ['3m', '3M'], ['6m', '6M'], ['ytd', 'YTD'], ['1y', '1Y'], ['all', 'All']];
+  const ranges = [['1m', 'This month'], ['3m', '3 months'], ['6m', '6 months'], ['ytd', 'Year to date'], ['1y', '1 year'], ['all', 'All time']];
   $('#holdingHistoryRange').innerHTML = ranges.map(([value, label]) => `<button type="button" class="${state.holdingHistoryRange === value ? 'active' : ''}" data-holding-history-range="${value}" aria-pressed="${state.holdingHistoryRange === value}">${label}</button>`).join('');
   $('#holdingHistoryNote').textContent = isMarket ? 'Market price does not include your purchases, sales, or contributions.' : (data.detail || data.reason || 'Your position history is unavailable.');
   // A dialog has no stable width until the browser has painted it. Defer chart
@@ -1677,7 +1677,7 @@ function renderAccountHistoryDetail() {
     : (account.subtype || account.type || 'Connected account');
   $('#accountHistoryMetrics').classList.toggle('single', !metric);
   $('#accountHistoryMetrics').innerHTML = `<div><span>${debt ? 'Amount owed' : 'Current balance'}</span><strong class="${debt ? 'negative' : ''}">${fmt.format(Math.abs(Number(account.value || 0)))}</strong></div>${metric ? `<div><span>Balance change</span><strong class="${metric.tone}">${metric.value}</strong><small>${escapeHtml(investmentRangeLabel(data.progress.range))}</small></div>` : ''}`;
-  const ranges = [['1m', '1M'], ['3m', '3M'], ['6m', '6M'], ['ytd', 'YTD'], ['1y', '1Y'], ['all', 'All']];
+  const ranges = [['1m', 'This month'], ['3m', '3 months'], ['6m', '6 months'], ['ytd', 'Year to date'], ['1y', '1 year'], ['all', 'All time']];
   $('#accountHistoryRange').innerHTML = ranges.map(([value, label]) => `<button type="button" class="${state.accountHistoryRange === value ? 'active' : ''}" data-account-history-range="${value}" aria-pressed="${state.accountHistoryRange === value}">${label}</button>`).join('');
   $('#accountHistoryNote').textContent = data.detail || data.reason || 'Your balance history is unavailable.';
   $('#accountHistoryActivity').innerHTML = data.activity?.length ? `<h3>Recent activity</h3>${data.activity.map((transaction) => `<div><span><b>${escapeHtml(transaction.name)}</b><small>${escapeHtml(new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))}</small></span><strong class="${transaction.amount > 0 ? 'negative' : 'positive'}">${transaction.amount > 0 ? '−' : '+'}${fmt.format(Math.abs(transaction.amount))}</strong></div>`).join('')}` : '';
