@@ -405,6 +405,10 @@ test('monthly cash-flow values stay self-labeled instead of relying on a detache
 test('cash-flow diagram stays readable and opens transactions in-app @critical', async ({ page }, testInfo) => {
   await openDemo(page);
   await goToView(page, 'spending');
+  const closeCashflowDrawer = async () => {
+    if (testInfo.project.name === 'phone') await page.locator('#cashflowDialogDragHandle').click();
+    else await page.locator('#cashflowDialogClose').click();
+  };
   await expect(page.locator('#cashflowSankey')).toContainText('Paychecks');
   const compactDiagram = await page.locator('#cashflowSankey').evaluate((diagram) => ({
     hasHorizontalOverflow: diagram.scrollWidth > diagram.clientWidth + 1,
@@ -420,7 +424,7 @@ test('cash-flow diagram stays readable and opens transactions in-app @critical',
     expect(labelBox && diagramBox && labelBox.x >= diagramBox.x && labelBox.x + labelBox.width <= diagramBox.x + diagramBox.width).toBe(true);
     await moreLabel.click();
     await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
-    await page.locator('#cashflowDialogClose').click();
+    await closeCashflowDrawer();
   }
   // Transaction access is always explicit. A person need not infer that a
   // diagram tap filtered a drawer farther down the page.
@@ -433,7 +437,7 @@ test('cash-flow diagram stays readable and opens transactions in-app @critical',
     const sheetBox = await page.locator('#cashflowDialog').boundingBox();
     expect(sheetBox && Math.abs(sheetBox.y + sheetBox.height - (await page.evaluate(() => window.innerHeight))) < 2).toBe(true);
   }
-  await page.locator('#cashflowDialogClose').click();
+  await closeCashflowDrawer();
   await page.locator('#cashflowExpand').click();
   await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
   await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
