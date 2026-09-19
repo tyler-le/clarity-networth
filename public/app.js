@@ -1846,7 +1846,8 @@ function renderRetirement(data) {
   $('#retirementProjection').textContent = projectedBalance;
   const assumptionsConfigured = data.assumptionsConfigured !== false;
   $('#retirementOutlookCard').classList.toggle('needs-setup', !assumptionsConfigured);
-  $('#retirementProjectionContext').textContent = assumptionsConfigured
+  const projectionContext = $('#retirementProjectionContext');
+  const projectionBaseContext = assumptionsConfigured
     ? `By age ${data.retirementAge}`
     : `By age ${data.retirementAge} · default plan`;
   const monthlyContributions = Math.max(0, Number(data.monthlyContributions || 0));
@@ -1870,6 +1871,11 @@ function renderRetirement(data) {
   const observedMonths = Number(data.monthsObserved || 0);
   coverage.hidden = observedMonths < 1;
   coverage.textContent = observedMonths ? `${observedMonths} mo. tracked` : '';
+  projectionContext.textContent = [
+    projectionBaseContext,
+    `${data.yearsToRetirement} years to go`,
+    coverage.textContent
+  ].filter(Boolean).join(' · ');
   $('#retirementSpendingSummary').textContent = data.monthsObserved
     ? `Based on ${fmt.format(data.monthlySpend || 0)} a month in total spending`
     : 'Your spending will shape these targets.';

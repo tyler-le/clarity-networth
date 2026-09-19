@@ -1074,3 +1074,57 @@ html[data-theme="dark"] .retirement-inputs > span strong { color: var(--ink); }
     padding-inline: 5px;
   }
 }
+
+/* Mobile retirement is a compact plan snapshot: one outcome, the two inputs
+   that drive it, then quiet provenance. This override intentionally lives
+   last because older desktop rules share these selectors. */
+@media (max-width: 560px) {
+  .retirement-hero { position: relative; padding: 18px; }
+  .retirement-hero .card-top { display: block; }
+  .retirement-total { margin-top: 5px; font-size: clamp(36px, 10.5vw, 46px); }
+  #retirementProjectionContext { margin-bottom: 0; }
+  #retirementProjectionContext::after { content: ' · ' attr(data-mobile-timeline); }
+  .retirement-inputs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+    margin-top: 10px;
+    padding: 8px 0;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .retirement-inputs > span {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px 4px;
+    min-width: 0;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    font-size: 9px;
+  }
+  .retirement-inputs > span + span { border-left: 1px solid var(--line); }
+  .retirement-inputs > span > span { grid-column: 1 / -1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .retirement-inputs > span strong { grid-column: 1; font-size: 15px; }
+  .retirement-inputs > span small { grid-column: 2; align-self: end; font-size: 9px; }
+  .retirement-context-chips { display: block; margin-top: 6px; }
+  .retirement-age-chip { display: none; }
+  .retirement-coverage-chip { display: block; padding: 0; border: 0; border-radius: 0; color: var(--muted); background: transparent; font-size: 10px; font-weight: 650; }
+  .retirement-review-plan { position: absolute; top: 18px; right: 18px; margin: 0; padding: 5px 0; border: 0; border-radius: 0; color: var(--accent); background: transparent; font-size: 11px; }
+  .retirement-review-plan:hover, .retirement-review-plan:focus-visible { background: transparent; text-decoration: underline; }
+  .retirement-next-milestone { margin-top: 13px; padding: 11px 12px; }
+  .retirement-path { gap: 8px; margin-top: 17px; }
+}
+
+/* The outlook context belongs with the projected value on every screen.
+   Timeline and tracking are explanatory metadata, not a second visual column. */
+.retirement-hero { position: relative; }
+.retirement-hero .card-top { display: block; }
+.retirement-context-chips { display: block; height: 0; margin: 0; }
+.retirement-age-chip, .retirement-coverage-chip { display: none !important; }
+.retirement-review-plan { position: absolute; top: 24px; right: 24px; margin: 0; }
+@media (max-width: 560px) {
+  #retirementProjectionContext::after { content: none; }
+  .retirement-review-plan { top: 18px; right: 18px; }
+}
