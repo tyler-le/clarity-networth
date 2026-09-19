@@ -432,6 +432,8 @@ function setInitialNetWorthRange(snapshots) {
   state.networthRange = preferredNetWorthRange(uniqueDailySnapshots(snapshots));
   state.networthRangeInitialized = true;
   $$('[data-networth-range]').forEach((control) => control.classList.toggle('active', control.dataset.networthRange === state.networthRange));
+  const summary = $('#netWorthPeriodSummary');
+  if (summary) summary.textContent = netWorthRangeLabel(state.networthRange);
 }
 
 // The first response can arrive while the calm loading shell is still hiding
@@ -2518,6 +2520,8 @@ $('#connectionsList').addEventListener('click', async (event) => {
 $$('[data-networth-range]').forEach((button) => button.addEventListener('click', () => {
   state.networthRange = button.dataset.networthRange;
   $$('[data-networth-range]').forEach((control) => control.classList.toggle('active', control === button));
+  const summary = $('#netWorthPeriodSummary');
+  if (summary) summary.textContent = netWorthRangeLabel(state.networthRange);
   renderOverviewBriefing(state.dashboard);
   renderNetWorthChartWhenVisible();
 }));

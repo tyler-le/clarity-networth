@@ -25,6 +25,14 @@ async function trackingLabelPrecedesVerifiedLine(page, chartSelector) {
   });
 }
 
+async function selectHoldingHistoryRange(page, range) {
+  const control = page.locator(`#holdingHistoryRange [data-holding-history-range="${range}"]`);
+  await expect(control).toBeVisible();
+  await expect(control).toBeEnabled();
+  await control.click();
+  await expect(control).toHaveAttribute('aria-pressed', 'true');
+}
+
 // Uses the complete, realistic demo contract as a baseline, then makes one
 // meaningful change for a member situation. The UI is real; only the service
 // boundary is mocked. This catches rendering and interaction regressions
@@ -297,6 +305,7 @@ test('historical charts use only observed snapshots @critical', async ({ page })
     preview.investments.total = 1300;
   });
   await page.locator('[data-networth-range="all"]').click();
+  await expect(page.locator('#netWorthPeriodSummary')).toHaveText('All history');
   await expect(page.locator('#netWorthDelta')).not.toContainText(/estimated/i);
   const netChart = page.locator('#netWorthChart');
   const netBox = await netChart.boundingBox();
@@ -315,7 +324,7 @@ test('historical charts use only observed snapshots @critical', async ({ page })
   await page.getByRole('button', { name: /View .+ performance history/ }).first().click();
   await expect(page.locator('#holdingHistoryDialog')).toBeVisible();
   await expect(page.locator('#holdingHistoryNote')).toContainText('verified daily updates');
-  await page.getByRole('button', { name: 'All', exact: true }).last().click();
+  await selectHoldingHistoryRange(page, 'all');
   await expect(page.locator('#holdingHistoryChart svg')).toBeVisible();
   const fits = await page.evaluate(() => {
     const dialog = document.querySelector('#holdingHistoryDialog');
