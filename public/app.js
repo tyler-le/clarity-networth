@@ -1848,7 +1848,7 @@ function renderRetirement(data) {
   const contributionPace = $('#retirementContributionPace');
   retirementInputs.hidden = monthlyContributions <= 0 && essentialMonthlySpend <= 0;
   contributionPace.textContent = monthlyContributions
-    ? `Estimated ongoing pace · ${fmt.format(monthlyContributions)}/mo`
+    ? `Estimated savings & investing · ${fmt.format(monthlyContributions)}/mo`
     : '';
   $('#retirementEssentialPace').textContent = essentialMonthlySpend
     ? `Essential spend · ${fmt.format(essentialMonthlySpend)}/mo`
