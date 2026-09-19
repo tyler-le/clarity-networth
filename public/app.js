@@ -939,7 +939,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const width = compact ? 390 : tablet ? 620 : 920;
   // Treat the blocks as compact labels for the flow, rather than cards that
   // compete with it. Phone labels get a little more vertical room to wrap.
-  const rowHeight = compact ? 50 : 46, rowStep = compact ? 57 : 53;
+  const rowHeight = compact ? 50 : 46, rowStep = compact ? 62 : 53;
   const middleNodes = [
     { key: 'actual_spend', label: 'Actual spend', value: actualSpend, color: 'var(--outflow)' },
     { key: 'save_invest', label: 'Saved & invested', value: savedInvested, color: 'var(--invest)' }
@@ -993,8 +993,11 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const middleW = nodeWidth(allocationNodes, compact ? 100 : 86, compact ? 116 : 128);
   const destinationW = nodeWidth(categoryNodes.map((row) => ({ label: row.name })), 92, 142);
   const sourceX = compact ? 5 : tablet ? 8 : 20;
-  const bridgeX = compact ? 132 : tablet ? 166 : 230;
-  const middleX = compact ? 236 : tablet ? 330 : 482;
+  // Keep visible breathing room between the compact phone columns. The prior
+  // positions left only a few pixels between node edges, making the thickest
+  // flows visually merge at the bridge and obscuring their relative weight.
+  const bridgeX = compact ? 145 : tablet ? 166 : 230;
+  const middleX = compact ? 260 : tablet ? 330 : 482;
   const destinationX = compact ? 0 : tablet ? 488 : 758;
   const colorFor = (key, fallback) => ({
     income_paychecks: 'var(--income)', income_interest: '#b08a4a', income_dividends: '#8a71a5', income_benefits: '#5e91a2', income_business: '#5d9b81', money_in_other: '#7893a8',
