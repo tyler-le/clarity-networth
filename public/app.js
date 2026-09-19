@@ -2649,14 +2649,14 @@ $('#cashflowSankey').addEventListener('click', (event) => {
   if (event.target.closest('[data-cashflow-expand]')) { openCashflowDialog(); return; }
   if (event.target.closest('[data-cashflow-transactions]')) { openCashflowCategoryActivity('all'); return; }
   const node = event.target.closest('[data-cashflow-node]');
-  if (node) openSpendingCategory(node.dataset.cashflowNode);
+  if (node) openCashflowCategoryActivity(node.dataset.cashflowNode);
 });
 $('#cashflowSankey').addEventListener('keydown', (event) => {
   if (!['Enter', ' '].includes(event.key)) return;
   const target = event.target.closest('[data-cashflow-category]');
   if (!target) return;
   event.preventDefault();
-  openSpendingCategory(target.dataset.cashflowNode);
+  openCashflowCategoryActivity(target.dataset.cashflowNode);
 });
 // Flows are deliberately not tap targets: once paths overlap, that interaction
 // becomes ambiguous. Instead, focusing or hovering a clear category block
