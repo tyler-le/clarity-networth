@@ -1848,8 +1848,8 @@ function renderRetirement(data) {
   $('#retirementOutlookCard').classList.toggle('needs-setup', !assumptionsConfigured);
   const projectionContext = $('#retirementProjectionContext');
   const projectionBaseContext = assumptionsConfigured
-    ? `By age ${data.retirementAge}`
-    : `By age ${data.retirementAge} · default plan`;
+    ? `${data.yearsToRetirement} years until age ${data.retirementAge}`
+    : `${data.yearsToRetirement} years until age ${data.retirementAge} · default plan`;
   const monthlyContributions = Math.max(0, Number(data.monthlyContributions || 0));
   const essentialMonthlySpend = Math.max(0, Number(data.essentialMonthlySpend || 0));
   const retirementInputs = $('#retirementInputs');
@@ -1861,21 +1861,12 @@ function renderRetirement(data) {
   $('#retirementEssentialPace').innerHTML = essentialMonthlySpend
     ? `<span>Essential spend</span><strong>${fmt.format(essentialMonthlySpend)}</strong><small>/mo</small>`
     : '';
-  $('#retirementAgeChip').textContent = `${data.yearsToRetirement} years to go`;
   const reviewPlan = $('#retirementReviewPlan');
   reviewPlan.hidden = false;
   reviewPlan.textContent = assumptionsConfigured ? 'Review plan' : 'Set your plan';
   reviewPlan.setAttribute('aria-label', assumptionsConfigured ? 'Review retirement plan assumptions' : 'Set retirement plan assumptions');
   reviewPlan.classList.toggle('needs-setup', !assumptionsConfigured);
-  const coverage = $('#retirementCoverage');
-  const observedMonths = Number(data.monthsObserved || 0);
-  coverage.hidden = observedMonths < 1;
-  coverage.textContent = observedMonths ? `${observedMonths} mo. tracked` : '';
-  projectionContext.textContent = [
-    projectionBaseContext,
-    `${data.yearsToRetirement} years to go`,
-    coverage.textContent
-  ].filter(Boolean).join(' · ');
+  projectionContext.textContent = projectionBaseContext;
   $('#retirementSpendingSummary').textContent = data.monthsObserved
     ? `Based on ${fmt.format(data.monthlySpend || 0)} a month in total spending`
     : 'Your spending will shape these targets.';

@@ -872,14 +872,13 @@ test('retirement milestones explain the planning terms on demand @critical', asy
   await expect(page.locator('#retirementPath')).toContainText('Six-month buffer');
   await expect(page.locator('#retirementPath')).toContainText('Amount needed today to fund retirement by age 65 without further contributions');
   await expect(page.locator('#retirementPath .retirement-milestone')).toHaveCount(4);
-  await expect(page.locator('#retirementProjectionContext')).toHaveText('By age 65');
+  await expect(page.locator('#retirementProjectionContext')).toHaveText('38 years until age 65');
   await expect(page.locator('#retirementContributionPace')).toContainText(/Saving & investing · \$[\d,]+\/mo/);
   await expect(page.locator('#retirementEssentialPace')).toContainText(/Essential spend · \$[\d,]+\/mo/);
   await expect(page.locator('#retirementNextMilestone')).toBeVisible();
   await page.locator('#retirementNextMilestone').click();
   await expect(page.locator('#retirementInfoDialog')).toHaveAttribute('open', '');
   await page.locator('#retirementInfoClose').click();
-  await expect(page.locator('#retirementCoverage')).toHaveText('12 mo. tracked');
   await expect(page.locator('#retirementSpendingTargetsCard')).not.toHaveAttribute('open', '');
   await expect(page.locator('#retirementSpendingSummary')).toContainText('Based on $');
   await page.locator('#retirementSpendingTargetsCard > summary').click();
@@ -976,7 +975,7 @@ test('dark mode is a calm, persistent profile setting', async ({ page }) => {
   await expect(page.locator('#investmentTotal')).toHaveCSS('color', 'rgb(217, 224, 218)');
   await goToView(page, 'retirement');
   await expect(page.locator('#retirementNextMilestone')).toHaveCSS('background-color', 'rgb(34, 42, 36)');
-  await expect(page.locator('#retirementCoverage')).toHaveCSS('background-color', 'rgb(38, 45, 39)');
+  await expect(page.locator('#retirementReviewPlan')).toBeVisible();
   await goToView(page, 'accounts');
   // Account balances describe where money is, not investment performance.
   // Keep those neutral so green remains a useful signal for an actual gain.
