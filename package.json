@@ -24,7 +24,7 @@
     "db:import-legacy": "node scripts/import-json-stores.js",
     "db:verify-legacy": "node scripts/verify-json-stores.js",
     "data:encrypt-legacy": "node scripts/encrypt-legacy-stores.js",
-    "test:ci": "node --check src/server.js && node --check src/lib/store.js && node --check src/lib/secure-payload.js && node --check src/lib/database.js && node --check src/lib/finance.js && node --check src/lib/market-data.js && node --check src/lib/plaid.js && node --check scripts/migrate-database.js && node --check scripts/import-json-stores.js && node --check scripts/verify-json-stores.js && node --check scripts/encrypt-legacy-stores.js && node --check public/app.js && node --check public/chart-utils.js && node --check public/customer-error.js && npm run test:unit && npm run test:integration && npm run test:ui:release"
+    "test:ci": "node --check src/server.js && node --check src/lib/store.js && node --check src/lib/secure-payload.js && node --check src/lib/database.js && node --check src/lib/finance.js && node --check src/lib/market-data.js && node --check src/lib/plaid.js && node --check scripts/migrate-database.js && node --check scripts/import-json-stores.js && node --check scripts/verify-json-stores.js && node --check scripts/encrypt-legacy-stores.js && node --check public/app.js && node --check public/chart-utils.js && node --check public/customer-error.js && npm run test:unit && npm run test:integration"
   },
   "engines": {
     "node": ">=20"

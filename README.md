@@ -81,10 +81,31 @@ Run the full local release gate before a push:
 npm run test:ci
 ```
 
-This checks syntax, unit tests, integration/security contracts, and Playwright
-journeys at phone, tablet, laptop, and desktop breakpoints. A push runs the
-same verification in GitHub Actions, deploys to staging, verifies it, then
-promotes to production.
+The release gate intentionally focuses on financial/data correctness: syntax
+checks, unit tests, and integration tests. Browser-flow checks remain available
+when a UI change needs them:
+
+```bash
+npm run test:ui
+```
+
+UI tests are not part of the production promotion gate because copy, layout,
+and responsive presentation changes should not block releases when the
+canonical data and API behavior remain correct.
+
+The required data suite still exercises failure behavior, not just happy-path
+totals. It covers provider/dependency errors and safe customer messages,
+rate-limit recovery, pending and ambiguous transactions, refunds and transfer
+reconciliation, incomplete or stale history, missing account data, duplicate
+provider records, protected writes, and authenticated API failure responses.
+When changing a financial rule or dependency boundary, add a focused fixture
+for the failure mode and assert the safe result (for example, an unavailable
+state or an actionable recovery code) rather than relying on a browser flow.
+
+The optional browser suite covers journeys at phone, tablet, laptop, and
+desktop breakpoints. Development pushes deploy without this release gate;
+production promotion is manual and runs `npm run test:ci` against the exact
+development commit before deployment.
 
 See [`AGENTS.md`](AGENTS.md) for the product, accessibility, financial-data,
 testing, and UX standards that guide changes.

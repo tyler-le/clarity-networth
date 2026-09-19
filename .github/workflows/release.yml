@@ -39,17 +39,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
       - run: npm run test:ci
-      - name: Upload test artifacts on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-playwright-report
-          path: |
-            playwright-report/
-            test-results/
-          if-no-files-found: ignore
 
   production:
     name: Deploy tested development commit to production
