@@ -1181,6 +1181,9 @@ test('retirement contribution forecast keeps recurring pace separate from histor
   assert.equal(plan.ongoingMonthlyContributions, 4000);
   assert.equal(plan.contributionStreams[0].behavior, 'recurring');
   assert.equal(plan.contributionEstimateQuality, 'medium');
+  const years = plan.retirementAge - plan.age;
+  const futureValueFactor = (Math.pow(1.05, years) - 1) / 0.05;
+  assert.equal(plan.projectedAtRetirement, 100000 * Math.pow(1.05, years) + plan.annualContributions * futureValueFactor, 'retirement outlook uses the exact observed trailing contribution total');
 });
 
 test('retirement contribution forecast does not annualize an isolated contribution', () => {

@@ -1909,7 +1909,11 @@ export function calculateFire(store, netWorth) {
   const yearsToRetirement = Math.max(0, retirementAge - age);
   const coast = standard > 0 ? standard / Math.pow(1 + realReturn, yearsToRetirement) : 0;
   const futureValueFactor = realReturn === 0 ? yearsToRetirement : (Math.pow(1 + realReturn, yearsToRetirement) - 1) / realReturn;
-  const projectedAtRetirement = freedomBalance * Math.pow(1 + realReturn, yearsToRetirement) + ongoingContributions.annualAmount * futureValueFactor;
+  // Retirement outlook uses the exact observed contribution total from the
+  // trailing completed 12-month window. Keep recurrence estimation available
+  // as metadata, but do not let it remove legitimate windfalls or outliers
+  // from the projection input.
+  const projectedAtRetirement = freedomBalance * Math.pow(1 + realReturn, yearsToRetirement) + contributions.annualContributions * futureValueFactor;
   const progress = (target, balance = freedomBalance) => target > 0 ? Math.max(0, balance) / target * 100 : 0;
   const emergencyFund = spend.essentialMonthlySpend * 3;
   const runway = spend.essentialMonthlySpend * 6;
@@ -1955,8 +1959,8 @@ export function calculateFire(store, netWorth) {
     ladder: [
       { key: 'emergency', name: 'Emergency fund', detail: '3 months of essentials', target: emergencyFund, progress: progress(emergencyFund, cashBalance), complete: cashBalance >= emergencyFund && emergencyFund > 0, estimatedMonths: monthsToTarget({ balance: cashBalance, target: emergencyFund, annualContribution: cashSavings.annualContributions }) },
       { key: 'runway', name: 'Six-month buffer', detail: '6 months of essentials', target: runway, progress: progress(runway, cashBalance), complete: cashBalance >= runway && runway > 0, estimatedMonths: monthsToTarget({ balance: cashBalance, target: runway, annualContribution: cashSavings.annualContributions }) },
-      { key: 'coast', name: 'Coast independence', detail: `Amount needed today to fund retirement by age ${retirementAge} without further contributions`, target: coast, progress: progress(coast), complete: freedomBalance >= coast && coast > 0, estimatedMonths: monthsToMovingCoastTarget({ balance: freedomBalance, retirementTarget: standard, yearsToRetirement, annualContribution: ongoingContributions.annualAmount, annualReturn: realReturn }) },
-      { key: 'standard', name: 'Financial independence', detail: 'Your current lifestyle', target: standard, progress: progress(standard), complete: freedomBalance >= standard && standard > 0, estimatedMonths: monthsToTarget({ balance: freedomBalance, target: standard, annualContribution: ongoingContributions.annualAmount, annualReturn: realReturn }) }
+      { key: 'coast', name: 'Coast independence', detail: `Amount needed today to fund retirement by age ${retirementAge} without further contributions`, target: coast, progress: progress(coast), complete: freedomBalance >= coast && coast > 0, estimatedMonths: monthsToMovingCoastTarget({ balance: freedomBalance, retirementTarget: standard, yearsToRetirement, annualContribution: contributions.annualContributions, annualReturn: realReturn }) },
+      { key: 'standard', name: 'Financial independence', detail: 'Your current lifestyle', target: standard, progress: progress(standard), complete: freedomBalance >= standard && standard > 0, estimatedMonths: monthsToTarget({ balance: freedomBalance, target: standard, annualContribution: contributions.annualContributions, annualReturn: realReturn }) }
     ],
     progress: {
       lean: progress(lean),

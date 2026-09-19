@@ -1846,13 +1846,13 @@ function renderRetirement(data) {
   $('#retirementProjectionContext').textContent = assumptionsConfigured
     ? `By age ${data.retirementAge}`
     : `By age ${data.retirementAge} · default plan`;
-  const monthlyContributions = Math.max(0, Number(data.ongoingMonthlyContributions ?? data.monthlyContributions ?? 0));
+  const monthlyContributions = Math.max(0, Number(data.monthlyContributions || 0));
   const essentialMonthlySpend = Math.max(0, Number(data.essentialMonthlySpend || 0));
   const retirementInputs = $('#retirementInputs');
   const contributionPace = $('#retirementContributionPace');
   retirementInputs.hidden = monthlyContributions <= 0 && essentialMonthlySpend <= 0;
   contributionPace.innerHTML = monthlyContributions
-    ? `<span>Estimated savings &amp; investing</span><strong>${fmt.format(monthlyContributions)}</strong><small>/mo</small>`
+    ? `<span>Savings &amp; investing</span><strong>${fmt.format(monthlyContributions)}</strong><small>/mo</small>`
     : '';
   $('#retirementEssentialPace').innerHTML = essentialMonthlySpend
     ? `<span>Essential spend</span><strong>${fmt.format(essentialMonthlySpend)}</strong><small>/mo</small>`
