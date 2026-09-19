@@ -2607,6 +2607,48 @@ function openCashflowCategoryActivity(category) {
 
 $('#cashflowExpand').addEventListener('click', openCashflowDialog);
 $('#cashflowDialogClose').addEventListener('click', () => $('#cashflowDialog').close());
+// The mobile cash-flow dialog is a bottom sheet. Its handle is a real control:
+// a tap closes it, while a deliberate downward drag follows the same path.
+{
+  const dialog = $('#cashflowDialog');
+  const handle = $('#cashflowDialogDragHandle');
+  let startY = null;
+  let pointerId = null;
+  handle.addEventListener('pointerdown', (event) => {
+    if (!window.matchMedia('(max-width: 640px)').matches) return;
+    startY = event.clientY;
+    pointerId = event.pointerId;
+    handle.setPointerCapture?.(pointerId);
+    dialog.setAttribute('data-dragging', '');
+    dialog.style.transition = 'none';
+    event.preventDefault();
+  });
+  handle.addEventListener('pointermove', (event) => {
+    if (event.pointerId !== pointerId || startY == null) return;
+    const offset = Math.max(0, event.clientY - startY);
+    dialog.style.transform = `translate3d(0, ${offset}px, 0)`;
+  });
+  handle.addEventListener('pointerup', (event) => {
+    if (event.pointerId !== pointerId || startY == null) return;
+    const offset = Math.max(0, event.clientY - startY);
+    try { handle.releasePointerCapture?.(event.pointerId); } catch { /* no retained capture */ }
+    startY = null;
+    pointerId = null;
+    dialog.removeAttribute('data-dragging');
+    if (offset < 10 || offset >= Math.min(52, dialog.getBoundingClientRect().height * .1)) {
+      dialog.style.transition = 'transform .2s cubic-bezier(.2,.75,.25,1)';
+      dialog.style.transform = `translate3d(0, ${offset < 10 ? Math.ceil(dialog.getBoundingClientRect().height) : offset}px, 0)`;
+      dialog.setAttribute('data-settling', '');
+      window.setTimeout(() => { dialog.close(); dialog.style.transform = ''; dialog.style.transition = ''; dialog.removeAttribute('data-settling'); }, 210);
+    } else {
+      dialog.style.transition = 'transform .18s ease-out';
+      dialog.style.transform = '';
+      window.setTimeout(() => { dialog.style.transition = ''; }, 190);
+    }
+  });
+  handle.addEventListener('pointercancel', () => { startY = null; pointerId = null; dialog.removeAttribute('data-dragging'); dialog.style.transform = ''; dialog.style.transition = ''; });
+  dialog.addEventListener('close', () => { startY = null; pointerId = null; dialog.style.transform = ''; dialog.style.transition = ''; dialog.removeAttribute('data-dragging'); dialog.removeAttribute('data-settling'); });
+}
 let cashflowResizeFrame;
 new ResizeObserver(() => {
   cancelAnimationFrame(cashflowResizeFrame);
