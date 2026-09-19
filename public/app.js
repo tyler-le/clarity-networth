@@ -890,6 +890,10 @@ function renderSpendingTrend(data) {
   }).join('');
   const step = (width - plot.left - plot.right) / months.length;
   const barWidth = Math.min(compact ? 22 : 34, step * .62);
+  // Keep every month selectable, but thin the visible axis labels when a
+  // long history is compressed into a phone-sized chart. Six labels is enough
+  // to establish the time span without turning the axis into a word salad.
+  const labelStride = Math.max(1, Math.ceil(months.length / (compact ? 6 : 12)));
   const bars = months.map((row, index) => {
     const value = values[index], x = plot.left + step * index + (step - barWidth) / 2;
     // Small positive values still need a visible bar, but that minimum must
@@ -897,12 +901,13 @@ function renderSpendingTrend(data) {
     const barHeight = Math.max(value ? 6 : 0, Math.abs(value) * scale);
     const y = value >= 0 ? zeroY - barHeight : zeroY;
     const label = new Date(`${row.month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'short' });
+    const showLabel = index === 0 || index === months.length - 1 || index % labelStride === 0;
     const actualSpend = Number(row.actual_spend ?? row.amount ?? 0);
     const savedInvested = Number(row.saved_invested || 0);
     const balanceLabel = value >= 0 ? `${fmt.format(Math.abs(value))} more money in than spent` : `${fmt.format(Math.abs(value))} more spent than money in`;
     const title = `${row.month}: Money in ${fmt.format(row.income || 0)} · Actual spend ${fmt.format(actualSpend)} · Saved & invested ${fmt.format(savedInvested)} · ${balanceLabel}`;
     const selected = state.spendingMonth === row.month;
-    return `<g class="trend-column ${selected ? 'active' : ''}" data-spending-month="${row.month}" role="button" tabindex="0" aria-pressed="${selected}" aria-label="Select ${escapeHtml(label)} cash flow" title="${escapeHtml(title)}"><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="5" fill="${value >= 0 ? 'var(--income)' : 'var(--outflow)'}"/><text x="${(x + barWidth / 2).toFixed(1)}" y="${height - 10}" text-anchor="middle" class="trend-month">${label}</text></g>`;
+    return `<g class="trend-column ${selected ? 'active' : ''}" data-spending-month="${row.month}" role="button" tabindex="0" aria-pressed="${selected}" aria-label="Select ${escapeHtml(label)} cash flow" title="${escapeHtml(title)}"><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="5" fill="${value >= 0 ? 'var(--income)' : 'var(--outflow)'}"/>${showLabel ? `<text x="${(x + barWidth / 2).toFixed(1)}" y="${height - 10}" text-anchor="middle" class="trend-month">${label}</text>` : ''}</g>`;
   }).join('');
   chart.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Monthly cash flow. Green bars above zero show more money in than actual spend; coral bars below zero show more spent than money in.">${ticks}${bars}</svg>`;
 }

@@ -110,7 +110,12 @@ test('a new visitor can explore the complete demo without signing in @critical',
   await expect(page.getByRole('heading', { name: 'Cash flow' })).toBeVisible();
   await page.locator('[data-spending-range="1y"]').click();
   await expect(page.locator('.trend-column')).toHaveCount(12);
-  await expect(page.locator('.trend-month')).toHaveCount(12);
+  const oneYearLabelCount = await page.locator('.trend-month').count();
+  const compactChart = await page.locator('#spendingTrend').evaluate((element) => element.clientWidth < 480);
+  expect(oneYearLabelCount).toBe(compactChart ? 7 : 12);
+  await page.locator('[data-spending-range="all"]').click();
+  const allLabelCount = await page.locator('.trend-month').count();
+  expect(allLabelCount).toBeLessThanOrEqual(compactChart ? 7 : 13);
   const positiveBarsStayAboveZero = await page.locator('#spendingTrend svg').evaluate((svg) => {
     const zero = Number(svg.querySelector('.trend-grid.zero')?.getAttribute('y1'));
     return [...svg.querySelectorAll('.trend-column rect')]
