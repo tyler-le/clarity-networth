@@ -1016,7 +1016,12 @@ html[data-theme="dark"] :is(
 ) { color: var(--muted); }
 
 /* Keep the two retirement planning inputs easy to scan independently. */
-.retirement-inputs { display: grid; gap: 2px; }
+.retirement-inputs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.retirement-inputs > span { display: inline-flex; align-items: baseline; gap: 5px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); background: color-mix(in srgb, var(--card) 86%, var(--accent-soft)); font-size: 10px; font-weight: 650; }
+.retirement-inputs > span strong { color: var(--ink); font-size: 11px; font-variant-numeric: tabular-nums; }
+.retirement-inputs > span small { color: var(--muted); font-size: 9px; }
+html[data-theme="dark"] .retirement-inputs > span { border-color: #39443b; background: #222a24; }
+html[data-theme="dark"] .retirement-inputs > span strong { color: var(--ink); }
 /* Keep chart value/date bubbles readable on narrow screens. */
 .holding-history-dialog .chart-tooltip { max-width: calc(100% - 18px); overflow: visible; text-overflow: clip; }
 @media (max-width: 560px) {
