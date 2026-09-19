@@ -1831,7 +1831,10 @@ function renderRetirement(data) {
   state.retirement = data;
   const projectedBalance = fmt.format(data.projectedAtRetirement || 0);
   $('#retirementProjection').textContent = projectedBalance;
-  $('#retirementProjectionContext').textContent = `By age ${data.retirementAge}`;
+  const assumptionsConfigured = data.assumptionsConfigured !== false;
+  $('#retirementProjectionContext').textContent = assumptionsConfigured
+    ? `By age ${data.retirementAge}`
+    : `By age ${data.retirementAge} · default plan`;
   const monthlyContributions = Math.max(0, Number(data.monthlyContributions || 0));
   const essentialMonthlySpend = Math.max(0, Number(data.essentialMonthlySpend || 0));
   const retirementInputs = $('#retirementInputs');
@@ -1844,6 +1847,11 @@ function renderRetirement(data) {
     ? `Essential spend · ${fmt.format(essentialMonthlySpend)}/mo`
     : '';
   $('#retirementAgeChip').textContent = `${data.yearsToRetirement} years to go`;
+  const reviewPlan = $('#retirementReviewPlan');
+  reviewPlan.hidden = false;
+  reviewPlan.textContent = assumptionsConfigured ? 'Review plan' : 'Set your plan';
+  reviewPlan.setAttribute('aria-label', assumptionsConfigured ? 'Review retirement plan assumptions' : 'Set retirement plan assumptions');
+  reviewPlan.classList.toggle('needs-setup', !assumptionsConfigured);
   const coverage = $('#retirementCoverage');
   const observedMonths = Number(data.monthsObserved || 0);
   coverage.hidden = observedMonths < 1;
@@ -2238,6 +2246,12 @@ $('#retirementReset').addEventListener('click', async () => {
   resetRetirementPreview();
   try { renderRetirement(await api('/api/retirement')); }
   catch (error) { showNotice(error.message); }
+});
+$('#retirementReviewPlan').addEventListener('click', () => {
+  const assumptions = $('#retirementAdjust');
+  assumptions.open = true;
+  assumptions.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  window.setTimeout(() => $('#retirementAgeValue').focus(), 180);
 });
 $('#retirementForm').addEventListener('submit', async (event) => {
   event.preventDefault();

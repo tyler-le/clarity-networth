@@ -1411,6 +1411,7 @@ app.patch('/api/settings/retirement', async (req, res) => {
   const store = await loadStore(req.user);
   try { store.settings.fire = retirementSettingsFrom(req.body, store.settings.fire); }
   catch (error) { return res.status(400).json({ error: error.message }); }
+  store.settings.fire.assumptions_configured = true;
   await saveStore(req.user, store);
   const visibleStore = activeStore(store);
   res.json(calculateFire(visibleStore, summarizeRange(visibleStore).netWorth));

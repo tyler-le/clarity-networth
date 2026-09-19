@@ -1737,6 +1737,9 @@ function monthsToMovingCoastTarget({ balance, retirementTarget, yearsToRetiremen
 
 export function calculateFire(store, netWorth) {
   const settings = store.settings?.fire || {};
+  const defaults = { age: 27, retirement_age: 65, withdrawal_rate: 4, real_return: 5 };
+  const assumptionsConfigured = settings.assumptions_configured === true
+    || ['age', 'retirement_age', 'withdrawal_rate', 'real_return'].some((field) => Number(settings[field]) !== defaults[field]);
   const age = Math.max(18, Number(settings.age || 27));
   const retirementAge = Math.max(age, Number(settings.retirement_age || 65));
   const withdrawalRate = Math.max(0, Number(settings.withdrawal_rate ?? 4)) / 100;
@@ -1765,6 +1768,7 @@ export function calculateFire(store, netWorth) {
   const runway = spend.essentialMonthlySpend * 6;
 
   return {
+    assumptionsConfigured,
     age,
     retirementAge,
     // Decimal arithmetic can otherwise serialize a clean 7% as
