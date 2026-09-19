@@ -1014,3 +1014,17 @@ html[data-theme="dark"] :is(
 .retirement-inputs { display: grid; gap: 2px; }
 /* Keep chart value/date bubbles readable on narrow screens. */
 .holding-history-dialog .chart-tooltip { max-width: calc(100% - 18px); overflow: visible; text-overflow: clip; }
+
+/* Give the longer first timeframe a little more room on phones so its
+   selected pill never crowds the label. */
+@media (max-width: 560px) {
+  .spending-period-actions .range-control,
+  .investment-period-actions .range-control {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) repeat(5, minmax(0, 1fr));
+  }
+  .spending-period-actions .range-control button,
+  .investment-period-actions .range-control button {
+    padding-inline: 5px;
+  }
+}
