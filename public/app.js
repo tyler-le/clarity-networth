@@ -1016,8 +1016,9 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     const valueY = y + (displayLines.length > 1 ? 39 : 29);
     const accentX = side === 'right' ? x + w - 6 : x;
     const shareMarkup = share == null ? '' : `<tspan dx="4" class="cashflow-share">${share}%</tspan>`;
+    const actionMarkup = actionCategory ? `<text x="${x + w - 13}" y="${y + 17}" class="cashflow-action-mark" aria-hidden="true">›</text>` : '';
     const description = `${label}: ${fmt.format(value)}${share == null ? '' : ` (${share}%)`}`;
-    return `<g ${actionCategory ? `data-cashflow-category="${escapeHtml(actionCategory)}" data-cashflow-node="${escapeHtml(actionCategory)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><title>${escapeHtml(description)}</title><rect data-testid="cashflow-node-surface" x="${x}" y="${y}" width="${w}" height="${rowHeight}" rx="5" fill="${color}" fill-opacity=".10" stroke="${color}" stroke-opacity=".38"/><rect data-testid="cashflow-node-accent" x="${accentX}" y="${y}" width="6" height="${rowHeight}" rx="2" fill="${color}"/><text x="${x + 11}" y="${y + 14}" class="cashflow-label">${labelMarkup}</text><text x="${x + 11}" y="${valueY}" class="cashflow-value">${fmt.format(value)}${shareMarkup}</text></g>`;
+    return `<g ${actionCategory ? `data-cashflow-category="${escapeHtml(actionCategory)}" data-cashflow-node="${escapeHtml(actionCategory)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><title>${escapeHtml(description)}</title><rect data-testid="cashflow-node-surface" x="${x}" y="${y}" width="${w}" height="${rowHeight}" rx="5" fill="${color}" fill-opacity=".10" stroke="${color}" stroke-opacity=".38"/><rect data-testid="cashflow-node-accent" x="${accentX}" y="${y}" width="6" height="${rowHeight}" rx="2" fill="${color}"/><text x="${x + 11}" y="${y + 14}" class="cashflow-label">${labelMarkup}</text><text x="${x + 11}" y="${valueY}" class="cashflow-value">${fmt.format(value)}${shareMarkup}</text>${actionMarkup}</g>`;
   };
   // Use perceptual (square-root) scaling. Exact dollars stay in each node,
   // while the flow still makes large categories visibly heavier without one
@@ -1839,6 +1840,7 @@ function renderRetirement(data) {
   const projectedBalance = fmt.format(data.projectedAtRetirement || 0);
   $('#retirementProjection').textContent = projectedBalance;
   const assumptionsConfigured = data.assumptionsConfigured !== false;
+  $('#retirementOutlookCard').classList.toggle('needs-setup', !assumptionsConfigured);
   $('#retirementProjectionContext').textContent = assumptionsConfigured
     ? `By age ${data.retirementAge}`
     : `By age ${data.retirementAge} · default plan`;
