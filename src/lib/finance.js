@@ -1660,6 +1660,152 @@ function median(values) {
   return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
+function contributionHistoryWindow(store, maxMonths = 24) {
+  const posted = canonicalEconomicLedger(store)
+    .filter((row) => ['investment_funding', 'payroll_retirement_contribution'].includes(row.economicType))
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  if (!posted.length) return { rows: [], months: [], monthsObserved: 0 };
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const complete = posted.filter((row) => String(row.date).slice(0, 7) < currentMonth);
+  if (!complete.length) return { rows: [], months: [], monthsObserved: 0 };
+  const latestMonth = String(complete.at(-1).date).slice(0, 7);
+  const latest = new Date(`${latestMonth}-01T12:00:00`);
+  const earliestAllowed = new Date(latest);
+  earliestAllowed.setMonth(earliestAllowed.getMonth() - (maxMonths - 1));
+  const firstObservedMonth = String(complete[0].date).slice(0, 7);
+  const startMonth = firstObservedMonth > earliestAllowed.toISOString().slice(0, 7)
+    ? firstObservedMonth
+    : earliestAllowed.toISOString().slice(0, 7);
+  const rows = complete.filter((row) => {
+    const month = String(row.date).slice(0, 7);
+    return month >= startMonth && month <= latestMonth;
+  });
+  const months = [];
+  const cursor = new Date(`${startMonth}-01T12:00:00`);
+  while (cursor <= latest) {
+    months.push(cursor.toISOString().slice(0, 7));
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return { rows, months, monthsObserved: months.length };
+}
+
+function contributionStreamKey(row) {
+  const accountId = row.investment_contribution_account_id || row.account_id || 'unknown';
+  if (row.economicType === 'payroll_retirement_contribution') return `payroll:${accountId}`;
+  return `investment:${accountId}`;
+}
+
+function contributionStreamName(row) {
+  if (row.economicType === 'payroll_retirement_contribution') {
+    const text = `${row.merchant_name || ''} ${row.name || ''}`.toUpperCase();
+    if (/HSA/.test(text)) return 'HSA payroll contributions';
+    if (/401\s*\(?K\)?/.test(text)) return '401(k) contributions';
+    if (/403\s*\(?B\)?/.test(text)) return '403(b) contributions';
+    return 'Payroll retirement contributions';
+  }
+  const account = row.investment_contribution_account_id || row.account_id;
+  return account ? `Investment account ${account}` : 'Investment funding';
+}
+
+function contributionCadence(intervals) {
+  if (intervals.length < 1) return null;
+  const typical = median(intervals);
+  const tolerance = (value, low, high) => value >= low && value <= high;
+  if (tolerance(typical, 5, 9)) return { key: 'weekly', days: 7, occurrencesPerYear: 52 };
+  if (tolerance(typical, 12, 17)) return { key: 'biweekly', days: 14, occurrencesPerYear: 26 };
+  if (tolerance(typical, 20, 45)) return { key: 'monthly', days: 30.4375, occurrencesPerYear: 12 };
+  if (tolerance(typical, 75, 110)) return { key: 'quarterly', days: 91.3125, occurrencesPerYear: 4 };
+  if (tolerance(typical, 330, 400)) return { key: 'annual', days: 365.25, occurrencesPerYear: 1 };
+  return null;
+}
+
+function oneTimeIncomeNear(store, date) {
+  const target = Date.parse(`${date}T12:00:00`);
+  return (store.transactions || []).some((transaction) => {
+    if (transaction.pending || transaction.excluded || Number(transaction.amount || 0) >= 0) return false;
+    const transactionDate = Date.parse(`${transaction.date}T12:00:00`);
+    if (!Number.isFinite(transactionDate) || Math.abs(transactionDate - target) > 45 * 86400000) return false;
+    const context = `${transaction.merchant_name || ''} ${transaction.name || ''} ${transaction.pfc_primary || ''} ${transaction.pfc_detailed || ''}`.toUpperCase();
+    return /SEVERANCE|PTO|VACATION PAY|TERMINATION|SETTLEMENT|INHERITANCE|WINDFALL/.test(context);
+  });
+}
+
+function classifyContributionStream(store, events) {
+  const ordered = [...events].sort((a, b) => a.date.localeCompare(b.date));
+  const intervals = ordered.slice(1).map((event, index) => Math.round((Date.parse(`${event.date}T12:00:00`) - Date.parse(`${ordered[index].date}T12:00:00`)) / 86400000));
+  const cadence = contributionCadence(intervals);
+  const amounts = ordered.map((event) => event.amount);
+  const typicalAmount = median(amounts);
+  const repeated = ordered.length >= 3;
+  const annualPattern = ordered.length >= 2 && cadence?.key === 'annual';
+  const cadenceReliable = cadence && (repeated || annualPattern);
+  const incomeBackedOutlier = typicalAmount > 0 && ordered.length >= 2
+    ? ordered.find((event) => event.amount > typicalAmount * 1.5 && oneTimeIncomeNear(store, event.date))
+    : null;
+  const outlier = typicalAmount > 0 && ordered.length >= 4
+    ? ordered.find((event) => event.amount > typicalAmount * 2.5)
+    : null;
+  const hasReturnToBaseline = outlier
+    && ordered.filter((event) => event.date > outlier.date && event.amount <= typicalAmount * 1.5).length >= 2;
+  const oneTime = ordered.length === 1
+    || Boolean(incomeBackedOutlier && !cadenceReliable)
+    || Boolean(outlier && hasReturnToBaseline && !cadenceReliable);
+  let behavior = 'uncertain';
+  let confidence = 'low';
+  if (cadenceReliable && !oneTime) {
+    behavior = cadence.key === 'annual' || cadence.key === 'quarterly' ? 'recurring_lumpy' : 'recurring';
+    confidence = ordered.length >= 6 ? 'high' : 'medium';
+  } else if (oneTime) {
+    behavior = 'one_time';
+    confidence = incomeBackedOutlier || hasReturnToBaseline ? 'high' : 'medium';
+  }
+  const eligibleEvents = behavior === 'recurring' || behavior === 'recurring_lumpy'
+    ? ordered.filter((event) => event !== incomeBackedOutlier && !(outlier && event.date === outlier.date && hasReturnToBaseline))
+    : [];
+  const normalizedAmount = eligibleEvents.length ? median(eligibleEvents.map((event) => event.amount)) : 0;
+  const annualAmount = cadence && eligibleEvents.length ? normalizedAmount * cadence.occurrencesPerYear : 0;
+  return {
+    key: contributionStreamKey(ordered[0].row),
+    name: contributionStreamName(ordered[0].row),
+    behavior,
+    confidence,
+    cadence: cadence?.key || null,
+    eventCount: ordered.length,
+    annualAmount,
+    monthlyAmount: annualAmount / 12,
+    events: ordered.map((event) => ({ date: event.date, amount: event.amount, transactionId: event.transactionId }))
+  };
+}
+
+export function estimateOngoingContributions(store) {
+  const history = contributionHistoryWindow(store);
+  const grouped = new Map();
+  for (const row of history.rows) {
+    const transactionId = row.transaction_id;
+    if (!transactionId || !(row.value > 0)) continue;
+    const key = contributionStreamKey(row);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push({ row, date: row.date, amount: row.value, transactionId });
+  }
+  const streams = [...grouped.values()].map((events) => classifyContributionStream(store, events));
+  const ongoingStreams = streams.filter((stream) => ['recurring', 'recurring_lumpy'].includes(stream.behavior));
+  const annualAmount = ongoingStreams.reduce((sum, stream) => sum + stream.annualAmount, 0);
+  const incompleteCoverage = (store.items || []).some((item) => item.investment_ledger?.complete === false || item.transactions_history_complete === false);
+  const quality = !streams.length || history.monthsObserved < 3 || incompleteCoverage
+    ? 'limited'
+    : history.monthsObserved < 12 || streams.some((stream) => stream.behavior === 'uncertain' || stream.eventCount < 12)
+      ? 'medium'
+      : 'high';
+  return {
+    annualAmount,
+    monthlyAmount: annualAmount / 12,
+    monthsObserved: history.monthsObserved,
+    quality,
+    streams,
+    historicalAnnualAmount: history.rows.reduce((sum, row) => sum + row.value, 0)
+  };
+}
+
 export function annualizedLivingSpend(store) {
   const { transactions, months } = trailingPostedTransactionWindow(store);
   if (!months.length) {
@@ -1748,6 +1894,7 @@ export function calculateFire(store, netWorth) {
   const fatMultiplier = Math.max(1, Number(settings.fat_multiplier || 150)) / 100;
   const spend = annualizedLivingSpend(store);
   const contributions = annualizedContributions(store);
+  const ongoingContributions = estimateOngoingContributions(store);
   const cashSavings = annualizedContributions(store, ['savings']);
   const investedAssets = (store.accounts || []).filter((account) => !account.hidden && account.type === 'investment').reduce((sum, account) => sum + Math.max(0, Number(account.current_balance || 0)), 0);
   const freedomBalance = investedAssets || Math.max(0, Number(netWorth || 0));
@@ -1762,7 +1909,7 @@ export function calculateFire(store, netWorth) {
   const yearsToRetirement = Math.max(0, retirementAge - age);
   const coast = standard > 0 ? standard / Math.pow(1 + realReturn, yearsToRetirement) : 0;
   const futureValueFactor = realReturn === 0 ? yearsToRetirement : (Math.pow(1 + realReturn, yearsToRetirement) - 1) / realReturn;
-  const projectedAtRetirement = freedomBalance * Math.pow(1 + realReturn, yearsToRetirement) + contributions.annualContributions * futureValueFactor;
+  const projectedAtRetirement = freedomBalance * Math.pow(1 + realReturn, yearsToRetirement) + ongoingContributions.annualAmount * futureValueFactor;
   const progress = (target, balance = freedomBalance) => target > 0 ? Math.max(0, balance) / target * 100 : 0;
   const emergencyFund = spend.essentialMonthlySpend * 3;
   const runway = spend.essentialMonthlySpend * 6;
@@ -1787,6 +1934,10 @@ export function calculateFire(store, netWorth) {
     annualizedFromFullYear: Boolean(spend.annualizedFromFullYear),
     annualContributions: contributions.annualContributions,
     monthlyContributions: contributions.monthlyContributions,
+    ongoingAnnualContributions: ongoingContributions.annualAmount,
+    ongoingMonthlyContributions: ongoingContributions.monthlyAmount,
+    contributionEstimateQuality: ongoingContributions.quality,
+    contributionStreams: ongoingContributions.streams,
     contributionMonthsObserved: contributions.monthsObserved,
     investedAssets,
     freedomBalance,
@@ -1804,8 +1955,8 @@ export function calculateFire(store, netWorth) {
     ladder: [
       { key: 'emergency', name: 'Emergency fund', detail: '3 months of essentials', target: emergencyFund, progress: progress(emergencyFund, cashBalance), complete: cashBalance >= emergencyFund && emergencyFund > 0, estimatedMonths: monthsToTarget({ balance: cashBalance, target: emergencyFund, annualContribution: cashSavings.annualContributions }) },
       { key: 'runway', name: 'Six-month buffer', detail: '6 months of essentials', target: runway, progress: progress(runway, cashBalance), complete: cashBalance >= runway && runway > 0, estimatedMonths: monthsToTarget({ balance: cashBalance, target: runway, annualContribution: cashSavings.annualContributions }) },
-      { key: 'coast', name: 'Coast independence', detail: `Amount needed today to fund retirement by age ${retirementAge} without further contributions`, target: coast, progress: progress(coast), complete: freedomBalance >= coast && coast > 0, estimatedMonths: monthsToMovingCoastTarget({ balance: freedomBalance, retirementTarget: standard, yearsToRetirement, annualContribution: contributions.annualContributions, annualReturn: realReturn }) },
-      { key: 'standard', name: 'Financial independence', detail: 'Your current lifestyle', target: standard, progress: progress(standard), complete: freedomBalance >= standard && standard > 0, estimatedMonths: monthsToTarget({ balance: freedomBalance, target: standard, annualContribution: contributions.annualContributions, annualReturn: realReturn }) }
+      { key: 'coast', name: 'Coast independence', detail: `Amount needed today to fund retirement by age ${retirementAge} without further contributions`, target: coast, progress: progress(coast), complete: freedomBalance >= coast && coast > 0, estimatedMonths: monthsToMovingCoastTarget({ balance: freedomBalance, retirementTarget: standard, yearsToRetirement, annualContribution: ongoingContributions.annualAmount, annualReturn: realReturn }) },
+      { key: 'standard', name: 'Financial independence', detail: 'Your current lifestyle', target: standard, progress: progress(standard), complete: freedomBalance >= standard && standard > 0, estimatedMonths: monthsToTarget({ balance: freedomBalance, target: standard, annualContribution: ongoingContributions.annualAmount, annualReturn: realReturn }) }
     ],
     progress: {
       lean: progress(lean),

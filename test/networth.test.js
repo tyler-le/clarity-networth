@@ -1077,8 +1077,8 @@ test('retirement presets calculate coast, lean, standard, fat, and a projected r
     ...store,
     transactions: [
       ...store.transactions.map((transaction) => transaction.bucket === 'investments' ? { ...transaction, amount: 1000 } : transaction),
-      ...Array.from({ length: 11 }, (_, index) => ({ date: `2025-${String(index + 9).padStart(2, '0')}-20`, amount: 1000, bucket: 'investments' })),
-      ...Array.from({ length: 11 }, (_, index) => ({ date: `2025-${String(index + 9).padStart(2, '0')}-10`, amount: 4000, bucket: 'guilt_free' }))
+      ...Array.from({ length: 11 }, (_, index) => ({ date: new Date(Date.UTC(2025, 8 + index, 20)).toISOString().slice(0, 10), amount: 1000, bucket: 'investments' })),
+      ...Array.from({ length: 11 }, (_, index) => ({ date: new Date(Date.UTC(2025, 8 + index, 10)).toISOString().slice(0, 10), amount: 4000, bucket: 'guilt_free' }))
     ]
   }, 100000);
   const coastMonths = fasterSaver.ladder.find((step) => step.key === 'coast').estimatedMonths;
@@ -1157,4 +1157,51 @@ test('retirement preserves a genuine annual expense and irregular annual contrib
   const plan = calculateFire(store, 0);
   assert.equal(plan.annualContributions, 7000);
   assert.equal(plan.monthlyContributions, 7000 / 12);
+});
+
+test('retirement contribution forecast keeps recurring pace separate from historical windfalls', () => {
+  const transactions = [
+    { date: '2025-01-15', amount: -5000, bucket: 'income', name: 'Payroll', pfc_primary: 'INCOME', pfc_detailed: 'INCOME_PAYCHECK' },
+    { date: '2025-01-20', amount: 4000, bucket: 'investments', account_id: 'checking', investment_contribution_account_id: 'brokerage', pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS' },
+    { date: '2025-02-15', amount: -5000, bucket: 'income', name: 'Payroll', pfc_primary: 'INCOME', pfc_detailed: 'INCOME_PAYCHECK' },
+    { date: '2025-02-20', amount: 4000, bucket: 'investments', account_id: 'checking', investment_contribution_account_id: 'brokerage', pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS' },
+    { date: '2025-03-15', amount: -25000, bucket: 'income', name: 'Severance payout', pfc_primary: 'INCOME', pfc_detailed: 'INCOME_OTHER' },
+    { date: '2025-03-20', amount: 20000, bucket: 'investments', account_id: 'checking', investment_contribution_account_id: 'brokerage', pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS' },
+    { date: '2025-04-15', amount: -5000, bucket: 'income', name: 'Payroll', pfc_primary: 'INCOME', pfc_detailed: 'INCOME_PAYCHECK' },
+    { date: '2025-04-20', amount: 4000, bucket: 'investments', account_id: 'checking', investment_contribution_account_id: 'brokerage', pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS' },
+    { date: '2025-05-15', amount: -5000, bucket: 'income', name: 'Payroll', pfc_primary: 'INCOME', pfc_detailed: 'INCOME_PAYCHECK' },
+    { date: '2025-05-20', amount: 4000, bucket: 'investments', account_id: 'checking', investment_contribution_account_id: 'brokerage', pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS' },
+    { date: '2025-06-15', amount: -5000, bucket: 'income', name: 'Payroll', pfc_primary: 'INCOME', pfc_detailed: 'INCOME_PAYCHECK' },
+    { date: '2025-06-20', amount: 4000, bucket: 'investments', account_id: 'checking', investment_contribution_account_id: 'brokerage', pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS' }
+  ];
+  const store = { accounts: [{ id: 'checking', type: 'depository' }], transactions };
+  const plan = calculateFire(store, 100000);
+  assert.equal(plan.annualContributions, 40000);
+  assert.equal(plan.ongoingAnnualContributions, 48000);
+  assert.equal(plan.ongoingMonthlyContributions, 4000);
+  assert.equal(plan.contributionStreams[0].behavior, 'recurring');
+  assert.equal(plan.contributionEstimateQuality, 'medium');
+});
+
+test('retirement contribution forecast does not annualize an isolated contribution', () => {
+  const plan = calculateFire({
+    transactions: [{ date: '2025-06-15', amount: 7000, bucket: 'investments', account_id: 'checking', investment_contribution_account_id: 'ira', pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS' }]
+  }, 100000);
+  assert.equal(plan.annualContributions, 7000);
+  assert.equal(plan.ongoingAnnualContributions, 0);
+  assert.equal(plan.ongoingMonthlyContributions, 0);
+  assert.equal(plan.contributionStreams[0].behavior, 'one_time');
+});
+
+test('retirement contribution forecast preserves an established annual IRA pattern', () => {
+  const plan = calculateFire({
+    transactions: [
+      { date: '2025-01-15', amount: 7000, bucket: 'investments', account_id: 'checking', investment_contribution_account_id: 'ira', pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS' },
+      { date: '2026-01-15', amount: 7000, bucket: 'investments', account_id: 'checking', investment_contribution_account_id: 'ira', pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS' }
+    ]
+  }, 100000);
+  assert.equal(plan.ongoingAnnualContributions, 7000);
+  assert.equal(plan.ongoingMonthlyContributions, 7000 / 12);
+  assert.equal(plan.contributionStreams[0].behavior, 'recurring_lumpy');
+  assert.equal(plan.contributionStreams[0].cadence, 'annual');
 });
