@@ -1132,4 +1132,7 @@ html[data-theme="dark"] .retirement-inputs > span strong { color: var(--ink); }
   .retirement-inputs { gap: 16px; margin-top: 12px; padding: 0; border: 0; }
   .retirement-inputs > span { padding: 0; }
   .retirement-inputs > span + span { border: 0; }
+  .retirement-inputs > span { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 4px; }
+  .retirement-inputs > span > span { flex: 0 0 100%; }
+  .retirement-inputs > span small { align-self: baseline; }
 }
