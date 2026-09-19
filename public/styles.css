@@ -1019,6 +1019,9 @@ html[data-theme="dark"] :is(
 .retirement-inputs { display: grid; gap: 2px; }
 /* Keep chart value/date bubbles readable on narrow screens. */
 .holding-history-dialog .chart-tooltip { max-width: calc(100% - 18px); overflow: visible; text-overflow: clip; }
+@media (max-width: 560px) {
+  .account-history-dialog .holding-history-head .dialog-close { display: none; }
+}
 
 /* Account groups share one disclosure pattern: the header controls whether
    the group is open, while the existing footer reveals additional rows. */

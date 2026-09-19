@@ -3064,6 +3064,61 @@ $('#accountHistoryRange').addEventListener('click', (event) => {
   });
   dialog.addEventListener('close', reset);
 }
+
+// Account detail uses the same mobile bottom-sheet affordance as investment
+// detail. Keep the gesture local to this sheet so chart scrubbing is not
+// affected.
+{
+  const dialog = $('#accountHistoryDialog');
+  const handle = $('#accountHistoryDragHandle');
+  let startY = null;
+  let dragging = false;
+  const isPhoneDrawer = () => window.matchMedia('(max-width: 560px)').matches;
+  const reset = () => {
+    dialog.style.transform = '';
+    dialog.style.transition = '';
+    dialog.removeAttribute('data-dragging');
+    dialog.removeAttribute('data-settling');
+    startY = null;
+    dragging = false;
+  };
+  const finish = (clientY) => {
+    if (!dragging || startY == null) return;
+    const offset = Math.max(0, clientY - startY);
+    dragging = false;
+    startY = null;
+    if (offset >= Math.min(52, dialog.getBoundingClientRect().height * .1)) {
+      dialog.setAttribute('data-settling', '');
+      dialog.style.transition = 'transform .2s cubic-bezier(.2,.75,.25,1)';
+      dialog.style.transform = `translate3d(0, ${Math.ceil(dialog.getBoundingClientRect().height)}px, 0)`;
+      window.setTimeout(() => { dialog.close(); reset(); }, 210);
+      return;
+    }
+    dialog.removeAttribute('data-dragging');
+    dialog.style.transition = 'transform .18s ease-out';
+    dialog.style.transform = 'translate3d(0, 0, 0)';
+    window.setTimeout(reset, 190);
+  };
+  handle.addEventListener('pointerdown', (event) => {
+    if (!isPhoneDrawer()) return;
+    startY = event.clientY;
+    dragging = true;
+    dialog.setAttribute('data-dragging', '');
+    dialog.style.transition = 'none';
+    handle.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  });
+  handle.addEventListener('pointermove', (event) => {
+    if (!dragging || startY == null) return;
+    dialog.style.transform = `translate3d(0, ${Math.max(0, event.clientY - startY)}px, 0)`;
+  });
+  handle.addEventListener('pointerup', (event) => finish(event.clientY));
+  handle.addEventListener('pointercancel', () => finish(startY || 0));
+  dialog.addEventListener('click', (event) => {
+    if (isPhoneDrawer() && event.target === dialog) dialog.close();
+  });
+  dialog.addEventListener('close', reset);
+}
 $('#manualHoldingForm').addEventListener('submit', async (event) => {
   event.preventDefault();
   const dialog = $('#manualHoldingDialog');
