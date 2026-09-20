@@ -116,7 +116,9 @@ integrationTest('serves public legal, support, and dependency-aware health pages
     assert.match(response.text, /legal-brand/);
   }
   const privacy = await request(app).get('/privacy');
-  assert.match(privacy.text, /aggregate daily count/i);
+  // Assert a current, member-meaningful privacy promise rather than retired
+  // analytics wording that is no longer part of the policy.
+  assert.match(privacy.text, /We do not sell personal financial information/i);
   const health = await request(app).get('/api/health');
   assert.equal(health.status, 200);
   assert.deepEqual(health.body, { ok: true, securityReady: true, databaseReady: true });
