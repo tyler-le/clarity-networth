@@ -2039,7 +2039,7 @@ async function loadAll() {
       $('#monthLabel').textContent = 'Demo workspace';
       return;
     }
-    const [dashboard, spending, investments, retirement] = await Promise.all([api('/api/dashboard'), api(`/api/spending?range=${state.spendingRange}`), api('/api/investments'), api('/api/retirement')]);
+    const [dashboard, spending, investments, retirement] = await Promise.all([api('/api/dashboard'), api(`/api/spending?range=${state.spendingRange}`), api(`/api/investments?range=${state.investmentRange}`), api('/api/retirement')]);
     state.dashboard = dashboard;
     const fresh = !(dashboard.accounts || []).length && !(dashboard.items || []).length;
     const needsInvestmentConnection = !(dashboard.accounts || []).some((account) => !account.hidden && account.type === 'investment');
