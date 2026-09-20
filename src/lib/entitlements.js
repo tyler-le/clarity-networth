@@ -79,14 +79,18 @@ export function entitlementsForStore(store = {}, now = Date.now(), enabled = fre
       canUseFullHistory: true,
       canExportData: true,
       canUseRetirementScenarios: true,
+      canUseAdvancedInsights: true,
       canUseApp: true,
       requiresSubscription: false
     };
   }
   const hasProductAccess = paid || demo;
-  const requiresSubscription = !hasProductAccess;
-  const linkedInstitutionLimit = paid ? null : FREE_CONNECTED_INSTITUTION_LIMIT;
-  const canConnectInstitution = hasProductAccess;
+  // Free is a real, useful product—not a blocked landing state. Plus adds
+  // breadth and planning depth while core visibility and every timeframe stay
+  // available to everyone.
+  const requiresSubscription = false;
+  const linkedInstitutionLimit = paid || demo ? null : FREE_CONNECTED_INSTITUTION_LIMIT;
+  const canConnectInstitution = paid || demo || linkedInstitutionCount < FREE_CONNECTED_INSTITUTION_LIMIT;
   const plan = paid ? (membership.plan === 'trial' ? 'trial' : 'plus') : 'free';
 
   return {
@@ -96,12 +100,13 @@ export function entitlementsForStore(store = {}, now = Date.now(), enabled = fre
     linkedInstitutionCount,
     linkedInstitutionLimit,
     canConnectInstitution,
-    // A trial and an active subscription unlock the complete product. The
-    // Free state is retained as the pre-subscription state shown by the gate.
-    canUseFullHistory: hasProductAccess,
-    canExportData: hasProductAccess,
+    canUseFullHistory: true,
+    canExportData: true,
+    // The baseline retirement outlook is free. Plus unlocks side-by-side
+    // lifestyle/scenario comparisons and future advanced insights.
     canUseRetirementScenarios: hasProductAccess,
-    canUseApp: hasProductAccess,
+    canUseAdvancedInsights: hasProductAccess,
+    canUseApp: true,
     requiresSubscription
   };
 }

@@ -256,9 +256,6 @@ function setView(view) {
   $('#connectButton').classList.toggle('hidden', view === 'profile' || Boolean(state.onboardingPreview));
   $('#profileBack').classList.toggle('hidden', view !== 'profile');
   $('#profileButton').classList.toggle('hidden', view === 'profile');
-  const subscriptionRequired = Boolean(state.dashboard?.subscriptionRequired && !state.dashboard?.demoMode);
-  $('#appShell').classList.toggle('subscription-locked', subscriptionRequired && view !== 'profile');
-  $('#subscriptionRequiredState')?.classList.toggle('hidden', !subscriptionRequired || view === 'profile');
   const launchEvent = {
     spending: 'cash_flow_viewed', investments: 'investments_viewed',
     retirement: 'retirement_viewed', accounts: 'accounts_viewed'
@@ -816,11 +813,11 @@ function renderProfileSettings(d) {
   if (showPlan) {
     const subscribed = ['plus', 'trial'].includes(entitlement.plan);
     $('#profilePlanTitle').textContent = subscribed ? 'Clarity Plus' : 'Clarity Free';
-    $('#profilePlanDetail').textContent = entitlement.plan === 'trial' ? 'Your 14-day trial is active.' : subscribed ? 'Your subscription is active.' : 'Start a 14-day free trial to use Clarity.';
+    $('#profilePlanDetail').textContent = entitlement.plan === 'trial' ? 'Your 14-day Plus trial is active.' : subscribed ? 'Your subscription is active.' : 'Core Clarity is free. Try Plus for more depth.';
     $('#profilePlanAction').textContent = subscribed ? 'Manage plan' : 'Start free trial';
     $('#profilePlanBenefits').innerHTML = subscribed
-      ? '<li>Full cash flow, net worth, investments, and retirement views</li><li>Unlimited connected institutions</li>'
-      : '<li>Full cash flow, net worth, investments, and retirement views</li><li>All available history and exports</li>';
+      ? '<li>Unlimited connected institutions</li><li>Advanced insights and retirement scenarios</li>'
+      : '<li>Two connected institutions</li><li>All timeframes, core views, and exports</li>';
   }
 }
 
@@ -2041,16 +2038,6 @@ async function loadAll() {
     }
     const dashboard = await api('/api/dashboard');
     state.dashboard = dashboard;
-    if (dashboard.subscriptionRequired) {
-      state.onboardingPreview = null;
-      state.investmentPreview = null;
-      state.spending = null;
-      state.investments = null;
-      state.retirement = null;
-      renderProfileSettings(dashboard);
-      setView('overview');
-      return;
-    }
     const [spending, investments, retirement] = await Promise.all([api(`/api/spending?range=${state.spendingRange}`), api(`/api/investments?range=${state.investmentRange}`), api('/api/retirement')]);
     const fresh = !(dashboard.accounts || []).length && !(dashboard.items || []).length;
     const needsInvestmentConnection = !(dashboard.accounts || []).some((account) => !account.hidden && account.type === 'investment');
@@ -2153,7 +2140,6 @@ $('#profileButton').addEventListener('click', () => setView('profile'));
 $('#profileBack').addEventListener('click', () => setView(state.returnView || 'overview'));
 $('#upgradePlanButton').addEventListener('click', () => openBilling('checkout'));
 $('#profilePlanAction').addEventListener('click', () => openBilling(['plus', 'trial'].includes(state.dashboard?.entitlements?.plan) ? 'portal' : 'checkout'));
-$('#subscriptionRequiredAction').addEventListener('click', () => openBilling('checkout'));
 // Help tips should disappear as soon as the reader returns to the page. This
 // keeps optional explanation from obscuring the next action on compact views.
 document.addEventListener('click', (event) => {

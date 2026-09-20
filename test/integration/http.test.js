@@ -705,7 +705,7 @@ integrationTest('freemium limits only current Free-plan institutions and an unli
   deleteStore(key);
 });
 
-integrationTest('configured billing gates Free financial data behind the trial', async (t) => {
+integrationTest('configured billing keeps Free core data open and exposes Plus entitlements', async (t) => {
   const previous = {
     freemium: process.env.FREEMIUM_ENABLED,
     secret: process.env.STRIPE_SECRET_KEY,
@@ -738,17 +738,13 @@ integrationTest('configured billing gates Free financial data behind the trial',
 
   const dashboard = await request(app).get('/api/dashboard').set('Cookie', cookie);
   assert.equal(dashboard.status, 200);
-  assert.equal(dashboard.body.subscriptionRequired, true);
-  assert.equal(dashboard.body.entitlements.requiresSubscription, true);
+  assert.equal(dashboard.body.subscriptionRequired, undefined);
+  assert.equal(dashboard.body.entitlements.requiresSubscription, false);
   assert.equal(dashboard.body.entitlements.billingAvailable, true);
 
   const spending = await request(app).get('/api/spending?range=1m').set('Cookie', cookie);
-  assert.equal(spending.status, 402);
-  assert.deepEqual(spending.body, {
-    error: 'Start your free trial to continue using Clarity.',
-    error_code: 'subscription_required',
-    recovery: 'upgrade'
-  });
+  assert.equal(spending.status, 200);
+  assert.equal(spending.body.range, '1m');
   deleteStore(key);
 });
 

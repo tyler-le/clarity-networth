@@ -34,7 +34,7 @@ test('a Free-plan institution limit directs the member to unlink instead of expo
   });
 });
 
-test('a Free-plan subscription gate gives members a clear trial recovery path', () => {
+test('a Plus feature gate gives members a clear trial recovery path', () => {
   assert.deepEqual(publicErrorPayload('subscription_required'), {
     error: 'Start your free trial to continue using Clarity.',
     error_code: 'subscription_required',

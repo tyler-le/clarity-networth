@@ -5,7 +5,7 @@ import { connectedInstitutionCount, entitlementsForStore, hasPaidAccess, normali
 const now = Date.parse('2026-09-19T12:00:00.000Z');
 const currentItem = (id) => ({ id, demo: false });
 
-test('Free state requires a subscription while preserving institution counts', () => {
+test('Free state keeps the core product open and limits active institutions', () => {
   const store = { items: [currentItem('one'), currentItem('two')], settings: { membership: { plan: 'free' } } };
   const atLimit = entitlementsForStore(store, now, true);
   assert.equal(atLimit.enabled, true);
@@ -13,16 +13,18 @@ test('Free state requires a subscription while preserving institution counts', (
   assert.equal(atLimit.linkedInstitutionCount, 2);
   assert.equal(atLimit.linkedInstitutionLimit, 2);
   assert.equal(atLimit.canConnectInstitution, false);
-  assert.equal(atLimit.canUseFullHistory, false);
-  assert.equal(atLimit.canExportData, false);
+  assert.equal(atLimit.canUseFullHistory, true);
+  assert.equal(atLimit.canExportData, true);
   assert.equal(atLimit.canUseRetirementScenarios, false);
-  assert.equal(atLimit.canUseApp, false);
-  assert.equal(atLimit.requiresSubscription, true);
+  assert.equal(atLimit.canUseApp, true);
+  assert.equal(atLimit.requiresSubscription, false);
 
   store.items = [currentItem('two')];
   const afterUnlink = entitlementsForStore(store, now, true);
   assert.equal(afterUnlink.linkedInstitutionCount, 1);
-  assert.equal(afterUnlink.canConnectInstitution, false);
+  assert.equal(afterUnlink.canConnectInstitution, true);
+  assert.equal(afterUnlink.canUseFullHistory, true);
+  assert.equal(afterUnlink.canUseApp, true);
 });
 
 test('Plus and trial plans unlock retirement comparisons without changing the primary plan editor', () => {
