@@ -1714,6 +1714,31 @@ function setHoldingHistoryRangeLoading(loading) {
   });
 }
 
+function openHoldingHistoryPreview({ ticker = '', accountId = '' } = {}) {
+  const dialog = $('#holdingHistoryDialog');
+  const selectedAccount = accountId ? (state.investments?.accounts || []).find((account) => account.account_id === accountId) : null;
+  const label = selectedAccount?.name || ticker || 'Investment detail';
+  dialog.showModal();
+  dialog.focus({ preventScroll: true });
+  $('#holdingHistoryEyebrow').textContent = accountId ? 'Your account' : 'Your position';
+  $('#holdingHistoryTitle').textContent = label;
+  $('#holdingHistorySubtitle').textContent = 'Verified history is available with Clarity Plus';
+  $('#holdingHistoryMetrics').innerHTML = '<div><span>Current value</span><strong>••••••</strong></div><div><span>History</span><strong>Plus</strong></div>';
+  $('#holdingHistoryTabs').innerHTML = '';
+  $('#holdingHistoryRange').innerHTML = '';
+  $('#holdingHistoryNote').textContent = 'Preview the timeline shape below. Your values and dates stay private until you unlock investment history.';
+  $('#holdingHistoryChart').innerHTML = '<div class="plus-history-preview" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>';
+  $('#holdingHistoryWhere').innerHTML = '<div class="plus-history-cta"><span class="card-label">CLARITY PLUS</span><strong>Follow verified account and position history</strong><button class="primary" type="button" data-plus-cta>Unlock history <span aria-hidden="true">→</span></button></div>';
+}
+
+function openHoldingHistoryEntry(options = {}) {
+  if (!plusFeatureAvailable('canUseInvestmentDetails')) {
+    openHoldingHistoryPreview(options);
+    return;
+  }
+  openHoldingHistory(options);
+}
+
 async function openHoldingHistory({ ticker = '', accountId = '' } = {}, { preserveRange = false } = {}) {
   const dialog = $('#holdingHistoryDialog');
   const selectedAccount = accountId ? (state.investments?.accounts || []).find((account) => account.account_id === accountId) : null;
@@ -2677,11 +2702,22 @@ $$('[data-spending-range]').forEach((button) => button.addEventListener('click',
   }
 }));
 function openCashflowDialog() {
-  if (!requestPlus('canUseCashFlowDetails')) return;
+  if (!plusFeatureAvailable('canUseCashFlowDetails')) {
+    showCashflowPreviewDrawer('all');
+    return;
+  }
   trackProductEvent('cash_flow_expanded');
   const dialog = $('#cashflowDialog');
   dialog.showModal();
   renderCashFlowSankey(spendingForSelectedMonth(state.spending), $('#cashflowDialogContent'), true);
+}
+
+function showCashflowPreviewDrawer(category = 'all') {
+  const dialog = $('#cashflowDialog');
+  const data = spendingForSelectedMonth(state.spending);
+  const label = category === 'all' ? 'Cash flow activity' : cashflowActivityLabel(data, category);
+  dialog.showModal();
+  $('#cashflowDialogContent').innerHTML = `<section class="cashflow-plus-preview" aria-labelledby="cashflowPreviewTitle"><div class="card-label">CLARITY PLUS</div><h2 id="cashflowPreviewTitle">${escapeHtml(label)}</h2><p>Plus reveals the transactions behind this view. Your Free plan keeps your totals and categories private.</p><div class="cashflow-plus-preview-rows" aria-hidden="true"><div><i></i><span></span><b></b></div><div><i></i><span></span><b></b></div><div><i></i><span></span><b></b></div><div><i></i><span></span><b></b></div></div><button class="primary" type="button" data-plus-cta>Unlock transaction detail <span aria-hidden="true">→</span></button></section>`;
 }
 
 function cashflowActivityLabel(data, category) {
@@ -2717,7 +2753,7 @@ function openCashflowCategoryActivity(category) {
   const transactionKeys = new Set((data.transactions || []).flatMap((transaction) => [transaction.flowKey, transaction.flowGroup]));
   if (category !== 'all' && !transactionKeys.has(category)) return;
   if (!plusFeatureAvailable('canUseCashFlowDetails')) {
-    revealCashflowPreview(category);
+    showCashflowPreviewDrawer(category);
     return;
   }
   trackProductEvent('cash_flow_drilldown');
@@ -3011,7 +3047,7 @@ $('#investmentHoldingsMore').addEventListener('click', () => {
 });
 $('#investmentAccounts').addEventListener('click', (event) => {
   const account = event.target.closest('[data-investment-account-history]');
-  if (account && requestPlus('canUseInvestmentDetails')) openHoldingHistory({ accountId: account.dataset.investmentAccountHistory });
+    if (account) openHoldingHistoryEntry({ accountId: account.dataset.investmentAccountHistory });
 });
 $('#investmentPositions').addEventListener('change', async (event) => {
   const select = event.target.closest('[data-position-class]');
@@ -3046,7 +3082,7 @@ $('#investmentPositions').addEventListener('click', async (event) => {
   }
   const holding = event.target.closest('[data-holding-history]');
   if (holding) {
-    if (requestPlus('canUseInvestmentDetails')) openHoldingHistory({ ticker: holding.dataset.holdingHistory });
+    openHoldingHistoryEntry({ ticker: holding.dataset.holdingHistory });
     return;
   }
   const remove = event.target.closest('[data-remove-manual-holding]');

@@ -109,7 +109,10 @@ test('a Free member sees an in-context Plus prompt for deeper cash-flow detail',
   const sankeyNode = page.locator('#cashflowSankey [data-cashflow-node]').first();
   await expect(sankeyNode).toBeVisible();
   await sankeyNode.click();
-  await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
+  await expect(page.locator('#cashflowDialog')).toBeVisible();
+  await expect(page.locator('#cashflowDialog')).toContainText('Unlock transaction detail');
+  await page.keyboard.press('Escape');
+  await page.locator('#spendingTransactionsPanel summary').click();
   await expect(page.locator('#spendingTransactions')).toContainText('See the transactions behind each category');
   await page.locator('#spendingTransactions [data-plus-cta]').click();
   await expect(page.locator('#upgradeDialog')).toBeVisible();
