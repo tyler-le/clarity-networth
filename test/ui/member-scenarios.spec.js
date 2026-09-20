@@ -162,6 +162,24 @@ test('cash-flow activity keeps a remembered category visible without stretching 
   await expect.poll(() => forgotRule).toBe(true);
 });
 
+test('cash-flow activity summary uses the same category label as its active transaction filter', async ({ page }) => {
+  await openSignedInScenario(page, (preview) => {
+    preview.dashboard.entitlements = { enabled: false, canUseCashFlowDetails: true };
+    for (const transaction of preview.spending.transactions) {
+      if (transaction.flowGroup !== 'actual_spend') continue;
+      transaction.flowKey = 'food_dining';
+      transaction.flowLabel = 'Food & dining';
+      transaction.category = 'Fixed costs';
+    }
+  });
+
+  await goToView(page, 'spending');
+  await page.locator('#spendingTransactionsPanel summary').click();
+  await page.locator('#spendingCategoryFilter').selectOption('food_dining');
+  await expect(page.locator('.spending-transaction-context .spending-context-stat')).toContainText('Food & dining');
+  await expect(page.locator('.spending-transaction-context .spending-context-stat')).not.toContainText('Fixed costs');
+});
+
 test('a Free member can preview investment history before choosing Plus', async ({ page }) => {
   await openSignedInScenario(page, (preview) => {
     preview.dashboard.entitlements = {

@@ -1241,6 +1241,11 @@ function spendingCategory(transaction) {
 // person should have to learn in order to correct a transaction.
 export const CASH_FLOW_CATEGORY_OPTIONS = [
   { key: 'housing_bills', label: 'Housing & bills', bucket: 'fixed', flow: 'outflow' },
+  { key: 'groceries', label: 'Groceries', bucket: 'guilt_free', flow: 'outflow' },
+  { key: 'dining_out', label: 'Dining out', bucket: 'guilt_free', flow: 'outflow' },
+  // Keep this only for food purchases where Plaid has not supplied enough
+  // detail to distinguish a grocery store from a restaurant. We should not
+  // invent that distinction from a merchant name.
   { key: 'food_dining', label: 'Food & dining', bucket: 'guilt_free', flow: 'outflow' },
   { key: 'transport', label: 'Transport', bucket: 'fixed', flow: 'outflow' },
   { key: 'health', label: 'Health', bucket: 'fixed', flow: 'outflow' },
@@ -1283,7 +1288,9 @@ function cashFlowDetail(transaction) {
   const detailed = String(transaction.pfc_detailed || '').toUpperCase();
   const labels = {
     RENT_AND_UTILITIES: ['housing_bills', 'Housing & bills'],
-    FOOD_AND_DRINK: ['food_dining', 'Food & dining'],
+    FOOD_AND_DRINK: detailed.includes('GROCER') ? ['groceries', 'Groceries']
+      : /(RESTAURANT|FAST_FOOD|COFFEE|BAR|DINING)/.test(detailed) ? ['dining_out', 'Dining out']
+        : ['food_dining', 'Food & dining'],
     GENERAL_MERCHANDISE: ['shopping', 'Shopping'],
     GENERAL_SERVICES: detailed.includes('INSURANCE') ? ['insurance', 'Insurance'] : detailed.includes('EDUCATION') ? ['education', 'Education'] : ['services', 'Services'],
     GOVERNMENT_AND_NON_PROFIT: detailed.includes('TAX') ? ['taxes', 'Taxes'] : ['civic', 'Civic & giving'],

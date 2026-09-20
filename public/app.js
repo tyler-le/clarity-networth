@@ -1246,7 +1246,10 @@ function transactionCategoryControl(data, transaction, { context = 'cashflow', a
   const label = transaction.category || transaction.flowLabel || 'Transaction';
   if (!editable || !options.length) {
     const payroll = transaction.bucket === 'pre_tax_retirement' || transaction.flowKey === 'payroll_retirement';
-    return `<span class="transaction-category-label${payroll ? ' transaction-category-label-payroll' : ''}">${escapeHtml(label)}</span>`;
+    const investment = transaction.bucket === 'investments' || transaction.flowKey === 'save_invest';
+    const contextLabel = payroll ? 'Pre-tax retirement' : investment ? 'Investment activity' : label;
+    const contextHint = payroll || investment ? 'Tracked separately from ordinary cash-flow categories' : '';
+    return `<span class="transaction-category-label${payroll || investment ? ' transaction-category-label-context' : ''}"${contextHint ? ` title="${escapeHtml(contextHint)}"` : ''}>${escapeHtml(contextLabel)}</span>`;
   }
   return `<span class="transaction-category-control"><select data-transaction-category="${escapeHtml(transaction.id)}" data-category-context="${escapeHtml(context)}" data-cashflow-category="${escapeHtml(activityCategory)}" aria-label="Category for ${escapeHtml(transaction.name)}">${options.map((category) => `<option value="${escapeHtml(category.key)}" ${transaction.cashFlowCategory === category.key ? 'selected' : ''}>${escapeHtml(category.label)}</option>`).join('')}</select></span>`;
 }
@@ -1295,7 +1298,11 @@ function renderTransactionContextPanel(rows, data) {
     if (transaction.categoryRuleId) savedRules.set(transaction.categoryRuleId, transaction);
   }
   const total = rows.reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount || 0)), 0);
-  const categories = [...new Set(rows.map((transaction) => transaction.category || transaction.flowLabel).filter(Boolean))];
+  // The list itself presents the cash-flow detail label. Use that same label
+  // here, rather than the broader bucket (for example, Food & dining instead
+  // of Guilt-free spending / Fixed costs), so the panel cannot contradict the
+  // active filter.
+  const categories = [...new Set(rows.map((transaction) => transaction.flowLabel || transaction.category).filter(Boolean))];
   const search = state.spendingTransactionSearch.trim();
   const category = state.spendingCategory !== 'all' ? cashflowActivityLabel(data, state.spendingCategory) : '';
   const subject = search ? `“${search}” activity` : category || 'This activity';
