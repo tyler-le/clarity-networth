@@ -1162,7 +1162,10 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const bridgeBlock = sourceTotal >= .5 ? block(bridgeX, bridgeY, bridgeW, bridgeNode.color, bridgeNode.label, bridgeNode.value, null, bridgeNode.key, 'left') : '';
   const middleBlocks = allocationNodes.map((node) => block(middleX, middleY.get(node.key), middleW, node.color, node.label, node.value, node.share, node.key, 'left')).join('');
   el.classList.toggle('has-transaction-action', Boolean(transactionAction));
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="External money in flows into spending, saving, and investing">${paths}${sourceBlocks}${bridgeBlock}${middleBlocks}${categories}</svg>${categoryList}${more}${transactionAction}`;
+  const detailActions = more || transactionAction
+    ? `<div class="cashflow-detail-actions" aria-label="Explore cash flow details">${more}${transactionAction}</div>`
+    : '';
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="External money in flows into spending, saving, and investing">${paths}${sourceBlocks}${bridgeBlock}${middleBlocks}${categories}</svg>${categoryList}${detailActions}`;
   // SVG focus delegation differs subtly across browsers. Bind directly as
   // well so keyboard focus always traces the same connected flow as hover.
   el.querySelectorAll('[data-cashflow-node]').forEach((node) => {
@@ -2710,6 +2713,7 @@ function openCashflowDialog() {
   }
   trackProductEvent('cash_flow_expanded');
   const dialog = $('#cashflowDialog');
+  dialog.classList.remove('plus-preview');
   dialog.showModal();
   renderCashFlowSankey(spendingForSelectedMonth(state.spending), $('#cashflowDialogContent'), true);
 }
@@ -2724,6 +2728,7 @@ function showCashflowPreviewDrawer(category = 'all') {
   const teaserMarkup = teaserRows.length
     ? teaserRows.map((transaction) => `<div><i></i><span>${escapeHtml(transaction.name || 'Transaction')}<small>${new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</small></span><b aria-label="Amount hidden in preview">••••</b></div>`).join('')
     : '<div class="cashflow-plus-preview-empty">A few real transactions will appear here after you unlock Plus.</div>';
+  dialog.classList.add('plus-preview');
   dialog.showModal();
   $('#cashflowDialogContent').innerHTML = `<section class="cashflow-plus-preview" aria-labelledby="cashflowPreviewTitle"><div class="card-label">CLARITY PLUS · YOUR PREVIEW</div><h2 id="cashflowPreviewTitle">${escapeHtml(label)}</h2><p>These are real transactions from this view. Amounts stay hidden until you unlock Plus.</p><div class="cashflow-plus-preview-rows"><div class="cashflow-plus-preview-head"><span>Activity</span><span>Date</span><span>Amount</span></div>${teaserMarkup}</div><button class="primary" type="button" data-plus-cta>Unlock transaction detail <span aria-hidden="true">→</span></button></section>`;
 }
