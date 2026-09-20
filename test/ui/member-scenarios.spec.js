@@ -88,6 +88,31 @@ test('a Free member can use the core product before choosing Plus', async ({ pag
   await expect(page.locator('#netWorthCard')).toBeVisible();
 });
 
+test('a Free member sees an in-context Plus prompt for deeper cash-flow detail', async ({ page }) => {
+  await openSignedInScenario(page, (preview) => {
+    preview.dashboard.entitlements = {
+      enabled: true,
+      plan: 'free',
+      billingAvailable: true,
+      requiresSubscription: false,
+      canUseApp: true,
+      canUseConnectInstitution: true,
+      canUseCashFlowDetails: false,
+      canUseInvestmentDetails: false,
+      canUseRetirementScenarios: false,
+      linkedInstitutionCount: 1,
+      linkedInstitutionLimit: 2
+    };
+  });
+
+  await goToView(page, 'spending');
+  await expect(page.locator('#spendingTransactions')).toContainText('See the transactions behind each category');
+  await page.locator('#spendingTransactions [data-plus-cta]').click();
+  await expect(page.locator('#upgradeDialog')).toBeVisible();
+  await expect(page.locator('#upgradeDialogTitle')).toHaveText('See more of your money.');
+  await expect(page.locator('#upgradeDialog')).toContainText('No charge during your trial');
+});
+
 test('a newly signed-in member with no accounts gets a calm, truthful product preview', async ({ page }) => {
   await openSignedInScenario(page, (preview) => {
     preview.dashboard.accounts = [];

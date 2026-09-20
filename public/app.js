@@ -825,7 +825,9 @@ function renderProfileSettings(d) {
       [subscribed, 'Holding and investment-account history'],
       [subscribed, 'Side-by-side retirement scenarios']
     ];
-    $('#profilePlanBenefits').innerHTML = benefits.map(([included, label]) => `<li class="${included ? 'included' : 'excluded'}"><span>${label}</span></li>`).join('');
+    const included = benefits.filter(([isIncluded]) => isIncluded).map(([, label]) => `<li><span aria-hidden="true">✓</span><span>${label}</span></li>`).join('');
+    const excluded = benefits.filter(([isIncluded]) => !isIncluded).map(([, label]) => `<li><span aria-hidden="true">×</span><span>${label}</span></li>`).join('');
+    $('#profilePlanBenefits').innerHTML = `<div class="profile-plan-benefit-group"><div class="profile-plan-benefit-heading">Included</div><ul>${included}</ul></div><div class="profile-plan-benefit-group excluded"><div class="profile-plan-benefit-heading">Plus unlocks</div><ul>${excluded}</ul></div>`;
   }
 }
 
@@ -1208,7 +1210,7 @@ function renderSpendingTransactions(data) {
   if (!plusFeatureAvailable('canUseCashFlowDetails')) {
     const count = (data.transactions || []).length;
     $('#spendingTransactionCount').textContent = `${count} posted`;
-    $('#spendingTransactions').innerHTML = `<div class="plus-inline-lock"><div><div class="card-label">CLARITY PLUS</div><strong>See the transactions behind each category</strong><p>Your Free plan keeps the cash-flow summary. Plus unlocks category drilldowns and transaction detail.</p></div><button class="secondary" type="button" data-plus-cta>Start free trial</button></div>`;
+    $('#spendingTransactions').innerHTML = `<div class="plus-inline-lock"><div class="plus-preview-copy"><div class="card-label">CLARITY PLUS</div><strong>See the transactions behind each category</strong><p>Preview the detail Plus adds. Your real transactions stay private until you unlock it.</p></div><div class="plus-preview-list" aria-hidden="true"><div><i></i><b></b><em></em></div><div><i></i><b></b><em></em></div><div><i></i><b></b><em></em></div></div><button class="secondary" type="button" data-plus-cta>Unlock with Plus <span aria-hidden="true">→</span></button></div>`;
     return;
   }
   const filter = $('#spendingCategoryFilter');

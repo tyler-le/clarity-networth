@@ -168,7 +168,7 @@
 
           <section class="profile-plan-card hidden" id="profilePlan" aria-labelledby="profilePlanTitle">
             <div class="profile-group-head">
-              <div><div class="card-label">Plan</div><h3 id="profilePlanTitle">Clarity Free</h3><p id="profilePlanDetail">Two connected institutions included.</p><ul class="profile-plan-benefits" id="profilePlanBenefits"></ul></div>
+              <div><div class="card-label">Plan</div><h3 id="profilePlanTitle">Clarity Free</h3><p id="profilePlanDetail">Two connected institutions included.</p><div class="profile-plan-benefits" id="profilePlanBenefits"></div></div>
               <button class="secondary" type="button" id="profilePlanAction">Upgrade</button>
             </div>
           </section>
@@ -290,11 +290,21 @@
     </form>
   </dialog>
   <dialog class="upgrade-dialog" id="upgradeDialog" aria-labelledby="upgradeDialogTitle">
+    <div class="upgrade-dialog-handle" aria-hidden="true"></div>
     <form method="dialog"><button class="dialog-close" aria-label="Close">×</button></form>
-    <div class="card-label">Clarity Plus</div>
-    <h2 id="upgradeDialogTitle">Go deeper with Clarity Plus.</h2>
-    <p>Start a 14-day free trial for unlimited connected institutions and side-by-side retirement planning.</p>
-    <button class="primary full" type="button" id="upgradePlanButton">Start free trial</button>
+    <div class="upgrade-dialog-body">
+      <div class="upgrade-dialog-mark" aria-hidden="true">+</div>
+      <div class="card-label">CLARITY PLUS</div>
+      <h2 id="upgradeDialogTitle">See more of your money.</h2>
+      <p>Try Plus for 14 days and keep the Free plan if it is not for you.</p>
+      <ul class="upgrade-benefits">
+        <li><span aria-hidden="true">✓</span><span>Unlimited connected institutions</span></li>
+        <li><span aria-hidden="true">✓</span><span>Category and transaction drilldowns</span></li>
+        <li><span aria-hidden="true">✓</span><span>Investment history and retirement scenarios</span></li>
+      </ul>
+      <div class="upgrade-dialog-note"><span aria-hidden="true">✓</span>No charge during your trial</div>
+      <button class="primary full" type="button" id="upgradePlanButton">Start free trial <span aria-hidden="true">→</span></button>
+    </div>
   </dialog>
   <div class="update-toast hidden" id="updateToast" role="status" aria-live="polite"><span>A newer version of Clarity is ready.</span><button type="button" id="updateAppButton">Refresh</button></div>
       <dialog class="cashflow-dialog" id="cashflowDialog"><header><button class="cashflow-dialog-drag-handle" id="cashflowDialogDragHandle" type="button" aria-label="Swipe down to close cash flow activity"></button><span>Cash flow</span><button class="dialog-close" id="cashflowDialogClose" type="button" aria-label="Close">×</button></header><div id="cashflowDialogContent"></div></dialog>
