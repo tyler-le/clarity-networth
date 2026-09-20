@@ -180,6 +180,27 @@ test('cash-flow activity summary uses the same category label as its active tran
   await expect(page.locator('.spending-transaction-context .spending-context-stat')).not.toContainText('Fixed costs');
 });
 
+test('cash-flow activity reveals a long filtered history in deliberate pages', async ({ page }) => {
+  await openSignedInScenario(page, (preview) => {
+    const source = preview.spending.transactions.find((transaction) => transaction.flowGroup === 'actual_spend');
+    preview.spending.transactions = Array.from({ length: 55 }, (_, index) => ({
+      ...source,
+      id: `long-history-${index}`,
+      name: `Purchase ${index + 1}`,
+      date: `2026-09-${String((index % 28) + 1).padStart(2, '0')}`
+    }));
+    preview.dashboard.entitlements = { enabled: false, canUseCashFlowDetails: true };
+  });
+
+  await goToView(page, 'spending');
+  await page.locator('#spendingTransactionsPanel summary').click();
+  await expect(page.locator('.spending-transaction-row')).toHaveCount(50);
+  await expect(page.getByRole('button', { name: 'Load 5 more' })).toBeVisible();
+  await page.getByRole('button', { name: 'Load 5 more' }).click();
+  await expect(page.locator('.spending-transaction-row')).toHaveCount(55);
+  await expect(page.locator('.spending-transactions-more')).toContainText('Showing all 55 transactions');
+});
+
 test('a Free member can preview investment history before choosing Plus', async ({ page }) => {
   await openSignedInScenario(page, (preview) => {
     preview.dashboard.entitlements = {

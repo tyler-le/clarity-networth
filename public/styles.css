@@ -1354,6 +1354,10 @@ html[data-theme="dark"] .plus-history-gate .plus-history-cta { background: linea
 .spending-transaction-row { grid-template-columns: minmax(0, 1fr) minmax(130px, auto); }
 .spending-transaction-context { display: grid; align-content: start; gap: 11px; padding: 20px; border-left: 1px solid var(--line); background: linear-gradient(145deg, color-mix(in srgb, var(--accent-soft) 68%, var(--card)), var(--card) 68%); }
 .spending-transaction-context > strong { font-size: 16px; letter-spacing: -.025em; }
+.spending-transactions-more { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-top: 1px solid var(--line); background: color-mix(in srgb, var(--accent-soft) 30%, var(--card)); }
+.spending-transactions-more span { color: var(--muted); font-size: 11px; }
+.spending-transactions-more button { flex: 0 0 auto; margin: 0; padding: 8px 11px; font-size: 11px; }
+.spending-transactions-complete { justify-content: flex-start; background: var(--card); }
 .spending-transaction-context > p { margin: -5px 0 2px; color: var(--muted); font-size: 12px; }
 .spending-context-stat { display: grid; gap: 3px; padding: 10px 11px; border: 1px solid color-mix(in srgb, var(--accent) 15%, var(--line)); border-radius: 10px; background: color-mix(in srgb, var(--card) 78%, transparent); }
 .spending-context-stat span { color: var(--muted); font-size: 10px; font-weight: 720; text-transform: uppercase; letter-spacing: .05em; }
@@ -1382,4 +1386,6 @@ html[data-theme="dark"] .plus-history-gate .plus-history-cta { background: linea
   .spending-transaction-context > p, .spending-transaction-context .spending-context-stat { grid-column: 1; }
   .spending-memory-note { grid-column: 1 / -1; }
   .spending-forget-memory { grid-column: 2; grid-row: 1 / span 2; align-self: start; }
+  .spending-transactions-more { align-items: stretch; flex-direction: column; }
+  .spending-transactions-more button { width: 100%; }
 }

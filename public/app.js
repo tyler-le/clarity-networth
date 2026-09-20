@@ -21,6 +21,8 @@ const state = {
   spendingCategory: 'all',
   spendingSort: 'recent',
   spendingTransactionSearch: '',
+  spendingTransactionsVisible: 50,
+  spendingTransactionsPageKey: '',
   cashflowActivitySort: 'recent',
   // Set after the first verified portfolio payload arrives. Starting at "all"
   // avoids a transient 1Y selection that would turn a new connection into a
@@ -1283,10 +1285,19 @@ function renderSpendingTransactions(data) {
   });
   rows = sortCashflowTransactions(rows, state.spendingSort);
   $('#spendingTransactionCount').textContent = `${rows.length} posted`;
-  const transactionRows = rows.length ? `<div class="spending-transaction-list">${rows.map((transaction) => {
+  // Keep filters and search comprehensive, but avoid turning a long history
+  // into an endless initial scroll. The page key resets only when the person
+  // changes the result set; loading another page preserves their place.
+  const pageKey = [state.spendingRange, state.spendingMonth || '', state.spendingCategory, state.spendingSort, state.spendingTransactionSearch].join('|');
+  if (pageKey !== state.spendingTransactionsPageKey) {
+    state.spendingTransactionsPageKey = pageKey;
+    state.spendingTransactionsVisible = 50;
+  }
+  const visibleRows = rows.slice(0, state.spendingTransactionsVisible);
+  const transactionRows = visibleRows.length ? `<div class="spending-transaction-list">${visibleRows.map((transaction) => {
     const categoryControl = transactionCategoryControl(data, transaction);
     return `<div class="spending-transaction-row ${transaction.bucket === 'income' ? 'income-transaction' : ''} ${transaction.bucket === 'pre_tax_retirement' ? 'payroll-transaction' : ''}"><div><strong>${escapeHtml(transaction.name)}</strong><span>${new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span></div><div class="transaction-plan"><b>${transaction.bucket === 'income' ? '+' : ''}${fmt.format(transaction.amount)}</b>${categoryControl}</div></div>`;
-  }).join('')}</div>` : `<p class="spending-empty">No posted transactions match${state.spendingTransactionSearch ? ` “${escapeHtml(state.spendingTransactionSearch)}”` : ' this category for this period'}.</p>`;
+  }).join('')}${rows.length > visibleRows.length ? `<div class="spending-transactions-more"><span>Showing ${visibleRows.length} of ${rows.length}</span><button class="secondary" type="button" data-spending-transactions-more>Load ${Math.min(50, rows.length - visibleRows.length)} more</button></div>` : rows.length > 50 ? `<div class="spending-transactions-more spending-transactions-complete"><span>Showing all ${rows.length} transactions</span></div>` : ''}</div>` : `<p class="spending-empty">No posted transactions match${state.spendingTransactionSearch ? ` “${escapeHtml(state.spendingTransactionSearch)}”` : ' this category for this period'}.</p>`;
   $('#spendingTransactions').innerHTML = rows.length
     ? `<div class="spending-transaction-layout">${transactionRows}${renderTransactionContextPanel(rows, data)}</div>`
     : transactionRows;
@@ -3071,6 +3082,12 @@ $('#spendingTransactions').addEventListener('change', (event) => {
   void saveTransactionCategory(select);
 });
 $('#spendingTransactions').addEventListener('click', async (event) => {
+  const more = event.target.closest('[data-spending-transactions-more]');
+  if (more) {
+    state.spendingTransactionsVisible += 50;
+    renderSpendingTransactions(spendingForSelectedMonth(state.spending));
+    return;
+  }
   const forget = event.target.closest('[data-cashflow-forget-rule]');
   if (!forget) return;
   forget.disabled = true;

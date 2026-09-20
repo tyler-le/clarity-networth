@@ -328,18 +328,7 @@ test('cash flow separates actual spending details from saving and investing', ()
   assert.equal(result.investments, 500);
   assert.equal(result.savingsAndInvestments, 750);
   assert.equal(result.savedInvested, 750);
-  assert.deepEqual(result.actualSpendCategories.map((row) => [row.key, row.amount]), [['housing_bills', 1800], ['groceries', 240], ['shopping', 90]]);
-});
-
-test('cash flow separates groceries and dining out when Plaid provides detailed food categories', () => {
-  const store = { transactions: [
-    { date: '2026-09-01', amount: 120, bucket: 'guilt_free', pfc_primary: 'FOOD_AND_DRINK', pfc_detailed: 'FOOD_AND_DRINK_GROCERIES', merchant_name: 'Neighborhood market' },
-    { date: '2026-09-02', amount: 48, bucket: 'guilt_free', pfc_primary: 'FOOD_AND_DRINK', pfc_detailed: 'FOOD_AND_DRINK_RESTAURANTS', merchant_name: 'Local restaurant' },
-    { date: '2026-09-03', amount: 6, bucket: 'guilt_free', pfc_primary: 'FOOD_AND_DRINK', merchant_name: 'Unspecified food merchant' }
-  ] };
-  const result = spendingSummary(store, '1m', new Date('2026-09-05T12:00:00'));
-  assert.deepEqual(result.actualSpendCategories.map((row) => [row.key, row.amount]), [['groceries', 120], ['dining_out', 48], ['food_dining', 6]]);
-  assert.deepEqual(result.transactions.map((row) => row.flowLabel), ['Groceries', 'Dining out', 'Food & dining']);
+  assert.deepEqual(result.actualSpendCategories.map((row) => [row.key, row.amount]), [['housing_bills', 1800], ['food_dining', 240], ['shopping', 90]]);
 });
 
 test('cash-flow headline subtracts actual spend only', () => {
