@@ -1371,6 +1371,13 @@ html[data-theme="dark"] .plus-history-gate .plus-history-cta { background: linea
 .spending-transaction-pagination span { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .spending-transaction-pagination button { margin: 0; padding: 5px 3px; font-size: 11px; }
 .spending-transaction-pagination button:disabled { color: var(--muted); cursor: default; opacity: .52; }
+.spending-transaction-empty { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 118px; padding: 24px 22px; color: var(--ink); background: linear-gradient(115deg, color-mix(in srgb, var(--accent-soft) 42%, var(--card)), var(--card) 68%); }
+.spending-transaction-empty-mark { position: relative; display: block; width: 32px; height: 32px; border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line)); border-radius: 10px; background: color-mix(in srgb, var(--accent-soft) 72%, var(--card)); }
+.spending-transaction-empty-mark::before { position: absolute; top: 9px; left: 9px; width: 10px; height: 10px; border: 2px solid var(--accent); border-radius: 50%; content: ''; }
+.spending-transaction-empty-mark::after { position: absolute; width: 7px; height: 2px; right: 7px; bottom: 8px; border-radius: 99px; background: var(--accent); content: ''; transform: rotate(45deg); transform-origin: center; }
+.spending-transaction-empty strong { display: block; font-size: 14px; letter-spacing: -.015em; }
+.spending-transaction-empty p { max-width: 54ch; margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.spending-transaction-empty .text-button { margin: 0; padding: 7px 0; white-space: nowrap; font-size: 12px; }
 .spending-transaction-context > p { margin: -5px 0 2px; color: var(--muted); font-size: 12px; }
 .spending-context-stat { display: grid; gap: 3px; padding: 10px 11px; border: 1px solid color-mix(in srgb, var(--accent) 15%, var(--line)); border-radius: 10px; background: color-mix(in srgb, var(--card) 78%, transparent); }
 .spending-context-stat span { color: var(--muted); font-size: 10px; font-weight: 720; text-transform: uppercase; letter-spacing: .05em; }
@@ -1400,6 +1407,8 @@ html[data-theme="dark"] .plus-history-gate .plus-history-cta { background: linea
   .spending-memory-note { grid-column: 1 / -1; }
   .spending-forget-memory { grid-column: 2; grid-row: 1 / span 2; align-self: start; }
   .spending-transaction-pagination { padding-inline: 15px; }
+  .spending-transaction-empty { grid-template-columns: 32px minmax(0, 1fr); min-height: 0; padding: 20px 18px; }
+  .spending-transaction-empty .text-button { grid-column: 2; justify-self: start; }
   .recurring-layout { grid-template-columns: 1fr; }
   .recurring-context { order: -1; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 14px; padding: 15px 18px; border-right: 0; border-bottom: 1px solid var(--line); border-left: 0; }
   .recurring-context > p, .recurring-context .recurring-context-stat, .recurring-context > small { grid-column: 1; }

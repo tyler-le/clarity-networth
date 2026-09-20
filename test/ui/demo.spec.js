@@ -152,6 +152,10 @@ test('cash flow activity search narrows the visible transactions without changin
   await expect(page.locator('#spendingTransactionCount')).toContainText(/posted/);
   await search.fill('not-a-real-merchant');
   await expect(page.locator('#spendingTransactions')).toContainText('No posted transactions match');
+  await expect(page.locator('#spendingTransactions')).toContainText('No activity found');
+  await page.getByRole('button', { name: 'Clear search' }).click();
+  await expect(search).toHaveValue('');
+  await expect(page.locator('#spendingTransactions')).toContainText('Netflix');
 });
 
 test('net worth opens as a concise financial briefing', async ({ page }) => {

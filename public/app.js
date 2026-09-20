@@ -1299,10 +1299,18 @@ function renderSpendingTransactions(data) {
   state.spendingTransactionsPage = Math.min(state.spendingTransactionsPage, totalPages);
   const pageStart = (state.spendingTransactionsPage - 1) * pageSize;
   const visibleRows = rows.slice(pageStart, pageStart + pageSize);
+  const hasSearch = Boolean(state.spendingTransactionSearch.trim());
+  const hasCategoryFilter = state.spendingCategory !== 'all';
+  const emptyDescription = hasSearch
+    ? `No posted transactions match “${escapeHtml(state.spendingTransactionSearch.trim())}”. Try another search or clear it to see all activity.`
+    : hasCategoryFilter
+      ? `No posted transactions match ${escapeHtml(cashflowActivityLabel(data, state.spendingCategory))} for this period. Try another category or clear the filter.`
+      : 'No posted transactions are available for this period.';
+  const clearLabel = hasSearch && !hasCategoryFilter ? 'Clear search' : 'Clear filters';
   const transactionRows = visibleRows.length ? `<div class="spending-transaction-list">${visibleRows.map((transaction) => {
     const categoryControl = transactionCategoryControl(data, transaction);
     return `<div class="spending-transaction-row ${transaction.bucket === 'income' ? 'income-transaction' : ''} ${transaction.bucket === 'pre_tax_retirement' ? 'payroll-transaction' : ''}"><div><strong>${escapeHtml(transaction.name)}</strong><span>${new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span></div><div class="transaction-plan"><b>${transaction.bucket === 'income' ? '+' : ''}${fmt.format(transaction.amount)}</b>${categoryControl}</div></div>`;
-  }).join('')}${totalPages > 1 ? `<nav class="spending-transaction-pagination" aria-label="Transaction pages"><button class="text-button" type="button" data-spending-transactions-page="previous" ${state.spendingTransactionsPage === 1 ? 'disabled' : ''}>‹ Previous</button><span>Page ${state.spendingTransactionsPage} of ${totalPages}</span><button class="text-button" type="button" data-spending-transactions-page="next" ${state.spendingTransactionsPage === totalPages ? 'disabled' : ''}>Next ›</button></nav>` : ''}</div>` : `<p class="spending-empty">No posted transactions match${state.spendingTransactionSearch ? ` “${escapeHtml(state.spendingTransactionSearch)}”` : ' this category for this period'}.</p>`;
+  }).join('')}${totalPages > 1 ? `<nav class="spending-transaction-pagination" aria-label="Transaction pages"><button class="text-button" type="button" data-spending-transactions-page="previous" ${state.spendingTransactionsPage === 1 ? 'disabled' : ''}>‹ Previous</button><span>Page ${state.spendingTransactionsPage} of ${totalPages}</span><button class="text-button" type="button" data-spending-transactions-page="next" ${state.spendingTransactionsPage === totalPages ? 'disabled' : ''}>Next ›</button></nav>` : ''}</div>` : `<div class="spending-transaction-empty" role="status"><span class="spending-transaction-empty-mark" aria-hidden="true"></span><div><strong>No activity found</strong><p>${emptyDescription}</p></div>${hasSearch || hasCategoryFilter ? `<button class="text-button" type="button" data-clear-spending-filters>${clearLabel}</button>` : ''}</div>`;
   $('#spendingTransactions').innerHTML = rows.length
     ? `<div class="spending-transaction-layout">${transactionRows}${renderTransactionContextPanel(rows, data)}</div>`
     : transactionRows;
@@ -3161,6 +3169,14 @@ $('#spendingTransactions').addEventListener('change', (event) => {
   void saveTransactionCategory(select);
 });
 $('#spendingTransactions').addEventListener('click', async (event) => {
+  const clearFilters = event.target.closest('[data-clear-spending-filters]');
+  if (clearFilters) {
+    state.spendingTransactionSearch = '';
+    state.spendingCategory = 'all';
+    renderSpendingTransactions(spendingForSelectedMonth(state.spending));
+    $('#spendingTransactionSearch')?.focus();
+    return;
+  }
   const page = event.target.closest('[data-spending-transactions-page]');
   if (page) {
     state.spendingTransactionsPage += page.dataset.spendingTransactionsPage === 'next' ? 1 : -1;
