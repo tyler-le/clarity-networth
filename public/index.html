@@ -119,7 +119,7 @@
         <article class="card investment-card investment-accounts-card" id="investmentAccountsCard"><div class="card-label">Accounts</div><p class="spending-context">Current values and change over the selected timeframe.</p><div class="investment-accounts" id="investmentAccounts"></div></article>
         <article class="card allocation-card" id="investmentAllocationCard"><div class="card-label">Asset allocation</div><p class="spending-context" id="investmentAllocationInsight">Select a category to see its holdings.</p><div class="allocation-visual"><div class="investment-donut" id="investmentDonut" role="button" tabindex="0" aria-label="Select an asset category"><span>—</span></div><div class="investment-allocation" id="investmentAllocation"></div></div></article>
         <article class="card holdings-card" id="investmentHoldingsPanel"><div class="holdings-head"><div><div class="card-label">Holdings</div><p class="spending-context" id="investmentHoldingsInsight">Your largest investments, at a glance.</p></div><select id="investmentSort" aria-label="Sort holdings"><option value="value">Largest value</option><option value="performance">Best performance</option><option value="equity">Asset type</option></select></div><div class="holdings-list" id="investmentPositions"></div><button class="holdings-more hidden" id="investmentHoldingsMore" type="button"></button></article>
-        <article class="card plus-prompt hidden" id="investmentPlusPrompt"><div><div class="card-label">CLARITY PLUS</div><strong>See your investment history</strong><p>Preview the history view from your current holdings. Plus unlocks verified account and position timelines.</p></div><button class="text-button" type="button" data-plus-cta>Unlock history <span aria-hidden="true">›</span></button></article>
+        <article class="card plus-prompt hidden" id="investmentPlusPrompt"><div><div class="card-label">CLARITY PLUS</div><strong>See your investment history</strong><p>Preview the history view from your current holdings. Plus unlocks verified account and position timelines.</p></div><button class="text-button" type="button" data-plus-cta data-plus-feature="investment_history">Unlock history <span aria-hidden="true">›</span></button></article>
       </section>
 
       <section id="retirementView" class="view">
@@ -157,7 +157,7 @@
         <article class="card debt-payoff-card hidden" id="debtPayoffCard" aria-live="polite"></article>
         <div id="accountGrid" class="account-groups"></div>
         <article class="card manual-account-prompt" aria-label="Add an account or manual item"><div class="manual-account-heading"><div class="card-label">Add what’s missing</div><strong>Complete your picture</strong></div><div class="manual-account-options"><button class="manual-account-option primary" type="button" data-connect-account><span class="manual-account-option-icon" aria-hidden="true">+</span><span><b>Connect account</b><small>Use your institution</small></span></button><button class="manual-account-option secondary" type="button" id="addManualAccount"><span class="manual-account-option-icon" aria-hidden="true">◇</span><span><b>Add manually</b><small>Home, vehicle, or other</small></span></button></div></article>
-        <article class="card plus-prompt hidden" id="accountsPlusPrompt"><div><div class="card-label">CLARITY PLUS</div><strong>Bring every institution into one view</strong><p>You’re using both Free connection slots. Plus gives you unlimited connected institutions.</p></div><button class="text-button" type="button" data-plus-cta>Explore Plus <span aria-hidden="true">›</span></button></article>
+        <article class="card plus-prompt hidden" id="accountsPlusPrompt"><div><div class="card-label">CLARITY PLUS</div><strong>Bring every institution into one view</strong><p>You’re using both Free connection slots. Plus gives you unlimited connected institutions.</p></div><button class="text-button" type="button" data-plus-cta data-plus-feature="institutions">Unlock connections <span aria-hidden="true">›</span></button></article>
       </section>
 
       <section id="profileView" class="view">
@@ -290,21 +290,18 @@
       <button class="primary full" id="viewNetWorthAfterConnection" value="close">View my net worth</button>
     </form>
   </dialog>
-  <dialog class="upgrade-dialog" id="upgradeDialog" aria-labelledby="upgradeDialogTitle">
+      <dialog class="upgrade-dialog" id="upgradeDialog" aria-labelledby="upgradeDialogTitle">
     <div class="upgrade-dialog-handle" aria-hidden="true"></div>
     <form method="dialog"><button class="dialog-close" aria-label="Close">×</button></form>
     <div class="upgrade-dialog-body">
       <div class="upgrade-dialog-mark" aria-hidden="true">+</div>
-      <div class="card-label">CLARITY PLUS</div>
+      <div class="card-label" id="upgradeDialogLabel">CLARITY PLUS</div>
       <h2 id="upgradeDialogTitle">See more of your money.</h2>
-      <p>Try Plus for 14 days and keep the Free plan if it is not for you.</p>
-      <ul class="upgrade-benefits">
-        <li><span aria-hidden="true">✓</span><span>Unlimited connected institutions</span></li>
-        <li><span aria-hidden="true">✓</span><span>Category and transaction drilldowns</span></li>
-        <li><span aria-hidden="true">✓</span><span>Investment history and retirement scenarios</span></li>
-      </ul>
+      <p id="upgradeDialogDescription">Try Plus for 14 days and keep the Free plan if it is not for you.</p>
+      <ul class="upgrade-benefits" id="upgradeDialogBenefits"></ul>
+      <div class="upgrade-dialog-price" id="upgradeDialogPrice">Included with Plus · $9/month · Cancel anytime</div>
       <div class="upgrade-dialog-note"><span aria-hidden="true">✓</span>No charge during your trial</div>
-      <button class="primary full" type="button" id="upgradePlanButton">Start free trial <span aria-hidden="true">→</span></button>
+      <button class="primary full" type="button" id="upgradePlanButton">Unlock with Plus <span aria-hidden="true">→</span></button>
     </div>
   </dialog>
   <div class="update-toast hidden" id="updateToast" role="status" aria-live="polite"><span>A newer version of Clarity is ready.</span><button type="button" id="updateAppButton">Refresh</button></div>

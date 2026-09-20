@@ -130,7 +130,7 @@ function presentConnectionError(error) {
       prompt.scrollIntoView({ behavior: 'smooth', block: 'center' });
       prompt.animate?.([{ transform: 'translateY(0)' }, { transform: 'translateY(-3px)' }, { transform: 'translateY(0)' }], { duration: 280, easing: 'ease-out' });
     } else {
-      $('#upgradeDialog')?.showModal();
+      showPlusUpgrade('institutions');
     }
   }
   showNotice(error?.message || customerError('connection_unavailable').message, 'error');
@@ -852,6 +852,54 @@ async function openBilling(destination) {
   } finally { button.disabled = false; }
 }
 
+const plusUpgradeCopy = {
+  general: {
+    title: 'See more of your money',
+    description: 'Keep the calm core of Clarity and unlock the deeper views when you want to investigate.',
+    benefits: ['Unlimited connected institutions', 'Category and transaction drilldowns', 'Verified investment history and retirement scenarios'],
+    cta: 'Unlock Clarity Plus'
+  },
+  cash_flow_details: {
+    title: 'See the transactions behind your cash flow',
+    description: 'Follow a category from the flow diagram into the real activity behind it, with amounts and dates included.',
+    benefits: ['Category-level transaction detail', 'Search and sort posted activity', 'The same cash-flow view, with more depth'],
+    cta: 'Unlock transaction detail'
+  },
+  investment_history: {
+    title: 'Follow your investment history',
+    description: 'See how each account and position changed over time using verified provider history.',
+    benefits: ['Verified account timelines', 'Holding and position history', 'Range-aware performance context'],
+    cta: 'Unlock investment history'
+  },
+  retirement_scenarios: {
+    title: 'Explore your retirement possibilities',
+    description: 'Compare spending paths and see how your choices change the road to financial independence.',
+    benefits: ['Side-by-side retirement scenarios', 'Coast Financial Independence context', 'Personalized milestone comparisons'],
+    cta: 'Unlock retirement scenarios'
+  },
+  institutions: {
+    title: 'Bring every institution into one view',
+    description: 'Connect more of the accounts that make up your financial picture and keep them together in Clarity.',
+    benefits: ['Unlimited connected institutions', 'One combined net-worth picture', 'More complete cash-flow context'],
+    cta: 'Unlock unlimited connections'
+  }
+};
+
+function showPlusUpgrade(feature = 'general') {
+  if (isDemoExperience()) return;
+  const entitlement = state.dashboard?.entitlements;
+  if (!entitlement?.billingAvailable) {
+    showNotice('Plus billing is not available yet.', 'info');
+    return;
+  }
+  const copy = plusUpgradeCopy[feature] || plusUpgradeCopy.general;
+  $('#upgradeDialogTitle').textContent = copy.title;
+  $('#upgradeDialogDescription').textContent = copy.description;
+  $('#upgradeDialogBenefits').innerHTML = copy.benefits.map((benefit) => `<li><span aria-hidden="true">✓</span><span>${escapeHtml(benefit)}</span></li>`).join('');
+  $('#upgradePlanButton').innerHTML = `${escapeHtml(copy.cta)} <span aria-hidden="true">→</span>`;
+  $('#upgradeDialog')?.showModal();
+}
+
 function plusPromptsAvailable() {
   const entitlement = state.dashboard?.entitlements;
   return Boolean(entitlement?.enabled && entitlement?.billingAvailable && !state.dashboard?.demoMode && !['plus', 'trial'].includes(entitlement.plan));
@@ -1243,7 +1291,7 @@ function renderSpendingTransactions(data) {
     const count = (data.transactions || []).length;
     $('#spendingTransactionCount').textContent = `${count} posted`;
     const selectedCategory = state.spendingCategory && state.spendingCategory !== 'all' ? cashflowActivityLabel(data, state.spendingCategory) : 'each category';
-    $('#spendingTransactions').innerHTML = `<div class="plus-inline-lock"><div class="plus-preview-copy"><div class="card-label">CLARITY PLUS</div><strong>See ${escapeHtml(selectedCategory)} transactions</strong><p>Preview the detail Plus adds. Your real transactions stay private until you unlock it.</p></div><div class="plus-preview-list" aria-hidden="true"><div><i></i><b></b><em></em></div><div><i></i><b></b><em></em></div><div><i></i><b></b><em></em></div></div><button class="secondary" type="button" data-plus-cta>Unlock with Plus <span aria-hidden="true">→</span></button></div>`;
+    $('#spendingTransactions').innerHTML = `<div class="plus-inline-lock"><div class="plus-preview-copy"><div class="card-label">CLARITY PLUS</div><strong>See ${escapeHtml(selectedCategory)} transactions</strong><p>Preview the detail Plus adds. Your real transactions stay private until you unlock it.</p></div><div class="plus-preview-list" aria-hidden="true"><div><i></i><b></b><em></em></div><div><i></i><b></b><em></em></div><div><i></i><b></b><em></em></div></div><button class="secondary" type="button" data-plus-cta data-plus-feature="cash_flow_details">Unlock transaction detail <span aria-hidden="true">→</span></button></div>`;
     return;
   }
   const filter = $('#spendingCategoryFilter');
@@ -1734,7 +1782,7 @@ function openHoldingHistoryPreview({ ticker = '', accountId = '' } = {}) {
   $('#holdingHistoryChart').innerHTML = '<div class="plus-history-preview" aria-hidden="true"><svg viewBox="0 0 640 220" preserveAspectRatio="none"><path class="plus-history-grid" d="M0 48H640M0 108H640M0 168H640"/><path class="plus-history-area" d="M0 178C70 172 82 148 142 154C204 161 218 113 276 126C336 140 359 93 411 106C474 121 506 63 554 75C593 84 614 45 640 34V220H0Z"/><path class="plus-history-line" d="M0 178C70 172 82 148 142 154C204 161 218 113 276 126C336 140 359 93 411 106C474 121 506 63 554 75C593 84 614 45 640 34"/></svg><span>Illustrative history shape</span></div>';
   const teaserPositions = accountId ? (state.investments?.positions || []).filter((position) => position.account_id === accountId).slice(0, 3) : [];
   const teaserRows = teaserPositions.map((position) => `<div class="plus-history-teaser-row"><span>${escapeHtml(position.ticker || position.name || 'Holding')}</span><b>••••</b></div>`).join('');
-  $('#holdingHistoryWhere').innerHTML = `${teaserRows ? `<div class="plus-history-teasers"><span class="card-label">Your holdings</span>${teaserRows}</div>` : ''}<div class="plus-history-cta"><span class="card-label">CLARITY PLUS</span><strong>Follow verified account and position history</strong><button class="primary" type="button" data-plus-cta>Unlock history <span aria-hidden="true">→</span></button></div>`;
+  $('#holdingHistoryWhere').innerHTML = `${teaserRows ? `<div class="plus-history-teasers"><span class="card-label">Your holdings</span>${teaserRows}</div>` : ''}<div class="plus-history-cta"><span class="card-label">CLARITY PLUS</span><strong>Follow verified account and position history</strong><button class="primary" type="button" data-plus-cta data-plus-feature="investment_history">Unlock history <span aria-hidden="true">→</span></button></div>`;
 }
 
 function openHoldingHistoryEntry(options = {}) {
@@ -2241,7 +2289,8 @@ $('#profileButton').addEventListener('click', () => setView('profile'));
 $('#profileBack').addEventListener('click', () => setView(state.returnView || 'overview'));
 $('#upgradePlanButton').addEventListener('click', () => openBilling('checkout'));
 document.addEventListener('click', (event) => {
-  if (event.target.closest('[data-plus-cta]')) openBilling('checkout');
+  const cta = event.target.closest('[data-plus-cta]');
+  if (cta) showPlusUpgrade(cta.dataset.plusFeature || 'general');
 });
 $('#profilePlanAction').addEventListener('click', () => openBilling(['plus', 'trial'].includes(state.dashboard?.entitlements?.plan) ? 'portal' : 'checkout'));
 // Help tips should disappear as soon as the reader returns to the page. This
@@ -2406,7 +2455,7 @@ $('#retirementReviewPlan').addEventListener('click', () => {
   assumptions.scrollIntoView({ behavior: 'smooth', block: 'center' });
   window.setTimeout(() => $('#retirementAgeValue').focus(), 180);
 });
-$('#retirementScenarioUpgrade').addEventListener('click', () => openBilling('checkout'));
+$('#retirementScenarioUpgrade').addEventListener('click', () => showPlusUpgrade('retirement_scenarios'));
 $('#retirementForm').addEventListener('submit', async (event) => {
   event.preventDefault();
   if (state.demoPreview || state.dashboard?.demoMode) { showNotice('Sign in to save changes to your own plan.'); return; }
@@ -2731,7 +2780,7 @@ function showCashflowPreviewDrawer(category = 'all') {
     : '<div class="cashflow-plus-preview-empty">A few real transactions will appear here after you unlock Plus.</div>';
   dialog.classList.add('plus-preview');
   dialog.showModal();
-  $('#cashflowDialogContent').innerHTML = `<section class="cashflow-plus-preview" aria-labelledby="cashflowPreviewTitle"><div class="card-label">CLARITY PLUS · YOUR PREVIEW</div><h2 id="cashflowPreviewTitle">${escapeHtml(label)}</h2><p>These are real transactions from this view. Amounts stay hidden until you unlock Plus.</p><div class="cashflow-plus-preview-rows"><div class="cashflow-plus-preview-head"><span>Activity</span><span>Date</span><span>Amount</span></div>${teaserMarkup}</div><button class="primary" type="button" data-plus-cta>Unlock transaction detail <span aria-hidden="true">→</span></button></section>`;
+  $('#cashflowDialogContent').innerHTML = `<section class="cashflow-plus-preview" aria-labelledby="cashflowPreviewTitle"><div class="card-label">CLARITY PLUS · YOUR PREVIEW</div><h2 id="cashflowPreviewTitle">${escapeHtml(label)}</h2><p>These are real transactions from this view. Amounts stay hidden until you unlock Plus.</p><div class="cashflow-plus-preview-rows"><div class="cashflow-plus-preview-head"><span>Activity</span><span>Date</span><span>Amount</span></div>${teaserMarkup}</div><button class="primary" type="button" data-plus-cta data-plus-feature="cash_flow_details">Unlock transaction detail <span aria-hidden="true">→</span></button></section>`;
 }
 
 function cashflowActivityLabel(data, category) {

@@ -116,7 +116,7 @@ test('a Free member sees an in-context Plus prompt for deeper cash-flow detail',
   await expect(page.locator('#spendingTransactions')).toContainText('See the transactions behind each category');
   await page.locator('#spendingTransactions [data-plus-cta]').click();
   await expect(page.locator('#upgradeDialog')).toBeVisible();
-  await expect(page.locator('#upgradeDialogTitle')).toHaveText('See more of your money.');
+  await expect(page.locator('#upgradeDialogTitle')).toHaveText('See the transactions behind your cash flow');
   await expect(page.locator('#upgradeDialog')).toContainText('No charge during your trial');
 });
 

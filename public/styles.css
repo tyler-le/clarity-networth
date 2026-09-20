@@ -835,6 +835,7 @@ html[data-theme="dark"] .chart-grid { stroke: #2d3930; }
 html[data-theme="dark"] .chart-axis-label { fill: #889489; }
 html[data-theme="dark"] .scrub-line { stroke: #6f7d72; }
 html[data-theme="dark"] .scrub-dot { fill: #1a201c; }
+.upgrade-dialog-price { margin: 18px 0 11px; color: var(--ink); font-size: 12px; font-weight: 730; }
 
 /* Full dark-surface audit: interactive controls must never inherit the light
    theme's white surfaces or use the light text token as a background. */
