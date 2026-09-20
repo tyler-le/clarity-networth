@@ -1063,7 +1063,15 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   // would read as "$0" after that rounding; it adds visual noise and implies
   // a meaningful flow where there is none.
   const hasVisibleAmount = (value) => Math.abs(Number(value || 0)) >= .5;
-  if (![income, actualSpend, savedInvested].some(hasVisibleAmount)) { el.innerHTML = ''; return; }
+  if (![income, actualSpend, savedInvested].some(hasVisibleAmount)) {
+    el.innerHTML = '';
+    if (el.id === 'cashflowSankey') {
+      const actions = $('#cashflowActions');
+      actions.innerHTML = '';
+      actions.classList.add('hidden');
+    }
+    return;
+  }
   // Use the chart's actual container, not a device label. This survives
   // tablets, split-screen, zoom, sidebars, and window resizing.
   const availableWidth = el.clientWidth;
@@ -1198,10 +1206,10 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     categories += block(destinationX, y, destinationW, categoryColor, row.name, row.amount, row.share, row.key, 'left');
   });
   const hiddenCategoryCount = allSpendCategories.length - actualCategories.length;
-  const more = !expanded && hiddenCategoryCount > 0 ? `<button type="button" class="cashflow-more" data-cashflow-expand aria-label="Explore all ${hiddenCategoryCount + actualCategories.length} spending categories and their transactions">Explore ${allSpendCategories.length} spending categories <span>›</span></button>` : '';
+  const more = !expanded && hiddenCategoryCount > 0 ? `<button type="button" class="cashflow-more cashflow-action-card" data-cashflow-expand aria-label="Explore all ${hiddenCategoryCount + actualCategories.length} spending categories and their transactions"><span class="cashflow-action-icon" aria-hidden="true">⌘</span><span class="cashflow-action-copy"><small>SPENDING</small><b>Explore ${allSpendCategories.length} categories</b></span><i aria-hidden="true">›</i></button>` : '';
   const transactionCount = (data.transactions || []).length;
   const transactionAction = transactionCount
-    ? `<button type="button" class="cashflow-transactions-action" data-cashflow-transactions>View transactions <span>${transactionCount} posted</span><b aria-hidden="true">›</b></button>`
+    ? `<button type="button" class="cashflow-transactions-action cashflow-action-card" data-cashflow-transactions><span class="cashflow-action-icon" aria-hidden="true">≡</span><span class="cashflow-action-copy"><small>ACTIVITY</small><b>View transactions</b><em>${transactionCount} posted</em></span><i aria-hidden="true">›</i></button>`
     : '';
   const categoryList = compact && expanded && allSpendCategories.length
     ? `<div class="cashflow-category-list" aria-label="Spending categories">${withShare(allSpendCategories, actualSpend).map((row) => `<button type="button" data-cashflow-category="${escapeHtml(row.key)}" data-cashflow-node="${escapeHtml(row.key)}" aria-label="View ${escapeHtml(row.name)} activity" aria-pressed="false"><span><i style="background:${colorFor(row.key, 'var(--outflow-muted)')}"></i>${escapeHtml(row.name)}</span><strong>${fmt.format(row.amount)} <small>${row.share}%</small></strong><b aria-hidden="true">›</b></button>`).join('')}</div>`
@@ -1209,11 +1217,17 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const sourceBlocks = incomeNodes.map((source, index) => block(sourceX, sourceStart + index * rowStep, sourceW, source.color || colorFor(source.key, 'var(--income)'), source.label, source.amount, source.share, source.key, 'right')).join('');
   const bridgeBlock = sourceTotal >= .5 ? block(bridgeX, bridgeY, bridgeW, bridgeNode.color, bridgeNode.label, bridgeNode.value, null, bridgeNode.key, 'left') : '';
   const middleBlocks = allocationNodes.map((node) => block(middleX, middleY.get(node.key), middleW, node.color, node.label, node.value, node.share, node.key, 'left')).join('');
-  el.classList.toggle('has-transaction-action', Boolean(transactionAction));
+  const inlineActions = el.id === 'cashflowSankey';
+  el.classList.toggle('has-transaction-action', Boolean(transactionAction) && !inlineActions);
   const detailActions = more || transactionAction
     ? `<div class="cashflow-detail-actions" aria-label="Explore cash flow details">${more}${transactionAction}</div>`
     : '';
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="External money in flows into spending, saving, and investing">${paths}${sourceBlocks}${bridgeBlock}${middleBlocks}${categories}</svg>${categoryList}${detailActions}`;
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="External money in flows into spending, saving, and investing">${paths}${sourceBlocks}${bridgeBlock}${middleBlocks}${categories}</svg>${categoryList}${inlineActions ? '' : detailActions}`;
+  if (inlineActions) {
+    const actions = $('#cashflowActions');
+    actions.innerHTML = `${more}${transactionAction}`;
+    actions.classList.toggle('hidden', !detailActions);
+  }
   // SVG focus delegation differs subtly across browsers. Bind directly as
   // well so keyboard focus always traces the same connected flow as hover.
   el.querySelectorAll('[data-cashflow-node]').forEach((node) => {
@@ -1245,7 +1259,7 @@ function renderSpending(data) {
   $('#cashflowHeadline').className = `cashflow-headline ${remaining >= 0 ? 'positive' : 'negative'}`;
   const preTaxNote = $('#cashflowPreTax');
   const payrollDetailsAvailable = plusFeatureAvailable('canUseCashFlowDetails');
-  preTaxNote.innerHTML = preTaxRetirement ? `<span class="cashflow-payroll-mark" aria-hidden="true">↗</span><div><span>PAYROLL CONTRIBUTIONS</span><strong>${fmt.format(preTaxRetirement)}</strong><p>401(k), HSA, and similar contributions saved before reaching your bank account.</p>${payrollDetailsAvailable ? '' : '<small class="cashflow-payroll-lock">Contribution details with Plus</small>'}</div><i class="cashflow-payroll-chevron" aria-hidden="true">›</i>` : '';
+  preTaxNote.innerHTML = preTaxRetirement ? `<span class="cashflow-payroll-mark cashflow-action-icon" aria-hidden="true">↗</span><div class="cashflow-action-copy"><span>PAYROLL CONTRIBUTIONS</span><strong>${fmt.format(preTaxRetirement)}</strong><p>401(k), HSA, and similar contributions saved before reaching your bank account.</p>${payrollDetailsAvailable ? '' : '<small class="cashflow-payroll-lock">Contribution details with Plus</small>'}</div><i class="cashflow-payroll-chevron" aria-hidden="true">›</i>` : '';
   preTaxNote.setAttribute('aria-label', `View ${fmt.format(preTaxRetirement)} in payroll contributions`);
   preTaxNote.classList.toggle('hidden', !preTaxRetirement);
   const completedThrough = data.completedMonths ? new Date(`${data.endDate}T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '';
@@ -2928,6 +2942,10 @@ $('#cashflowSankey').addEventListener('click', (event) => {
   if (event.target.closest('[data-cashflow-transactions]')) { openCashflowCategoryActivity('all'); return; }
   const node = event.target.closest('[data-cashflow-node]');
   if (node) openCashflowCategoryActivity(node.dataset.cashflowNode);
+});
+$('#cashflowActions').addEventListener('click', (event) => {
+  if (event.target.closest('[data-cashflow-expand]')) { openCashflowDialog(); return; }
+  if (event.target.closest('[data-cashflow-transactions]')) openCashflowCategoryActivity('all');
 });
 $('#cashflowSankey').addEventListener('keydown', (event) => {
   if (!['Enter', ' '].includes(event.key)) return;
