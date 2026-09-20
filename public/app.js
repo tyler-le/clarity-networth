@@ -816,9 +816,14 @@ function renderProfileSettings(d) {
     $('#profilePlanTitle').textContent = subscribed ? 'Clarity Plus' : 'Clarity Free';
     $('#profilePlanDetail').textContent = entitlement.plan === 'trial' ? 'Your 14-day Plus trial is active.' : subscribed ? 'Your subscription is active.' : 'Core Clarity is free. Try Plus for more depth.';
     $('#profilePlanAction').textContent = subscribed ? 'Manage plan' : 'Start free trial';
-    $('#profilePlanBenefits').innerHTML = subscribed
-      ? '<li>Unlimited connected institutions</li><li>Advanced insights and retirement scenarios</li>'
-      : '<li>Two connected institutions</li><li>All timeframes, core views, and exports</li>';
+    const benefits = [
+      [subscribed, subscribed ? 'Unlimited connected institutions' : 'Two connected institutions'],
+      [true, 'All timeframes and available history'],
+      [true, 'Core Cash Flow, Investments, and Net Worth'],
+      [true, 'Baseline retirement outlook and editable assumptions'],
+      [subscribed, 'Side-by-side retirement scenarios']
+    ];
+    $('#profilePlanBenefits').innerHTML = benefits.map(([included, label]) => `<li class="${included ? 'included' : 'excluded'}"><span>${label}</span></li>`).join('');
   }
 }
 
@@ -841,15 +846,9 @@ function plusPromptsAvailable() {
   return Boolean(entitlement?.enabled && entitlement?.billingAvailable && !state.dashboard?.demoMode && !['plus', 'trial'].includes(entitlement.plan));
 }
 
-function renderPlusPrompts({ spending = null, investments = null, accounts = null, snapshots = null } = {}) {
+function renderPlusPrompts({ accounts = null } = {}) {
   const available = plusPromptsAvailable();
-  const hasSnapshots = Array.isArray(snapshots) && snapshots.length > 1;
-  const hasSpending = Array.isArray(spending?.transactions) && spending.transactions.length > 0;
-  const hasInvestments = Boolean(investments?.positionsAvailable && (investments.positions || []).length);
   const currentItems = Array.isArray(state.dashboard?.items) ? state.dashboard.items.filter((item) => !item?.demo).length : 0;
-  $('#netWorthPlusPrompt')?.classList.toggle('hidden', !available || !hasSnapshots);
-  $('#cashFlowPlusPrompt')?.classList.toggle('hidden', !available || !hasSpending);
-  $('#investmentsPlusPrompt')?.classList.toggle('hidden', !available || !hasInvestments);
   $('#accountsPlusPrompt')?.classList.toggle('hidden', !available || currentItems < 2);
 }
 
@@ -1130,7 +1129,6 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
 
 function renderSpending(data) {
   if (!data) return;
-  renderPlusPrompts({ spending: data });
   // The selected range remains visible when a person drills into one month;
   // it explains where that month belongs and keeps both cash-flow visuals in
   // one shared context.
@@ -1772,7 +1770,6 @@ async function openAccountHistory(accountId, { preserveRange = false } = {}) {
 
 function renderInvestments(data) {
   if (!data) return;
-  renderPlusPrompts({ investments: data });
   const accounts = data.accounts || [];
   const allSnapshots = uniqueDailySnapshots(data.snapshots || []);
   syncPortfolioRangeControls(allSnapshots);
@@ -1983,7 +1980,6 @@ function renderDashboard() {
   renderOverviewBriefing(d);
   if (state.view === 'overview') renderNetWorthChartWhenVisible();
   renderAccounts(d.accounts || []);
-  renderPlusPrompts({ snapshots: d.snapshots || [] });
   renderDebtPayoff(d.debtPayoff);
   renderConnections(actual.items || []);
   renderClarityLayer(d);

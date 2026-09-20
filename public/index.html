@@ -99,7 +99,6 @@
         <section class="overview-guidance" aria-label="What deserves attention">
           <article class="card clarity-checkin hidden" id="clarityCheckin"><span class="checkin-mark" id="clarityCheckinMark" aria-hidden="true">✦</span><div><div class="card-label">Your next step</div><strong id="clarityCheckinTitle">—</strong><p id="clarityCheckinDetail"></p></div><button class="text-button" id="clarityCheckinAction">View your path</button></article>
           <article class="card connection-attention hidden" id="connectionAttention"><div><div class="card-label">Connection update</div><strong id="connectionAttentionTitle"></strong><p id="connectionAttentionDetail"></p></div><button class="text-button" id="connectionAttentionAction">View connections</button></article>
-          <article class="card plus-prompt hidden" id="netWorthPlusPrompt"><div><div class="card-label">CLARITY PLUS</div><strong>See what changed across your whole picture</strong><p>Plus connects more institutions and shows the deeper story behind your net worth.</p></div><button class="text-button" type="button" data-plus-cta>Explore Plus <span aria-hidden="true">›</span></button></article>
         </section>
         <!-- Temporary compatibility targets: an older no-cache client script
              may still be active while its service worker updates. They remain
@@ -119,7 +118,6 @@
         </article>
         <article class="card investment-card investment-accounts-card" id="investmentAccountsCard"><div class="card-label">Accounts</div><p class="spending-context">Current values and change over the selected timeframe.</p><div class="investment-accounts" id="investmentAccounts"></div></article>
         <article class="card allocation-card" id="investmentAllocationCard"><div class="card-label">Asset allocation</div><p class="spending-context" id="investmentAllocationInsight">Select a category to see its holdings.</p><div class="allocation-visual"><div class="investment-donut" id="investmentDonut" role="button" tabindex="0" aria-label="Select an asset category"><span>—</span></div><div class="investment-allocation" id="investmentAllocation"></div></div></article>
-        <article class="card plus-prompt hidden" id="investmentsPlusPrompt"><div><div class="card-label">CLARITY PLUS</div><strong>Understand what is driving your portfolio</strong><p>Plus adds deeper performance and allocation insight across your investment accounts.</p></div><button class="text-button" type="button" data-plus-cta>Explore Plus <span aria-hidden="true">›</span></button></article>
         <article class="card holdings-card" id="investmentHoldingsPanel"><div class="holdings-head"><div><div class="card-label">Holdings</div><p class="spending-context" id="investmentHoldingsInsight">Your largest investments, at a glance.</p></div><select id="investmentSort" aria-label="Sort holdings"><option value="value">Largest value</option><option value="performance">Best performance</option><option value="equity">Asset type</option></select></div><div class="holdings-list" id="investmentPositions"></div><button class="holdings-more hidden" id="investmentHoldingsMore" type="button"></button></article>
       </section>
 
@@ -149,7 +147,6 @@
           <div id="spendingTransactions"></div>
         </details>
         <details class="card recurring-card hidden" id="recurringCharges"><summary><span>Recurring charges</span><small id="recurringHint"></small></summary><div id="recurringList"></div></details>
-        <article class="card plus-prompt hidden" id="cashFlowPlusPrompt"><div><div class="card-label">CLARITY PLUS</div><strong>Find patterns across your cash flow</strong><p>Plus adds deeper recurring, category, and cross-account insights while every timeframe stays free.</p></div><button class="text-button" type="button" data-plus-cta>Explore Plus <span aria-hidden="true">›</span></button></article>
       </section>
 
       <section id="accountsView" class="view">
@@ -296,7 +293,7 @@
     <form method="dialog"><button class="dialog-close" aria-label="Close">×</button></form>
     <div class="card-label">Clarity Plus</div>
     <h2 id="upgradeDialogTitle">Go deeper with Clarity Plus.</h2>
-    <p>Start a 14-day free trial for unlimited connected institutions, advanced insights, and side-by-side retirement planning.</p>
+    <p>Start a 14-day free trial for unlimited connected institutions and side-by-side retirement planning.</p>
     <button class="primary full" type="button" id="upgradePlanButton">Start free trial</button>
   </dialog>
   <div class="update-toast hidden" id="updateToast" role="status" aria-live="polite"><span>A newer version of Clarity is ready.</span><button type="button" id="updateAppButton">Refresh</button></div>

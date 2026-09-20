@@ -79,7 +79,6 @@ export function entitlementsForStore(store = {}, now = Date.now(), enabled = fre
       canUseFullHistory: true,
       canExportData: true,
       canUseRetirementScenarios: true,
-      canUseAdvancedInsights: true,
       canUseApp: true,
       requiresSubscription: false
     };
@@ -103,9 +102,8 @@ export function entitlementsForStore(store = {}, now = Date.now(), enabled = fre
     canUseFullHistory: true,
     canExportData: true,
     // The baseline retirement outlook is free. Plus unlocks side-by-side
-    // lifestyle/scenario comparisons and future advanced insights.
+    // lifestyle/scenario comparisons.
     canUseRetirementScenarios: hasProductAccess,
-    canUseAdvancedInsights: hasProductAccess,
     canUseApp: true,
     requiresSubscription
   };

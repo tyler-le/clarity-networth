@@ -476,11 +476,15 @@ html[data-theme="dark"] .profile-shell .connections-panel, html[data-theme="dark
 .profile-plan-card .card-label { color: var(--accent); }
 .profile-plan-card #profilePlanTitle { margin: 5px 0 0; letter-spacing: -.04em; }
 .profile-plan-card #profilePlanDetail { margin: 5px 0 0; color: var(--muted); font-size: 13px; }
-.profile-plan-benefits { display: flex; flex-wrap: wrap; gap: 5px 18px; margin: 12px 0 0; padding: 0; color: var(--muted); font-size: 11px; list-style: none; }
-.profile-plan-benefits li::before { margin-right: 5px; color: var(--accent); content: '✓'; font-weight: 800; }
+.profile-plan-benefits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 20px; max-width: 680px; margin: 14px 0 0; padding: 0; color: var(--muted); font-size: 11px; list-style: none; }
+.profile-plan-benefits li { display: flex; align-items: flex-start; gap: 7px; line-height: 1.35; }
+.profile-plan-benefits li::before { flex: 0 0 auto; width: 14px; text-align: center; font-size: 14px; line-height: 13px; font-weight: 850; }
+.profile-plan-benefits li.included::before { color: var(--accent); content: '✓'; }
+.profile-plan-benefits li.excluded::before { color: #b45757; content: '×'; }
 .profile-plan-card #profilePlanAction { flex: 0 0 auto; border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line)); border-radius: 999px; padding: 10px 17px; color: var(--accent); background: var(--card); font: inherit; font-size: 13px; font-weight: 750; box-shadow: 0 2px 8px rgba(31,111,74,.06); }
 .profile-plan-card #profilePlanAction:hover { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-1px); }
 .profile-plan-card #profilePlanAction:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 28%, transparent); outline-offset: 3px; }
+@media (max-width: 760px) { .profile-plan-benefits { grid-template-columns: 1fr; } }
 .profile-settings-panel .connections-panel { overflow: visible; border: 0; border-radius: 0; background: transparent; }
 .profile-settings-panel .connections-panel summary { display: none; }
 .profile-settings-panel .connection-row { padding: 13px 0; }
