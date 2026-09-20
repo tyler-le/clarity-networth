@@ -33,3 +33,11 @@ test('a Free-plan institution limit directs the member to unlink instead of expo
     recovery: 'manage_connections'
   });
 });
+
+test('a Free-plan history limit points to Plus without exposing billing internals', () => {
+  assert.deepEqual(publicErrorPayload('full_history_required'), {
+    error: 'All available history is included with Clarity Plus.',
+    error_code: 'full_history_required',
+    recovery: 'upgrade'
+  });
+});

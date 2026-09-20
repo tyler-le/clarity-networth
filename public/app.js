@@ -24,7 +24,7 @@ const state = {
   // Set after the first verified portfolio payload arrives. Starting at "all"
   // avoids a transient 1Y selection that would turn a new connection into a
   // misleading vertical spike.
-  investmentRange: 'all',
+  investmentRange: '1y',
   investmentRangeInitialized: false,
   investmentFilter: 'all',
   investmentSort: 'value',
@@ -815,6 +815,9 @@ function renderProfileSettings(d) {
     $('#profilePlanTitle').textContent = plus ? 'Clarity Plus' : 'Clarity Free';
     $('#profilePlanDetail').textContent = plus ? 'Unlimited connected institutions.' : 'Two connected institutions included.';
     $('#profilePlanAction').textContent = plus ? 'Manage plan' : 'Upgrade';
+    $('#profilePlanBenefits').innerHTML = plus
+      ? '<li>Compare retirement spending paths</li><li>Use all available history</li>'
+      : '<li>Compare more retirement spending paths</li><li>Use all available history</li>';
   }
 }
 
@@ -1232,8 +1235,11 @@ function syncPortfolioRangeControls(snapshots) {
   if (!state.investmentRangeInitialized) {
     const latest = snapshots.at(-1)?.date ? new Date(`${snapshots.at(-1).date}T12:00:00`) : new Date();
     const preferredRange = preferredNetWorthRange(snapshots, latest);
-    changed = preferredRange !== state.investmentRange;
-    state.investmentRange = preferredRange;
+    const range = state.dashboard?.demoMode || state.dashboard?.entitlements?.canUseFullHistory !== false
+      ? preferredRange
+      : preferredRange === 'all' ? '1y' : preferredRange;
+    changed = range !== state.investmentRange;
+    state.investmentRange = range;
     state.investmentRangeInitialized = true;
   }
   $$('[data-investment-range]').forEach((control) => {
@@ -2581,6 +2587,10 @@ $$('[data-networth-range]').forEach((button) => button.addEventListener('click',
   renderNetWorthChartWhenVisible();
 }));
 $$('[data-spending-range]').forEach((button) => button.addEventListener('click', async () => {
+  if (button.dataset.spendingRange === 'all' && !state.dashboard?.demoMode && state.dashboard?.entitlements?.canUseFullHistory === false) {
+    $('#upgradeDialog')?.showModal();
+    return;
+  }
   state.spendingRange = button.dataset.spendingRange;
   state.spendingMonth = null;
   $$('[data-spending-range]').forEach((control) => {
@@ -2884,6 +2894,10 @@ $('#spendingTrend').addEventListener('keydown', (event) => {
 });
 $$('[data-investment-range]').forEach((button) => button.addEventListener('click', async () => {
   if (button.disabled) return;
+  if (button.dataset.investmentRange === 'all' && !state.dashboard?.demoMode && state.dashboard?.entitlements?.canUseFullHistory === false) {
+    $('#upgradeDialog')?.showModal();
+    return;
+  }
   state.investmentRange = button.dataset.investmentRange;
   await loadInvestmentRange(state.investmentRange);
 }));
