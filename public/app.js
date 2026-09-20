@@ -124,6 +124,9 @@ function applyConnectionCooldown(seconds) {
 
 function presentConnectionError(error) {
   if (error?.recovery === 'wait' && error.retryAfterSeconds) applyConnectionCooldown(error.retryAfterSeconds);
+  if (error?.recovery === 'manage_connections' && state.dashboard?.entitlements?.billingAvailable) {
+    $('#upgradeDialog')?.showModal();
+  }
   showNotice(error?.message || customerError('connection_unavailable').message, 'error');
 }
 
@@ -804,6 +807,29 @@ function renderProfileSettings(d) {
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
   $('#profileMonogram').textContent = initials || 'C';
   $('#developmentRecoveryTesting').classList.toggle('hidden', !d?.developmentTesting);
+  const entitlement = d?.entitlements;
+  const showPlan = Boolean(entitlement?.enabled && entitlement?.billingAvailable && !d?.demoMode);
+  $('#profilePlan').classList.toggle('hidden', !showPlan);
+  if (showPlan) {
+    const plus = entitlement.plan === 'plus';
+    $('#profilePlanTitle').textContent = plus ? 'Clarity Plus' : 'Clarity Free';
+    $('#profilePlanDetail').textContent = plus ? 'Unlimited connected institutions.' : 'Two connected institutions included.';
+    $('#profilePlanAction').textContent = plus ? 'Manage plan' : 'Upgrade';
+  }
+}
+
+async function openBilling(destination) {
+  if (isDemoExperience()) return;
+  const button = destination === 'checkout' ? $('#upgradePlanButton') : $('#profilePlanAction');
+  if (!state.dashboard?.entitlements?.billingAvailable) return;
+  button.disabled = true;
+  try {
+    const result = await api(`/api/billing/${destination}`, { method: 'POST', body: '{}' });
+    if (!/^https:\/\//.test(String(result.url || ''))) throw new Error('We could not open billing right now. Please try again shortly.');
+    window.location.assign(result.url);
+  } catch (error) {
+    showNotice(error.message, 'error');
+  } finally { button.disabled = false; }
 }
 
 const spendingColors = ['#1f6f4a', '#7ea98b', '#d5a75f', '#b88692', '#9ca9bd', '#c4c9c1'];
@@ -2106,6 +2132,8 @@ $$('[data-view]').forEach((button) => button.addEventListener('click', () => set
 $('#homeBrand').addEventListener('click', () => setView('overview'));
 $('#profileButton').addEventListener('click', () => setView('profile'));
 $('#profileBack').addEventListener('click', () => setView(state.returnView || 'overview'));
+$('#upgradePlanButton').addEventListener('click', () => openBilling('checkout'));
+$('#profilePlanAction').addEventListener('click', () => openBilling(state.dashboard?.entitlements?.plan === 'plus' ? 'portal' : 'checkout'));
 // Help tips should disappear as soon as the reader returns to the page. This
 // keeps optional explanation from obscuring the next action on compact views.
 document.addEventListener('click', (event) => {

@@ -13,6 +13,7 @@ import { investmentLedgerPages, plaidConfigured, plaidPost } from './lib/plaid.j
 import { loadHistoricalPrices } from './lib/market-data.js';
 import { historyStart } from './lib/history.js';
 import { entitlementsForStore } from './lib/entitlements.js';
+import { stripeBillingConfigured, stripeClient, stripeWebhookIsValid } from './lib/stripe.js';
 import { plaidErrorCode, publicErrorPayload } from '../public/customer-error.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -176,6 +177,7 @@ function apiOperation(pathname) {
   if (pathname === '/api/investments') return 'investments';
   if (pathname === '/api/retirement' || pathname.startsWith('/api/settings/')) return 'planning_settings';
   if (pathname.startsWith('/api/plaid/')) return 'account_connection';
+  if (pathname.startsWith('/api/billing/')) return 'billing';
   if (pathname.startsWith('/api/items/')) return 'connected_accounts';
   if (pathname.startsWith('/api/manual-')) return 'manual_accounts';
   if (pathname.startsWith('/api/transactions/')) return 'transactions';
@@ -612,6 +614,82 @@ function sendConnectionLimit(res, eligibility) {
     return res.status(429).json({ error: `You can connect up to ${MAX_LINKED_ITEMS} institutions. Unlink one before adding another.` });
   }
   return res.status(403).json(publicErrorPayload('institution_limit_reached'));
+}
+
+function billingAppUrl() {
+  try {
+    const parsed = new URL(String(process.env.PUBLIC_APP_URL || ''));
+    if (parsed.protocol !== 'https:' && isProduction) return null;
+    if (!['https:', 'http:'].includes(parsed.protocol)) return null;
+    return parsed.origin;
+  } catch { return null; }
+}
+
+function billingAvailable() {
+  return stripeBillingConfigured() && Boolean(billingAppUrl());
+}
+
+function validStorageKey(value) {
+  return /^[a-f0-9]{64}$/.test(String(value || '')) ? String(value) : null;
+}
+
+function stripeObjectId(value, prefix) {
+  const id = String(value || '');
+  return new RegExp(`^${prefix}_[A-Za-z0-9]+$`).test(id) ? id : null;
+}
+
+function invoiceSubscriptionId(invoice) {
+  return stripeObjectId(invoice?.subscription, 'sub')
+    || stripeObjectId(invoice?.parent?.subscription_details?.subscription, 'sub');
+}
+
+function checkoutIntegrationIdentifier() {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz';
+  return `clarity_plus_${Array.from(crypto.randomBytes(8), (byte) => alphabet[byte % alphabet.length]).join('')}`;
+}
+
+async function storageKeysWithStripeMembership(subscriptionId, customerId) {
+  const keys = new Set(listUserStorageKeys());
+  if (databaseEnabled()) (await listDatabaseStoreKeys()).forEach((key) => keys.add(key));
+  for (const key of keys) {
+    const membership = (await loadStoreByKey(key)).settings?.membership || {};
+    if ((subscriptionId && membership.stripe_subscription_id === subscriptionId)
+      || (customerId && membership.stripe_customer_id === customerId)) return key;
+  }
+  return null;
+}
+
+async function storageKeyForStripeEvent(object, { allowMetadataFallback = false } = {}) {
+  const subscriptionId = stripeObjectId(object?.id, 'sub') || invoiceSubscriptionId(object)
+    || stripeObjectId(object?.subscription, 'sub');
+  const customerId = stripeObjectId(object?.customer, 'cus');
+  const existing = await storageKeysWithStripeMembership(subscriptionId, customerId);
+  if (existing) return existing;
+  // Checkout creates the first durable mapping. Metadata is retained only as a
+  // narrow fallback for the subscription event that can race that Checkout
+  // completion event; later invoices resolve through the saved Stripe IDs.
+  return allowMetadataFallback ? validStorageKey(object?.metadata?.user_key || object?.client_reference_id) : null;
+}
+
+function updateMembershipFromStripe(store, subscription, eventCreatedAt) {
+  const existing = store.settings?.membership || {};
+  if (Number(existing.stripe_event_created_at || 0) > eventCreatedAt) return false;
+  const status = String(subscription.status || '');
+  const trialing = status === 'trialing';
+  const active = ['active', 'trialing'].includes(status);
+  const pastDue = status === 'past_due';
+  store.settings ||= {};
+  store.settings.membership = {
+    ...existing,
+    plan: trialing ? 'trial' : 'plus',
+    subscription_status: active ? 'active' : pastDue ? 'past_due' : 'canceled',
+    trial_ends_at: trialing && Number.isFinite(Number(subscription.trial_end)) ? new Date(Number(subscription.trial_end) * 1000).toISOString() : null,
+    subscription_ends_at: Number.isFinite(Number(subscription.current_period_end)) ? new Date(Number(subscription.current_period_end) * 1000).toISOString() : null,
+    stripe_customer_id: typeof subscription.customer === 'string' ? subscription.customer : existing.stripe_customer_id,
+    stripe_subscription_id: typeof subscription.id === 'string' ? subscription.id : existing.stripe_subscription_id,
+    stripe_event_created_at: eventCreatedAt
+  };
+  return true;
 }
 
 async function refreshAccountsForItem(store, item) {
@@ -1253,7 +1331,7 @@ app.get('/api/demo-investments', demoLimiter, (req, res) => {
 });
 
 app.use('/api', (req, res, next) => {
-  if (req.path.startsWith('/auth/') || req.path === '/health' || req.path === '/plaid/webhook' || req.path === '/demo-investments' || req.path === '/demo-investments/history') return next();
+  if (req.path.startsWith('/auth/') || req.path === '/health' || req.path === '/plaid/webhook' || req.path === '/billing/stripe/webhook' || req.path === '/demo-investments' || req.path === '/demo-investments/history') return next();
   const user = verifySession(req);
   if (!user) return res.status(401).json({ error: 'Sign in required.' });
   if (!securityReady()) return res.status(503).json({ error: 'The service is not securely configured.' });
@@ -1266,7 +1344,7 @@ app.use('/api', (req, res, next) => {
 });
 
 app.use('/api', (req, res, next) => {
-  if (req.path.startsWith('/auth/') || req.path === '/health' || req.path === '/plaid/webhook' || !req.user) return next();
+  if (req.path.startsWith('/auth/') || req.path === '/health' || req.path === '/plaid/webhook' || req.path === '/billing/stripe/webhook' || !req.user) return next();
   res.setHeader('Cache-Control', 'no-store');
   next();
 });
@@ -1301,6 +1379,102 @@ app.post('/api/launch-event', async (req, res) => {
   }
 });
 
+app.post('/api/billing/checkout', async (req, res) => {
+  const store = await loadStore(req.user);
+  const entitlement = entitlementsForStore(store);
+  if (!entitlement.enabled || !billingAvailable()) return res.status(404).json({ error: 'Billing is not available yet.' });
+  if (entitlement.plan === 'plus') return res.status(409).json({ error: 'Your Plus plan is already active.' });
+  try {
+    const appUrl = billingAppUrl();
+    const membership = entitlement.membership;
+    const fields = {
+      mode: 'subscription',
+      integration_identifier: checkoutIntegrationIdentifier(),
+      client_reference_id: req.user.storageKey,
+      success_url: `${appUrl}/?billing=success`,
+      cancel_url: `${appUrl}/?billing=cancelled`,
+      // Managed Payments requires a Stripe product tax code and active tax
+      // setup. Clarity is not collecting tax yet, so keep this subscription
+      // on standard Checkout until tax registrations are configured.
+      managed_payments: { enabled: false },
+      metadata: { user_key: req.user.storageKey },
+      subscription_data: { trial_period_days: 14, metadata: { user_key: req.user.storageKey } },
+      line_items: [{ price: process.env.STRIPE_PLUS_PRICE_ID, quantity: 1 }]
+    };
+    if (membership.stripe_customer_id) fields.customer = membership.stripe_customer_id;
+    else fields.customer_email = req.user.email;
+    const checkout = await stripeClient().checkout.sessions.create(fields);
+    if (!/^https:\/\//.test(String(checkout.url || ''))) throw new Error('Stripe checkout URL is unavailable.');
+    res.json({ url: checkout.url });
+  } catch (error) {
+    logOperationalError('Stripe checkout unavailable', error);
+    res.status(error.status || 503).json(publicErrorPayload('action_unavailable'));
+  }
+});
+
+app.post('/api/billing/portal', async (req, res) => {
+  const store = await loadStore(req.user);
+  const entitlement = entitlementsForStore(store);
+  if (!entitlement.enabled || !billingAvailable()) return res.status(404).json({ error: 'Billing is not available yet.' });
+  const customer = entitlement.membership.stripe_customer_id;
+  if (!customer) return res.status(409).json({ error: 'Your billing account is still being prepared. Please try again shortly.' });
+  try {
+    const portal = await stripeClient().billingPortal.sessions.create({ customer, return_url: `${billingAppUrl()}/?billing=managed` });
+    if (!/^https:\/\//.test(String(portal.url || ''))) throw new Error('Stripe portal URL is unavailable.');
+    res.json({ url: portal.url });
+  } catch (error) {
+    logOperationalError('Stripe customer portal unavailable', error);
+    res.status(error.status || 503).json(publicErrorPayload('action_unavailable'));
+  }
+});
+
+app.post('/api/billing/stripe/webhook', async (req, res) => {
+  if (!stripeWebhookIsValid(req.rawBody, req.get('Stripe-Signature'))) return res.sendStatus(400);
+  let event;
+  try { event = JSON.parse(req.rawBody.toString('utf8')); }
+  catch { return res.sendStatus(400); }
+  const object = event?.data?.object || {};
+  const eventCreatedAt = Number.isInteger(event?.created) ? event.created : 0;
+  if (!eventCreatedAt) return res.sendStatus(200);
+  try {
+    const checkoutEvent = ['checkout.session.completed', 'checkout.session.async_payment_succeeded'].includes(event.type);
+    const subscriptionEvent = ['customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted'].includes(event.type);
+    const invoiceEvent = ['invoice.paid', 'invoice.payment_failed'].includes(event.type);
+    if (!checkoutEvent && !subscriptionEvent && !invoiceEvent) return res.sendStatus(200);
+    if (checkoutEvent && !['paid', 'no_payment_required'].includes(String(object.payment_status || 'paid'))) return res.sendStatus(200);
+    const storageKey = await storageKeyForStripeEvent(object, { allowMetadataFallback: checkoutEvent || subscriptionEvent });
+    if (!storageKey) return res.sendStatus(200);
+    const store = await loadStoreByKey(storageKey);
+    if (checkoutEvent) {
+      store.settings ||= {};
+      const membership = store.settings.membership || {};
+      if (Number(membership.stripe_event_created_at || 0) <= eventCreatedAt) {
+        store.settings.membership = {
+          ...membership,
+          stripe_customer_id: typeof object.customer === 'string' ? object.customer : membership.stripe_customer_id,
+          stripe_subscription_id: typeof object.subscription === 'string' ? object.subscription : membership.stripe_subscription_id,
+          stripe_event_created_at: eventCreatedAt
+        };
+        await saveStoreByKey(storageKey, store);
+      }
+    } else if (subscriptionEvent) {
+      if (updateMembershipFromStripe(store, object, eventCreatedAt)) await saveStoreByKey(storageKey, store);
+    } else {
+      const subscriptionId = invoiceSubscriptionId(object);
+      if (!subscriptionId) return res.sendStatus(200);
+      // Invoices identify their subscription but do not carry an authoritative
+      // lifecycle state. Retrieve that first-class resource before changing
+      // access, so renewals and dunning cannot be inferred from invoice text.
+      const subscription = await stripeClient().subscriptions.retrieve(subscriptionId);
+      if (updateMembershipFromStripe(store, subscription, eventCreatedAt)) await saveStoreByKey(storageKey, store);
+    }
+    res.sendStatus(200);
+  } catch (error) {
+    logOperationalError('Stripe webhook processing failed', error, 'error');
+    res.sendStatus(500);
+  }
+});
+
 app.get('/api/dashboard', async (req, res) => {
   const store = await loadStore(req.user);
   const isDemoMode = Boolean(store.settings?.demo_mode);
@@ -1325,6 +1499,7 @@ app.get('/api/dashboard', async (req, res) => {
   // activation metric includes existing signed-in members.
   await trackLaunchEvent(req.user, 'sign_in_completed');
   await trackLaunchEvent(req.user, 'dashboard_opened');
+  const entitlements = { ...entitlementsForStore(visibleStore), billingAvailable: billingAvailable() };
   res.json({
     user: publicUser(req.user),
     summary,
@@ -1341,7 +1516,7 @@ app.get('/api/dashboard', async (req, res) => {
     snapshots,
     items: visibleStore.items.map(publicItem),
     // Demo is a complete product illustration, never a Free-plan preview.
-    entitlements: entitlementsForStore(visibleStore),
+    entitlements,
     plaidConfigured: plaidConfigured(),
     developmentTesting: developmentMockConnectionsEnabled(req),
     demoMode: Boolean(store.settings?.demo_mode) || visibleStore.accounts.some((a) => a.demo),

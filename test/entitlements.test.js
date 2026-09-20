@@ -47,13 +47,15 @@ test('the global freemium switch leaves every product capability available when 
 });
 
 test('paid and trial access are derived from valid membership state, including expiry', () => {
-  assert.equal(hasPaidAccess({ plan: 'plus', subscription_status: 'active' }, now), true);
+  assert.equal(hasPaidAccess({ plan: 'plus', subscription_status: 'active', subscription_ends_at: '2026-10-01T00:00:00Z' }, now), true);
   assert.equal(hasPaidAccess({ plan: 'plus', subscription_status: 'canceled', subscription_ends_at: '2026-10-01T00:00:00Z' }, now), true);
   assert.equal(hasPaidAccess({ plan: 'plus', subscription_status: 'past_due' }, now), false);
+  assert.equal(hasPaidAccess({ plan: 'plus', subscription_status: 'active' }, now), false);
   assert.equal(hasPaidAccess({ plan: 'plus', subscription_status: 'active', subscription_ends_at: '2026-09-01T00:00:00Z' }, now), false);
   assert.equal(hasPaidAccess({ plan: 'trial', trial_ends_at: '2026-09-20T00:00:00Z' }, now), true);
   assert.equal(hasPaidAccess({ plan: 'trial', trial_ends_at: '2026-09-01T00:00:00Z' }, now), false);
   assert.deepEqual(normalizeMembership({ plan: 'not-a-plan', subscription_status: 'untrusted' }), {
-    plan: 'free', trial_ends_at: null, subscription_status: 'none', subscription_ends_at: null
+    plan: 'free', trial_ends_at: null, subscription_status: 'none', subscription_ends_at: null,
+    stripe_customer_id: null, stripe_subscription_id: null, stripe_event_created_at: 0
   });
 });

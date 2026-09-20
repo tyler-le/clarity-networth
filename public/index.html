@@ -174,6 +174,13 @@
               <details class="connections-panel" open><summary>Connected institutions</summary><div id="connectionsList"></div></details>
             </section>
 
+            <section class="profile-group hidden" id="profilePlan" aria-labelledby="profilePlanTitle">
+              <div class="profile-group-head">
+                <div><div class="card-label">Plan</div><h3 id="profilePlanTitle">Clarity Free</h3><p id="profilePlanDetail">Two connected institutions included.</p></div>
+                <button class="secondary" type="button" id="profilePlanAction">Upgrade</button>
+              </div>
+            </section>
+
             <section class="profile-group hidden" id="developmentRecoveryTesting" aria-labelledby="developmentRecoveryTestingTitle">
               <div class="profile-group-head compact"><div><div class="card-label">Development testing</div><h3 id="developmentRecoveryTestingTitle">Test connection recovery</h3></div></div>
               <div class="demo-setting"><div class="demo-setting-copy"><strong>Show a customer-safe connection problem</strong><p>This does not contact an institution or change your accounts.</p></div><select id="developmentRecoveryScenario" aria-label="Connection recovery scenario"><option value="offline">You’re offline</option><option value="rate_limited">Wait before trying again</option><option value="institution_unavailable">Institution temporarily unavailable</option><option value="reconnect_required">Institution needs reconnecting</option><option value="data_preparing">Institution is preparing data</option></select><button class="secondary" id="developmentRecoveryTrigger" type="button">Show state</button></div>
@@ -280,6 +287,13 @@
       <div class="onboarding-steps"><div><i>1</i><span><strong>Today</strong><small>See your current net worth and connected accounts.</small></span></div><div><i>2</i><span><strong>Next few minutes</strong><small>We organize available transactions and holdings.</small></span></div><div><i>3</i><span><strong>Over time</strong><small>Your verified history builds without manual entry.</small></span></div></div>
       <button class="primary full" id="viewNetWorthAfterConnection" value="close">View my net worth</button>
     </form>
+  </dialog>
+  <dialog class="upgrade-dialog" id="upgradeDialog" aria-labelledby="upgradeDialogTitle">
+    <form method="dialog"><button class="dialog-close" aria-label="Close">×</button></form>
+    <div class="card-label">Clarity Plus</div>
+    <h2 id="upgradeDialogTitle">Keep every institution in one place.</h2>
+    <p>Connect unlimited institutions and keep the full picture together.</p>
+    <button class="primary full" type="button" id="upgradePlanButton">Upgrade to Plus</button>
   </dialog>
   <div class="update-toast hidden" id="updateToast" role="status" aria-live="polite"><span>A newer version of Clarity is ready.</span><button type="button" id="updateAppButton">Refresh</button></div>
       <dialog class="cashflow-dialog" id="cashflowDialog"><header><button class="cashflow-dialog-drag-handle" id="cashflowDialogDragHandle" type="button" aria-label="Swipe down to close cash flow activity"></button><span>Cash flow</span><button class="dialog-close" id="cashflowDialogClose" type="button" aria-label="Close">×</button></header><div id="cashflowDialogContent"></div></dialog>

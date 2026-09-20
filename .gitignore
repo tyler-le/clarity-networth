@@ -5,3 +5,4 @@ data/
 .playwright-data/
 playwright-report/
 test-results/
+.secrets/

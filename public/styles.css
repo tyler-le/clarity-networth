@@ -479,6 +479,7 @@ html[data-theme="dark"] .profile-shell .connections-panel, html[data-theme="dark
 .profile-settings-panel .data-controls { border-top: 1px solid var(--line); }
 .profile-settings-panel .beta-help { padding: 0; border-top: 0; }
 .profile-settings-panel .beta-help strong { display: block; margin-top: 4px; }
+.upgrade-dialog { width: min(420px, calc(100vw - 32px)); padding: 28px; border: 1px solid var(--line); border-radius: 20px; color: var(--ink); background: var(--card); box-shadow: 0 20px 55px rgba(20, 30, 23, .18); }.upgrade-dialog::backdrop { background: rgba(20, 27, 22, .38); }.upgrade-dialog form { display: flex; justify-content: end; margin: -8px -8px 8px; }.upgrade-dialog h2 { margin: 7px 0; font-size: 25px; letter-spacing: -.045em; }.upgrade-dialog p { margin: 0 0 21px; color: var(--muted); line-height: 1.5; }.upgrade-dialog .full { width: 100%; }
 .profile-settings-panel .profile-signout-footer { padding: 18px 28px 22px; border-top: 1px solid var(--line); }
 html[data-theme="dark"] .profile-identity { border-color: var(--line); background: linear-gradient(135deg, #1e271f, #192019 64%); }
 html[data-theme="dark"] .profile-monogram { color: #a6d5b0; background: #274231; }

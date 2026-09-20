@@ -39,6 +39,14 @@ Clarity enforces these server-side limits before it calls Plaid:
 
 The counters are stored as opaque HMAC-derived identifiers in Postgres, so they survive deploys and do not retain raw IP or email data.
 
+## Freemium and billing rollout
+
+`FREEMIUM_ENABLED` is off by default. Stripe Billing becomes available only when that flag and `PUBLIC_APP_URL`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `STRIPE_PLUS_PRICE_ID` are all configured. Use a restricted Stripe API key and a separate Stripe sandbox with a staging Price first.
+
+Configure Stripe to send `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, and `invoice.payment_failed` to `https://YOUR_DOMAIN/api/billing/stripe/webhook`. Signature verification rejects unsigned or stale events. Checkout and the Stripe-hosted customer portal are the only payment surfaces—card details never reach Clarity. Configure the portal to let members update payment methods, see invoices, and cancel; changes take effect only after their signed lifecycle event is received.
+
+Before collecting sales tax, complete the required Stripe Tax registrations for the jurisdictions where Clarity has an obligation. Do not enable `automatic_tax` until those registrations are active; Stripe otherwise calculates and collects no tax.
+
 ## Edge protection before public signup
 
 Put the production custom domain behind Cloudflare before removing the email allow list. Configure managed bot protection and rate-limit rules for `/api/auth/*` and `/api/plaid/*`, while allowing Plaid's documented webhook traffic to reach `/api/plaid/webhook`. Keep Railway as the origin and do not cache any `/api/*` response.

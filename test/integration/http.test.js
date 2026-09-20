@@ -19,6 +19,10 @@ const previousEnvironment = {
   PLAID_ENV: process.env.PLAID_ENV,
   DEV_MOCK_CONNECTIONS: process.env.DEV_MOCK_CONNECTIONS,
   FREEMIUM_ENABLED: process.env.FREEMIUM_ENABLED,
+  STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+  STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
+  STRIPE_PLUS_PRICE_ID: process.env.STRIPE_PLUS_PRICE_ID,
+  PUBLIC_APP_URL: process.env.PUBLIC_APP_URL,
   INVITE_CODE: process.env.INVITE_CODE,
   DOTENV_CONFIG_PATH: process.env.DOTENV_CONFIG_PATH
 };
@@ -54,6 +58,12 @@ function signedTestCookie(email = 'rate-limit@example.com') {
     cipher.final()
   ]);
   return `clarity_session=v2.${iv.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}.${encrypted.toString('base64url')}`;
+}
+
+function stripeSignature(payload, secret, timestamp) {
+  const raw = JSON.stringify(payload);
+  const signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${raw}`).digest('hex');
+  return { raw, header: `t=${timestamp},v1=${signature}` };
 }
 
 test.after(() => {
@@ -692,6 +702,36 @@ integrationTest('freemium limits only current Free-plan institutions and an unli
   const availableAgain = await request(app).post('/api/plaid/create_link_token').set('Cookie', cookie).send({});
   assert.equal(availableAgain.status, 200);
   assert.deepEqual(availableAgain.body, { development_mock: true });
+  deleteStore(key);
+});
+
+integrationTest('a signed Stripe subscription webhook updates only its member entitlement', async (t) => {
+  const previousWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  process.env.STRIPE_WEBHOOK_SECRET = 'whsec_integration_test';
+  t.after(() => {
+    if (previousWebhookSecret === undefined) delete process.env.STRIPE_WEBHOOK_SECRET;
+    else process.env.STRIPE_WEBHOOK_SECRET = previousWebhookSecret;
+  });
+  const email = 'stripe-member@example.test';
+  const key = userStorageKey(email);
+  writeStore({ items: [], accounts: [], settings: { membership: { plan: 'free' } } }, key);
+  const created = Math.floor(Date.now() / 1000);
+  const payload = {
+    id: 'evt_subscription_updated', created, type: 'customer.subscription.updated',
+    data: { object: {
+      id: 'sub_123456', customer: 'cus_123456', status: 'active', current_period_end: created + 2_592_000,
+      metadata: { user_key: key }
+    } }
+  };
+  const signed = stripeSignature(payload, process.env.STRIPE_WEBHOOK_SECRET, created);
+  const response = await request(app).post('/api/billing/stripe/webhook')
+    .set('Stripe-Signature', signed.header).set('Content-Type', 'application/json').send(signed.raw);
+  assert.equal(response.status, 200);
+  assert.deepEqual(readStore(key).settings.membership, {
+    plan: 'plus', trial_ends_at: null, subscription_status: 'active',
+    subscription_ends_at: new Date((created + 2_592_000) * 1000).toISOString(),
+    stripe_customer_id: 'cus_123456', stripe_subscription_id: 'sub_123456', stripe_event_created_at: created
+  });
   deleteStore(key);
 });
 

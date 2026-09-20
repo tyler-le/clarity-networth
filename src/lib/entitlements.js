@@ -15,6 +15,11 @@ function validDate(value) {
   return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
 }
 
+function stripeId(value, prefix) {
+  const id = String(value || '');
+  return new RegExp(`^${prefix}_[A-Za-z0-9]+$`).test(id) ? id : null;
+}
+
 export function normalizeMembership(value = {}) {
   const plan = PLANS.has(value?.plan) ? value.plan : 'free';
   const subscriptionStatus = SUBSCRIPTION_STATUSES.has(value?.subscription_status)
@@ -26,7 +31,12 @@ export function normalizeMembership(value = {}) {
     plan,
     trial_ends_at: trialEndsAt,
     subscription_status: subscriptionStatus,
-    subscription_ends_at: subscriptionEndsAt
+    subscription_ends_at: subscriptionEndsAt,
+    stripe_customer_id: stripeId(value?.stripe_customer_id, 'cus'),
+    stripe_subscription_id: stripeId(value?.stripe_subscription_id, 'sub'),
+    stripe_event_created_at: Number.isInteger(value?.stripe_event_created_at) && value.stripe_event_created_at > 0
+      ? value.stripe_event_created_at
+      : 0
   };
 }
 
@@ -45,7 +55,10 @@ export function hasPaidAccess(membership = {}, now = Date.now()) {
   }
   if (normalized.plan !== 'plus' || !['active', 'canceled'].includes(normalized.subscription_status)) return false;
   const subscriptionEndsAt = Date.parse(normalized.subscription_ends_at || '');
-  return !Number.isFinite(subscriptionEndsAt) || subscriptionEndsAt > now;
+  // Stripe provides the current period end for subscription lifecycle events.
+  // If it is absent or malformed, do not silently grant indefinite paid
+  // access—provider data must be complete before it expands an entitlement.
+  return Number.isFinite(subscriptionEndsAt) && subscriptionEndsAt > now;
 }
 
 export function entitlementsForStore(store = {}, now = Date.now(), enabled = freemiumEnabled()) {
