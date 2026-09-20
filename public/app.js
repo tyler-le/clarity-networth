@@ -690,6 +690,7 @@ function accountConnectionAction(account, health = accountConnectionHealth(accou
 }
 
 function renderAccounts(accounts) {
+  renderPlusPrompts({ accounts });
   const grouped = groupedAccounts(accounts);
   if (!grouped.length) {
     $('#accountsSummary').innerHTML = '';
@@ -833,6 +834,23 @@ async function openBilling(destination) {
   } catch (error) {
     showNotice(error.message, 'error');
   } finally { button.disabled = false; }
+}
+
+function plusPromptsAvailable() {
+  const entitlement = state.dashboard?.entitlements;
+  return Boolean(entitlement?.enabled && entitlement?.billingAvailable && !state.dashboard?.demoMode && !['plus', 'trial'].includes(entitlement.plan));
+}
+
+function renderPlusPrompts({ spending = null, investments = null, accounts = null, snapshots = null } = {}) {
+  const available = plusPromptsAvailable();
+  const hasSnapshots = Array.isArray(snapshots) && snapshots.length > 1;
+  const hasSpending = Array.isArray(spending?.transactions) && spending.transactions.length > 0;
+  const hasInvestments = Boolean(investments?.positionsAvailable && (investments.positions || []).length);
+  const currentItems = Array.isArray(state.dashboard?.items) ? state.dashboard.items.filter((item) => !item?.demo).length : 0;
+  $('#netWorthPlusPrompt')?.classList.toggle('hidden', !available || !hasSnapshots);
+  $('#cashFlowPlusPrompt')?.classList.toggle('hidden', !available || !hasSpending);
+  $('#investmentsPlusPrompt')?.classList.toggle('hidden', !available || !hasInvestments);
+  $('#accountsPlusPrompt')?.classList.toggle('hidden', !available || currentItems < 2);
 }
 
 const spendingColors = ['#1f6f4a', '#7ea98b', '#d5a75f', '#b88692', '#9ca9bd', '#c4c9c1'];
@@ -1112,6 +1130,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
 
 function renderSpending(data) {
   if (!data) return;
+  renderPlusPrompts({ spending: data });
   // The selected range remains visible when a person drills into one month;
   // it explains where that month belongs and keeps both cash-flow visuals in
   // one shared context.
@@ -1753,6 +1772,7 @@ async function openAccountHistory(accountId, { preserveRange = false } = {}) {
 
 function renderInvestments(data) {
   if (!data) return;
+  renderPlusPrompts({ investments: data });
   const accounts = data.accounts || [];
   const allSnapshots = uniqueDailySnapshots(data.snapshots || []);
   syncPortfolioRangeControls(allSnapshots);
@@ -1963,6 +1983,7 @@ function renderDashboard() {
   renderOverviewBriefing(d);
   if (state.view === 'overview') renderNetWorthChartWhenVisible();
   renderAccounts(d.accounts || []);
+  renderPlusPrompts({ snapshots: d.snapshots || [] });
   renderDebtPayoff(d.debtPayoff);
   renderConnections(actual.items || []);
   renderClarityLayer(d);
@@ -2139,6 +2160,7 @@ $('#homeBrand').addEventListener('click', () => setView('overview'));
 $('#profileButton').addEventListener('click', () => setView('profile'));
 $('#profileBack').addEventListener('click', () => setView(state.returnView || 'overview'));
 $('#upgradePlanButton').addEventListener('click', () => openBilling('checkout'));
+$$('[data-plus-cta]').forEach((button) => button.addEventListener('click', () => openBilling('checkout')));
 $('#profilePlanAction').addEventListener('click', () => openBilling(['plus', 'trial'].includes(state.dashboard?.entitlements?.plan) ? 'portal' : 'checkout'));
 // Help tips should disappear as soon as the reader returns to the page. This
 // keeps optional explanation from obscuring the next action on compact views.

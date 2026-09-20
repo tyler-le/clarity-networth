@@ -86,6 +86,11 @@ test('a Free member can use the core product before choosing Plus', async ({ pag
 
   await expect(page.locator('#overviewView')).toBeVisible();
   await expect(page.locator('#netWorthCard')).toBeVisible();
+  await expect(page.locator('#netWorthPlusPrompt')).toBeVisible();
+  await goToView(page, 'spending');
+  await expect(page.locator('#cashFlowPlusPrompt')).toBeVisible();
+  await goToView(page, 'investments');
+  await expect(page.locator('#investmentsPlusPrompt')).toBeVisible();
 });
 
 test('a newly signed-in member with no accounts gets a calm, truthful product preview', async ({ page }) => {
