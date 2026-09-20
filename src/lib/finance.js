@@ -1318,8 +1318,9 @@ export function applyCashFlowCategoryOverride(store, transactionId, categoryKey)
     const isSelected = transaction.id === selected.id;
     const isPastMatch = Boolean(ruleKey) && String(transaction.date || '') <= selectedDate && categoryRuleKey(transaction) === ruleKey;
     if (!isSelected && !isPastMatch) continue;
-    // A deliberate, different correction always wins over a later rule.
-    if (!isSelected && transaction.cash_flow_category_overridden && transaction.cash_flow_category !== category.key) continue;
+    // This is a merchant-level rule, not a one-off row edit. A later choice
+    // for “Zelle Rent” intentionally replaces that same rule on its prior
+    // matching payments, so a person can correct a correction.
     apply(transaction);
     updated += 1;
   }

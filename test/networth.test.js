@@ -105,7 +105,7 @@ test('spending summary excludes transfers and groups only transactions in the se
   assert.deepEqual(result.topMerchants, [{ name: 'Cafe', amount: 80 }]);
 });
 
-test('a cash-flow category correction applies to prior matching merchant payments without overwriting another explicit choice', () => {
+test('a cash-flow category correction applies to every prior matching merchant payment and can replace an earlier rule', () => {
   const store = { transactions: [
     { id: 'latest-rent', date: '2026-09-15', amount: 1500, bucket: 'guilt_free', merchant_name: 'Zelle: Rent', pending: false },
     { id: 'prior-rent', date: '2026-08-15', amount: 1500, bucket: 'guilt_free', merchant_name: 'Zelle Rent', pending: false },
@@ -113,11 +113,16 @@ test('a cash-flow category correction applies to prior matching merchant payment
     { id: 'explicit-choice', date: '2026-07-15', amount: 1500, bucket: 'guilt_free', merchant_name: 'Zelle Rent', pending: false, cash_flow_category: 'shopping', cash_flow_category_overridden: true }
   ] };
   const result = applyCashFlowCategoryOverride(store, 'latest-rent', 'housing_bills');
-  assert.deepEqual({ updated: result.updated, matchedPrior: result.matchedPrior, category: result.category.key }, { updated: 2, matchedPrior: 1, category: 'housing_bills' });
+  assert.deepEqual({ updated: result.updated, matchedPrior: result.matchedPrior, category: result.category.key }, { updated: 3, matchedPrior: 2, category: 'housing_bills' });
   assert.equal(store.transactions.find((transaction) => transaction.id === 'latest-rent').bucket, 'fixed');
   assert.equal(store.transactions.find((transaction) => transaction.id === 'prior-rent').cash_flow_category, 'housing_bills');
   assert.equal(store.transactions.find((transaction) => transaction.id === 'different-recipient').cash_flow_category, undefined);
-  assert.equal(store.transactions.find((transaction) => transaction.id === 'explicit-choice').cash_flow_category, 'shopping');
+  assert.equal(store.transactions.find((transaction) => transaction.id === 'explicit-choice').cash_flow_category, 'housing_bills');
+  const changedAgain = applyCashFlowCategoryOverride(store, 'latest-rent', 'fees');
+  assert.deepEqual({ updated: changedAgain.updated, matchedPrior: changedAgain.matchedPrior }, { updated: 3, matchedPrior: 2 });
+  assert.deepEqual(store.transactions.filter((transaction) => transaction.id !== 'different-recipient').map((transaction) => transaction.cash_flow_category), ['fees', 'fees', 'fees']);
+  applyCashFlowCategoryOverride(store, 'latest-rent', 'housing_bills');
+  assert.deepEqual(store.transactions.filter((transaction) => transaction.id !== 'different-recipient').map((transaction) => transaction.cash_flow_category), ['housing_bills', 'housing_bills', 'housing_bills']);
   const summary = spendingSummary(store, '3m', new Date('2026-09-20T12:00:00'));
   assert.equal(summary.transactions.find((transaction) => transaction.id === 'prior-rent').flowLabel, 'Housing & bills');
 });
