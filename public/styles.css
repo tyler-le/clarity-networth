@@ -470,14 +470,15 @@ html[data-theme="dark"] .profile-shell .connections-panel, html[data-theme="dark
 .profile-settings-panel .profile-group { gap: 13px; padding: 25px 28px; }
 .profile-settings-panel .profile-group + .profile-group { padding-top: 25px; border-top: 1px solid var(--line); }
 .profile-settings-panel .profile-group-head p { margin: 5px 0 0; }
-.profile-settings-panel .profile-plan { position: relative; overflow: hidden; background: linear-gradient(110deg, color-mix(in srgb, var(--accent-soft) 58%, var(--card)), var(--card) 72%); }
-.profile-settings-panel .profile-plan::before { position: absolute; inset: 0 auto 0 0; width: 4px; border-radius: inherit; background: var(--accent); content: ''; }
-.profile-plan .profile-group-head { align-items: center; }
-.profile-plan .card-label { color: var(--accent); }
-.profile-plan #profilePlanTitle { letter-spacing: -.04em; }
-.profile-plan #profilePlanAction { flex: 0 0 auto; border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line)); border-radius: 999px; padding: 10px 17px; color: var(--accent); background: var(--card); font: inherit; font-size: 13px; font-weight: 750; box-shadow: 0 2px 8px rgba(31,111,74,.06); }
-.profile-plan #profilePlanAction:hover { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-1px); }
-.profile-plan #profilePlanAction:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 28%, transparent); outline-offset: 3px; }
+.profile-plan-card { position: relative; overflow: hidden; padding: 22px 28px; border: 1px solid #cfe2d4; border-radius: 20px; background: linear-gradient(110deg, color-mix(in srgb, var(--accent-soft) 58%, var(--card)), var(--card) 72%); box-shadow: 0 8px 24px rgba(30, 45, 33, .035); }
+.profile-plan-card::before { position: absolute; inset: 0 auto 0 0; width: 4px; border-radius: inherit; background: var(--accent); content: ''; }
+.profile-plan-card .profile-group-head { align-items: center; }
+.profile-plan-card .card-label { color: var(--accent); }
+.profile-plan-card #profilePlanTitle { margin: 5px 0 0; letter-spacing: -.04em; }
+.profile-plan-card #profilePlanDetail { margin: 5px 0 0; color: var(--muted); font-size: 13px; }
+.profile-plan-card #profilePlanAction { flex: 0 0 auto; border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line)); border-radius: 999px; padding: 10px 17px; color: var(--accent); background: var(--card); font: inherit; font-size: 13px; font-weight: 750; box-shadow: 0 2px 8px rgba(31,111,74,.06); }
+.profile-plan-card #profilePlanAction:hover { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-1px); }
+.profile-plan-card #profilePlanAction:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 28%, transparent); outline-offset: 3px; }
 .profile-settings-panel .connections-panel { overflow: visible; border: 0; border-radius: 0; background: transparent; }
 .profile-settings-panel .connections-panel summary { display: none; }
 .profile-settings-panel .connection-row { padding: 13px 0; }

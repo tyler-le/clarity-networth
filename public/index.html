@@ -165,6 +165,13 @@
             <div><div class="card-label">Your Clarity account</div><h2 id="profileName">Your account</h2><p id="profileEmail">Signed in securely</p></div>
           </header>
 
+          <section class="profile-plan-card hidden" id="profilePlan" aria-labelledby="profilePlanTitle">
+            <div class="profile-group-head">
+              <div><div class="card-label">Plan</div><h3 id="profilePlanTitle">Clarity Free</h3><p id="profilePlanDetail">Two connected institutions included.</p></div>
+              <button class="secondary" type="button" id="profilePlanAction">Upgrade</button>
+            </div>
+          </section>
+
           <div class="profile-settings-panel">
             <section class="profile-group profile-connections" aria-labelledby="profileConnectionsTitle">
               <div class="profile-group-head">
@@ -172,13 +179,6 @@
                 <button class="primary profile-connect" data-connect-account>+ Connect account</button>
               </div>
               <details class="connections-panel" open><summary>Connected institutions</summary><div id="connectionsList"></div></details>
-            </section>
-
-            <section class="profile-group profile-plan hidden" id="profilePlan" aria-labelledby="profilePlanTitle">
-              <div class="profile-group-head">
-                <div><div class="card-label">Plan</div><h3 id="profilePlanTitle">Clarity Free</h3><p id="profilePlanDetail">Two connected institutions included.</p></div>
-                <button class="secondary" type="button" id="profilePlanAction">Upgrade</button>
-              </div>
             </section>
 
             <section class="profile-group hidden" id="developmentRecoveryTesting" aria-labelledby="developmentRecoveryTestingTitle">
