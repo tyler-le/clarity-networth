@@ -201,8 +201,10 @@ app.use('/api', (req, res, next) => {
 function isDevelopmentRequest(req) {
   const host = String(req.hostname || req.get('host') || '').split(':')[0].toLowerCase();
   // The host header is useful for the staging presentation, but it is not a
-  // security boundary. Never enable development-only behavior in production
-  // merely because an attacker supplied a staging-looking Host header.
+  // security boundary. Railway supplies this environment value separately for
+  // the staging deployment; production can never opt into dev behavior from a
+  // request-supplied Host header.
+  if (process.env.RAILWAY_ENVIRONMENT_NAME === 'staging') return true;
   return !isProduction && (host === 'localhost' || host === '127.0.0.1' || host.includes('staging'));
 }
 

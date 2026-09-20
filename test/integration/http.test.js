@@ -650,6 +650,20 @@ integrationTest('development mock connection cannot be reached from a production
   assert.equal(response.status, 404);
 });
 
+integrationTest('Railway staging uses the development app icon without trusting the request host', async (t) => {
+  const previousEnvironment = process.env.RAILWAY_ENVIRONMENT_NAME;
+  process.env.RAILWAY_ENVIRONMENT_NAME = 'staging';
+  t.after(() => {
+    if (previousEnvironment === undefined) delete process.env.RAILWAY_ENVIRONMENT_NAME;
+    else process.env.RAILWAY_ENVIRONMENT_NAME = previousEnvironment;
+  });
+  const icon = await request(app).get('/app-icon.svg').set('Host', 'claritynetworth.com');
+  const manifest = await request(app).get('/manifest.webmanifest').set('Host', 'claritynetworth.com');
+  assert.equal(icon.status, 200);
+  assert.match(icon.body.toString('utf8'), /#123b2a/);
+  assert.equal(manifest.body.name, 'Clarity Dev');
+});
+
 integrationTest('does not create a Plaid reconnect session for another or missing connection', async () => {
   const response = await request(app)
     .post('/api/items/not-a-real-item/create_reconnect_token')

@@ -21,7 +21,7 @@ Four narrow fixes were applied in this review.
 | --- | --- | --- | --- |
 | SEC-001 | Medium | The signed `clarity_session` cookie exposed its email payload as base64url text to anyone who possessed the cookie. | `src/server.js` now encrypts and authenticates the session payload with AES-256-GCM (`v2` cookie format); tests prove it is accepted only intact and does not expose the email in readable form. Existing sessions will sign out once after deployment. |
 | SEC-002 | Medium | Several background-sync and Plaid failure logs included raw provider error messages and one included an institution name. | `logOperationalError()` now logs only a controlled operation label plus a bounded provider/error code. It is used for provider, database, webhook, and background-sync failures. |
-| SEC-003 | Low | Development-only behavior used a Host-derived staging check without an explicit production guard. | `isDevelopmentRequest()` now always returns false in production, even with a spoofed staging-looking Host header. |
+| SEC-003 | Low | Development-only behavior used a Host-derived staging check without an explicit production guard. | `isDevelopmentRequest()` now relies on Railway's deployment-controlled staging environment marker; a spoofed staging-looking Host header cannot enable development behavior in production. |
 | SEC-004 | Low | A stalled Plaid response could hold an API request or scheduled sync worker indefinitely. | `plaidPost()` now uses a 15-second abort signal; existing safe dependency-error handling remains responsible for retry UI and background retry. |
 
 ## Verified controls
