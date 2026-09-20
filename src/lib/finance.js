@@ -1358,7 +1358,70 @@ function categoryRuleKey(transaction) {
   // A generic deposit label identifies a banking action, not the person who
   // wrote the check. Keep that choice local unless Plaid gives us a payer.
   if (isPhysicalCheckDeposit(transaction) && /^(?:(?:mobile|remote)\s+)?check deposit$|^deposit check$/.test(name)) return '';
-  return name;
+  // A peer-payment recipient only has meaning within its payment rail. This
+  // prevents, for example, a Zelle transfer and a Venmo transfer with the
+  // same abbreviated recipient from silently sharing a remembered purpose.
+  const rail = peerPaymentRail(transaction);
+  return rail ? `${rail.toLowerCase().replace(/\s+/g, '_')}:${name}` : name;
+}
+
+// A payment rail alone is never a category. It can, however, provide a safe
+// enough boundary for an *opt-in* suggestion when several payments also share
+// a close amount and a monthly rhythm. Keep this deliberately conservative:
+// the member must review the suggestion before anything else is changed.
+function peerPaymentRail(transaction) {
+  const text = `${transaction.merchant_name || ''} ${transaction.name || ''}`.toLowerCase();
+  if (/\bzelle\b/.test(text)) return 'Zelle';
+  if (/\bvenmo\b/.test(text)) return 'Venmo';
+  if (/\bcash\s*app\b/.test(text)) return 'Cash App';
+  return null;
+}
+
+function postedDay(transaction) {
+  const day = Date.parse(`${transaction.date || ''}T12:00:00Z`);
+  return Number.isFinite(day) ? day : null;
+}
+
+export function peerPaymentCategorySuggestion(store, transactionId, categoryKey) {
+  const selected = (store.transactions || []).find((transaction) => transaction.id === transactionId);
+  const category = cashFlowCategoryOption(categoryKey);
+  if (!selected || !category || category.flow !== 'outflow' || cashFlowCategoryRuleFlow(selected) !== 'outflow') return null;
+  const rail = peerPaymentRail(selected);
+  const amount = Math.abs(Number(selected.amount || 0));
+  const selectedDay = postedDay(selected);
+  const selectedMerchantKey = categoryRuleKey(selected);
+  if (!rail || !selectedDay || !(amount > 0)) return null;
+
+  const tolerance = Math.max(15, amount * 0.12);
+  const matching = (store.transactions || []).filter((transaction) => {
+    if (transaction.id === selected.id || transaction.demo || transaction.pending || transaction.category_overridden) return false;
+    if (cashFlowCategoryRuleFlow(transaction) !== 'outflow' || peerPaymentRail(transaction) !== rail) return false;
+    // Exact recipient matches are covered by the ordinary remembered rule;
+    // this optional review is only for differently named peer payments.
+    if (selectedMerchantKey && categoryRuleKey(transaction) === selectedMerchantKey) return false;
+    const candidateDay = postedDay(transaction);
+    return candidateDay && Math.abs(Math.abs(Number(transaction.amount || 0)) - amount) <= tolerance;
+  });
+  const series = [selected, ...matching]
+    .map((transaction) => ({ transaction, day: postedDay(transaction) }))
+    .sort((left, right) => left.day - right.day);
+  const monthlyGaps = series.slice(1).filter((entry, index) => {
+    const days = Math.round((entry.day - series[index].day) / 86_400_000);
+    return days >= 20 && days <= 45;
+  }).length;
+  // Two monthly intervals (three occurrences) are enough to describe a
+  // pattern, while a one-off similar amount remains untouched.
+  if (matching.length < 2 || monthlyGaps < 2) return null;
+  const amounts = series.map(({ transaction }) => Math.abs(Number(transaction.amount || 0)));
+  return {
+    candidateIds: matching.map((transaction) => transaction.id),
+    count: matching.length,
+    rail,
+    amountMin: Math.min(...amounts),
+    amountMax: Math.max(...amounts),
+    cadence: 'about monthly',
+    category
+  };
 }
 
 function cashFlowCategoryRuleFlow(transaction) {
@@ -1379,7 +1442,12 @@ function categoryRuleForTransaction(store, transaction) {
   const flow = cashFlowCategoryRuleFlow(transaction);
   const merchantKey = categoryRuleKey(transaction);
   if (!flow || !merchantKey) return null;
-  const rule = (store.cash_flow_category_rules || []).find((candidate) => candidate.flow === flow && candidate.merchant_key === merchantKey);
+  const legacyPeerMerchantKey = peerPaymentRail(transaction) ? merchantKey.replace(/^[^:]+:/, '') : null;
+  // Keep rules saved before payment rails were added to the matching key
+  // working for existing members. Newly saved choices always use the safer
+  // rail-qualified key above.
+  const rule = (store.cash_flow_category_rules || []).find((candidate) => candidate.flow === flow && candidate.merchant_key === merchantKey)
+    || (legacyPeerMerchantKey ? (store.cash_flow_category_rules || []).find((candidate) => candidate.flow === flow && candidate.merchant_key === legacyPeerMerchantKey) : null);
   const category = rule && cashFlowCategoryOption(rule.category_key);
   return category?.flow === flow ? { rule, category } : null;
 }
@@ -1403,14 +1471,40 @@ export function removeCashFlowCategoryRule(store, ruleId) {
   return true;
 }
 
-export function applyCashFlowCategoryOverride(store, transactionId, categoryKey) {
+export function previewCashFlowCategoryOverride(store, transactionId, categoryKey) {
   const selected = (store.transactions || []).find((transaction) => transaction.id === transactionId);
   const category = cashFlowCategoryOption(categoryKey);
   const selectedFlow = cashFlowCategoryRuleFlow(selected || {});
-  const isOutflow = selectedFlow === 'outflow';
-  const isIncome = selectedFlow === 'income';
   const ruleFlow = category?.flow === 'income' ? 'income' : category?.flow === 'outflow' ? 'outflow' : null;
-  if (!selected || !category || selected.demo || selected.pending || (ruleFlow === 'outflow' ? !isOutflow : !isIncome)) return null;
+  if (!selected || !category || selected.demo || selected.pending || (ruleFlow === 'outflow' ? selectedFlow !== 'outflow' : selectedFlow !== 'income')) return null;
+  const ruleKey = categoryRuleKey(selected);
+  const matchingIds = !ruleKey ? [selected.id] : (store.transactions || [])
+    .filter((transaction) => {
+      if (transaction.demo || transaction.pending || categoryRuleKey(transaction) !== ruleKey) return false;
+      return ruleFlow === 'outflow' ? cashFlowCategoryRuleFlow(transaction) === 'outflow' : cashFlowCategoryRuleFlow(transaction) === 'income';
+    })
+    .map((transaction) => transaction.id);
+  const rule = ruleKey ? { id: `${ruleFlow}:${ruleKey}`, merchant_key: ruleKey, flow: ruleFlow, category_key: category.key } : null;
+  return {
+    updated: matchingIds.length,
+    matchedDuplicates: Math.max(0, matchingIds.length - 1),
+    category,
+    rule,
+    similarPeerPayments: peerPaymentCategorySuggestion(store, transactionId, categoryKey)
+  };
+}
+
+export function applyCashFlowCategoryOverride(store, transactionId, categoryKey, { applyToMatches = true } = {}) {
+  const preview = previewCashFlowCategoryOverride(store, transactionId, categoryKey);
+  if (!preview) return null;
+  const selected = (store.transactions || []).find((transaction) => transaction.id === transactionId);
+  const { category, rule: previewRule } = preview;
+  if (!applyToMatches) {
+    applyCategory(selected, category);
+    delete selected.cash_flow_category_rule_id;
+    return { updated: 1, category, rule: null, matchedDuplicates: 0, similarPeerPayments: preview.similarPeerPayments };
+  }
+  const ruleFlow = previewRule?.flow || category.flow;
   const ruleKey = categoryRuleKey(selected);
   if (!ruleKey) {
     // Some provider descriptions (for example “Mobile check deposit”) name a
@@ -1443,7 +1537,17 @@ export function applyCashFlowCategoryOverride(store, transactionId, categoryKey)
     transaction.cash_flow_category_rule_id = rule.id;
     updated += 1;
   }
-  return { updated, category, rule, matchedDuplicates: Math.max(0, updated - 1) };
+  return { updated, category, rule, matchedDuplicates: Math.max(0, updated - 1), similarPeerPayments: preview.similarPeerPayments };
+}
+
+export function applyPeerPaymentCategorySuggestion(store, transactionId, categoryKey) {
+  const suggestion = peerPaymentCategorySuggestion(store, transactionId, categoryKey);
+  if (!suggestion) return null;
+  for (const id of suggestion.candidateIds) {
+    const transaction = (store.transactions || []).find((candidate) => candidate.id === id);
+    if (transaction) applyCategory(transaction, suggestion.category);
+  }
+  return { updated: suggestion.count, category: suggestion.category, rail: suggestion.rail };
 }
 
 function transactionKey(transaction, index) {

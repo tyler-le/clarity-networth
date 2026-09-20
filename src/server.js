@@ -8,7 +8,7 @@ import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './lib/store.js';
 import { assertSafeFinancialStoreWrite, chooseSaferStore, hasConnectedFinancialData } from './lib/store-safety.js';
 import { consumeRateLimit, databaseEnabled, databaseHealthy, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, writeDatabaseStore } from './lib/database.js';
-import { accountBalanceHistory, applyCashFlowCategoryOverride, applyCashFlowCategoryRule, calculateFire, cashFlowType, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentSummary, monthlyReview, recurringCharges, removeCashFlowCategoryRule, removeEstimatedNetWorthHistory, repairIncomingClassifications, repairTransferClassifications, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './lib/finance.js';
+import { accountBalanceHistory, applyCashFlowCategoryOverride, applyCashFlowCategoryRule, applyPeerPaymentCategorySuggestion, calculateFire, cashFlowType, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentSummary, monthlyReview, previewCashFlowCategoryOverride, recurringCharges, removeCashFlowCategoryRule, removeEstimatedNetWorthHistory, repairIncomingClassifications, repairTransferClassifications, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './lib/finance.js';
 import { investmentLedgerPages, plaidConfigured, plaidPost } from './lib/plaid.js';
 import { loadHistoricalPrices } from './lib/market-data.js';
 import { historyStart } from './lib/history.js';
@@ -1626,12 +1626,24 @@ app.delete('/api/account', async (req, res) => {
   res.json({ ok: true });
 });
 
+app.post('/api/transactions/:id/category/preview', async (req, res) => {
+  const store = await loadStore(req.user);
+  const preview = previewCashFlowCategoryOverride(store, req.params.id, req.body?.category);
+  if (!preview) return res.status(400).json({ error: 'Choose a category for a posted income or spending transaction.' });
+  res.json({ ok: true, ...preview });
+});
+
 app.patch('/api/transactions/:id/category', async (req, res) => {
   const store = await loadStore(req.user);
-  const result = applyCashFlowCategoryOverride(store, req.params.id, req.body?.category);
+  const result = applyCashFlowCategoryOverride(store, req.params.id, req.body?.category, { applyToMatches: req.body?.applyToMatches !== false });
   if (!result) return res.status(400).json({ error: 'Choose a category for a posted income or spending transaction.' });
+  let similarPeerPaymentsUpdated = 0;
+  if (req.body?.includeSimilarPeerPayments) {
+    const suggestion = applyPeerPaymentCategorySuggestion(store, req.params.id, req.body?.category);
+    similarPeerPaymentsUpdated = suggestion?.updated || 0;
+  }
   await saveStore(req.user, store);
-  res.json({ ok: true, updated: result.updated, matchedDuplicates: result.matchedDuplicates, category: result.category });
+  res.json({ ok: true, updated: result.updated, matchedDuplicates: result.matchedDuplicates, similarPeerPaymentsUpdated, category: result.category });
 });
 
 app.delete('/api/transaction-category-rules/:id', async (req, res) => {

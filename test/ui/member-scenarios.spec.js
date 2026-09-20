@@ -121,6 +121,10 @@ test('a Free member sees an in-context Plus prompt for deeper cash-flow detail',
 
 test('cash-flow transaction categories use the same income and spending editor in the list and Sankey detail', async ({ page }) => {
   let updateRequest;
+  await page.route('**/api/transactions/*/category/preview', async (route) => {
+    const request = route.request().postDataJSON();
+    await route.fulfill({ json: { ok: true, updated: 2, matchedDuplicates: 1, category: { key: request.category, label: 'Fees' }, similarPeerPayments: null } });
+  });
   await page.route('**/api/transactions/*/category', async (route) => {
     updateRequest = route.request().postDataJSON();
     await route.fulfill({ json: { ok: true, updated: 1, matchedDuplicates: 0, category: { key: updateRequest.category } } });
@@ -138,6 +142,9 @@ test('cash-flow transaction categories use the same income and spending editor i
   const incomeEditor = page.locator('#cashflowDialogContent [data-transaction-category]').filter({ has: page.locator('option[value="income_paychecks"]') }).first();
   if (await incomeEditor.count()) await incomeEditor.selectOption('income_business');
   else await page.locator('#cashflowDialogContent [data-transaction-category]').first().selectOption('fees');
+  await expect(page.locator('#categoryChangeDialog')).toBeVisible();
+  await expect(page.locator('#categoryChangeDialog')).toContainText(/matching transaction/i);
+  await page.locator('#categoryChangeConfirm').click();
   await expect.poll(() => updateRequest?.category).toMatch(/^(income_business|fees)$/);
 });
 

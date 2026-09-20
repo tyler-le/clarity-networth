@@ -455,6 +455,12 @@ integrationTest('categorizing a transaction updates every matching merchant acti
     { id: 'future', merchant_name: 'Zelle Rent', name: 'Zelle Rent', date: '2026-10-15', amount: 1500, bucket: 'guilt_free', pending: false },
     { id: 'other-recipient', merchant_name: 'Zelle: Alex', name: 'Zelle: Alex', date: '2026-08-15', amount: 50, bucket: 'guilt_free', pending: false }
   ] }, key);
+  const preview = await request(app).post('/api/transactions/latest/category/preview').set('Cookie', signedTestCookie(email)).send({ category: 'housing_bills' });
+  assert.equal(preview.status, 200);
+  assert.equal(preview.body.updated, 3);
+  assert.equal(preview.body.matchedDuplicates, 2);
+  assert.equal(preview.body.category.label, 'Housing & bills');
+  assert.equal(preview.body.similarPeerPayments, null);
   const response = await request(app).patch('/api/transactions/latest/category').set('Cookie', signedTestCookie(email)).send({ category: 'housing_bills' });
   assert.equal(response.status, 200);
   assert.equal(response.body.updated, 3);
@@ -464,7 +470,7 @@ integrationTest('categorizing a transaction updates every matching merchant acti
   assert.equal(stored.transactions.find((transaction) => transaction.id === 'future').cash_flow_category, 'housing_bills');
   assert.equal(stored.transactions.find((transaction) => transaction.id === 'other-recipient').cash_flow_category, undefined);
   assert.deepEqual(stored.cash_flow_category_rules.map(({ id, merchant_key, flow, category_key }) => ({ id, merchant_key, flow, category_key })), [{
-    id: 'outflow:rent', merchant_key: 'rent', flow: 'outflow', category_key: 'housing_bills'
+    id: 'outflow:zelle:rent', merchant_key: 'zelle:rent', flow: 'outflow', category_key: 'housing_bills'
   }]);
   const changed = await request(app).patch('/api/transactions/latest/category').set('Cookie', signedTestCookie(email)).send({ category: 'fees' });
   assert.equal(changed.status, 200);

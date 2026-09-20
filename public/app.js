@@ -1255,7 +1255,7 @@ function transactionCategoryControl(data, transaction, { context = 'cashflow', a
     const contextHint = payroll || investment ? 'Tracked separately from ordinary cash-flow categories' : '';
     return `<span class="transaction-category-label${payroll || investment ? ' transaction-category-label-context' : ''}"${contextHint ? ` title="${escapeHtml(contextHint)}"` : ''}>${escapeHtml(contextLabel)}</span>`;
   }
-  return `<span class="transaction-category-control"><select data-transaction-category="${escapeHtml(transaction.id)}" data-category-context="${escapeHtml(context)}" data-cashflow-category="${escapeHtml(activityCategory)}" aria-label="Category for ${escapeHtml(transaction.name)}">${options.map((category) => `<option value="${escapeHtml(category.key)}" ${transaction.cashFlowCategory === category.key ? 'selected' : ''}>${escapeHtml(category.label)}</option>`).join('')}</select></span>`;
+  return `<span class="transaction-category-control"><select data-transaction-category="${escapeHtml(transaction.id)}" data-category-context="${escapeHtml(context)}" data-cashflow-category="${escapeHtml(activityCategory)}" data-previous-category="${escapeHtml(transaction.cashFlowCategory)}" aria-label="Category for ${escapeHtml(transaction.name)}">${options.map((category) => `<option value="${escapeHtml(category.key)}" ${transaction.cashFlowCategory === category.key ? 'selected' : ''}>${escapeHtml(category.label)}</option>`).join('')}</select></span>`;
 }
 
 function renderSpendingTransactions(data) {
@@ -3066,20 +3066,94 @@ $('#investmentDonut').addEventListener('keydown', (event) => {
   state.holdingsExpanded = true;
   renderInvestments(state.investments);
 });
+let pendingCategoryChange = null;
+
+function restoreTransactionCategory(select) {
+  if (select?.dataset.previousCategory) select.value = select.dataset.previousCategory;
+  if (select) select.disabled = false;
+}
+
+function categoryChangeLabel(categoryKey) {
+  return state.spending?.categoryOptions?.find((category) => category.key === categoryKey)?.label || 'this category';
+}
+
+function openCategoryChangeDialog(change) {
+  const { preview } = change;
+  const dialog = $('#categoryChangeDialog');
+  const duplicateCount = Number(preview.matchedDuplicates || 0);
+  const targetLabel = preview.category?.label || categoryChangeLabel(change.category);
+  $('#categoryChangeTitle').textContent = `Apply ${targetLabel} to matching activity?`;
+  $('#categoryChangeDescription').textContent = `This remembers ${targetLabel} for this merchant so future matching activity stays organized.`;
+  $('#categoryChangePreview').innerHTML = duplicateCount
+    ? `<small>THIS CHANGE WILL UPDATE</small><strong>This transaction and ${duplicateCount} matching transaction${duplicateCount === 1 ? '' : 's'}</strong>`
+    : `<small>THIS CHANGE WILL UPDATE</small><strong>Only this transaction</strong>`;
+  const similar = preview.similarPeerPayments;
+  const similarRow = $('#categoryChangeSimilar');
+  similarRow.classList.toggle('hidden', !similar);
+  $('#categoryChangeIncludeSimilar').checked = Boolean(similar);
+  if (similar) {
+    const range = similar.amountMin === similar.amountMax ? fmt.format(similar.amountMin) : `${fmt.format(similar.amountMin)}–${fmt.format(similar.amountMax)}`;
+    $('#categoryChangeSimilarTitle').textContent = `Also apply to ${similar.count} similar ${similar.rail} payment${similar.count === 1 ? '' : 's'}`;
+    $('#categoryChangeSimilarDetail').textContent = `${similar.cadence}, around ${range}. These are reviewed separately because payment apps can be used for different things.`;
+  }
+  $('#categoryChangeConfirm').textContent = duplicateCount ? `Apply to ${duplicateCount + 1} transactions` : 'Apply category';
+  pendingCategoryChange = change;
+  dialog.showModal();
+}
+
+async function commitTransactionCategory(change, { applyToMatches = true } = {}) {
+  const { select, context, activityCategory, category } = change;
+  const includeSimilarPeerPayments = applyToMatches && Boolean($('#categoryChangeIncludeSimilar')?.checked && change.preview.similarPeerPayments);
+  select.disabled = true;
+  try {
+    const result = await api(`/api/transactions/${select.dataset.transactionCategory}/category`, { method: 'PATCH', body: JSON.stringify({ category, applyToMatches, includeSimilarPeerPayments }) });
+    state.spending = await loadSpending();
+    renderSpending(state.spending);
+    if (context === 'cashflow-drawer' && $('#cashflowDialog').open) renderCashflowActivityDetail(activityCategory);
+    if (context === 'account-history' && state.accountHistory?.account?.id) await openAccountHistory(state.accountHistory.account.id, { preserveRange: true });
+    const changed = Number(result.matchedDuplicates || 0) + Number(result.similarPeerPaymentsUpdated || 0);
+    if (changed) showNotice(`Updated this and ${changed} matching transaction${changed === 1 ? '' : 's'}.`, 'success');
+    else showNotice('Transaction category updated.', 'success');
+  } catch (error) {
+    restoreTransactionCategory(select);
+    showNotice(error.message, 'error');
+  }
+}
+
 async function saveTransactionCategory(select) {
   const context = select.dataset.categoryContext;
   const activityCategory = select.dataset.cashflowCategory || 'all';
   select.disabled = true;
   try {
-    const result = await api(`/api/transactions/${select.dataset.transactionCategory}/category`, { method: 'PATCH', body: JSON.stringify({ category: select.value }) });
-    state.spending = await loadSpending();
-    renderSpending(state.spending);
-    if (context === 'cashflow-drawer' && $('#cashflowDialog').open) renderCashflowActivityDetail(activityCategory);
-    if (context === 'account-history' && state.accountHistory?.account?.id) await openAccountHistory(state.accountHistory.account.id, { preserveRange: true });
-    if (result.matchedDuplicates) showNotice(`Updated this and ${result.matchedDuplicates} matching transaction${result.matchedDuplicates === 1 ? '' : 's'}.`, 'success');
-    else showNotice('Transaction category updated.', 'success');
-  } catch (error) { showNotice(error.message, 'error'); select.disabled = false; }
+    const category = select.value;
+    const preview = await api(`/api/transactions/${select.dataset.transactionCategory}/category/preview`, { method: 'POST', body: JSON.stringify({ category }) });
+    const change = { select, context, activityCategory, category, preview };
+    if (preview.matchedDuplicates || preview.similarPeerPayments) openCategoryChangeDialog(change);
+    else await commitTransactionCategory(change);
+  } catch (error) { restoreTransactionCategory(select); showNotice(error.message, 'error'); }
 }
+
+$('#categoryChangeClose').addEventListener('click', () => {
+  restoreTransactionCategory(pendingCategoryChange?.select);
+  pendingCategoryChange = null;
+  $('#categoryChangeDialog').close();
+});
+$('#categoryChangeOne').addEventListener('click', async () => {
+  const change = pendingCategoryChange;
+  pendingCategoryChange = null;
+  $('#categoryChangeDialog').close();
+  if (change) await commitTransactionCategory(change, { applyToMatches: false });
+});
+$('#categoryChangeConfirm').addEventListener('click', async () => {
+  const change = pendingCategoryChange;
+  pendingCategoryChange = null;
+  $('#categoryChangeDialog').close();
+  if (change) await commitTransactionCategory(change);
+});
+$('#categoryChangeDialog').addEventListener('cancel', () => {
+  restoreTransactionCategory(pendingCategoryChange?.select);
+  pendingCategoryChange = null;
+});
 
 $('#spendingTransactions').addEventListener('change', (event) => {
   const select = event.target.closest('[data-transaction-category]');
