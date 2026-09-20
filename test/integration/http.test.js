@@ -81,6 +81,8 @@ integrationTest('serves public legal, support, and dependency-aware health pages
     const response = await request(app).get(pathname);
     assert.equal(response.status, 200);
     assert.match(response.text, /Clarity/);
+    assert.match(response.text, /app-icon\.svg/);
+    assert.match(response.text, /legal-brand/);
   }
   const privacy = await request(app).get('/privacy');
   assert.match(privacy.text, /aggregate daily count/i);
