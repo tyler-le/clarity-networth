@@ -1196,7 +1196,8 @@ function renderSpending(data) {
   $('#cashflowHeadline').textContent = remaining >= 0 ? 'More money in than spent' : 'More spent than money in';
   $('#cashflowHeadline').className = `cashflow-headline ${remaining >= 0 ? 'positive' : 'negative'}`;
   const preTaxNote = $('#cashflowPreTax');
-  preTaxNote.innerHTML = preTaxRetirement ? `<span class="cashflow-payroll-mark" aria-hidden="true">↗</span><div><span>PAYROLL CONTRIBUTIONS</span><strong>${fmt.format(preTaxRetirement)}</strong><p>401(k), HSA, and similar contributions saved before reaching your bank account.</p></div><i class="cashflow-payroll-chevron" aria-hidden="true">›</i>` : '';
+  const payrollDetailsAvailable = plusFeatureAvailable('canUseCashFlowDetails');
+  preTaxNote.innerHTML = preTaxRetirement ? `<span class="cashflow-payroll-mark" aria-hidden="true">↗</span><div><span>PAYROLL CONTRIBUTIONS</span><strong>${fmt.format(preTaxRetirement)}</strong><p>401(k), HSA, and similar contributions saved before reaching your bank account.</p>${payrollDetailsAvailable ? '' : '<small class="cashflow-payroll-lock">Contribution details with Plus</small>'}</div><i class="cashflow-payroll-chevron" aria-hidden="true">›</i>` : '';
   preTaxNote.setAttribute('aria-label', `View ${fmt.format(preTaxRetirement)} in payroll contributions`);
   preTaxNote.classList.toggle('hidden', !preTaxRetirement);
   const completedThrough = data.completedMonths ? new Date(`${data.endDate}T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '';

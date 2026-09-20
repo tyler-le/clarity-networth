@@ -595,6 +595,21 @@ html[data-theme="dark"] .profile-settings-panel { border-color: var(--line); bac
 .cashflow-detail-actions .cashflow-more, .cashflow-detail-actions .cashflow-transactions-action { min-height: 42px; border: 0; border-radius: 0; background: transparent; transform: none; }
 .cashflow-detail-actions .cashflow-more + .cashflow-transactions-action { border-top: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line)); }
 .cashflow-detail-actions .cashflow-more:hover, .cashflow-detail-actions .cashflow-transactions-action:hover { background: color-mix(in srgb, var(--accent-soft) 64%, var(--card)); transform: none; }
+
+/* Keep the detail rail cohesive: one surface, two navigation rows, and one
+   supporting payroll insight rather than three competing cards. */
+.cashflow-detail-stack { margin-top: 13px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line)); border-radius: 16px; background: linear-gradient(145deg, color-mix(in srgb, var(--accent-soft) 34%, var(--card)), var(--card) 68%); }
+.cashflow-detail-stack .cashflow-sankey { margin-top: 0; }
+.cashflow-detail-stack .cashflow-payroll { margin-top: 0; border: 0; border-top: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line)); border-radius: 0; background: transparent; }
+.cashflow-detail-stack .cashflow-payroll:hover { background: color-mix(in srgb, var(--accent-soft) 55%, var(--card)); transform: none; }
+.cashflow-plus-preview { position: relative; isolation: isolate; overflow: hidden; padding: 28px 12px 24px; background: radial-gradient(circle at 92% 4%, color-mix(in srgb, var(--accent-soft) 86%, transparent), transparent 34%), linear-gradient(145deg, color-mix(in srgb, var(--accent-soft) 40%, var(--card)), var(--card) 58%); }
+.cashflow-plus-preview::before { position: absolute; z-index: -1; top: -90px; right: -90px; width: 260px; height: 260px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 8%, transparent); content: ''; filter: blur(2px); }
+.cashflow-plus-preview .card-label { letter-spacing: .12em; }
+.cashflow-plus-preview h2 { font-size: clamp(26px, 3vw, 34px); }
+.cashflow-plus-preview p { max-width: 520px; font-size: 14px; }
+.cashflow-plus-preview-rows { position: relative; box-shadow: 0 12px 26px rgba(34, 75, 48, .07); }
+.cashflow-plus-preview .primary { min-height: 46px; padding-inline: 20px; border-radius: 12px; box-shadow: 0 9px 20px rgba(29, 112, 72, .16); font-weight: 760; }
+.cashflow-payroll-lock { grid-column: 1 / -1; justify-self: start; margin-top: 5px; padding: 3px 7px; border-radius: 999px; color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 72%, var(--card)); font-size: 10px; font-weight: 720; }
 .cashflow-target.is-selected .cashflow-label { fill: var(--accent); }
 .cashflow-target.is-selected .cashflow-value { fill: var(--ink); }
 .cashflow-action-mark { fill: var(--muted); font-size: 16px; font-weight: 500; }
