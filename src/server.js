@@ -42,7 +42,7 @@ const reconnectSessions = new Map();
 // never prevent a person from using their financial data.
 function trackLaunchEvent(user, eventName) {
   return recordLaunchEvent(user?.storageKey || null, eventName).catch((error) => {
-    console.warn('Launch telemetry unavailable:', error.message);
+    logOperationalError('Launch telemetry unavailable', error);
   });
 }
 
@@ -115,7 +115,7 @@ function plaidCostLimiter({ scope, userLimit, ipLimit, windowMs }) {
     } catch (error) {
       // Fail closed: a missing cost-control store must never permit billable
       // provider calls without a limit.
-      console.error('Provider rate-limit check unavailable:', error.message);
+      logOperationalError('Provider rate-limit check unavailable', error, 'error');
       res.status(503).json(publicErrorPayload('connection_unavailable'));
     }
   };
@@ -127,6 +127,18 @@ function plaidCostLimiter({ scope, userLimit, ipLimit, windowMs }) {
 function publicPlaidError(error, fallback) {
   const code = plaidErrorCode(error?.plaid?.error_code);
   return publicErrorPayload(code, code === 'connection_unavailable' && fallback ? { message: fallback } : {});
+}
+
+// Provider and database errors can include institution-specific context. Keep
+// operational logs useful without retaining account names, request details, or
+// opaque provider messages that may contain personal financial information.
+function safeErrorCode(error) {
+  const code = String(error?.plaid?.error_code || error?.code || error?.status || '').trim();
+  return /^[A-Z0-9_-]{1,80}$/i.test(code) ? ` [${code}]` : '';
+}
+
+function logOperationalError(context, error, level = 'warn') {
+  console[level](`${context}${safeErrorCode(error)}`);
 }
 
 app.set('trust proxy', 1);
@@ -188,7 +200,10 @@ app.use('/api', (req, res, next) => {
 });
 function isDevelopmentRequest(req) {
   const host = String(req.hostname || req.get('host') || '').split(':')[0].toLowerCase();
-  return host === 'localhost' || host === '127.0.0.1' || host.includes('staging');
+  // The host header is useful for the staging presentation, but it is not a
+  // security boundary. Never enable development-only behavior in production
+  // merely because an attacker supplied a staging-looking Host header.
+  return !isProduction && (host === 'localhost' || host === '127.0.0.1' || host.includes('staging'));
 }
 
 // An installed PWA uses its manifest/icon rather than the in-app environment
@@ -280,7 +295,7 @@ async function loadStoreByKey(key) {
   const mirror = normalizeStore(readStore(key));
   let primary = null;
   if (databaseEnabled()) {
-    try { primary = await readDatabaseStore(key); } catch (error) { console.error('Database store read failed:', error.message); throw new Error('Your secure financial store is temporarily unavailable.'); }
+    try { primary = await readDatabaseStore(key); } catch (error) { logOperationalError('Database store read failed', error, 'error'); throw new Error('Your secure financial store is temporarily unavailable.'); }
   }
   const primaryStore = normalizeStore(primary || mirror);
   // A valid but empty database row must never outrank the encrypted volume
@@ -519,29 +534,34 @@ function readCookie(req, name) {
   return entry ? decodeURIComponent(entry.slice(name.length + 1)) : null;
 }
 
-function signSession(payload) {
-  const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const signature = crypto.createHmac('sha256', sessionSecret).update(encoded).digest('base64url');
-  return `${encoded}.${signature}`;
+function encodeSession(payload) {
+  // An HMAC-only cookie kept the email address readable to anyone holding the
+  // cookie. AES-GCM provides confidentiality and integrity while preserving
+  // the stateless, bounded session design.
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', sessionSecret, iv);
+  const encrypted = Buffer.concat([cipher.update(JSON.stringify(payload), 'utf8'), cipher.final()]);
+  return `v2.${iv.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}.${encrypted.toString('base64url')}`;
 }
 
 function verifySession(req) {
   const value = readCookie(req, 'clarity_session');
   if (!value) return null;
-  const [encoded, signature] = value.split('.');
-  if (!encoded || !signature) return null;
-  const expected = crypto.createHmac('sha256', sessionSecret).update(encoded).digest('base64url');
-  if (signature.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
   try {
-    const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
-    if (!payload.email || !payload.exp || payload.exp < Date.now()) return null;
-    const email = String(payload.email).toLowerCase();
+    const [version, iv, tag, encrypted] = value.split('.');
+    if (version !== 'v2' || !iv || !tag || !encrypted) return null;
+    const decipher = crypto.createDecipheriv('aes-256-gcm', sessionSecret, Buffer.from(iv, 'base64url'));
+    decipher.setAuthTag(Buffer.from(tag, 'base64url'));
+    const payload = JSON.parse(Buffer.concat([decipher.update(Buffer.from(encrypted, 'base64url')), decipher.final()]).toString('utf8'));
+    if (typeof payload.email !== 'string' || payload.email.length > 320 || !Number.isFinite(payload.exp) || payload.exp < Date.now()) return null;
+    const email = payload.email.trim().toLowerCase();
+    if (!email) return null;
     return { email, name: String(payload.name || ''), storageKey: userStorageKey(email) };
   } catch { return null; }
 }
 
 function setSession(res, user) {
-  const value = signSession({ email: user.email, name: user.name, exp: Date.now() + 7 * 24 * 60 * 60 * 1000 });
+  const value = encodeSession({ email: user.email, name: user.name, exp: Date.now() + 7 * 24 * 60 * 60 * 1000 });
   res.cookie('clarity_session', value, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 60 * 60 * 1000, path: '/' });
 }
 
@@ -646,7 +666,7 @@ async function refreshAccountsForItem(store, item) {
           cost_basis: holding.cost_basis == null ? null : Number(holding.cost_basis), updated_at: new Date().toISOString(), demo: false
         });
       }
-    } catch (e) { console.warn('Investments not available:', e.message); }
+    } catch (e) { logOperationalError('Investments not available', e); }
   }
   if (types.has('credit') || types.has('loan')) {
     try {
@@ -671,7 +691,7 @@ async function refreshAccountsForItem(store, item) {
         const minimum = Number(record.minimum_payment_amount);
         if (Number.isFinite(minimum) && minimum >= 0) account.minimum_payment = minimum;
       }
-    } catch (e) { console.warn('Liabilities not available:', e.message); }
+    } catch (e) { logOperationalError('Liabilities not available', e); }
   }
 }
 
@@ -705,7 +725,7 @@ async function syncItem(store, item) {
     item.last_verified_update_at = new Date().toISOString();
     // Transaction availability can lag a connection or institution update.
     // Keep a successful balance refresh instead of failing the entire item.
-    try { await syncTransactionsForItem(store, item); } catch (error) { console.warn('Transactions sync failed:', error.message); }
+    try { await syncTransactionsForItem(store, item); } catch (error) { logOperationalError('Transactions sync failed', error); }
     // Investments was historically consented in Link, then added on demand. Ask
     // Plaid to prepare the initial extraction asynchronously once, rather than
     // blocking a newly connected account for up to two minutes or silently
@@ -716,10 +736,10 @@ async function syncItem(store, item) {
       await syncRetirementContributionsForItem(store, item, {
         asyncUpdate: hasInvestmentAccount && !item.investment_history_requested_at
       });
-    } catch (error) { console.warn('Investment contribution sync unavailable:', error.message); }
+    } catch (error) { logOperationalError('Investment contribution sync unavailable', error); }
     if (hasInvestmentAccount) {
       try { await hydrateInvestmentPriceHistory(store, item); }
-      catch (error) { console.warn('Investment price history unavailable:', error.message); }
+      catch (error) { logOperationalError('Investment price history unavailable', error); }
     }
     item.last_synced_at = new Date().toISOString();
     delete item.last_sync_error_at;
@@ -739,7 +759,7 @@ async function syncStoreItems(store) {
       await syncItem(store, item);
       results.push({ item: item.institution_name, ok: true });
     } catch (error) {
-      console.warn(`Account refresh failed for ${item.institution_name}:`, error.message);
+      logOperationalError('Account refresh failed for a connected institution', error);
       results.push({ item: item.institution_name, ok: false });
     }
   }
@@ -753,7 +773,7 @@ async function scheduledDailySync() {
   let storageKeys = listUserStorageKeys();
   if (databaseEnabled()) {
     try { storageKeys = [...new Set([...storageKeys, ...(await listDatabaseStoreKeys())])]; }
-    catch (error) { console.error('Daily sync could not enumerate secure stores:', error.message); return; }
+    catch (error) { logOperationalError('Daily sync could not enumerate secure stores', error, 'error'); return; }
   }
   for (const storageKey of storageKeys) {
     await queueUserSync(storageKey, async () => {
@@ -766,7 +786,7 @@ async function scheduledDailySync() {
       } catch (error) {
         // One person's unavailable institution or store must never block the
         // rest of the daily queue. Existing encrypted data stays intact.
-        console.error('Daily sync failed for a financial store:', error.message);
+        logOperationalError('Daily sync failed for a financial store', error, 'error');
         trackLaunchEvent({ storageKey }, 'sync_failed');
       }
     });
@@ -821,7 +841,7 @@ async function requestPendingInvestmentHistory() {
         } catch (error) {
           // A provider issue must not block startup or prevent other people
           // from receiving the request. The normal daily sync will retry it.
-          console.warn('Investment history request unavailable:', error.message);
+          logOperationalError('Investment history request unavailable', error);
         }
       }
       if (changed) await saveStoreByKey(storageKey, store);
@@ -830,7 +850,7 @@ async function requestPendingInvestmentHistory() {
 }
 
 function scheduleInvestmentHistoryRetries() {
-  const retry = () => requestPendingInvestmentHistory().catch((error) => console.error('Investment history retry failed:', error.message));
+  const retry = () => requestPendingInvestmentHistory().catch((error) => logOperationalError('Investment history retry failed', error, 'error'));
   const interval = setInterval(retry, INVESTMENT_HISTORY_RETRY_MS);
   interval.unref?.();
 }
@@ -848,8 +868,8 @@ function millisecondsUntilDailySync() {
 function scheduleDailySync() {
   const delay = Math.min(millisecondsUntilDailySync(), DAILY_SYNC_INTERVAL_MS);
   const first = setTimeout(() => {
-    scheduledDailySync().catch((error) => console.error('Daily sync scheduler failed:', error.message));
-    const interval = setInterval(() => scheduledDailySync().catch((error) => console.error('Daily sync scheduler failed:', error.message)), DAILY_SYNC_INTERVAL_MS);
+    scheduledDailySync().catch((error) => logOperationalError('Daily sync scheduler failed', error, 'error'));
+    const interval = setInterval(() => scheduledDailySync().catch((error) => logOperationalError('Daily sync scheduler failed', error, 'error')), DAILY_SYNC_INTERVAL_MS);
     interval.unref?.();
   }, delay);
   first.unref?.();
@@ -1120,7 +1140,7 @@ async function hydrateInstitutionBrand(item) {
     if (institution.logo) item.institution_logo = `data:image/png;base64,${institution.logo}`;
     if (institution.primary_color) item.institution_color = institution.primary_color;
   } catch (error) {
-    console.warn('Institution brand unavailable:', error.message);
+    logOperationalError('Institution brand unavailable', error);
   }
 }
 
@@ -1245,7 +1265,7 @@ app.use('/api', async (req, res, next) => {
     if (store.settings?.demo_mode) return res.status(409).json({ error: 'Exit demo to change your personal financial data.' });
     next();
   } catch (error) {
-    console.error('Protected API store check failed:', error.message);
+    logOperationalError('Protected API store check failed', error, 'error');
     res.status(503).json(publicErrorPayload('financial_data_unavailable'));
   }
 });
@@ -1444,7 +1464,7 @@ app.delete('/api/account', async (req, res) => {
   const store = await loadStore(req.user);
   for (const item of store.items.filter((item) => !item.demo && item.access_token_enc)) {
     try { await plaidPost('/item/remove', { access_token: decrypt(item.access_token_enc) }); }
-    catch (error) { console.warn('Plaid connection revocation skipped:', error.message); }
+    catch (error) { logOperationalError('Plaid connection revocation skipped', error); }
   }
   await deleteDatabaseStore(req.user.storageKey);
   deleteStore(req.user.storageKey);
@@ -1634,7 +1654,7 @@ app.delete('/api/items/:id', async (req, res) => {
   if (!item.development_mock) {
     try { await plaidPost('/item/remove', { access_token: decrypt(item.access_token_enc) }); }
     catch (error) {
-      console.warn('Plaid connection revocation failed:', error.message);
+      logOperationalError('Plaid connection revocation failed', error);
       return res.status(503).json({ error: 'We could not unlink this institution yet. Please try again shortly.' });
     }
   }
@@ -1663,7 +1683,7 @@ app.post('/api/items/:id/create_reconnect_token', plaidCostLimiter({ scope: 'pla
     reconnectSessions.set(reconnectSession, { userKey: req.user.storageKey, itemId: item.id, expiresAt: Date.now() + 30 * 60_000 });
     res.json({ link_token: data.link_token, reconnect_session: reconnectSession });
   } catch (error) {
-    console.warn('Plaid reconnect token failed:', error.message);
+    logOperationalError('Plaid reconnect token failed', error);
     res.status(error.status || 500).json(publicPlaidError(error));
   }
 });
@@ -1685,7 +1705,7 @@ app.post('/api/items/:id/reconnected', plaidCostLimiter({ scope: 'plaid_reconnec
     res.json({ ok: true });
     trackLaunchEvent(req.user, 'sync_succeeded');
   } catch (error) {
-    console.warn('Reconnect sync failed:', error.message);
+    logOperationalError('Reconnect sync failed', error);
     trackLaunchEvent(req.user, 'sync_failed');
     res.status(503).json({ error: 'Your institution was reconnected, but its latest data is still catching up. We will retry automatically.' });
   }
@@ -1711,7 +1731,7 @@ app.post('/api/plaid/create_link_token', plaidCostLimiter({ scope: 'plaid_link_t
     res.json({ link_token: data.link_token });
     trackLaunchEvent(req.user, 'account_link_started');
   } catch (error) {
-    console.warn('Plaid link token failed:', error.message);
+    logOperationalError('Plaid link token failed', error);
     res.status(error.status || 500).json(publicPlaidError(error));
   }
 });
@@ -1769,7 +1789,7 @@ app.post('/api/plaid/exchange_public_token', plaidCostLimiter({ scope: 'plaid_it
     }
     trackLaunchEvent(req.user, 'account_link_completed');
   } catch (error) {
-    console.warn('Plaid item exchange failed:', error.message);
+    logOperationalError('Plaid item exchange failed', error);
     res.status(error.status || 500).json(publicPlaidError(error, 'We could not finish connecting this institution. Please try again shortly.'));
   }
 });
@@ -1793,7 +1813,7 @@ async function verifyPlaidWebhook(req) {
       && payload.request_body_sha256.length === expectedHash.length
       && crypto.timingSafeEqual(Buffer.from(payload.request_body_sha256), Buffer.from(expectedHash));
   } catch (error) {
-    console.warn('Rejected Plaid webhook:', error.message);
+    logOperationalError('Rejected Plaid webhook', error);
     return false;
   }
 }
@@ -1820,7 +1840,7 @@ app.post('/api/plaid/webhook', webhookLimiter, async (req, res) => {
       });
       if (found) return;
     }
-  } catch (error) { console.warn('Webhook sync failed:', error.message); }
+  } catch (error) { logOperationalError('Webhook sync failed', error); }
 });
 
 app.post('/api/reset-demo', async (_req, res) => {
@@ -1854,7 +1874,7 @@ app.use((_req, res) => res.sendFile(path.join(projectRoot, 'public', 'index.html
 // give customers one safe, recoverable API response rather than an Express
 // stack trace, provider message, or a blank application shell.
 app.use((error, req, res, next) => {
-  console.error('Unhandled application request failed:', error?.message || error);
+  logOperationalError('Unhandled application request failed', error, 'error');
   if (res.headersSent) return next(error);
   if (req.path.startsWith('/api/')) return res.status(503).json(publicErrorPayload('financial_data_unavailable'));
   res.status(503).type('html').send('<!doctype html><title>Clarity is temporarily unavailable</title><p>Clarity is temporarily unavailable. Please try again shortly.</p>');
@@ -1869,13 +1889,13 @@ async function startServer() {
     console.log(`Plaid: ${plaidConfigured() ? `configured (${process.env.PLAID_ENV || 'sandbox'})` : 'not configured — demo mode available'}`);
   });
   scheduleDailySync();
-  requestPendingInvestmentHistory().catch((error) => console.error('Investment history request scheduler failed:', error.message));
+  requestPendingInvestmentHistory().catch((error) => logOperationalError('Investment history request scheduler failed', error, 'error'));
   scheduleInvestmentHistoryRetries();
 }
 
 if (process.env.CLARITY_LISTEN !== 'false') {
   startServer().catch((error) => {
-    console.error('Database migration failed; refusing to start:', error.message);
+    logOperationalError('Database migration failed; refusing to start', error, 'error');
     process.exitCode = 1;
   });
 }

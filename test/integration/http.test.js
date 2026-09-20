@@ -45,10 +45,14 @@ const { decryptPayload } = await import('../../src/lib/secure-payload.js');
 const integrationTest = process.env.CODEX_SANDBOX_NETWORK_DISABLED ? test.skip : test;
 
 function signedTestCookie(email = 'rate-limit@example.com') {
-  const payload = Buffer.from(JSON.stringify({ email, name: 'Rate Limit', exp: Date.now() + 60_000 })).toString('base64url');
-  const secret = crypto.createHash('sha256').update(process.env.SESSION_SECRET || process.env.ENCRYPTION_KEY).digest();
-  const signature = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
-  return `clarity_session=${payload}.${signature}`;
+  const sessionKey = crypto.createHash('sha256').update(process.env.SESSION_SECRET || process.env.ENCRYPTION_KEY).digest();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', sessionKey, iv);
+  const encrypted = Buffer.concat([
+    cipher.update(JSON.stringify({ email, name: 'Rate Limit', exp: Date.now() + 60_000 }), 'utf8'),
+    cipher.final()
+  ]);
+  return `clarity_session=v2.${iv.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}.${encrypted.toString('base64url')}`;
 }
 
 test.after(() => {
@@ -74,6 +78,22 @@ integrationTest('serves the app shell with defensive browser headers', async () 
   assert.equal(errorContract.status, 200);
   assert.match(errorContract.text, /rate_limited/);
   assert.match(errorContract.headers['cache-control'], /no-store/);
+});
+
+integrationTest('uses an encrypted, tamper-evident session cookie for financial API access', async () => {
+  const email = 'private-member@example.test';
+  const cookie = signedTestCookie(email);
+  assert.doesNotMatch(cookie, /private-member|cHJpdmF0ZS1tZW1iZXI/i, 'the email must not be readable from the cookie');
+  const authenticated = await request(app).get('/api/auth/me').set('Cookie', cookie);
+  assert.equal(authenticated.status, 200);
+  assert.equal(authenticated.body.user.email, email);
+
+  const [, value] = cookie.split('=');
+  const parts = value.split('.');
+  parts[3] = `${parts[3].startsWith('A') ? 'B' : 'A'}${parts[3].slice(1)}`;
+  const tampered = parts.join('.');
+  const rejected = await request(app).get('/api/auth/me').set('Cookie', `clarity_session=${tampered}`);
+  assert.equal(rejected.status, 401);
 });
 
 integrationTest('serves public legal, support, and dependency-aware health pages', async () => {

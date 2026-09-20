@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { combinedHistory, mergeReportedHistory, priceAt, reconstructCashAccount, reconstructInvestmentAccount, reconstructedNetWorth } from '../src/lib/history.js';
 import { accountBalanceHistory, investmentDetailHistory, refreshReconstructedInvestmentSnapshots } from '../src/lib/finance.js';
-import { investmentLedgerPages } from '../src/lib/plaid.js';
+import { investmentLedgerPages, plaidPost } from '../src/lib/plaid.js';
 import { loadHistoricalPrices } from '../src/lib/market-data.js';
 
 const today = '2026-09-07';
@@ -267,6 +267,25 @@ test('investment pagination collects all pages and refuses duplicates or a chang
   assert.equal(calls[1].async_update, false);
   await assert.rejects(investmentLedgerPages({}, async () => ({ total_investment_transactions: 2, investment_transactions: [{ investment_transaction_id: 'same' }] })), /overlapped/);
   await assert.rejects(investmentLedgerPages({}, async () => ({ total_investment_transactions: 2, investment_transactions: [] })), /incomplete/);
+});
+
+test('Plaid requests have a bounded abort signal', async (t) => {
+  const oldClientId = process.env.PLAID_CLIENT_ID;
+  const oldSecret = process.env.PLAID_SECRET;
+  process.env.PLAID_CLIENT_ID = 'test-client';
+  process.env.PLAID_SECRET = 'test-secret';
+  t.after(() => {
+    if (oldClientId === undefined) delete process.env.PLAID_CLIENT_ID; else process.env.PLAID_CLIENT_ID = oldClientId;
+    if (oldSecret === undefined) delete process.env.PLAID_SECRET; else process.env.PLAID_SECRET = oldSecret;
+  });
+  let signal;
+  t.mock.method(globalThis, 'fetch', async (_url, init) => {
+    signal = init.signal;
+    return { ok: true, status: 200, json: async () => ({ ok: true }) };
+  });
+  await plaidPost('/accounts/get', { access_token: 'not-a-real-token' });
+  assert.ok(signal instanceof AbortSignal);
+  assert.equal(signal.aborted, false);
 });
 
 test('market prices explicitly request unadjusted closes for contemporaneous quantities', async (t) => {

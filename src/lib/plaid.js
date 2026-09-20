@@ -2,6 +2,7 @@ const baseUrls = {
   sandbox: 'https://sandbox.plaid.com',
   production: 'https://production.plaid.com'
 };
+const PLAID_REQUEST_TIMEOUT_MS = 15_000;
 
 function baseUrl() {
   return baseUrls[process.env.PLAID_ENV || 'sandbox'] || baseUrls.sandbox;
@@ -49,6 +50,9 @@ export async function plaidPost(path, body = {}) {
     const response = await fetch(`${baseUrl()}${path}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
+      // A stuck dependency must not tie up a request or sync worker forever.
+      // The caller already maps failures to a safe retry state.
+      signal: AbortSignal.timeout(PLAID_REQUEST_TIMEOUT_MS),
       body: JSON.stringify({
         client_id: process.env.PLAID_CLIENT_ID,
         secret: process.env.PLAID_SECRET,
