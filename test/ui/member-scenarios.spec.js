@@ -63,7 +63,6 @@ async function openSignedInScenario(page, transform = () => {}) {
     route.fulfill({ json: { ...preview.investments, ...(requestedRange ? { range: requestedRange } : {}) } });
   });
   await page.route('**/api/retirement', (route) => route.fulfill({ json: preview.retirement }));
-  await page.route('**/api/launch-event', (route) => route.fulfill({ status: 204 }));
   await page.route('**/api/settings/debt-strategy', (route) => route.fulfill({ json: preview.dashboard.debtPayoff || {} }));
   await page.goto('/');
   await expect(page.locator('#appShell')).toBeVisible();

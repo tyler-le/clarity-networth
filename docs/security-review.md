@@ -35,7 +35,6 @@ Four narrow fixes were applied in this review.
 | CSRF and browser isolation | `src/server.js` API middleware | State-changing authenticated API requests with an Origin header must match the current origin. No CORS policy grants cross-origin credentialed API access; JSON API calls and SameSite cookies add defense in depth. |
 | Browser protections | `src/server.js` headers; `public/sw.js` | CSP, `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `nosniff`, restrictive referrer and permissions policies, HSTS in production, and no service-worker caching of financial data are present. |
 | Webhooks and dependency limits | `src/server.js` `verifyPlaidWebhook`, `plaidCostLimiter`; `db/migrations/003_rate_limit_counters.sql` | Webhooks require ES256 verification and a raw-body hash match. Billable Plaid actions are bounded per opaque user and IP-derived key; database failure fails closed for those calls. |
-| Privacy telemetry | `src/lib/database.js` `recordLaunchEvent` / `recordDependencyEvent` | Event names are allowlisted and do not accept balances, account names, transaction data, paths, raw IPs, or request bodies. Retention is bounded. |
 
 ## Remaining recommendations
 

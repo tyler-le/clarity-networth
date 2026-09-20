@@ -182,24 +182,12 @@ integrationTest('protects personal financial endpoints without a session', async
     ['delete', '/api/manual-holdings/example'],
     ['get', '/api/retirement'],
     ['get', '/api/data-export'],
-    ['post', '/api/launch-event'],
     ['delete', '/api/account'],
   ]) {
     const response = await request(app)[method](pathname).send({});
     assert.equal(response.status, 401, pathname);
     assert.equal(response.body.error, 'Sign in required.');
   }
-});
-
-integrationTest('accepts only minimal allowlisted launch telemetry', async () => {
-  const cookie = signedTestCookie('launch-event@example.com');
-  const valid = await request(app).post('/api/launch-event').set('Cookie', cookie).send({ event: 'retirement_outlook_viewed' });
-  assert.equal(valid.status, 204);
-  const accountCard = await request(app).post('/api/launch-event').set('Cookie', cookie).send({ event: 'account_detail_opened' });
-  assert.equal(accountCard.status, 204);
-  const invalid = await request(app).post('/api/launch-event').set('Cookie', cookie).send({ event: 'screen_recording_or_balance' });
-  assert.equal(invalid.status, 400);
-  assert.equal(invalid.body.error, 'Invalid launch event.');
 });
 
 integrationTest('serves an authenticated dashboard for an existing member session', async () => {

@@ -136,64 +136,6 @@ function presentConnectionError(error) {
   showNotice(error?.message || customerError('connection_unavailable').message, 'error');
 }
 
-// Private-beta success telemetry is intentionally tiny and invisible: no
-// amounts, merchants, account names, routes, or click replay leave the app.
-// A failed telemetry request must never interrupt financial data or UI flow.
-function trackProductEvent(event) {
-  if (!state.dashboard || state.demoPreview || state.dashboard.demoMode) return;
-  fetch('/api/launch-event', {
-    method: 'POST', credentials: 'same-origin',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ event })
-  }).catch(() => {});
-}
-
-// A card view is deliberately stricter than a scroll: the primary content has
-// to be at least half visible for 750ms. This lets product reporting describe
-// whether a non-interactive card was actually seen, without collecting scroll
-// position, mouse data, or any financial content.
-const coreCardViewEvents = {
-  netWorthCard: 'net_worth_card_viewed',
-  goalInsight: 'goal_card_viewed',
-  cashFlowOverviewCard: 'cash_flow_overview_viewed',
-  monthlyCashFlowCard: 'monthly_cash_flow_viewed',
-  investmentHoldingsPanel: 'investment_holdings_viewed',
-  investmentAllocationCard: 'investment_allocation_viewed',
-  retirementOutlookCard: 'retirement_outlook_viewed',
-  retirementSpendingTargetsCard: 'retirement_spending_targets_viewed',
-  debtPayoffCard: 'debt_payoff_viewed'
-};
-let coreCardObserver;
-const coreCardTimers = new Map();
-const coreCardTracked = new Set();
-
-function observeCoreCardViews() {
-  if (state.demoPreview || state.dashboard?.demoMode || coreCardObserver || !('IntersectionObserver' in window)) return;
-  coreCardObserver = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => {
-      const event = coreCardViewEvents[entry.target.id];
-      if (!event || coreCardTracked.has(event)) return;
-      if (!entry.isIntersecting || entry.intersectionRatio < 0.5) {
-        clearTimeout(coreCardTimers.get(event));
-        coreCardTimers.delete(event);
-        return;
-      }
-      if (coreCardTimers.has(event)) return;
-      const timer = window.setTimeout(() => {
-        coreCardTimers.delete(event);
-        if (coreCardTracked.has(event)) return;
-        coreCardTracked.add(event);
-        trackProductEvent(event);
-      }, 750);
-      coreCardTimers.set(event, timer);
-    });
-  }, { threshold: [0.5] });
-  Object.keys(coreCardViewEvents).forEach((id) => {
-    const card = document.getElementById(id);
-    if (card) coreCardObserver.observe(card);
-  });
-}
-
 function institutionMark(account) {
   if (account.institution_logo) return `<img class="institution-logo" src="${escapeHtml(account.institution_logo)}" alt="" />`;
   return `<span class="institution-fallback" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 9.5 12 4l9 5.5M5.5 11h13M6.5 11v7M11 11v7M15.5 11v7M4 20h16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
@@ -262,11 +204,6 @@ function setView(view) {
   $('#connectButton').classList.toggle('hidden', view === 'profile' || Boolean(state.onboardingPreview));
   $('#profileBack').classList.toggle('hidden', view !== 'profile');
   $('#profileButton').classList.toggle('hidden', view === 'profile');
-  const launchEvent = {
-    spending: 'cash_flow_viewed', investments: 'investments_viewed',
-    retirement: 'retirement_viewed', accounts: 'accounts_viewed'
-  }[view];
-  if (launchEvent) trackProductEvent(launchEvent);
   if (view === 'overview' && state.dashboard) {
     requestAnimationFrame(() => {
       renderNetWorthChartWhenVisible();
@@ -580,7 +517,6 @@ function renderLineChart(snapshots, summary, rangeStart = null) {
 
   el.addEventListener('pointerdown', (event) => {
     active = true;
-    trackProductEvent('net_worth_history_explored');
     el.setPointerCapture?.(event.pointerId);
     showPoint(event);
   });
@@ -2217,7 +2153,6 @@ async function loadAll() {
     renderSpending(state.spending);
     renderInvestments(state.investmentPreview || state.investments);
     renderRetirement(state.retirement);
-    observeCoreCardViews();
     $('#monthLabel').textContent = 'Account overview';
   } finally {
     clearTimeout(skeletonTimer);
@@ -2516,7 +2451,6 @@ function openRetirementMilestone(name) {
     }
   }[name];
   if (!details) return;
-  trackProductEvent('retirement_milestone_opened');
   const milestone = (plan.ladder || []).find((step) => step.key === name);
   const months = Number(milestone?.estimatedMonths);
   let timing = 'Set a saving pace';
@@ -2560,7 +2494,6 @@ $('#accountGrid').addEventListener('click', (event) => {
   }
   const groupButton = event.target.closest('[data-account-group]');
   if (groupButton) {
-    trackProductEvent('account_group_opened');
     const group = groupButton.dataset.accountGroup;
     if (state.expandedAccountGroups.has(group)) state.expandedAccountGroups.delete(group); else state.expandedAccountGroups.add(group);
     renderAccounts(state.dashboard?.accounts || []);
@@ -2589,13 +2522,11 @@ $('#accountGrid').addEventListener('click', (event) => {
   }
   const investment = event.target.closest('[data-account-investment-history]');
   if (investment) {
-    trackProductEvent('investment_account_opened');
     openHoldingHistory({ accountId: investment.dataset.accountInvestmentHistory });
     return;
   }
   const accountHistory = event.target.closest('[data-account-history]');
   if (accountHistory) {
-    trackProductEvent('account_detail_opened');
     openAccountHistory(accountHistory.dataset.accountHistory);
     return;
   }
@@ -2612,14 +2543,12 @@ $('#accountGrid').addEventListener('click', (event) => {
 });
 $('#debtPayoffCard').addEventListener('click', async (event) => {
   if (event.target.closest('[data-toggle-debt-plan]')) {
-    trackProductEvent('debt_plan_opened');
     state.debtPlanExpanded = !state.debtPlanExpanded;
     renderDebtPayoff(state.dashboard?.debtPayoff);
     return;
   }
   const strategyButton = event.target.closest('[data-debt-strategy]');
   if (strategyButton) {
-    trackProductEvent('debt_strategy_selected');
     const strategy = strategyButton.dataset.debtStrategy;
     try {
       if (isDemoExperience()) {
@@ -2777,7 +2706,6 @@ function openCashflowDialog() {
     showCashflowPreviewDrawer('all');
     return;
   }
-  trackProductEvent('cash_flow_expanded');
   const dialog = $('#cashflowDialog');
   dialog.classList.remove('plus-preview');
   dialog.style.height = '';
@@ -2837,7 +2765,6 @@ function openCashflowCategoryActivity(category) {
     showCashflowPreviewDrawer(category);
     return;
   }
-  trackProductEvent('cash_flow_drilldown');
   const dialog = $('#cashflowDialog');
   if (!dialog.open) dialog.showModal();
   renderCashflowActivityDetail(category);
@@ -2914,7 +2841,6 @@ function openSpendingCategory(category) {
     revealCashflowPreview(category);
     return;
   }
-  trackProductEvent('cash_flow_drilldown');
   state.spendingCategory = category;
   const panel = $('#spendingTransactionsPanel');
   panel.open = true;
@@ -3086,7 +3012,6 @@ $('#spendingTrend').addEventListener('click', (event) => {
   const month = event.target.closest('[data-spending-month]')?.dataset.spendingMonth;
   const row = state.spending?.monthly?.find((entry) => entry.month === month);
   if (!row) return;
-  trackProductEvent('cash_flow_month_selected');
   state.spendingMonth = state.spendingMonth === month ? null : month;
   renderSpending(state.spending);
   $('#spendingTransactionsPanel').open = true;
@@ -3110,7 +3035,6 @@ $$('[data-investment-range]').forEach((button) => button.addEventListener('click
 $('#investmentAllocation').addEventListener('click', (event) => {
   const filter = event.target.closest('[data-investment-filter]')?.dataset.investmentFilter;
   if (!filter) return;
-  trackProductEvent('investment_allocation_filtered');
   // Holdings sit above allocation on small screens. Preserve the selected
   // allocation row's screen position when the matching list changes height.
   const allocationTop = $('#investmentAllocationCard').getBoundingClientRect().top;
@@ -3153,7 +3077,6 @@ $('#investmentPositions').addEventListener('change', async (event) => {
 $('#investmentPositions').addEventListener('click', async (event) => {
   const add = event.target.closest('[data-add-manual-holding]');
   if (add) {
-    trackProductEvent('holding_reconciliation_started');
     const dialog = $('#manualHoldingDialog');
     dialog.dataset.accountId = add.dataset.addManualHolding;
     $('#manualHoldingHelp').textContent = `Your institution did not return holdings for ${add.dataset.manualAccountName}. Add up to ${fmt.format(Number(add.dataset.manualRemaining || 0))} so your allocation is accurate. This does not change anything at your institution.`;

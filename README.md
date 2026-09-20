@@ -115,14 +115,8 @@ testing, and UX standards that guide changes.
 
 - [PWA installation guide for beta users](docs/PWA_INSTALL.md)
 - [Private beta launch checklist](docs/BETA_LAUNCH.md)
-- [Private launch measurement](docs/LAUNCH_METRICS.md)
 - [Operations and recovery notes](docs/operations.md)
 
-## Private health dashboard
-
-This owner-only dashboard lives in a separate, password-protected Metabase service—not in the Clarity customer app:
-
-- [Clarity Health](https://clarity-insights-production.up.railway.app/dashboard/2): product adoption and engagement appear first, followed by the last 24 hours of grouped Clarity API, Plaid, Google sign-in, and market-data status and latency. It reads only minimal operational and product-event tables—never encrypted financial stores or financial values.
 
 ## Data principles
 

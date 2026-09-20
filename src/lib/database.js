@@ -106,129 +106,6 @@ export async function recordAuditEvent(userKey, eventType) {
   );
 }
 
-// Dependency events are intentionally operational rather than customer
-// telemetry. They never carry a user key, URL parameters, provider payload,
-// account identifier, credential, or financial value.
-export async function recordDependencyEvent({ dependency, operation, outcome, statusCode = null, durationMs }) {
-  if (!/^[a-z0-9_]{1,40}$/.test(dependency) || !/^[a-z0-9_]{1,80}$/.test(operation)) throw new Error('Invalid dependency event.');
-  if (!['success', 'failure', 'client_error', 'server_error'].includes(outcome)) throw new Error('Invalid dependency outcome.');
-  if (statusCode != null && (!Number.isInteger(statusCode) || statusCode < 100 || statusCode > 599)) throw new Error('Invalid dependency status.');
-  if (!Number.isFinite(durationMs) || durationMs < 0) throw new Error('Invalid dependency duration.');
-  if (!databaseEnabled()) return;
-  const database = getPool();
-  await database.query("DELETE FROM dependency_events WHERE created_at < now() - interval '30 days'");
-  await database.query(
-    `INSERT INTO dependency_events (id, dependency, operation, outcome, status_code, duration_ms)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
-    [crypto.randomUUID(), dependency, operation, outcome, statusCode, Math.round(durationMs)]
-  );
-}
-
-const launchEventNames = new Set([
-  'demo_opened', 'sign_in_completed', 'dashboard_opened', 'account_link_started',
-  'account_link_completed', 'sync_succeeded', 'sync_failed', 'cash_flow_viewed',
-  'investments_viewed', 'retirement_viewed', 'accounts_viewed',
-  'net_worth_history_explored', 'cash_flow_drilldown',
-  'cash_flow_month_selected', 'cash_flow_expanded', 'investment_allocation_filtered',
-  'holding_reconciliation_started', 'account_group_opened', 'debt_plan_opened',
-  'debt_strategy_selected', 'retirement_milestone_opened', 'goal_created',
-  'net_worth_card_viewed', 'goal_card_viewed', 'cash_flow_overview_viewed',
-  'monthly_cash_flow_viewed', 'investment_holdings_viewed',
-  'investment_allocation_viewed', 'investment_account_opened',
-  'account_detail_opened', 'retirement_outlook_viewed',
-  'retirement_spending_targets_viewed', 'debt_payoff_viewed'
-]);
-
-// Launch telemetry intentionally records only a tiny set of product-health
-// events. It never accepts arbitrary properties or financial content. Every
-// accepted tab/card use is recorded as one aggregate-safe row with a count of
-// one; the reporting dashboard can therefore rank total uses without
-// deduplicating by member or day. Data is retained for 90 days.
-export async function recordLaunchEvent(userKey, eventName) {
-  if (userKey != null && !/^[a-f0-9]{64}$/.test(userKey)) throw new Error('Invalid launch-event user key.');
-  if (!launchEventNames.has(eventName)) throw new Error('Invalid launch event.');
-  if (!databaseEnabled()) return;
-  const database = getPool();
-  await database.query('DELETE FROM launch_events WHERE created_at < now() - interval \'90 days\'');
-  await database.query(
-    `INSERT INTO launch_events (id, user_key, event_name, interaction_count)
-     VALUES ($1, $2, $3, 1)`,
-    [crypto.randomUUID(), userKey || null, eventName]
-  );
-}
-
-// Aggregates only. The owner dashboard never reads encrypted financial stores
-// and cannot drill into a person’s balances, transactions, or event history.
-export async function launchMetrics() {
-  if (!databaseEnabled()) throw new Error('Launch metrics require PostgreSQL.');
-  const database = getPool();
-  const [summary, returning, cohorts, features] = await Promise.all([
-    database.query(`
-      SELECT
-        COUNT(DISTINCT user_key) FILTER (WHERE event_name = 'sign_in_completed')::int AS signed_in_members,
-        COUNT(DISTINCT user_key) FILTER (WHERE event_name = 'account_link_completed')::int AS activated_members,
-        COUNT(DISTINCT user_key) FILTER (WHERE event_name = 'dashboard_opened' AND created_at >= now() - interval '7 days')::int AS active_7d,
-        COUNT(DISTINCT user_key) FILTER (WHERE event_name = 'dashboard_opened' AND created_at >= now() - interval '28 days')::int AS active_28d,
-        COALESCE(SUM(interaction_count) FILTER (WHERE event_name = 'demo_opened' AND created_at >= now() - interval '7 days'), 0)::int AS demo_opens_7d,
-        COUNT(DISTINCT user_key) FILTER (WHERE event_name = 'sync_succeeded' AND created_at >= now() - interval '26 hours')::int AS synced_26h,
-        COUNT(DISTINCT user_key) FILTER (WHERE event_name = 'sync_failed' AND created_at >= now() - interval '26 hours')::int AS sync_failed_26h
-      FROM launch_events
-    `),
-    database.query(`
-      SELECT COUNT(DISTINCT recent.user_key)::int AS returning_7d
-      FROM launch_events recent
-      WHERE recent.event_name = 'dashboard_opened'
-        AND recent.created_at >= now() - interval '7 days'
-        AND recent.user_key IS NOT NULL
-        AND EXISTS (
-          SELECT 1 FROM launch_events prior
-          WHERE prior.user_key = recent.user_key
-            AND prior.event_name = 'dashboard_opened'
-            AND prior.created_at < now() - interval '7 days'
-      )
-    `),
-    database.query(`
-      WITH first_visits AS (
-        SELECT user_key, MIN(event_date) AS first_date
-        FROM launch_events
-        WHERE event_name = 'dashboard_opened' AND user_key IS NOT NULL
-        GROUP BY user_key
-      )
-      SELECT
-        COUNT(*) FILTER (WHERE first_date <= CURRENT_DATE - 7)::int AS cohort_7d_eligible,
-        COUNT(*) FILTER (WHERE first_date <= CURRENT_DATE - 7 AND EXISTS (
-          SELECT 1 FROM launch_events revisit
-          WHERE revisit.user_key = first_visits.user_key
-            AND revisit.event_name = 'dashboard_opened'
-            AND revisit.event_date BETWEEN first_visits.first_date + 7 AND first_visits.first_date + 13
-        ))::int AS cohort_7d_retained,
-        COUNT(*) FILTER (WHERE first_date <= CURRENT_DATE - 28)::int AS cohort_28d_eligible,
-        COUNT(*) FILTER (WHERE first_date <= CURRENT_DATE - 28 AND EXISTS (
-          SELECT 1 FROM launch_events revisit
-          WHERE revisit.user_key = first_visits.user_key
-            AND revisit.event_name = 'dashboard_opened'
-            AND revisit.event_date BETWEEN first_visits.first_date + 28 AND first_visits.first_date + 34
-        ))::int AS cohort_28d_retained
-      FROM first_visits
-    `),
-    database.query(`
-      SELECT
-        event_name,
-        COUNT(DISTINCT user_key)::int AS members,
-        COUNT(DISTINCT (user_key, event_date))::int AS active_member_days,
-        COALESCE(SUM(interaction_count), 0)::int AS interactions,
-        COALESCE(SUM(interaction_count), 0)::int AS total_uses,
-        ROUND(COALESCE(SUM(interaction_count)::numeric / NULLIF(COUNT(*), 0), 0), 1) AS interactions_per_active_member_day
-      FROM launch_events
-      WHERE created_at >= now() - interval '28 days'
-        AND event_name IN ('cash_flow_viewed', 'investments_viewed', 'retirement_viewed', 'accounts_viewed', 'net_worth_history_explored', 'cash_flow_drilldown', 'cash_flow_month_selected', 'cash_flow_expanded', 'investment_allocation_filtered', 'holding_reconciliation_started', 'account_group_opened', 'investment_account_opened', 'account_detail_opened', 'debt_plan_opened', 'debt_strategy_selected', 'retirement_milestone_opened', 'goal_created', 'net_worth_card_viewed', 'goal_card_viewed', 'cash_flow_overview_viewed', 'monthly_cash_flow_viewed', 'investment_holdings_viewed', 'investment_allocation_viewed', 'retirement_outlook_viewed', 'retirement_spending_targets_viewed', 'debt_payoff_viewed')
-      GROUP BY event_name
-      ORDER BY interactions DESC, event_name ASC
-    `)
-  ]);
-  return { ...summary.rows[0], returning_7d: returning.rows[0].returning_7d, ...cohorts.rows[0], featureEvents: features.rows };
-}
-
 // Atomically consume a bounded action inside a fixed window. This is used for
 // provider-cost controls and remains effective across deploys and replicas.
 export async function consumeRateLimit({ scope, subjectKey, windowMs, limit, now = Date.now() }) {
@@ -253,7 +130,6 @@ export async function deleteDatabaseStore(userKey) {
   const client = await getPool().connect();
   try {
     await client.query('BEGIN');
-    await client.query('DELETE FROM launch_events WHERE user_key = $1', [userKey]);
     await client.query('DELETE FROM financial_stores WHERE user_key = $1', [userKey]);
     await client.query('INSERT INTO audit_events (id, user_key, event_type) VALUES ($1, $2, $3)', [crypto.randomUUID(), userKey, 'account_deleted']);
     await client.query('COMMIT');

@@ -24,14 +24,10 @@ export async function loadHistoricalPrices({ symbol, securityType, from, to }) {
   }
   let lastError;
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const startedAt = Date.now();
-    let statusCode = null;
     try {
       const response = await fetch(url, { headers: { Accept: 'application/json', Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20_000) });
-      statusCode = response.status;
       if ([200, 203].includes(response.status)) {
         const candles = normalizeCandles(await response.json());
-        void recordDependencyEvent({ dependency: 'market_data', operation: 'historical_prices', outcome: 'success', statusCode, durationMs: Date.now() - startedAt }).catch(() => {});
         return candles;
       }
       const retriable = response.status === 429 || response.status >= 500;
@@ -40,9 +36,7 @@ export async function loadHistoricalPrices({ symbol, securityType, from, to }) {
     } catch (error) {
       lastError = error;
     }
-    void recordDependencyEvent({ dependency: 'market_data', operation: 'historical_prices', outcome: 'failure', statusCode, durationMs: Date.now() - startedAt }).catch(() => {});
     if (attempt < 2) await wait(400 * (attempt + 1));
   }
   throw lastError || new Error(`Historical prices unavailable for ${symbol}.`);
 }
-import { recordDependencyEvent } from './database.js';
