@@ -2854,6 +2854,55 @@ function revealCashflowPreview(category = 'all') {
 
 $('#cashflowExpand').addEventListener('click', openCashflowDialog);
 $('#cashflowDialogClose').addEventListener('click', () => $('#cashflowDialog').close());
+// Mobile sheets should not require a precise grab on the small handle. Keep
+// the swipe gesture broad, but only dismiss after a deliberate vertical drag
+// from the top of the sheet so normal scrolling and controls remain usable.
+function wireMobileSheetDismiss(dialog, surface, { maxWidth = 640 } = {}) {
+  if (!dialog || !surface) return;
+  let start = null;
+  let suppressClick = false;
+  const isMobile = () => window.matchMedia(`(max-width: ${maxWidth}px)`).matches;
+  const isInteractive = (target) => target instanceof Element && Boolean(target.closest('button, a, input, select, textarea, [contenteditable="true"]'));
+  const dismiss = () => {
+    if (!dialog.open || dialog.hasAttribute('data-settling')) return;
+    dialog.setAttribute('data-settling', '');
+    dialog.style.transition = 'transform .2s cubic-bezier(.2,.75,.25,1)';
+    dialog.style.transform = `translate3d(0, ${Math.ceil(dialog.getBoundingClientRect().height)}px, 0)`;
+    window.setTimeout(() => {
+      if (dialog.open) dialog.close();
+      dialog.style.transform = '';
+      dialog.style.transition = '';
+      dialog.removeAttribute('data-settling');
+    }, 210);
+  };
+  surface.addEventListener('pointerdown', (event) => {
+    if (!isMobile() || event.button !== 0 || isInteractive(event.target)) return;
+    start = { x: event.clientX, y: event.clientY, pointerId: event.pointerId, scrollTop: surface.scrollTop };
+  }, { passive: true });
+  const finish = (event) => {
+    if (!start || event.pointerId !== start.pointerId) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    const initialScrollTop = start.scrollTop;
+    start = null;
+    // A sheet only dismisses when the gesture began at the top. If the user
+    // started mid-list, the same downward motion is ordinary scroll-back and
+    // must never close the drawer as it reaches scrollTop 0.
+    if (initialScrollTop <= 1 && dy >= 72 && dy > Math.abs(dx) * 1.15 && surface.scrollTop <= 1) {
+      suppressClick = true;
+      dismiss();
+      window.setTimeout(() => { suppressClick = false; }, 240);
+    }
+  };
+  window.addEventListener('pointerup', finish, { passive: true });
+  window.addEventListener('pointercancel', () => { start = null; }, { passive: true });
+  dialog.addEventListener('click', (event) => {
+    if (suppressClick) { event.preventDefault(); event.stopPropagation(); return; }
+    if (isMobile() && event.target === dialog) dismiss();
+  });
+}
+
+wireMobileSheetDismiss($('#cashflowDialog'), $('#cashflowDialogContent'));
 // The mobile cash-flow dialog is a bottom sheet. Its handle is a real control:
 // a tap closes it, while a deliberate downward drag follows the same path.
 {
@@ -3340,10 +3389,9 @@ $('#accountHistoryRange').addEventListener('click', (event) => {
   state.accountHistoryRange = range;
   void openAccountHistory(state.accountHistory.account.id, { preserveRange: true });
 });
-// On phones the bottom-sheet handle is the single close affordance. It is a
-// real drag target, not decorative chrome; desktop retains its conventional
-// close button. Keep the threshold deliberate so chart scrubbing or a short
-// accidental touch cannot dismiss the detail.
+// On phones the bottom-sheet handle remains a visible affordance, but the
+// whole sheet also accepts a deliberate downward drag. Keep the threshold
+// deliberate so chart scrubbing or a short accidental touch cannot dismiss it.
 {
   const dialog = $('#holdingHistoryDialog');
   const handle = $('#holdingHistoryDragHandle');
@@ -3476,15 +3524,8 @@ $('#accountHistoryRange').addEventListener('click', (event) => {
     });
     window.addEventListener('touchcancel', () => { if (touchId != null) finishDrawerDrag(startY || 0); });
   }
-  // On a phone this dialog is a bottom sheet, not a blocking desktop modal.
-  // A tap on its dimmed backdrop should dismiss it using the same calm exit
-  // as a completed downward drag. Events from the sheet's contents never
-  // match the dialog element, so chart and control taps remain unaffected.
-  dialog.addEventListener('click', (event) => {
-    if (isPhoneDrawer() && event.target === dialog) {
-      settleAndCloseDrawer();
-    }
-  });
+  // The shared mobile-sheet wiring below handles backdrop taps and broad
+  // swipe-to-dismiss gestures for the sheet surface.
   dialog.addEventListener('close', reset);
 }
 
@@ -3537,11 +3578,11 @@ $('#accountHistoryRange').addEventListener('click', (event) => {
   });
   handle.addEventListener('pointerup', (event) => finish(event.clientY));
   handle.addEventListener('pointercancel', () => finish(startY || 0));
-  dialog.addEventListener('click', (event) => {
-    if (isPhoneDrawer() && event.target === dialog) dialog.close();
-  });
   dialog.addEventListener('close', reset);
 }
+
+wireMobileSheetDismiss($('#holdingHistoryDialog'), $('#holdingHistoryDialog .holding-history-shell'), { maxWidth: 560 });
+wireMobileSheetDismiss($('#accountHistoryDialog'), $('#accountHistoryDialog .holding-history-shell'), { maxWidth: 560 });
 $('#manualHoldingForm').addEventListener('submit', async (event) => {
   event.preventDefault();
   const dialog = $('#manualHoldingDialog');

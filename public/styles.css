@@ -566,6 +566,7 @@ html[data-theme="dark"] .profile-settings-panel { border-color: var(--line); bac
 @media (max-width: 640px) { .cashflow-dialog.plus-preview { height: auto; max-height: calc(100dvh - 18px); } }
 .cashflow-dialog-drag-handle { display: none; }
 @media (max-width: 640px) { .cashflow-dialog-drag-handle { display: grid; } }
+@media (max-width: 640px) { .cashflow-dialog #cashflowDialogContent { touch-action: pan-y; } }
 @media (max-width: 460px) { .cashflow-sankey { height: 116px; }.cashflow-label, .cashflow-value { font-size: 9px; } }
 .cashflow-target:focus-visible rect:first-child { stroke: var(--accent); stroke-width: 2px; }
 
@@ -1418,4 +1419,7 @@ html[data-theme="dark"] .plus-history-gate .plus-history-cta { background: linea
   .recurring-layout { grid-template-columns: 1fr; }
   .recurring-context { order: -1; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 14px; padding: 15px 18px; border-right: 0; border-bottom: 1px solid var(--line); border-left: 0; }
   .recurring-context > p, .recurring-context .recurring-context-stat, .recurring-context > small { grid-column: 1; }
+}
+@media (max-width: 560px) {
+  .holding-history-dialog .holding-history-shell { touch-action: pan-y; }
 }

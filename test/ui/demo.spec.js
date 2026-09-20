@@ -607,6 +607,32 @@ test('net-worth history can be scrubbed and always identifies the selected date 
   expect(afterScrub?.y).toBe(box.y);
 });
 
+test('mobile sheets dismiss from a broad downward swipe or the backdrop', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'phone' && testInfo.project.name !== 'tablet', 'Bottom-sheet gesture coverage.');
+  await openDemo(page);
+  await goToView(page, 'spending');
+  await page.locator('#cashflowExpand').click();
+  const dialog = page.locator('#cashflowDialog');
+  const content = page.locator('#cashflowDialogContent');
+  await expect(dialog).toHaveAttribute('open', '');
+  const box = await content.boundingBox();
+  if (!box) throw new Error('Cash-flow sheet content is not measurable.');
+  const x = box.x + Math.min(120, box.width / 2);
+  const y = box.y + Math.min(120, box.height / 2);
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 4, y + 96, { steps: 6 });
+  await page.mouse.up();
+  await expect(dialog).toBeHidden();
+
+  await page.locator('#cashflowExpand').click();
+  await expect(dialog).toHaveAttribute('open', '');
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error('Viewport is not available.');
+  await page.mouse.click(8, 8);
+  await expect(dialog).toBeHidden();
+});
+
 test('holding details preserve account context without crowding the overview', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'investments');
