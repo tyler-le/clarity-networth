@@ -501,6 +501,11 @@ html[data-theme="dark"] .profile-shell .connections-panel, html[data-theme="dark
 .plus-prompt strong { display: block; margin-top: 4px; font-size: 16px; letter-spacing: -.02em; }
 .plus-prompt p { margin: 5px 0 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
 .plus-prompt button { flex: 0 0 auto; white-space: nowrap; }
+.plus-inline-lock { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 8px 0; padding: 16px; border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line)); border-radius: 14px; background: color-mix(in srgb, var(--accent-soft) 48%, var(--card)); }
+.plus-inline-lock strong { display: block; margin-top: 3px; font-size: 14px; }
+.plus-inline-lock p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.plus-inline-lock .card-label { color: var(--accent); }
+@media (max-width: 760px) { .plus-inline-lock { align-items: stretch; flex-direction: column; }.plus-inline-lock button { width: 100%; } }
 @media (max-width: 760px) { .plus-prompt { align-items: flex-start; flex-direction: column; gap: 12px; }.plus-prompt button { width: 100%; text-align: left; } }
 .profile-settings-panel .profile-signout-footer { padding: 18px 28px 22px; border-top: 1px solid var(--line); }
 html[data-theme="dark"] .profile-identity { border-color: var(--line); background: linear-gradient(135deg, #1e271f, #192019 64%); }

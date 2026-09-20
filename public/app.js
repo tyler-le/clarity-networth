@@ -821,6 +821,8 @@ function renderProfileSettings(d) {
       [true, 'All timeframes and available history'],
       [true, 'Core Cash Flow, Investments, and Net Worth'],
       [true, 'Baseline retirement outlook and editable assumptions'],
+      [subscribed, 'Category drilldowns and transaction detail'],
+      [subscribed, 'Holding and investment-account history'],
       [subscribed, 'Side-by-side retirement scenarios']
     ];
     $('#profilePlanBenefits').innerHTML = benefits.map(([included, label]) => `<li class="${included ? 'included' : 'excluded'}"><span>${label}</span></li>`).join('');
@@ -844,6 +846,18 @@ async function openBilling(destination) {
 function plusPromptsAvailable() {
   const entitlement = state.dashboard?.entitlements;
   return Boolean(entitlement?.enabled && entitlement?.billingAvailable && !state.dashboard?.demoMode && !['plus', 'trial'].includes(entitlement.plan));
+}
+
+function plusFeatureAvailable(feature) {
+  if (isDemoExperience()) return true;
+  return state.dashboard?.entitlements?.[feature] !== false;
+}
+
+function requestPlus(feature) {
+  if (plusFeatureAvailable(feature)) return true;
+  if (state.dashboard?.entitlements?.billingAvailable) $('#upgradeDialog')?.showModal();
+  else showNotice('This Plus feature is not available yet.', 'info');
+  return false;
 }
 
 function renderPlusPrompts({ accounts = null } = {}) {
@@ -1191,6 +1205,12 @@ function renderSpending(data) {
 }
 
 function renderSpendingTransactions(data) {
+  if (!plusFeatureAvailable('canUseCashFlowDetails')) {
+    const count = (data.transactions || []).length;
+    $('#spendingTransactionCount').textContent = `${count} posted`;
+    $('#spendingTransactions').innerHTML = `<div class="plus-inline-lock"><div><div class="card-label">CLARITY PLUS</div><strong>See the transactions behind each category</strong><p>Your Free plan keeps the cash-flow summary. Plus unlocks category drilldowns and transaction detail.</p></div><button class="secondary" type="button" data-plus-cta>Start free trial</button></div>`;
+    return;
+  }
   const filter = $('#spendingCategoryFilter');
   const categories = [...new Map((data.transactions || []).map((transaction) => {
     const key = transaction.flowGroup === 'save_invest' ? 'save_invest' : transaction.flowKey || transaction.category;
@@ -2156,7 +2176,9 @@ $('#homeBrand').addEventListener('click', () => setView('overview'));
 $('#profileButton').addEventListener('click', () => setView('profile'));
 $('#profileBack').addEventListener('click', () => setView(state.returnView || 'overview'));
 $('#upgradePlanButton').addEventListener('click', () => openBilling('checkout'));
-$$('[data-plus-cta]').forEach((button) => button.addEventListener('click', () => openBilling('checkout')));
+document.addEventListener('click', (event) => {
+  if (event.target.closest('[data-plus-cta]')) openBilling('checkout');
+});
 $('#profilePlanAction').addEventListener('click', () => openBilling(['plus', 'trial'].includes(state.dashboard?.entitlements?.plan) ? 'portal' : 'checkout'));
 // Help tips should disappear as soon as the reader returns to the page. This
 // keeps optional explanation from obscuring the next action on compact views.
@@ -2622,6 +2644,7 @@ $$('[data-spending-range]').forEach((button) => button.addEventListener('click',
   }
 }));
 function openCashflowDialog() {
+  if (!requestPlus('canUseCashFlowDetails')) return;
   trackProductEvent('cash_flow_expanded');
   const dialog = $('#cashflowDialog');
   dialog.showModal();
@@ -2657,6 +2680,7 @@ function renderCashflowActivityDetail(category) {
 }
 
 function openCashflowCategoryActivity(category) {
+  if (!requestPlus('canUseCashFlowDetails')) return;
   const data = spendingForSelectedMonth(state.spending);
   const transactionKeys = new Set((data.transactions || []).flatMap((transaction) => [transaction.flowKey, transaction.flowGroup]));
   if (category !== 'all' && !transactionKeys.has(category)) return;
@@ -2724,6 +2748,7 @@ $('#spendingCategoryFilter').addEventListener('change', (event) => { state.spend
 $('#spendingSort').addEventListener('change', (event) => { state.spendingSort = event.target.value; renderSpendingTransactions(spendingForSelectedMonth(state.spending)); });
 function openSpendingCategory(category) {
   if (!category) return;
+  if (!requestPlus('canUseCashFlowDetails')) return;
   trackProductEvent('cash_flow_drilldown');
   state.spendingCategory = category;
   const panel = $('#spendingTransactionsPanel');
@@ -2938,7 +2963,7 @@ $('#investmentHoldingsMore').addEventListener('click', () => {
 });
 $('#investmentAccounts').addEventListener('click', (event) => {
   const account = event.target.closest('[data-investment-account-history]');
-  if (account) openHoldingHistory({ accountId: account.dataset.investmentAccountHistory });
+  if (account && requestPlus('canUseInvestmentDetails')) openHoldingHistory({ accountId: account.dataset.investmentAccountHistory });
 });
 $('#investmentPositions').addEventListener('change', async (event) => {
   const select = event.target.closest('[data-position-class]');
@@ -2973,7 +2998,7 @@ $('#investmentPositions').addEventListener('click', async (event) => {
   }
   const holding = event.target.closest('[data-holding-history]');
   if (holding) {
-    openHoldingHistory({ ticker: holding.dataset.holdingHistory });
+    if (requestPlus('canUseInvestmentDetails')) openHoldingHistory({ ticker: holding.dataset.holdingHistory });
     return;
   }
   const remove = event.target.closest('[data-remove-manual-holding]');

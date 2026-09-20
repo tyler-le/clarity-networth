@@ -16,6 +16,8 @@ test('Free state keeps the core product open and limits active institutions', ()
   assert.equal(atLimit.canUseFullHistory, true);
   assert.equal(atLimit.canExportData, true);
   assert.equal(atLimit.canUseRetirementScenarios, false);
+  assert.equal(atLimit.canUseCashFlowDetails, false);
+  assert.equal(atLimit.canUseInvestmentDetails, false);
   assert.equal(atLimit.canUseApp, true);
   assert.equal(atLimit.requiresSubscription, false);
 
@@ -32,6 +34,8 @@ test('Plus and trial plans unlock retirement comparisons without changing the pr
   const trial = entitlementsForStore({ settings: { membership: { plan: 'trial', trial_ends_at: '2026-09-20T00:00:00Z' } } }, now, true);
   assert.equal(plus.canUseRetirementScenarios, true);
   assert.equal(trial.canUseRetirementScenarios, true);
+  assert.equal(plus.canUseCashFlowDetails, true);
+  assert.equal(trial.canUseInvestmentDetails, true);
   assert.equal(plus.plan, 'plus');
   assert.equal(trial.plan, 'trial');
   assert.equal(plus.requiresSubscription, false);
