@@ -70,6 +70,27 @@ async function openSignedInScenario(page, transform = () => {}) {
   await expect(page.locator('#appShell')).toHaveAttribute('aria-busy', 'false');
 }
 
+test('an unsubscribed member sees a clear full-access trial gate', async ({ page }) => {
+  await openSignedInScenario(page, (preview) => {
+    preview.dashboard.subscriptionRequired = true;
+    preview.dashboard.entitlements = {
+      enabled: true,
+      plan: 'free',
+      billingAvailable: true,
+      requiresSubscription: true,
+      canUseApp: false,
+      canConnectInstitution: false,
+      linkedInstitutionCount: 0,
+      linkedInstitutionLimit: 2
+    };
+  });
+
+  await expect(page.locator('#subscriptionRequiredState')).toBeVisible();
+  await expect(page.locator('#subscriptionRequiredTitle')).toContainText('financial picture');
+  await expect(page.locator('#subscriptionRequiredAction')).toHaveText('Start free trial');
+  await expect(page.locator('#overviewView')).not.toBeVisible();
+});
+
 test('a newly signed-in member with no accounts gets a calm, truthful product preview', async ({ page }) => {
   await openSignedInScenario(page, (preview) => {
     preview.dashboard.accounts = [];

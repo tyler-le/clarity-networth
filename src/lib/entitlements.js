@@ -64,6 +64,7 @@ export function hasPaidAccess(membership = {}, now = Date.now()) {
 export function entitlementsForStore(store = {}, now = Date.now(), enabled = freemiumEnabled()) {
   const membership = normalizeMembership(store.settings?.membership);
   const paid = hasPaidAccess(membership, now);
+  const demo = Boolean(store.settings?.demo_mode) || (store.items || []).some((item) => item?.demo);
   const linkedInstitutionCount = connectedInstitutionCount(store);
   if (!enabled) {
     // A disabled flag is a true product kill switch. Existing behaviour keeps
@@ -77,24 +78,30 @@ export function entitlementsForStore(store = {}, now = Date.now(), enabled = fre
       canConnectInstitution: true,
       canUseFullHistory: true,
       canExportData: true,
-      canUseRetirementScenarios: true
+      canUseRetirementScenarios: true,
+      canUseApp: true,
+      requiresSubscription: false
     };
   }
+  const hasProductAccess = paid || demo;
+  const requiresSubscription = !hasProductAccess;
   const linkedInstitutionLimit = paid ? null : FREE_CONNECTED_INSTITUTION_LIMIT;
-  const canConnectInstitution = paid || linkedInstitutionCount < FREE_CONNECTED_INSTITUTION_LIMIT;
+  const canConnectInstitution = hasProductAccess;
+  const plan = paid ? (membership.plan === 'trial' ? 'trial' : 'plus') : 'free';
 
   return {
     enabled: true,
-    plan: paid ? 'plus' : 'free',
+    plan,
     membership,
     linkedInstitutionCount,
     linkedInstitutionLimit,
     canConnectInstitution,
-    // Core history and export remain available on Free. The paid planning
-    // surface is retirement scenario comparison, alongside the institution
-    // limit above.
-    canUseFullHistory: true,
-    canExportData: true,
-    canUseRetirementScenarios: paid
+    // A trial and an active subscription unlock the complete product. The
+    // Free state is retained as the pre-subscription state shown by the gate.
+    canUseFullHistory: hasProductAccess,
+    canExportData: hasProductAccess,
+    canUseRetirementScenarios: hasProductAccess,
+    canUseApp: hasProductAccess,
+    requiresSubscription
   };
 }

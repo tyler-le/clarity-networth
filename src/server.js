@@ -1349,6 +1349,24 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+// A signed-in member can still manage billing, appearance, export, and
+// deletion while unsubscribed. Financial reads and mutations require the
+// trial/subscription; the public demo remains available without an account.
+app.use('/api', async (req, res, next) => {
+  if (!req.user) return next();
+  const exempt = new Set(['/dashboard', '/billing/checkout', '/billing/portal', '/launch-event', '/settings/appearance', '/data-export', '/account', '/demo-mode', '/reset-demo', '/clear-demo']);
+  if (exempt.has(req.path)) return next();
+  try {
+    const store = await loadStore(req.user);
+    if (store.settings?.demo_mode) return next();
+    if (entitlementsForStore(store).requiresSubscription && billingAvailable()) return res.status(402).json(publicErrorPayload('subscription_required'));
+    next();
+  } catch (error) {
+    logOperationalError('Subscription access check failed', error, 'error');
+    res.status(503).json(publicErrorPayload('financial_data_unavailable'));
+  }
+});
+
 // Signed-in demo is an in-memory financial scenario. Do not rely only on the
 // UI to keep real mutations out of it: a stale tab or crafted request must
 // never alter a member's accounts, names, plan, or connections while demo is
@@ -1383,7 +1401,7 @@ app.post('/api/billing/checkout', async (req, res) => {
   const store = await loadStore(req.user);
   const entitlement = entitlementsForStore(store);
   if (!entitlement.enabled || !billingAvailable()) return res.status(404).json({ error: 'Billing is not available yet.' });
-  if (entitlement.plan === 'plus') return res.status(409).json({ error: 'Your Plus plan is already active.' });
+  if (entitlement.canUseApp) return res.status(409).json({ error: 'Your Clarity plan is already active.' });
   try {
     const appUrl = billingAppUrl();
     const membership = entitlement.membership;
@@ -1500,6 +1518,16 @@ app.get('/api/dashboard', async (req, res) => {
   await trackLaunchEvent(req.user, 'sign_in_completed');
   await trackLaunchEvent(req.user, 'dashboard_opened');
   const entitlements = { ...entitlementsForStore(visibleStore), billingAvailable: billingAvailable() };
+  if (entitlements.requiresSubscription && entitlements.billingAvailable && !isDemoMode) {
+    return res.json({
+      user: publicUser(req.user),
+      entitlements,
+      plaidConfigured: plaidConfigured(),
+      demoMode: false,
+      appearance: store.settings?.appearance || { theme: 'light' },
+      subscriptionRequired: true
+    });
+  }
   res.json({
     user: publicUser(req.user),
     summary,

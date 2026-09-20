@@ -705,6 +705,53 @@ integrationTest('freemium limits only current Free-plan institutions and an unli
   deleteStore(key);
 });
 
+integrationTest('configured billing gates Free financial data behind the trial', async (t) => {
+  const previous = {
+    freemium: process.env.FREEMIUM_ENABLED,
+    secret: process.env.STRIPE_SECRET_KEY,
+    webhook: process.env.STRIPE_WEBHOOK_SECRET,
+    price: process.env.STRIPE_PLUS_PRICE_ID,
+    appUrl: process.env.PUBLIC_APP_URL
+  };
+  process.env.FREEMIUM_ENABLED = 'true';
+  process.env.STRIPE_SECRET_KEY = 'rk_test_integration';
+  process.env.STRIPE_WEBHOOK_SECRET = 'whsec_integration';
+  process.env.STRIPE_PLUS_PRICE_ID = 'price_integration';
+  process.env.PUBLIC_APP_URL = 'https://clarity.example.test';
+  t.after(() => {
+    for (const [key, value] of Object.entries({
+      FREEMIUM_ENABLED: previous.freemium,
+      STRIPE_SECRET_KEY: previous.secret,
+      STRIPE_WEBHOOK_SECRET: previous.webhook,
+      STRIPE_PLUS_PRICE_ID: previous.price,
+      PUBLIC_APP_URL: previous.appUrl
+    })) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+
+  const email = 'subscription-gate@example.test';
+  const key = userStorageKey(email);
+  const cookie = signedTestCookie(email);
+  writeStore({ items: [], accounts: [], transactions: [], snapshots: [], settings: { membership: { plan: 'free' } } }, key);
+
+  const dashboard = await request(app).get('/api/dashboard').set('Cookie', cookie);
+  assert.equal(dashboard.status, 200);
+  assert.equal(dashboard.body.subscriptionRequired, true);
+  assert.equal(dashboard.body.entitlements.requiresSubscription, true);
+  assert.equal(dashboard.body.entitlements.billingAvailable, true);
+
+  const spending = await request(app).get('/api/spending?range=1m').set('Cookie', cookie);
+  assert.equal(spending.status, 402);
+  assert.deepEqual(spending.body, {
+    error: 'Start your free trial to continue using Clarity.',
+    error_code: 'subscription_required',
+    recovery: 'upgrade'
+  });
+  deleteStore(key);
+});
+
 integrationTest('a signed Stripe subscription webhook updates only its member entitlement', async (t) => {
   const previousWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   process.env.STRIPE_WEBHOOK_SECRET = 'whsec_integration_test';

@@ -5,7 +5,7 @@ import { connectedInstitutionCount, entitlementsForStore, hasPaidAccess, normali
 const now = Date.parse('2026-09-19T12:00:00.000Z');
 const currentItem = (id) => ({ id, demo: false });
 
-test('Free plan allows two currently connected institutions and unlinking frees a slot', () => {
+test('Free state requires a subscription while preserving institution counts', () => {
   const store = { items: [currentItem('one'), currentItem('two')], settings: { membership: { plan: 'free' } } };
   const atLimit = entitlementsForStore(store, now, true);
   assert.equal(atLimit.enabled, true);
@@ -13,14 +13,16 @@ test('Free plan allows two currently connected institutions and unlinking frees 
   assert.equal(atLimit.linkedInstitutionCount, 2);
   assert.equal(atLimit.linkedInstitutionLimit, 2);
   assert.equal(atLimit.canConnectInstitution, false);
-  assert.equal(atLimit.canUseFullHistory, true);
-  assert.equal(atLimit.canExportData, true);
+  assert.equal(atLimit.canUseFullHistory, false);
+  assert.equal(atLimit.canExportData, false);
   assert.equal(atLimit.canUseRetirementScenarios, false);
+  assert.equal(atLimit.canUseApp, false);
+  assert.equal(atLimit.requiresSubscription, true);
 
   store.items = [currentItem('two')];
   const afterUnlink = entitlementsForStore(store, now, true);
   assert.equal(afterUnlink.linkedInstitutionCount, 1);
-  assert.equal(afterUnlink.canConnectInstitution, true);
+  assert.equal(afterUnlink.canConnectInstitution, false);
 });
 
 test('Plus and trial plans unlock retirement comparisons without changing the primary plan editor', () => {
@@ -28,6 +30,10 @@ test('Plus and trial plans unlock retirement comparisons without changing the pr
   const trial = entitlementsForStore({ settings: { membership: { plan: 'trial', trial_ends_at: '2026-09-20T00:00:00Z' } } }, now, true);
   assert.equal(plus.canUseRetirementScenarios, true);
   assert.equal(trial.canUseRetirementScenarios, true);
+  assert.equal(plus.plan, 'plus');
+  assert.equal(trial.plan, 'trial');
+  assert.equal(plus.requiresSubscription, false);
+  assert.equal(trial.requiresSubscription, false);
 });
 
 test('demo Items are excluded from freemium eligibility and never cap demo data', () => {
@@ -39,6 +45,7 @@ test('demo Items are excluded from freemium eligibility and never cap demo data'
   const entitlements = entitlementsForStore(demoStore, now, true);
   assert.equal(entitlements.canConnectInstitution, true);
   assert.equal(entitlements.linkedInstitutionCount, 0);
+  assert.equal(entitlements.requiresSubscription, false);
 });
 
 test('the global freemium switch leaves every product capability available when disabled', () => {
