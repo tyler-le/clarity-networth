@@ -13,11 +13,19 @@ test('Free plan allows two currently connected institutions and unlinking frees 
   assert.equal(atLimit.linkedInstitutionCount, 2);
   assert.equal(atLimit.linkedInstitutionLimit, 2);
   assert.equal(atLimit.canConnectInstitution, false);
+  assert.equal(atLimit.canUseRetirementScenarios, false);
 
   store.items = [currentItem('two')];
   const afterUnlink = entitlementsForStore(store, now, true);
   assert.equal(afterUnlink.linkedInstitutionCount, 1);
   assert.equal(afterUnlink.canConnectInstitution, true);
+});
+
+test('Plus and trial plans unlock retirement comparisons without changing the primary plan editor', () => {
+  const plus = entitlementsForStore({ settings: { membership: { plan: 'plus', subscription_status: 'active', subscription_ends_at: '2026-10-01T00:00:00Z' } } }, now, true);
+  const trial = entitlementsForStore({ settings: { membership: { plan: 'trial', trial_ends_at: '2026-09-20T00:00:00Z' } } }, now, true);
+  assert.equal(plus.canUseRetirementScenarios, true);
+  assert.equal(trial.canUseRetirementScenarios, true);
 });
 
 test('demo Items are excluded from freemium eligibility and never cap demo data', () => {

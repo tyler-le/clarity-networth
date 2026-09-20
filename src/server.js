@@ -1590,7 +1590,13 @@ app.get('/api/demo-accounts/history', demoLimiter, (req, res) => {
 
 app.get('/api/retirement', async (req, res) => {
   const store = activeStore(await loadStore(req.user));
-  res.json(calculateFire(store, summarizeRange(store).netWorth));
+  const retirement = calculateFire(store, summarizeRange(store).netWorth);
+  // Keep the primary plan and assumptions available on Free. Comparison
+  // lifestyles are an optional Plus planning surface, not a requirement for
+  // understanding the member's baseline outlook.
+  const scenariosAvailable = Boolean(store.settings?.demo_mode || entitlementsForStore(store).canUseRetirementScenarios);
+  if (!scenariosAvailable) retirement.lifestyles = [];
+  res.json(retirement);
 });
 
 function retirementSettingsFrom(body, existing = {}) {

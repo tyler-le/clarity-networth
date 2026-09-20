@@ -1931,7 +1931,9 @@ function renderRetirement(data) {
     delete nextButton.dataset.retirementNextMilestone;
     nextButton.textContent = '';
   }
-  $('#retirementLifestylePaths').innerHTML = (data.lifestyles || []).map((path, index) => `<div class="retirement-lifestyle ${index === 1 ? 'featured' : ''}"><span>${escapeHtml(path.name)}</span><strong>${fmt.format(path.target || 0)}</strong><small>${escapeHtml(path.detail)} · By age ${data.retirementAge}</small></div>`).join('');
+  const scenariosAvailable = Boolean(state.dashboard?.demoMode || state.dashboard?.entitlements?.canUseRetirementScenarios !== false);
+  $('#retirementLifestylePaths').innerHTML = scenariosAvailable ? (data.lifestyles || []).map((path, index) => `<div class="retirement-lifestyle ${index === 1 ? 'featured' : ''}"><span>${escapeHtml(path.name)}</span><strong>${fmt.format(path.target || 0)}</strong><small>${escapeHtml(path.detail)} · By age ${data.retirementAge}</small></div>`).join('') : '';
+  $('#retirementScenarioPaywall').classList.toggle('hidden', scenariosAvailable);
   const form = $('#retirementForm');
   form.age.value = data.age;
   form.retirement_age.value = data.retirementAge;
@@ -2296,6 +2298,7 @@ $('#retirementReviewPlan').addEventListener('click', () => {
   assumptions.scrollIntoView({ behavior: 'smooth', block: 'center' });
   window.setTimeout(() => $('#retirementAgeValue').focus(), 180);
 });
+$('#retirementScenarioUpgrade').addEventListener('click', () => openBilling('checkout'));
 $('#retirementForm').addEventListener('submit', async (event) => {
   event.preventDefault();
   if (state.demoPreview || state.dashboard?.demoMode) { showNotice('Sign in to save changes to your own plan.'); return; }
