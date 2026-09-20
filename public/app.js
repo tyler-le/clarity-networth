@@ -821,7 +821,7 @@ function renderProfileSettings(d) {
     const subscribed = ['plus', 'trial'].includes(entitlement.plan);
     $('#profilePlanTitle').textContent = subscribed ? 'Clarity Plus' : 'Clarity Free';
     $('#profilePlanDetail').textContent = entitlement.plan === 'trial' ? 'Your 14-day Plus trial is active.' : subscribed ? 'Your subscription is active.' : 'Core Clarity is free. Try Plus for more depth.';
-    $('#profilePlanAction').textContent = subscribed ? 'Manage plan' : 'Start free trial';
+    $('#profilePlanAction').textContent = subscribed ? 'Manage plan' : 'Start free trial →';
     const benefits = [
       [true, subscribed ? 'Unlimited connected institutions' : 'Up to two connected institutions'],
       [true, 'All timeframes and available history'],
@@ -2717,7 +2717,7 @@ function showCashflowPreviewDrawer(category = 'all') {
   const data = spendingForSelectedMonth(state.spending);
   const label = category === 'all' ? 'Cash flow activity' : cashflowActivityLabel(data, category);
   dialog.showModal();
-  $('#cashflowDialogContent').innerHTML = `<section class="cashflow-plus-preview" aria-labelledby="cashflowPreviewTitle"><div class="card-label">CLARITY PLUS</div><h2 id="cashflowPreviewTitle">${escapeHtml(label)}</h2><p>Plus reveals the transactions behind this view. Your Free plan keeps your totals and categories private.</p><div class="cashflow-plus-preview-rows" aria-hidden="true"><div><i></i><span></span><b></b></div><div><i></i><span></span><b></b></div><div><i></i><span></span><b></b></div><div><i></i><span></span><b></b></div></div><button class="primary" type="button" data-plus-cta>Unlock transaction detail <span aria-hidden="true">→</span></button></section>`;
+  $('#cashflowDialogContent').innerHTML = `<section class="cashflow-plus-preview" aria-labelledby="cashflowPreviewTitle"><div class="card-label">CLARITY PLUS · ILLUSTRATIVE PREVIEW</div><h2 id="cashflowPreviewTitle">${escapeHtml(label)}</h2><p>Plus reveals the transactions behind this view. Free keeps your totals and categories private.</p><div class="cashflow-plus-preview-rows" aria-hidden="true"><div class="cashflow-plus-preview-head"><span>Category</span><span>Merchant</span><span>Amount</span></div><div><i></i><span>Groceries</span><b>••••</b></div><div><i></i><span>Restaurant</span><b>••••</b></div><div><i></i><span>Transport</span><b>••••</b></div><div><i></i><span>Subscription</span><b>••••</b></div></div><button class="primary" type="button" data-plus-cta>Unlock transaction detail <span aria-hidden="true">→</span></button></section>`;
 }
 
 function cashflowActivityLabel(data, category) {
