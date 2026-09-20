@@ -864,6 +864,31 @@ html[data-theme="dark"] .scrub-dot { fill: #1a201c; }
 .cashflow-payroll > .cashflow-action-copy + .cashflow-payroll-chevron { grid-column: 4; }
 @media (max-width: 760px) { .cashflow-detail-cards { grid-template-columns: 1fr; gap: 8px; }.cashflow-action-card, .cashflow-more, .cashflow-transactions-action, .cashflow-payroll { min-height: 64px; }.cashflow-payroll { grid-template-columns: 34px minmax(0, 1fr) 16px; }.cashflow-payroll .cashflow-action-copy strong { font-size: 15px; }.cashflow-payroll .cashflow-action-copy p { display: none; } }
 
+/* A protected cash-flow view should feel like a premium continuation of the
+   app, not a generic disabled table. */
+.cashflow-dialog.plus-preview { height: fit-content !important; }
+.cashflow-dialog.plus-preview #cashflowDialogContent { overflow: visible; }
+.cashflow-plus-preview { gap: 18px; padding: 0 18px 20px; background: radial-gradient(circle at 90% 0, rgba(187, 225, 202, .72), transparent 29%), linear-gradient(145deg, #f5faf6 0%, #fff 58%); }
+.cashflow-plus-preview::before { top: -130px; right: -130px; width: 360px; height: 360px; background: rgba(42, 126, 83, .09); filter: blur(9px); }
+.cashflow-plus-preview-hero { display: grid; grid-template-columns: minmax(0, 1fr) 180px; align-items: end; gap: 18px; min-height: 176px; padding: 30px 2px 4px; }
+.cashflow-plus-preview h2 { max-width: 560px; margin: 8px 0 9px; font-size: clamp(30px, 4vw, 42px); letter-spacing: -.06em; }
+.cashflow-plus-preview p { max-width: 520px; margin: 0; font-size: 14px; line-height: 1.48; }
+.cashflow-plus-preview-spark { position: relative; align-self: stretch; min-height: 116px; overflow: hidden; border: 1px solid rgba(55, 132, 88, .16); border-radius: 22px 22px 10px 22px; background: linear-gradient(145deg, rgba(255,255,255,.72), rgba(221, 240, 227, .66)); box-shadow: inset 0 1px rgba(255,255,255,.72), 0 15px 34px rgba(32, 88, 54, .08); }
+.cashflow-plus-preview-spark::after { position: absolute; right: 12px; bottom: 12px; left: 12px; height: 46%; border-radius: 14px 14px 4px 4px; background: linear-gradient(90deg, rgba(43, 124, 82, .08), rgba(43, 124, 82, .28)); clip-path: polygon(0 90%, 18% 72%, 40% 80%, 62% 35%, 80% 50%, 100% 0, 100% 100%, 0 100%); content: ''; }
+.cashflow-plus-preview-spark i { position: absolute; bottom: 20px; width: 12px; border-radius: 99px; background: linear-gradient(#b7dac2, #2b7c52); box-shadow: 0 5px 10px rgba(29, 102, 64, .16); }
+.cashflow-plus-preview-spark i:nth-child(1) { left: 20px; height: 28px; }.cashflow-plus-preview-spark i:nth-child(2) { left: 52px; height: 43px; }.cashflow-plus-preview-spark i:nth-child(3) { left: 84px; height: 36px; }.cashflow-plus-preview-spark i:nth-child(4) { left: 116px; height: 66px; }
+.cashflow-plus-preview-rows { gap: 11px; margin: 0; padding: 17px 18px; border: 1px solid rgba(82, 144, 107, .2); border-radius: 18px; background: rgba(255,255,255,.68); box-shadow: 0 18px 34px rgba(37, 80, 51, .06); opacity: 1; backdrop-filter: blur(10px); }
+.cashflow-plus-preview-rows > div { min-height: 31px; }
+.cashflow-plus-preview-rows > div:not(.cashflow-plus-preview-head) { padding: 4px 0; }
+.cashflow-plus-preview-rows i { width: 10px; height: 10px; background: #8fc5a4; box-shadow: 0 0 0 4px rgba(143,197,164,.16); }
+.cashflow-plus-preview-footer { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 3px 0 0; }
+.cashflow-plus-preview-footer > div { display: grid; gap: 3px; }
+.cashflow-plus-preview-footer small { color: var(--accent); font-size: 9px; font-weight: 800; letter-spacing: .1em; }
+.cashflow-plus-preview-footer strong { color: var(--ink); font-size: 20px; letter-spacing: -.04em; }.cashflow-plus-preview-footer strong span { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 0; }
+.cashflow-plus-preview-footer em { color: var(--muted); font-size: 10px; font-style: normal; font-weight: 620; }
+.cashflow-plus-preview-footer .primary { min-height: 50px; padding: 0 19px; border-radius: 14px; background: linear-gradient(135deg, #1a2a20, #204c35); box-shadow: 0 13px 24px rgba(24, 60, 39, .2); font-size: 13px; }.cashflow-plus-preview-footer .primary:hover { background: linear-gradient(135deg, #132018, #1a5e3d); transform: translateY(-1px); }
+@media (max-width: 640px) { .cashflow-plus-preview { padding: 0 16px calc(18px + env(safe-area-inset-bottom)); }.cashflow-plus-preview-hero { grid-template-columns: 1fr; min-height: 0; padding-top: 25px; }.cashflow-plus-preview-spark { display: none; }.cashflow-plus-preview-footer { align-items: stretch; flex-direction: column; gap: 13px; }.cashflow-plus-preview-footer .primary { width: 100%; }.cashflow-plus-preview-rows { padding: 14px; } }
+
 /* Full dark-surface audit: interactive controls must never inherit the light
    theme's white surfaces or use the light text token as a background. */
 html[data-theme="dark"] .primary { background: #2d744a; color: #edf2ee; box-shadow: 0 3px 10px rgba(0,0,0,.18); }

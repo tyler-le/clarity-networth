@@ -2778,6 +2778,7 @@ function openCashflowDialog() {
   trackProductEvent('cash_flow_expanded');
   const dialog = $('#cashflowDialog');
   dialog.classList.remove('plus-preview');
+  dialog.style.height = '';
   dialog.showModal();
   renderCashFlowSankey(spendingForSelectedMonth(state.spending), $('#cashflowDialogContent'), true);
 }
@@ -2793,8 +2794,9 @@ function showCashflowPreviewDrawer(category = 'all') {
     ? teaserRows.map((transaction) => `<div><i></i><span>${escapeHtml(transaction.name || 'Transaction')}<small>${new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</small></span><b aria-label="Amount hidden in preview">••••</b></div>`).join('')
     : '<div class="cashflow-plus-preview-empty">A few real transactions will appear here after you unlock Plus.</div>';
   dialog.classList.add('plus-preview');
+  dialog.style.height = 'auto';
   dialog.showModal();
-  $('#cashflowDialogContent').innerHTML = `<section class="cashflow-plus-preview" aria-labelledby="cashflowPreviewTitle"><div class="card-label">CLARITY PLUS · YOUR PREVIEW</div><h2 id="cashflowPreviewTitle">${escapeHtml(label)}</h2><p>These are real transactions from this view. Amounts stay hidden until you unlock Plus.</p><div class="cashflow-plus-preview-rows"><div class="cashflow-plus-preview-head"><span>Activity</span><span>Date</span><span>Amount</span></div>${teaserMarkup}</div><button class="primary" type="button" data-plus-cta data-plus-feature="cash_flow_details">Unlock transaction detail <span aria-hidden="true">→</span></button></section>`;
+  $('#cashflowDialogContent').innerHTML = `<section class="cashflow-plus-preview" aria-labelledby="cashflowPreviewTitle"><div class="cashflow-plus-preview-hero"><div><div class="card-label">CLARITY PLUS · YOUR PREVIEW</div><h2 id="cashflowPreviewTitle">${escapeHtml(label)}</h2><p>Follow this flow into the real activity behind it. Exact amounts and full detail unlock with Plus.</p></div><div class="cashflow-plus-preview-spark" aria-hidden="true"><i></i><i></i><i></i><i></i></div></div><div class="cashflow-plus-preview-rows"><div class="cashflow-plus-preview-head"><span>Activity</span><span>Date</span><span>Amount</span></div>${teaserMarkup}</div><div class="cashflow-plus-preview-footer"><div><small>INCLUDED WITH CLARITY PLUS</small><strong>$9 <span>/ month</span></strong><em>Cancel anytime · 14-day free trial</em></div><button class="primary" type="button" data-plus-cta data-plus-feature="cash_flow_details">Unlock ${escapeHtml(label)} detail <span aria-hidden="true">→</span></button></div></section>`;
 }
 
 function cashflowActivityLabel(data, category) {
