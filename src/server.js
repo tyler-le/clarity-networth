@@ -1389,6 +1389,10 @@ app.post('/api/billing/checkout', async (req, res) => {
     const membership = entitlement.membership;
     const fields = {
       mode: 'subscription',
+      // Let members experience Plus without entering billing details up front.
+      // They can add a payment method during the trial before choosing to
+      // continue as a paid subscriber.
+      payment_method_collection: 'if_required',
       integration_identifier: checkoutIntegrationIdentifier(),
       client_reference_id: req.user.storageKey,
       success_url: `${appUrl}/?billing=success`,
