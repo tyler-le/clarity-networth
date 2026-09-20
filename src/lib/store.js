@@ -3,6 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { decryptPayload, encryptPayload, isEncryptedPayload } from './secure-payload.js';
+import { normalizeMembership } from './entitlements.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR || path.resolve(__dirname, '../../data');
@@ -70,6 +71,7 @@ const emptyStore = () => ({
       fat_multiplier: 150
     },
     demo_mode: false,
+    membership: normalizeMembership(),
     goals: [],
     appearance: { theme: 'light' }
   }
@@ -92,6 +94,7 @@ export function normalizeStore(parsed) {
       ...(parsed.settings || {}),
       targets: { ...defaults.settings.targets, ...(parsed.settings?.targets || {}) },
       fire: { ...defaults.settings.fire, ...(parsed.settings?.fire || {}) },
+      membership: normalizeMembership(parsed.settings?.membership),
       goals: Array.isArray(parsed.settings?.goals) ? parsed.settings.goals : [],
       appearance: { ...defaults.settings.appearance, ...(parsed.settings?.appearance || {}) }
     }

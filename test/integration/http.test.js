@@ -18,6 +18,7 @@ const previousEnvironment = {
   PLAID_SECRET: process.env.PLAID_SECRET,
   PLAID_ENV: process.env.PLAID_ENV,
   DEV_MOCK_CONNECTIONS: process.env.DEV_MOCK_CONNECTIONS,
+  FREEMIUM_ENABLED: process.env.FREEMIUM_ENABLED,
   INVITE_CODE: process.env.INVITE_CODE,
   DOTENV_CONFIG_PATH: process.env.DOTENV_CONFIG_PATH
 };
@@ -635,6 +636,62 @@ integrationTest('staging mock connection is explicitly gated, seeded, and remova
   assert.equal(unlinked.status, 200);
   assert.equal(readStore(key).items.length, 0);
   assert.equal(readStore(key).accounts.length, 0);
+  deleteStore(key);
+});
+
+integrationTest('freemium limits only current Free-plan institutions and an unlink frees a slot', async (t) => {
+  const previousMockSetting = process.env.DEV_MOCK_CONNECTIONS;
+  const previousFreemiumSetting = process.env.FREEMIUM_ENABLED;
+  process.env.DEV_MOCK_CONNECTIONS = 'true';
+  process.env.FREEMIUM_ENABLED = 'true';
+  t.after(() => {
+    if (previousMockSetting === undefined) delete process.env.DEV_MOCK_CONNECTIONS;
+    else process.env.DEV_MOCK_CONNECTIONS = previousMockSetting;
+    if (previousFreemiumSetting === undefined) delete process.env.FREEMIUM_ENABLED;
+    else process.env.FREEMIUM_ENABLED = previousFreemiumSetting;
+  });
+
+  const email = 'freemium-current-institutions@example.test';
+  const key = userStorageKey(email);
+  const cookie = signedTestCookie(email);
+  writeStore({
+    items: [
+      { id: 'first', institution_name: 'First Bank', development_mock: true, demo: false },
+      { id: 'second', institution_name: 'Second Bank', development_mock: true, demo: false }
+    ],
+    accounts: [], positions: [], transactions: [], snapshots: [],
+    settings: { membership: { plan: 'free' } }
+  }, key);
+
+  const dashboard = await request(app).get('/api/dashboard').set('Cookie', cookie);
+  assert.equal(dashboard.status, 200);
+  assert.deepEqual(
+    {
+      enabled: dashboard.body.entitlements.enabled,
+      linkedInstitutionCount: dashboard.body.entitlements.linkedInstitutionCount,
+      linkedInstitutionLimit: dashboard.body.entitlements.linkedInstitutionLimit,
+      canConnectInstitution: dashboard.body.entitlements.canConnectInstitution
+    },
+    { enabled: true, linkedInstitutionCount: 2, linkedInstitutionLimit: 2, canConnectInstitution: false }
+  );
+
+  // Block before opening Link so a member cannot spend a provider attempt on
+  // a connection the plan will not allow.
+  const blocked = await request(app).post('/api/plaid/create_link_token').set('Cookie', cookie).send({});
+  assert.equal(blocked.status, 403);
+  assert.deepEqual(blocked.body, {
+    error: 'Your Free plan includes two connected institutions. Unlink one to connect another.',
+    error_code: 'institution_limit_reached',
+    recovery: 'manage_connections'
+  });
+
+  const unlinked = await request(app).delete('/api/items/first').set('Cookie', cookie);
+  assert.equal(unlinked.status, 200);
+  assert.equal(readStore(key).items.length, 1);
+
+  const availableAgain = await request(app).post('/api/plaid/create_link_token').set('Cookie', cookie).send({});
+  assert.equal(availableAgain.status, 200);
+  assert.deepEqual(availableAgain.body, { development_mock: true });
   deleteStore(key);
 });
 

@@ -33,6 +33,7 @@ Clarity enforces these server-side limits before it calls Plaid:
 - 5 Link-token requests per signed-in user per 15 minutes (20 per IP).
 - 10 completed Item exchanges per signed-in user per day (25 per IP).
 - 15 active linked institutions per user by default; `MAX_LINKED_ITEMS` may lower this, never exceed 30.
+- `FREEMIUM_ENABLED=false` is the global product kill switch. With it off, no plan ingress or feature block is exposed. With it on, Free members may keep two currently linked institutions; unlinking an institution immediately frees a slot. Set and test the variable independently in staging before enabling it in production.
 - Automated refreshes run server-side on a daily schedule. Users cannot trigger unbounded manual refreshes.
 - Plaid webhook verification keys are cached for one hour and webhook traffic is IP-throttled before provider verification.
 

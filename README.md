@@ -67,6 +67,7 @@ SESSION_SECRET=different-unique-long-random-secret
 GOOGLE_CLIENT_ID=google-oauth-web-client-id
 INVITE_CODE=private-beta-code
 SUPPORT_EMAIL=support@example.com
+FREEMIUM_ENABLED=false
 ```
 
 Add `PLAID_CLIENT_ID`, `PLAID_SECRET`, and `PLAID_ENV` only when connecting

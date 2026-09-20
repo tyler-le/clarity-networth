@@ -188,6 +188,22 @@ test('a rate-limited connection gives a safe wait time and prevents repeated att
   await expect(page.locator('#connectButton')).toHaveText('Try again in 2 min');
 });
 
+test('a Free-plan connection limit explains that unlinking immediately frees a slot', async ({ page }) => {
+  await openSignedInScenario(page);
+  await page.route('**/api/plaid/create_link_token', (route) => route.fulfill({
+    status: 403,
+    json: {
+      error: 'Your Free plan includes two connected institutions. Unlink one to connect another.',
+      error_code: 'institution_limit_reached',
+      recovery: 'manage_connections'
+    }
+  }));
+
+  await page.locator('#connectButton').click();
+  await expect(page.locator('#notice')).toHaveText('Your Free plan includes two connected institutions. Unlink one to connect another.');
+  await expect(page.locator('#notice')).toHaveAttribute('data-tone', 'error');
+});
+
 test('development exposes deterministic connection-recovery states without provider calls', async ({ page }) => {
   await openSignedInScenario(page, (preview) => { preview.dashboard.developmentTesting = true; });
   await goToView(page, 'profile');

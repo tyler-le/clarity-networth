@@ -12,6 +12,7 @@ import { accountBalanceHistory, calculateFire, cashFlowType, cashRunway, classif
 import { investmentLedgerPages, plaidConfigured, plaidPost } from './lib/plaid.js';
 import { loadHistoricalPrices } from './lib/market-data.js';
 import { historyStart } from './lib/history.js';
+import { entitlementsForStore } from './lib/entitlements.js';
 import { plaidErrorCode, publicErrorPayload } from '../public/customer-error.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -595,6 +596,22 @@ function publicItem(item) {
     demo: item.demo || false,
     development_mock: Boolean(item.development_mock)
   };
+}
+
+function connectionEntitlement(store) {
+  const entitlement = entitlementsForStore(store);
+  if (!entitlement.canConnectInstitution) return { ok: false, entitlement };
+  // This operational ceiling is independent of product plans and remains in
+  // force even while freemium is disabled.
+  if (entitlement.linkedInstitutionCount >= MAX_LINKED_ITEMS) return { ok: false, entitlement, hardLimit: true };
+  return { ok: true, entitlement };
+}
+
+function sendConnectionLimit(res, eligibility) {
+  if (eligibility.hardLimit) {
+    return res.status(429).json({ error: `You can connect up to ${MAX_LINKED_ITEMS} institutions. Unlink one before adding another.` });
+  }
+  return res.status(403).json(publicErrorPayload('institution_limit_reached'));
 }
 
 async function refreshAccountsForItem(store, item) {
@@ -1323,6 +1340,8 @@ app.get('/api/dashboard', async (req, res) => {
     accounts,
     snapshots,
     items: visibleStore.items.map(publicItem),
+    // Demo is a complete product illustration, never a Free-plan preview.
+    entitlements: entitlementsForStore(visibleStore),
     plaidConfigured: plaidConfigured(),
     developmentTesting: developmentMockConnectionsEnabled(req),
     demoMode: Boolean(store.settings?.demo_mode) || visibleStore.accounts.some((a) => a.demo),
@@ -1717,6 +1736,9 @@ app.post('/api/items/:id/reconnected', plaidCostLimiter({ scope: 'plaid_reconnec
 
 app.post('/api/plaid/create_link_token', plaidCostLimiter({ scope: 'plaid_link_token', userLimit: 5, ipLimit: 20, windowMs: 15 * 60_000 }), async (req, res) => {
   try {
+    const store = await loadStore(req.user);
+    const eligibility = connectionEntitlement(store);
+    if (!eligibility.ok) return sendConnectionLimit(res, eligibility);
     if (developmentMockConnectionsEnabled(req)) return res.json({ development_mock: true });
     const body = {
       user: { client_user_id: req.user.storageKey },
@@ -1744,8 +1766,8 @@ app.post('/api/plaid/development_mock_connect', async (req, res) => {
   if (!developmentMockConnectionsEnabled(req)) return res.status(404).json({ error: 'Not found.' });
   const store = await loadStore(req.user);
   if (store.settings?.demo_mode) return res.status(409).json({ error: 'Exit demo before connecting an account.' });
-  const linkedItems = store.items.filter((item) => !item.demo).length;
-  if (linkedItems >= MAX_LINKED_ITEMS) return res.status(429).json({ error: `You can connect up to ${MAX_LINKED_ITEMS} institutions. Unlink one before adding another.` });
+  const eligibility = connectionEntitlement(store);
+  if (!eligibility.ok) return sendConnectionLimit(res, eligibility);
   const { item, alreadyLinked } = addDevelopmentMockInstitution(store);
   await saveStore(req.user, store);
   trackLaunchEvent(req.user, 'account_link_completed');
@@ -1757,8 +1779,8 @@ app.post('/api/plaid/exchange_public_token', plaidCostLimiter({ scope: 'plaid_it
     const { public_token, institution_name } = req.body;
     if (!public_token) return res.status(400).json({ error: 'public_token is required' });
     const store = await loadStore(req.user);
-    const linkedItems = store.items.filter((item) => !item.demo).length;
-    if (linkedItems >= MAX_LINKED_ITEMS) return res.status(429).json({ error: `You can connect up to ${MAX_LINKED_ITEMS} institutions. Unlink one before adding another.` });
+    const eligibility = connectionEntitlement(store);
+    if (!eligibility.ok) return sendConnectionLimit(res, eligibility);
     const exchanged = await plaidPost('/item/public_token/exchange', { public_token });
     const item = {
       id: crypto.randomUUID(),

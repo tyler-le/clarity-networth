@@ -24,3 +24,12 @@ test('rate-limit errors preserve an actionable wait time for the interface', () 
     retry_after_seconds: 90
   });
 });
+
+test('a Free-plan institution limit directs the member to unlink instead of exposing billing internals', () => {
+  assert.equal(httpErrorCode({ status: 403, errorCode: 'institution_limit_reached' }), 'institution_limit_reached');
+  assert.deepEqual(publicErrorPayload('institution_limit_reached'), {
+    error: 'Your Free plan includes two connected institutions. Unlink one to connect another.',
+    error_code: 'institution_limit_reached',
+    recovery: 'manage_connections'
+  });
+});
