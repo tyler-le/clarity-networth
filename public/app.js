@@ -853,7 +853,12 @@ function plusPromptsAvailable() {
 
 function plusFeatureAvailable(feature) {
   if (isDemoExperience()) return true;
-  return state.dashboard?.entitlements?.[feature] !== false;
+  const entitlements = state.dashboard?.entitlements;
+  // A disabled freemium switch is an explicit product kill switch. When the
+  // switch is on, missing Plus capability data must fail closed so a stale or
+  // partial dashboard payload cannot accidentally expose a paid surface.
+  if (!entitlements?.enabled) return true;
+  return entitlements[feature] === true;
 }
 
 function requestPlus(feature) {
@@ -1986,7 +1991,8 @@ function renderRetirement(data) {
     delete nextButton.dataset.retirementNextMilestone;
     nextButton.textContent = '';
   }
-  const scenariosAvailable = Boolean(state.dashboard?.demoMode || state.dashboard?.entitlements?.canUseRetirementScenarios !== false);
+  const entitlements = state.dashboard?.entitlements;
+  const scenariosAvailable = Boolean(state.dashboard?.demoMode || !entitlements?.enabled || entitlements.canUseRetirementScenarios === true);
   $('#retirementLifestylePaths').innerHTML = scenariosAvailable ? (data.lifestyles || []).map((path, index) => `<div class="retirement-lifestyle ${index === 1 ? 'featured' : ''}"><span>${escapeHtml(path.name)}</span><strong>${fmt.format(path.target || 0)}</strong><small>${escapeHtml(path.detail)} · By age ${data.retirementAge}</small></div>`).join('') : '';
   $('#retirementScenarioPaywall').classList.toggle('hidden', scenariosAvailable);
   const form = $('#retirementForm');
