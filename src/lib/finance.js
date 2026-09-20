@@ -18,6 +18,24 @@ function isProviderTransfer(tx) {
   return transactionCode === 'transfer' || primary.includes('TRANSFER') || detailed.includes('TRANSFER') || detailed.includes('CREDIT_CARD_PAYMENT') || name.includes('PAYMENT THANK YOU') || name.includes('AUTOPAY PAYMENT');
 }
 
+function isPeerPayment(tx) {
+  const counterpartyTypes = Array.isArray(tx.counterparty_types)
+    ? tx.counterparty_types
+    : Array.isArray(tx.counterparties) ? tx.counterparties.map((counterparty) => counterparty?.type) : [];
+  if (counterpartyTypes.some((type) => String(type || '').toLowerCase() === 'payment_app')) return true;
+  // Institutions do not always send counterparty metadata. These are payment
+  // rails, not a purpose: leave the payment uncategorized until the person
+  // says whether it was rent, groceries, or something else.
+  return /\b(?:zelle|venmo|cash\s*app)\b/i.test(`${tx.merchant_name || ''} ${tx.name || ''}`);
+}
+
+function isPhysicalCheckDeposit(tx) {
+  const transactionCode = String(tx.transaction_code || '').toLowerCase();
+  const context = `${tx.merchant_name || ''} ${tx.name || ''} ${tx.pfc_primary || ''} ${tx.pfc_detailed || ''}`.toLowerCase();
+  return transactionCode === 'check' || transactionCode === 'cheque'
+    || /\b(?:mobile|remote)?\s*check deposit\b|\bdeposit check\b/.test(context);
+}
+
 function inflowClassification(tx) {
   const primary = (tx.personal_finance_category?.primary || tx.pfc_primary || '').toUpperCase();
   const detailed = (tx.personal_finance_category?.detailed || tx.pfc_detailed || '').toUpperCase();
@@ -47,6 +65,15 @@ export function cashFlowType(tx) {
     && /CONTRIBUT|DEFERRAL|PAYROLL|401\s*\(?K\)?|403\s*\(?B\)?|457\s*\(?B\)?|HSA/.test(investmentText);
   if (tx.source === 'investment_transaction' && tx.bucket === 'investments' && isContributionRecord) return 'pre_tax_retirement';
   if (tx.source === 'investment_transaction' && tx.bucket === 'investments') return 'investment_activity';
+  // A payment-app transfer commonly pays another person, not another one of
+  // the member's connected accounts. Keep it visible and editable rather
+  // than silently removing it as an internal transfer.
+  if (isPeerPayment(tx)) {
+    const amount = Number(tx.amount || 0);
+    if (amount < 0) return 'external_inflow';
+    if (amount > 0) return 'external_outflow';
+  }
+  if (isPhysicalCheckDeposit(tx) && Number(tx.amount || 0) < 0) return 'external_inflow';
   if (isProviderTransfer(tx) || tx.bucket === 'transfer') return 'internal_transfer';
   const amount = Number(tx.amount || 0);
   if (amount < 0) return 'external_inflow';
@@ -70,7 +97,7 @@ export function classifyTransaction(tx) {
   // the transaction direction is the durable cash-flow fact: money entering
   // an account is an inflow, not discretionary spending. This also makes
   // refunds and credits reconcile rather than silently disappearing.
-  if (cashFlowType(tx) === 'external_inflow') return inflowClassification(tx);
+  if (cashFlowType(tx) === 'external_inflow') return isPhysicalCheckDeposit(tx) ? 'income' : inflowClassification(tx);
 
   if (detailed.includes('INVESTMENT') || detailed.includes('RETIREMENT')) return 'investments';
   if (detailed.includes('SAVINGS')) return 'savings';
@@ -107,6 +134,20 @@ export function repairTransferClassifications(store) {
   let repaired = 0;
   for (const transaction of store.transactions || []) {
     if (transaction.category_overridden || transaction.source === 'investment_transaction' || !isProviderTransfer(transaction)) continue;
+    if (isPeerPayment(transaction) && Number(transaction.amount || 0) > 0) {
+      if (transaction.bucket !== 'guilt_free') {
+        transaction.bucket = 'guilt_free';
+        repaired += 1;
+      }
+      continue;
+    }
+    if (isPhysicalCheckDeposit(transaction) && Number(transaction.amount || 0) < 0) {
+      if (transaction.bucket !== 'income') {
+        transaction.bucket = 'income';
+        repaired += 1;
+      }
+      continue;
+    }
     const destination = providerTransferDestinationBucket(transaction);
     // Plaid's sign convention is positive for money leaving this account.
     // Only that source-side leg may be presented as saving or investing; the
@@ -142,7 +183,7 @@ export function repairIncomingClassifications(store) {
       repaired += 1;
     }
     if (transaction.category_overridden || transaction.source === 'investment_transaction') continue;
-    if (flowType !== 'external_inflow' || !isConfirmedIncome(transaction) || transaction.bucket === 'income') continue;
+    if (flowType !== 'external_inflow' || (!isConfirmedIncome(transaction) && !isPhysicalCheckDeposit(transaction)) || transaction.bucket === 'income') continue;
     transaction.bucket = 'income';
     repaired += 1;
   }
@@ -1314,6 +1355,9 @@ function categoryRuleKey(transaction) {
     .trim()
     .replace(/\s+/g, ' ');
   if (name.length < 3 || ['zelle', 'venmo', 'paypal', 'cash app', 'transfer', 'payment'].includes(name)) return '';
+  // A generic deposit label identifies a banking action, not the person who
+  // wrote the check. Keep that choice local unless Plaid gives us a payer.
+  if (isPhysicalCheckDeposit(transaction) && /^(?:(?:mobile|remote)\s+)?check deposit$|^deposit check$/.test(name)) return '';
   return name;
 }
 
@@ -1368,7 +1412,14 @@ export function applyCashFlowCategoryOverride(store, transactionId, categoryKey)
   const ruleFlow = category?.flow === 'income' ? 'income' : category?.flow === 'outflow' ? 'outflow' : null;
   if (!selected || !category || selected.demo || selected.pending || (ruleFlow === 'outflow' ? !isOutflow : !isIncome)) return null;
   const ruleKey = categoryRuleKey(selected);
-  if (!ruleKey) return null;
+  if (!ruleKey) {
+    // Some provider descriptions (for example “Mobile check deposit”) name a
+    // banking action rather than a repeatable merchant. Preserve this choice
+    // on the selected record without teaching an unsafe rule for every check.
+    applyCategory(selected, category);
+    delete selected.cash_flow_category_rule_id;
+    return { updated: 1, category, rule: null, matchedDuplicates: 0 };
+  }
   store.cash_flow_category_rules ||= [];
   const ruleId = `${ruleFlow}:${ruleKey}`;
   const existingRule = store.cash_flow_category_rules.find((rule) => rule.id === ruleId);
@@ -1441,7 +1492,7 @@ export function canonicalEconomicLedger(store) {
     const sourceIsInvestment = transaction.source === 'investment_transaction' || account?.type === 'investment';
     let economicType = 'ambiguous';
     if (flowType === 'external_inflow') {
-      const incoming = inflowClassification(transaction);
+      const incoming = isPhysicalCheckDeposit(transaction) ? 'income' : inflowClassification(transaction);
       economicType = incoming === 'income' && isConfirmedIncome(transaction) ? 'income' : incoming;
       if (incoming === 'refund' && allocations.has(transactionKey(transaction, index))) economicType = 'refund';
     } else if (flowType === 'pre_tax_retirement') economicType = 'payroll_retirement_contribution';
@@ -1526,7 +1577,7 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
     // Cash flow follows the posted signed ledger, not a spending category.
     // Categories can change; whether external money entered the connected
     // accounts cannot. Provider-confirmed transfers remain outside cash flow.
-    if (transaction.pending || transaction.excluded || cashFlowType(transaction) !== 'external_inflow' || !isConfirmedIncome(transaction)) return false;
+    if (transaction.pending || transaction.excluded || cashFlowType(transaction) !== 'external_inflow' || (!isConfirmedIncome(transaction) && !isPhysicalCheckDeposit(transaction))) return false;
     return transaction.date >= startDate && transaction.date <= endDate;
   });
   for (const transaction of incomeTransactions) {

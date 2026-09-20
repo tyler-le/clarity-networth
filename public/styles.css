@@ -883,6 +883,9 @@ html[data-theme="dark"] .scrub-dot { fill: #1a201c; }
 .cashflow-payroll .cashflow-payroll-lock { grid-column: 1; margin-top: 4px; }
 .cashflow-payroll > .cashflow-action-copy + .cashflow-payroll-chevron { grid-column: 4; }
 @media (max-width: 760px) { .cashflow-detail-cards { grid-template-columns: 1fr; gap: 8px; }.cashflow-action-card, .cashflow-more, .cashflow-transactions-action, .cashflow-payroll { min-height: 64px; }.cashflow-payroll { grid-template-columns: 34px minmax(0, 1fr) 16px; }.cashflow-payroll .cashflow-action-copy strong { font-size: 15px; }.cashflow-payroll .cashflow-action-copy p { display: none; } }
+/* Three small cards make labels feel cramped on an iPad. Keep the two simple
+   actions paired, then give the richer payroll explanation a full row. */
+@media (min-width: 761px) and (max-width: 1200px) { .cashflow-detail-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }.cashflow-detail-cards .cashflow-payroll { grid-column: 1 / -1; }.cashflow-payroll .cashflow-action-copy > span { overflow: visible; text-overflow: clip; } }
 
 /* A protected cash-flow view should feel like a premium continuation of the
    app, not a generic disabled table. */

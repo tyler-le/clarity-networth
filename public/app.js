@@ -1118,10 +1118,11 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   // while the flow still makes large categories visibly heavier without one
   // unusually large payment consuming the entire chart.
   const largestFlow = Math.max(sourceTotal, knownAllocation, 1);
-  const flow = (fromX, fromY, toX, toY, amount, color, nodes) => {
+  const flow = (fromX, fromY, toX, toY, amount, color, nodes, emphasis = '') => {
     const value = Math.max(0, Number(amount || 0));
     const thickness = value ? 2 + Math.sqrt(value / largestFlow) * 22 : 0;
-    return `<path class="cashflow-flow" data-cashflow-flow="${escapeHtml(nodes.join(' '))}" d="M ${fromX} ${fromY} C ${fromX + (toX - fromX) * .42} ${fromY}, ${toX - (toX - fromX) * .42} ${toY}, ${toX} ${toY}" fill="none" stroke="${color}" stroke-opacity=".24" stroke-width="${thickness}" stroke-linecap="round"/>`;
+    const opacity = emphasis ? '.38' : '.24';
+    return `<path class="cashflow-flow ${emphasis}" data-cashflow-flow="${escapeHtml(nodes.join(' '))}" d="M ${fromX} ${fromY} C ${fromX + (toX - fromX) * .42} ${fromY}, ${toX - (toX - fromX) * .42} ${toY}, ${toX} ${toY}" fill="none" stroke="${color}" stroke-opacity="${opacity}" stroke-width="${thickness}" stroke-linecap="round"/>`;
   };
   const verticallyCenter = (rows) => Math.max(8, (height - contentHeight(rows)) / 2);
   const sourceStart = verticallyCenter(incomeNodes);
@@ -1132,7 +1133,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   let paths = '';
   incomeNodes.forEach((source, index) => {
     const y = sourceStart + index * rowStep;
-    paths += flow(sourceX + sourceW, y + rowHeight / 2, bridgeX, bridgeY + rowHeight / 2, source.amount, source.color || colorFor(source.key, 'var(--income)'), [source.key, bridgeNode.key]);
+    paths += flow(sourceX + sourceW, y + rowHeight / 2, bridgeX, bridgeY + rowHeight / 2, source.amount, source.color || colorFor(source.key, 'var(--income)'), [source.key, bridgeNode.key], 'cashflow-income-bridge');
   });
   if (sourceTotal >= .5) allocationNodes.forEach((node) => {
     paths += flow(bridgeX + bridgeW, bridgeY + rowHeight / 2, middleX, middleY.get(node.key) + rowHeight / 2, node.value, node.color, [bridgeNode.key, node.key]);

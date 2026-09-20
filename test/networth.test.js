@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { annualizedLivingSpend, applyCashFlowCategoryOverride, applyCashFlowCategoryRule, calculateFire, canonicalEconomicLedger, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentPortfolioRangeProgress, investmentRangeProgress, monthlyFinancialFacts, monthlyReview, reconstructInvestmentHistory, refreshReconstructedInvestmentSnapshots, investmentSummary, recurringCharges, removeCashFlowCategoryRule, removeEstimatedNetWorthHistory, repairIncomingClassifications, repairTransferClassifications, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
+import { annualizedLivingSpend, applyCashFlowCategoryOverride, applyCashFlowCategoryRule, calculateFire, canonicalEconomicLedger, cashFlowType, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentPortfolioRangeProgress, investmentRangeProgress, monthlyFinancialFacts, monthlyReview, reconstructInvestmentHistory, refreshReconstructedInvestmentSnapshots, investmentSummary, recurringCharges, removeCashFlowCategoryRule, removeEstimatedNetWorthHistory, repairIncomingClassifications, repairTransferClassifications, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
 import { normalizeCandles } from '../src/lib/market-data.js';
 import { filterSnapshots, preferredNetWorthRange, scrubIndex, uniqueDailySnapshots } from '../public/chart-utils.js';
 
@@ -177,6 +177,53 @@ test('remembered category rules never apply to refunds, transfers, or investment
     assert.equal(applyCashFlowCategoryRule(store, transaction), false);
     assert.equal(transaction.cash_flow_category, undefined);
   }
+});
+
+test('peer payments stay visible and uncategorized until a person assigns their purpose', () => {
+  const zelleRent = {
+    amount: 1500, date: '2026-09-02',
+    bucket: 'transfer',
+    merchant_name: 'Zelle: Jordan rent',
+    pfc_primary: 'TRANSFER_OUT',
+    pfc_detailed: 'TRANSFER_OUT_ACCOUNT_TRANSFER'
+  };
+  const venmoGroceries = {
+    amount: 72, date: '2026-09-03',
+    bucket: 'transfer',
+    counterparty_types: ['payment_app'],
+    merchant_name: 'Payment to Jordan',
+    pfc_primary: 'TRANSFER_OUT',
+    pfc_detailed: 'TRANSFER_OUT_ACCOUNT_TRANSFER'
+  };
+  const store = { transactions: [zelleRent, venmoGroceries] };
+
+  assert.equal(cashFlowType(zelleRent), 'external_outflow');
+  assert.equal(cashFlowType(venmoGroceries), 'external_outflow');
+  assert.equal(repairTransferClassifications(store), 2);
+  assert.equal(zelleRent.bucket, 'guilt_free');
+  assert.equal(venmoGroceries.bucket, 'guilt_free');
+  const result = spendingSummary(store, '1m', new Date('2026-09-05T12:00:00'));
+  assert.equal(result.actualSpend, 1572);
+  assert.deepEqual(result.actualSpendCategories, [{ key: 'uncategorized', name: 'Uncategorized', amount: 1572 }]);
+});
+
+test('physical check deposits stay visible as editable other money in without teaching a generic deposit rule', () => {
+  const checkDeposit = {
+    id: 'physical-check', amount: -2100, date: '2026-09-03', bucket: 'transfer',
+    merchant_name: 'Mobile check deposit', transaction_code: 'cheque',
+    pfc_primary: 'TRANSFER_IN', pfc_detailed: 'TRANSFER_IN_ACCOUNT_TRANSFER'
+  };
+  const store = { transactions: [checkDeposit] };
+
+  assert.equal(cashFlowType(checkDeposit), 'external_inflow');
+  assert.equal(classifyTransaction(checkDeposit), 'income');
+  assert.equal(repairTransferClassifications(store), 1);
+  assert.equal(checkDeposit.bucket, 'income');
+  const result = spendingSummary(store, '1m', new Date('2026-09-05T12:00:00'));
+  assert.deepEqual(result.incomeSources, [{ key: 'money_in_other', label: 'Other money in', amount: 2100 }]);
+  const update = applyCashFlowCategoryOverride(store, 'physical-check', 'income_paychecks');
+  assert.equal(update.rule, null);
+  assert.equal(checkDeposit.cash_flow_category, 'income_paychecks');
 });
 
 test('an income category rule updates every matching deposit without recategorizing protected inflows', () => {

@@ -173,6 +173,13 @@ app.get('/app-icon.svg', (req, res) => {
   res.setHeader('Cache-Control', 'private, no-store, no-cache, max-age=0, must-revalidate');
   res.type('svg').sendFile(path.join(projectRoot, 'public', isDevelopmentRequest(req) ? 'icon-dev.svg' : 'icon.svg'));
 });
+const appIconPngSizes = new Set(['152', '167', '180', '192', '512']);
+app.get('/app-icon-:size.png', (req, res, next) => {
+  const size = String(req.params.size || '');
+  if (!appIconPngSizes.has(size)) return next();
+  res.setHeader('Cache-Control', 'private, no-store, no-cache, max-age=0, must-revalidate');
+  res.type('png').sendFile(path.join(projectRoot, 'public', `${isDevelopmentRequest(req) ? 'icon-dev' : 'icon'}-${size}.png`));
+});
 app.get('/manifest.webmanifest', (req, res) => {
   const development = isDevelopmentRequest(req);
   res.setHeader('Cache-Control', 'private, no-store, no-cache, max-age=0, must-revalidate');
@@ -184,7 +191,10 @@ app.get('/manifest.webmanifest', (req, res) => {
     background_color: development ? '#123b2a' : '#f6f7f4',
     theme_color: development ? '#123b2a' : '#f6f7f4',
     description: development ? 'Clarity development environment' : 'A focused net worth and account tracker',
-    icons: [{ src: '/app-icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }]
+    icons: [
+      { src: '/app-icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: '/app-icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+    ]
   });
 });
 app.use(express.static(path.join(projectRoot, 'public'), {
@@ -217,7 +227,7 @@ function legalPage(title, content) {
   const company = escapeLegalText(process.env.PUBLIC_COMPANY_NAME || 'Clarity');
   const supportEmail = escapeLegalText(process.env.SUPPORT_EMAIL || process.env.OWNER_EMAIL || '');
   const contact = supportEmail ? `<a href="mailto:${supportEmail}">${supportEmail}</a>` : 'the support contact listed in the app';
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#f6f7f4"><title>${company} · ${title}</title><link rel="icon" href="/app-icon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="/app-icon.svg"><link rel="stylesheet" href="/styles.css"></head><body class="legal-body"><main class="legal-page"><header class="legal-header"><a class="legal-brand" href="/" aria-label="Go to ${company}"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 17.5h14M6.5 14.5l3.1-3.1 2.7 2.2 5.1-5.2" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17.4" cy="8.4" r="1.45" fill="currentColor"/></svg></span><span>${company}</span></a><a class="legal-back" href="/">Back to app <span aria-hidden="true">→</span></a></header><article class="legal-card"><p class="legal-kicker">Legal</p><h1>${title}</h1><div class="legal-content">${content(contact)}</div><p class="legal-updated">Last updated: September 6, 2026</p></article></main></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#f6f7f4"><title>${company} · ${title}</title><link rel="icon" href="/app-icon.svg" type="image/svg+xml"><link rel="apple-touch-icon" sizes="180x180" href="/app-icon-180.png"><link rel="apple-touch-icon" sizes="167x167" href="/app-icon-167.png"><link rel="apple-touch-icon" sizes="152x152" href="/app-icon-152.png"><link rel="stylesheet" href="/styles.css"></head><body class="legal-body"><main class="legal-page"><header class="legal-header"><a class="legal-brand" href="/" aria-label="Go to ${company}"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 17.5h14M6.5 14.5l3.1-3.1 2.7 2.2 5.1-5.2" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17.4" cy="8.4" r="1.45" fill="currentColor"/></svg></span><span>${company}</span></a><a class="legal-back" href="/">Back to app <span aria-hidden="true">→</span></a></header><article class="legal-card"><p class="legal-kicker">Legal</p><h1>${title}</h1><div class="legal-content">${content(contact)}</div><p class="legal-updated">Last updated: September 6, 2026</p></article></main></body></html>`;
 }
 
 app.get('/privacy', (_req, res) => {
@@ -1010,7 +1020,7 @@ async function syncTransactionsForItem(store, item) {
         account_id: transaction.account_id, merchant_name: transaction.merchant_name, name: transaction.name,
         amount: transaction.amount, date: transaction.date, bucket: existing?.category_overridden ? existing.bucket : (transferTarget?.bucket || baseBucket), cash_flow_category: existing?.cash_flow_category_overridden ? existing.cash_flow_category : null, cash_flow_category_overridden: existing?.cash_flow_category_overridden || false, cash_flow_type: cashFlowType(transaction), investment_contribution_amount: contributionAmount, investment_contribution_account_id: sourceAccount?.type === 'investment' ? sourceAccount.plaid_account_id : transferTarget?.accountId || null, excluded: existing?.excluded || false,
         iso_currency_code: transaction.iso_currency_code, unofficial_currency_code: transaction.unofficial_currency_code || null,
-        pending: transaction.pending, pfc_primary: transaction.personal_finance_category?.primary || '',
+        pending: transaction.pending, transaction_code: transaction.transaction_code || '', counterparty_types: (transaction.counterparties || []).map((counterparty) => counterparty?.type).filter(Boolean), pfc_primary: transaction.personal_finance_category?.primary || '',
         pfc_detailed: transaction.personal_finance_category?.detailed || '', demo: false
       };
       // Apply a person's remembered merchant category after Plaid's raw

@@ -77,6 +77,7 @@ integrationTest('serves the app shell with defensive browser headers', async () 
   const response = await request(app).get('/');
   assert.equal(response.status, 200);
   assert.match(response.text, /Explore the demo/);
+  assert.match(response.text, /apple-touch-icon" sizes="180x180" href="\/app-icon-180\.png"/);
   assert.match(response.headers['content-security-policy'], /default-src 'self'/);
   assert.equal(response.headers['x-frame-options'], 'DENY');
   assert.match(response.headers['permissions-policy'], /camera=\(\)/);
@@ -850,10 +851,15 @@ integrationTest('Railway staging uses the development app icon without trusting 
     else process.env.RAILWAY_ENVIRONMENT_NAME = previousEnvironment;
   });
   const icon = await request(app).get('/app-icon.svg').set('Host', 'claritynetworth.com');
+  const touchIcon = await request(app).get('/app-icon-180.png').set('Host', 'claritynetworth.com');
   const manifest = await request(app).get('/manifest.webmanifest').set('Host', 'claritynetworth.com');
   assert.equal(icon.status, 200);
   assert.match(icon.body.toString('utf8'), /#123b2a/);
+  assert.equal(touchIcon.status, 200);
+  assert.match(touchIcon.headers['content-type'], /^image\/png/);
+  assert.deepEqual(touchIcon.body, fs.readFileSync(path.join(process.cwd(), 'public', 'icon-dev-180.png')));
   assert.equal(manifest.body.name, 'Clarity Dev');
+  assert.deepEqual(manifest.body.icons.map((icon) => icon.src), ['/app-icon-192.png', '/app-icon-512.png']);
 });
 
 integrationTest('does not create a Plaid reconnect session for another or missing connection', async () => {
