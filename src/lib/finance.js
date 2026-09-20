@@ -1225,6 +1225,34 @@ function spendingCategory(transaction) {
   }[transaction.bucket] || 'Guilt-free spending';
 }
 
+// This is the single member-facing taxonomy for cash flow. Plaid's detailed
+// categories remain useful provider evidence, but they are not a vocabulary a
+// person should have to learn in order to correct a transaction.
+export const CASH_FLOW_CATEGORY_OPTIONS = [
+  { key: 'housing_bills', label: 'Housing & bills', bucket: 'fixed' },
+  { key: 'food_dining', label: 'Food & dining', bucket: 'guilt_free' },
+  { key: 'transport', label: 'Transport', bucket: 'fixed' },
+  { key: 'health', label: 'Health', bucket: 'fixed' },
+  { key: 'insurance', label: 'Insurance', bucket: 'fixed' },
+  { key: 'home', label: 'Home', bucket: 'fixed' },
+  { key: 'shopping', label: 'Shopping', bucket: 'guilt_free' },
+  { key: 'travel', label: 'Travel', bucket: 'guilt_free' },
+  { key: 'entertainment', label: 'Entertainment', bucket: 'guilt_free' },
+  { key: 'personal_care', label: 'Personal care', bucket: 'guilt_free' },
+  { key: 'education', label: 'Education', bucket: 'guilt_free' },
+  { key: 'services', label: 'Services', bucket: 'guilt_free' },
+  { key: 'civic', label: 'Civic & giving', bucket: 'guilt_free' },
+  { key: 'taxes', label: 'Taxes', bucket: 'fixed' },
+  { key: 'fees', label: 'Fees', bucket: 'fixed' },
+  { key: 'uncategorized', label: 'Uncategorized', bucket: 'guilt_free' }
+];
+
+const cashFlowCategoryByKey = new Map(CASH_FLOW_CATEGORY_OPTIONS.map((category) => [category.key, category]));
+
+export function cashFlowCategoryOption(key) {
+  return cashFlowCategoryByKey.get(String(key || '')) || null;
+}
+
 function cashFlowDetail(transaction) {
   // Savings and investing are one post-tax allocation in the Sankey. Keep
   // the underlying bucket for summaries, but expose one canonical flow key so
@@ -1232,6 +1260,8 @@ function cashFlowDetail(transaction) {
   if (transaction.bucket === 'savings' || transaction.bucket === 'investments') {
     return { key: 'save_invest', label: 'Saved & invested', group: 'save_invest' };
   }
+  const overridden = transaction.cash_flow_category_overridden && cashFlowCategoryOption(transaction.cash_flow_category);
+  if (overridden) return { key: overridden.key, label: overridden.label, group: 'actual_spend' };
   const primary = String(transaction.pfc_primary || '').toUpperCase();
   const detailed = String(transaction.pfc_detailed || '').toUpperCase();
   const labels = {
@@ -1250,6 +1280,50 @@ function cashFlowDetail(transaction) {
   };
   const [key, label] = labels[primary] || ['uncategorized', 'Uncategorized'];
   return { key, label, group: 'actual_spend' };
+}
+
+// A merchant rule deliberately uses a narrow, human-recognizable key. It
+// lets a correction to “Zelle Rent” repair prior rent payments, while never
+// treating every payment made through Zelle, Venmo, or PayPal as the same
+// merchant. The source name is preserved; this key is only for matching.
+function categoryRuleKey(transaction) {
+  let name = String(transaction.merchant_name || transaction.name || '')
+    .toLowerCase()
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/\b(?:zelle|venmo|paypal|cash\s*app)\b[\s:*\-]*/g, '')
+    .replace(/\b(?:transfer|payment|purchase|debit|credit)\b/g, '')
+    .replace(/\b(?:ref|confirmation|conf|id)\s*[#:]*\s*[a-z0-9-]+\b/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+  if (name.length < 3 || ['zelle', 'venmo', 'paypal', 'cash app', 'transfer', 'payment'].includes(name)) return '';
+  return name;
+}
+
+export function applyCashFlowCategoryOverride(store, transactionId, categoryKey) {
+  const selected = (store.transactions || []).find((transaction) => transaction.id === transactionId);
+  const category = cashFlowCategoryOption(categoryKey);
+  if (!selected || !category || selected.demo || selected.pending || ['savings', 'investments', 'transfer'].includes(selected.bucket) || cashFlowType(selected) !== 'external_outflow' || Number(selected.amount || 0) <= 0) return null;
+  const ruleKey = categoryRuleKey(selected);
+  const selectedDate = String(selected.date || '');
+  const apply = (transaction) => {
+    transaction.bucket = category.bucket;
+    transaction.category_overridden = true;
+    transaction.cash_flow_category = category.key;
+    transaction.cash_flow_category_overridden = true;
+  };
+  let updated = 0;
+  for (const transaction of store.transactions || []) {
+    if (transaction.demo || transaction.pending || cashFlowType(transaction) !== 'external_outflow' || Number(transaction.amount || 0) <= 0) continue;
+    const isSelected = transaction.id === selected.id;
+    const isPastMatch = Boolean(ruleKey) && String(transaction.date || '') <= selectedDate && categoryRuleKey(transaction) === ruleKey;
+    if (!isSelected && !isPastMatch) continue;
+    // A deliberate, different correction always wins over a later rule.
+    if (!isSelected && transaction.cash_flow_category_overridden && transaction.cash_flow_category !== category.key) continue;
+    apply(transaction);
+    updated += 1;
+  }
+  return { updated, category, matchedPrior: Math.max(0, updated - 1) };
 }
 
 function transactionKey(transaction, index) {
@@ -1485,6 +1559,7 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
       amount,
       category,
       bucket: transaction.bucket,
+      cashFlowCategory: flow.key,
       flowKey: flow.key,
       flowLabel: flow.label,
       flowGroup: flow.group
@@ -1612,7 +1687,7 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
   const incomeSources = [...incomeSourceMap.values()].sort((a, b) => b.amount - a.amount);
   const preTaxRetirement = [...monthlyPreTaxRetirement.values()].reduce((sum, amount) => sum + amount, 0);
   const actualSpendCategories = [...actualSpendCategoryMap.values()].filter((row) => row.amount > 0).sort((a, b) => b.amount - a.amount);
-  return { range, startDate, endDate, completedMonths, total, income, incomeSources, actualSpend, netCashFlow: income - actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, savedInvested, preTaxRetirement, monthlyAverage: total / monthCount, categories: categoryRows, topMerchants, monthly: monthlyRows, transactions: transactionRows };
+  return { range, startDate, endDate, completedMonths, total, income, incomeSources, actualSpend, netCashFlow: income - actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, savedInvested, preTaxRetirement, monthlyAverage: total / monthCount, categories: categoryRows, categoryOptions: CASH_FLOW_CATEGORY_OPTIONS, topMerchants, monthly: monthlyRows, transactions: transactionRows };
 }
 
 function monthId(dateString) {

@@ -8,7 +8,7 @@ import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './lib/store.js';
 import { assertSafeFinancialStoreWrite, chooseSaferStore, hasConnectedFinancialData } from './lib/store-safety.js';
 import { consumeRateLimit, databaseEnabled, databaseHealthy, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, writeDatabaseStore } from './lib/database.js';
-import { accountBalanceHistory, calculateFire, cashFlowType, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentSummary, monthlyReview, recurringCharges, removeEstimatedNetWorthHistory, repairIncomingClassifications, repairTransferClassifications, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './lib/finance.js';
+import { accountBalanceHistory, applyCashFlowCategoryOverride, calculateFire, cashFlowType, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentSummary, monthlyReview, recurringCharges, removeEstimatedNetWorthHistory, repairIncomingClassifications, repairTransferClassifications, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './lib/finance.js';
 import { investmentLedgerPages, plaidConfigured, plaidPost } from './lib/plaid.js';
 import { loadHistoricalPrices } from './lib/market-data.js';
 import { historyStart } from './lib/history.js';
@@ -1008,7 +1008,7 @@ async function syncTransactionsForItem(store, item) {
       const normalized = {
         id: existing?.id || crypto.randomUUID(), item_id: item.id, plaid_transaction_id: transaction.transaction_id,
         account_id: transaction.account_id, merchant_name: transaction.merchant_name, name: transaction.name,
-        amount: transaction.amount, date: transaction.date, bucket: existing?.category_overridden ? existing.bucket : (transferTarget?.bucket || baseBucket), cash_flow_type: cashFlowType(transaction), investment_contribution_amount: contributionAmount, investment_contribution_account_id: sourceAccount?.type === 'investment' ? sourceAccount.plaid_account_id : transferTarget?.accountId || null, excluded: existing?.excluded || false,
+        amount: transaction.amount, date: transaction.date, bucket: existing?.category_overridden ? existing.bucket : (transferTarget?.bucket || baseBucket), cash_flow_category: existing?.cash_flow_category_overridden ? existing.cash_flow_category : null, cash_flow_category_overridden: existing?.cash_flow_category_overridden || false, cash_flow_type: cashFlowType(transaction), investment_contribution_amount: contributionAmount, investment_contribution_account_id: sourceAccount?.type === 'investment' ? sourceAccount.plaid_account_id : transferTarget?.accountId || null, excluded: existing?.excluded || false,
         iso_currency_code: transaction.iso_currency_code, unofficial_currency_code: transaction.unofficial_currency_code || null,
         pending: transaction.pending, pfc_primary: transaction.personal_finance_category?.primary || '',
         pfc_detailed: transaction.personal_finance_category?.detailed || '', demo: false
@@ -1612,15 +1612,11 @@ app.delete('/api/account', async (req, res) => {
 });
 
 app.patch('/api/transactions/:id/category', async (req, res) => {
-  const bucket = req.body?.bucket;
-  if (!['fixed', 'savings', 'investments', 'guilt_free'].includes(bucket)) return res.status(400).json({ error: 'Invalid plan category.' });
   const store = await loadStore(req.user);
-  const transaction = store.transactions.find((record) => record.id === req.params.id);
-  if (!transaction || transaction.demo) return res.status(404).json({ error: 'Transaction not found.' });
-  transaction.bucket = bucket;
-  transaction.category_overridden = true;
+  const result = applyCashFlowCategoryOverride(store, req.params.id, req.body?.category);
+  if (!result) return res.status(400).json({ error: 'Choose a cash flow category for a posted spending transaction.' });
   await saveStore(req.user, store);
-  res.json({ ok: true });
+  res.json({ ok: true, updated: result.updated, matchedPrior: result.matchedPrior, category: result.category });
 });
 
 app.patch('/api/accounts/:id/nickname', async (req, res) => {

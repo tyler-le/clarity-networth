@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { annualizedLivingSpend, calculateFire, canonicalEconomicLedger, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentPortfolioRangeProgress, investmentRangeProgress, monthlyFinancialFacts, monthlyReview, reconstructInvestmentHistory, refreshReconstructedInvestmentSnapshots, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, repairIncomingClassifications, repairTransferClassifications, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
+import { annualizedLivingSpend, applyCashFlowCategoryOverride, calculateFire, canonicalEconomicLedger, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentPortfolioRangeProgress, investmentRangeProgress, monthlyFinancialFacts, monthlyReview, reconstructInvestmentHistory, refreshReconstructedInvestmentSnapshots, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, repairIncomingClassifications, repairTransferClassifications, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
 import { normalizeCandles } from '../src/lib/market-data.js';
 import { filterSnapshots, preferredNetWorthRange, scrubIndex, uniqueDailySnapshots } from '../public/chart-utils.js';
 
@@ -103,6 +103,23 @@ test('spending summary excludes transfers and groups only transactions in the se
   assert.equal(result.total, 80);
   assert.deepEqual(result.categories, [{ name: 'Food & dining', amount: 80, share: 1, percentage: 100 }]);
   assert.deepEqual(result.topMerchants, [{ name: 'Cafe', amount: 80 }]);
+});
+
+test('a cash-flow category correction applies to prior matching merchant payments without overwriting another explicit choice', () => {
+  const store = { transactions: [
+    { id: 'latest-rent', date: '2026-09-15', amount: 1500, bucket: 'guilt_free', merchant_name: 'Zelle: Rent', pending: false },
+    { id: 'prior-rent', date: '2026-08-15', amount: 1500, bucket: 'guilt_free', merchant_name: 'Zelle Rent', pending: false },
+    { id: 'different-recipient', date: '2026-08-16', amount: 40, bucket: 'guilt_free', merchant_name: 'Zelle: Alex', pending: false },
+    { id: 'explicit-choice', date: '2026-07-15', amount: 1500, bucket: 'guilt_free', merchant_name: 'Zelle Rent', pending: false, cash_flow_category: 'shopping', cash_flow_category_overridden: true }
+  ] };
+  const result = applyCashFlowCategoryOverride(store, 'latest-rent', 'housing_bills');
+  assert.deepEqual({ updated: result.updated, matchedPrior: result.matchedPrior, category: result.category.key }, { updated: 2, matchedPrior: 1, category: 'housing_bills' });
+  assert.equal(store.transactions.find((transaction) => transaction.id === 'latest-rent').bucket, 'fixed');
+  assert.equal(store.transactions.find((transaction) => transaction.id === 'prior-rent').cash_flow_category, 'housing_bills');
+  assert.equal(store.transactions.find((transaction) => transaction.id === 'different-recipient').cash_flow_category, undefined);
+  assert.equal(store.transactions.find((transaction) => transaction.id === 'explicit-choice').cash_flow_category, 'shopping');
+  const summary = spendingSummary(store, '3m', new Date('2026-09-20T12:00:00'));
+  assert.equal(summary.transactions.find((transaction) => transaction.id === 'prior-rent').flowLabel, 'Housing & bills');
 });
 
 test('monthly spending keeps income separate for comparison', () => {

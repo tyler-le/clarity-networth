@@ -140,6 +140,19 @@ test('a new visitor can explore the complete demo without signing in @critical',
   expect(pageErrors).toEqual([]);
 });
 
+test('cash flow activity search narrows the visible transactions without changing its selected timeframe', async ({ page }) => {
+  await openDemo(page);
+  await goToView(page, 'spending');
+  await page.locator('#spendingTransactionsPanel summary').click();
+  const search = page.getByRole('searchbox', { name: 'Search cash flow activity' });
+  await expect(search).toBeVisible();
+  await search.fill('Netflix');
+  await expect(page.locator('#spendingTransactions')).toContainText('Netflix');
+  await expect(page.locator('#spendingTransactionCount')).toContainText(/posted/);
+  await search.fill('not-a-real-merchant');
+  await expect(page.locator('#spendingTransactions')).toContainText('No posted transactions match');
+});
+
 test('net worth opens as a concise financial briefing', async ({ page }) => {
   await openDemo(page);
   await expect(page.locator('#netWorthCard')).toBeVisible();

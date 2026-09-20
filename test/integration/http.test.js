@@ -443,6 +443,31 @@ integrationTest('link sync retains complete ledger evidence and removes canceled
   assert.equal(stored.transactions.filter((row) => row.source === 'investment_transaction').length, 1);
 });
 
+integrationTest('categorizing a transaction updates prior matching merchant activity without crossing users', async () => {
+  const email = 'transaction-category@example.com';
+  const key = userStorageKey(email);
+  writeStore({ items: [], accounts: [], snapshots: [], transactions: [
+    { id: 'latest', merchant_name: 'Zelle: Rent', name: 'Zelle: Rent', date: '2026-09-15', amount: 1500, bucket: 'guilt_free', pending: false },
+    { id: 'prior', merchant_name: 'Zelle Rent', name: 'Zelle Rent', date: '2026-08-15', amount: 1500, bucket: 'guilt_free', pending: false },
+    { id: 'other-recipient', merchant_name: 'Zelle: Alex', name: 'Zelle: Alex', date: '2026-08-15', amount: 50, bucket: 'guilt_free', pending: false }
+  ] }, key);
+  const response = await request(app).patch('/api/transactions/latest/category').set('Cookie', signedTestCookie(email)).send({ category: 'housing_bills' });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.updated, 2);
+  assert.equal(response.body.matchedPrior, 1);
+  const stored = readStore(key);
+  assert.equal(stored.transactions.find((transaction) => transaction.id === 'prior').cash_flow_category, 'housing_bills');
+  assert.equal(stored.transactions.find((transaction) => transaction.id === 'other-recipient').cash_flow_category, undefined);
+  const otherEmail = 'other-transaction-category@example.com';
+  const otherKey = userStorageKey(otherEmail);
+  writeStore({ items: [], accounts: [], snapshots: [], transactions: [{ id: 'latest', merchant_name: 'Zelle Rent', name: 'Zelle Rent', date: '2026-09-15', amount: 1500, bucket: 'guilt_free', pending: false }] }, otherKey);
+  const forbidden = await request(app).patch('/api/transactions/latest/category').set('Cookie', signedTestCookie(otherEmail)).send({ category: 'invalid' });
+  assert.equal(forbidden.status, 400);
+  assert.equal(readStore(otherKey).transactions[0].cash_flow_category, undefined);
+  deleteStore(key);
+  deleteStore(otherKey);
+});
+
 integrationTest('does not expose sign-in configuration secrets', async () => {
   const response = await request(app).get('/api/auth/config');
   assert.equal(response.status, 200);

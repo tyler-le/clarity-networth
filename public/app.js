@@ -20,6 +20,7 @@ const state = {
   allocationDisplay: 'percentage',
   spendingCategory: 'all',
   spendingSort: 'recent',
+  spendingTransactionSearch: '',
   cashflowActivitySort: 'recent',
   // Set after the first verified portfolio payload arrives. Starting at "all"
   // avoids a transient 1Y selection that would turn a new connection into a
@@ -1259,17 +1260,19 @@ function renderSpendingTransactions(data) {
   $('#spendingSort').value = state.spendingSort;
   let rows = (data.transactions || []).filter((transaction) => {
     const matchesFilter = state.spendingCategory === 'all' || transaction.flowKey === state.spendingCategory || transaction.flowGroup === state.spendingCategory;
-    return matchesFilter && (!state.spendingMonth || String(transaction.date).startsWith(state.spendingMonth));
+    const search = state.spendingTransactionSearch.trim().toLocaleLowerCase();
+    const matchesSearch = !search || `${transaction.name || ''} ${transaction.flowLabel || ''} ${transaction.category || ''}`.toLocaleLowerCase().includes(search);
+    return matchesFilter && matchesSearch && (!state.spendingMonth || String(transaction.date).startsWith(state.spendingMonth));
   });
   rows = sortCashflowTransactions(rows, state.spendingSort);
   $('#spendingTransactionCount').textContent = `${rows.length} posted`;
-  const options = [['fixed', 'Fixed costs'], ['savings', 'Savings'], ['investments', 'Investments'], ['guilt_free', 'Guilt-free']];
+  const options = (data.categoryOptions || []).filter((category) => category.key !== 'uncategorized');
   $('#spendingTransactions').innerHTML = rows.length ? rows.map((transaction) => {
-    const categoryControl = ['income', 'pre_tax_retirement'].includes(transaction.bucket) || state.dashboard?.demoMode
+    const categoryControl = transaction.flowGroup !== 'actual_spend' || ['income', 'pre_tax_retirement'].includes(transaction.bucket) || state.dashboard?.demoMode
       ? `<span class="transaction-category-label">${escapeHtml(transaction.category)}</span>`
-      : `<select data-transaction-category="${escapeHtml(transaction.id)}" aria-label="Plan category for ${escapeHtml(transaction.name)}">${options.map(([value, label]) => `<option value="${value}" ${transaction.bucket === value ? 'selected' : ''}>${label}</option>`).join('')}</select>`;
+      : `<select data-transaction-category="${escapeHtml(transaction.id)}" aria-label="Cash flow category for ${escapeHtml(transaction.name)}">${options.map((category) => `<option value="${escapeHtml(category.key)}" ${transaction.cashFlowCategory === category.key ? 'selected' : ''}>${escapeHtml(category.label)}</option>`).join('')}</select>`;
     return `<div class="spending-transaction-row ${transaction.bucket === 'income' ? 'income-transaction' : ''} ${transaction.bucket === 'pre_tax_retirement' ? 'payroll-transaction' : ''}"><div><strong>${escapeHtml(transaction.name)}</strong><span>${new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span></div><div class="transaction-plan"><b>${transaction.bucket === 'income' ? '+' : ''}${fmt.format(transaction.amount)}</b>${categoryControl}</div></div>`;
-  }).join('') : '<p class="spending-empty">No posted transactions in this category for this period.</p>';
+  }).join('') : `<p class="spending-empty">No posted transactions match${state.spendingTransactionSearch ? ` “${escapeHtml(state.spendingTransactionSearch)}”` : ' this category for this period'}.</p>`;
 }
 
 function sortCashflowTransactions(rows, sort) {
@@ -2835,6 +2838,7 @@ $$('[data-allocation-display]').forEach((button) => button.addEventListener('cli
 }));
 $('#spendingCategoryFilter').addEventListener('change', (event) => { state.spendingCategory = event.target.value; renderSpendingTransactions(spendingForSelectedMonth(state.spending)); });
 $('#spendingSort').addEventListener('change', (event) => { state.spendingSort = event.target.value; renderSpendingTransactions(spendingForSelectedMonth(state.spending)); });
+$('#spendingTransactionSearch').addEventListener('input', (event) => { state.spendingTransactionSearch = event.target.value; renderSpendingTransactions(spendingForSelectedMonth(state.spending)); });
 function openSpendingCategory(category) {
   if (!category) return;
   if (!plusFeatureAvailable('canUseCashFlowDetails')) {
@@ -3003,9 +3007,10 @@ $('#spendingTransactions').addEventListener('change', async (event) => {
   if (!select) return;
   select.disabled = true;
   try {
-    await api(`/api/transactions/${select.dataset.transactionCategory}/category`, { method: 'PATCH', body: JSON.stringify({ bucket: select.value }) });
+    const result = await api(`/api/transactions/${select.dataset.transactionCategory}/category`, { method: 'PATCH', body: JSON.stringify({ category: select.value }) });
     state.spending = await loadSpending();
     renderSpending(state.spending);
+    if (result.matchedPrior) showNotice(`Updated this and ${result.matchedPrior} earlier matching transaction${result.matchedPrior === 1 ? '' : 's'}.`, 'success');
   } catch (error) { showNotice(error.message, 'error'); select.disabled = false; }
 });
 $('#spendingTrend').addEventListener('click', (event) => {
