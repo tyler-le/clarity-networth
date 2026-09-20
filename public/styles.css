@@ -624,18 +624,26 @@ html[data-theme="dark"] .profile-settings-panel { border-color: var(--line); bac
 .cashflow-activity-detail { position: relative; padding: 6px 8px 16px; }.cashflow-activity-back { display: grid; width: 30px; height: 30px; place-items: center; margin: 0 0 14px; padding: 0; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); background: var(--card); font: inherit; font-size: 21px; font-weight: 500; line-height: 1; }.cashflow-activity-back:hover { border-color: color-mix(in srgb, var(--accent) 42%, var(--line)); background: var(--accent-soft); }.cashflow-activity-back:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 32%, transparent); outline-offset: 2px; }.cashflow-activity-heading { display: flex; align-items: end; justify-content: space-between; gap: 14px; margin-bottom: 17px; }.cashflow-activity-detail h2 { margin: 5px 0 4px; font-size: 25px; letter-spacing: -.045em; }.cashflow-activity-heading p { margin: 0; color: var(--muted); font-size: 12px; }.cashflow-activity-controls { display: flex; flex: 0 0 auto; gap: 7px; }.cashflow-activity-controls select { min-height: 34px; max-width: 145px; border: 1px solid var(--line); border-radius: 9px; background: var(--card); color: var(--ink); padding: 6px 26px 6px 9px; font: inherit; font-size: 12px; font-weight: 650; }.cashflow-activity-controls select:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 32%, transparent); outline-offset: 2px; }.cashflow-activity-rows { overflow: hidden; border: 1px solid var(--line); border-radius: 12px; }.cashflow-activity-rows > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px; border-bottom: 1px solid var(--line); }.cashflow-activity-rows > div:last-child { border-bottom: 0; }.cashflow-activity-rows span { display: grid; min-width: 0; gap: 3px; }.cashflow-activity-rows strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }.cashflow-activity-rows small { color: var(--muted); font-size: 10px; }.cashflow-activity-value { display: grid; justify-items: end; gap: 4px; }.cashflow-activity-rows b { white-space: nowrap; font-size: 12px; font-variant-numeric: tabular-nums; }.cashflow-activity-rows b.positive { color: var(--accent); }.cashflow-activity-value :is(select, .transaction-category-label), .account-history-activity-value :is(select, .transaction-category-label) { max-width: 150px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 10px; line-height: 1.2; text-align-last: right; }.cashflow-activity-value .transaction-category-label, .account-history-activity-value .transaction-category-label { display: block; text-align: right; }
 .spending-transactions { scroll-margin-top: 16px; }
 .recurring-card { margin-top: 16px; overflow: hidden; }
-/* Recurring charges is a sibling to activity, not a smaller secondary widget.
-   Reuse the same type scale and spacing so the two disclosures scan as one system. */
 .recurring-card summary { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; cursor: pointer; list-style: none; color: var(--ink); font-size: 14px; font-weight: 720; }
 .recurring-card summary::-webkit-details-marker { display: none; }
 .recurring-card summary small { color: var(--muted); font-size: 12px; font-weight: 600; }
 .recurring-card[open] summary { border-bottom: 1px solid var(--line); }
+.recurring-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(250px, 310px); }
+.recurring-list { min-width: 0; }
 .recurring-card button { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border: 0; border-bottom: 1px solid var(--line); color: var(--ink); background: transparent; text-align: left; cursor: pointer; }
 .recurring-card button:last-child { border-bottom: 0; }
 .recurring-card button:hover { background: var(--accent-soft); }
-.recurring-card span { display: grid; gap: 3px; min-width: 0; }
-.recurring-card small { color: var(--muted); font-size: 11px; }
-.recurring-card strong { white-space: nowrap; font-size: 13px; font-variant-numeric: tabular-nums; }
+.recurring-card button > span { display: grid; gap: 3px; min-width: 0; }
+.recurring-card button strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.recurring-card button small { color: var(--muted); font-size: 11px; }
+.recurring-card button > b { flex: 0 0 auto; white-space: nowrap; font-size: 13px; font-variant-numeric: tabular-nums; }
+.recurring-context { display: grid; align-content: start; gap: 11px; padding: 20px; border-left: 1px solid var(--line); background: linear-gradient(145deg, color-mix(in srgb, var(--accent-soft) 68%, var(--card)), var(--card) 68%); }
+.recurring-context > strong { font-size: 16px; letter-spacing: -.025em; }
+.recurring-context > p { margin: -5px 0 2px; color: var(--muted); font-size: 12px; }
+.recurring-context-stat { display: grid; gap: 3px; padding: 10px 11px; border: 1px solid color-mix(in srgb, var(--accent) 15%, var(--line)); border-radius: 10px; background: color-mix(in srgb, var(--card) 78%, transparent); }
+.recurring-context-stat span { color: var(--muted); font-size: 10px; font-weight: 720; letter-spacing: .05em; text-transform: uppercase; }
+.recurring-context-stat b { font-size: 12px; font-variant-numeric: tabular-nums; }
+.recurring-context > small { color: var(--muted); font-size: 10px; line-height: 1.45; }
 
 /* Compare two equal-width bars rather than disguising one as an overlay. */
 .trend-bars { display: flex; align-items: end; gap: 3px; width: min(34px, 100%); }
@@ -1354,10 +1362,10 @@ html[data-theme="dark"] .plus-history-gate .plus-history-cta { background: linea
 .spending-transaction-row { grid-template-columns: minmax(0, 1fr) minmax(130px, auto); }
 .spending-transaction-context { display: grid; align-content: start; gap: 11px; padding: 20px; border-left: 1px solid var(--line); background: linear-gradient(145deg, color-mix(in srgb, var(--accent-soft) 68%, var(--card)), var(--card) 68%); }
 .spending-transaction-context > strong { font-size: 16px; letter-spacing: -.025em; }
-.spending-transactions-more { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-top: 1px solid var(--line); background: color-mix(in srgb, var(--accent-soft) 30%, var(--card)); }
-.spending-transactions-more span { color: var(--muted); font-size: 11px; }
-.spending-transactions-more button { flex: 0 0 auto; margin: 0; padding: 8px 11px; font-size: 11px; }
-.spending-transactions-complete { justify-content: flex-start; background: var(--card); }
+.spending-transaction-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; border-top: 1px solid var(--line); background: color-mix(in srgb, var(--accent-soft) 30%, var(--card)); }
+.spending-transaction-pagination span { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.spending-transaction-pagination button { margin: 0; padding: 5px 3px; font-size: 11px; }
+.spending-transaction-pagination button:disabled { color: var(--muted); cursor: default; opacity: .52; }
 .spending-transaction-context > p { margin: -5px 0 2px; color: var(--muted); font-size: 12px; }
 .spending-context-stat { display: grid; gap: 3px; padding: 10px 11px; border: 1px solid color-mix(in srgb, var(--accent) 15%, var(--line)); border-radius: 10px; background: color-mix(in srgb, var(--card) 78%, transparent); }
 .spending-context-stat span { color: var(--muted); font-size: 10px; font-weight: 720; text-transform: uppercase; letter-spacing: .05em; }
@@ -1386,6 +1394,8 @@ html[data-theme="dark"] .plus-history-gate .plus-history-cta { background: linea
   .spending-transaction-context > p, .spending-transaction-context .spending-context-stat { grid-column: 1; }
   .spending-memory-note { grid-column: 1 / -1; }
   .spending-forget-memory { grid-column: 2; grid-row: 1 / span 2; align-self: start; }
-  .spending-transactions-more { align-items: stretch; flex-direction: column; }
-  .spending-transactions-more button { width: 100%; }
+  .spending-transaction-pagination { padding-inline: 15px; }
+  .recurring-layout { grid-template-columns: 1fr; }
+  .recurring-context { order: -1; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 14px; padding: 15px 18px; border-right: 0; border-bottom: 1px solid var(--line); border-left: 0; }
+  .recurring-context > p, .recurring-context .recurring-context-stat, .recurring-context > small { grid-column: 1; }
 }

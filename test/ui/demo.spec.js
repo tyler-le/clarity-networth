@@ -127,6 +127,7 @@ test('a new visitor can explore the complete demo without signing in @critical',
   await expect(page.locator('#cashflowSankey svg')).toBeVisible();
   await expect(page.locator('#recurringCharges')).toBeVisible();
   await expect(page.locator('#recurringCharges')).toContainText('Netflix');
+  await expect(page.locator('#recurringCharges .recurring-context')).toContainText('Next likely');
   await expect(page.locator('#goalTitle')).toHaveText('Emergency fund');
   await expect(page.locator('#goalDetail')).toContainText('Demo only');
 

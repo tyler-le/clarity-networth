@@ -21,7 +21,7 @@ const state = {
   spendingCategory: 'all',
   spendingSort: 'recent',
   spendingTransactionSearch: '',
-  spendingTransactionsVisible: 50,
+  spendingTransactionsPage: 1,
   spendingTransactionsPageKey: '',
   cashflowActivitySort: 'recent',
   // Set after the first verified portfolio payload arrives. Starting at "all"
@@ -368,8 +368,9 @@ function renderRecurringCharges(recurring = {}) {
   panel.classList.toggle('hidden', !rows.length);
   if (!rows.length) return;
   const upcoming = recurring.upcoming?.[0];
-  $('#recurringHint').textContent = upcoming ? `Next likely · ${new Date(`${upcoming.nextDate}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : `${rows.length} tracked`;
-  $('#recurringList').innerHTML = rows.map((charge) => `<button type="button" data-recurring-charge="${escapeHtml(charge.key)}"><span>${escapeHtml(charge.name)}<small>${charge.cadence} · ${upcoming?.key === charge.key ? 'likely next' : `last ${new Date(`${charge.lastDate}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}</small></span><strong>${fmt.format(charge.amount)}</strong></button>`).join('');
+  $('#recurringHint').textContent = `${rows.length} tracked`;
+  const upcomingDate = upcoming && new Date(`${upcoming.nextDate}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  $('#recurringList').innerHTML = `<div class="recurring-layout"><div class="recurring-list">${rows.map((charge) => `<button type="button" data-recurring-charge="${escapeHtml(charge.key)}"><span><strong>${escapeHtml(charge.name)}</strong><small>${charge.cadence} · ${upcoming?.key === charge.key ? `likely ${upcomingDate}` : `last ${new Date(`${charge.lastDate}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}</small></span><b>${fmt.format(charge.amount)}</b></button>`).join('')}</div>${upcoming ? `<aside class="recurring-context" aria-label="Next recurring charge"><div class="card-label">NEXT LIKELY</div><strong>${escapeHtml(upcoming.name)}</strong><p>${escapeHtml(upcoming.cadence)} · expected ${escapeHtml(upcomingDate)}</p><div class="recurring-context-stat"><span>Expected charge</span><b>${fmt.format(upcoming.amount)}</b></div><small>Based on your recent posted activity.</small></aside>` : ''}</div>`;
 }
 
 function netWorthRangeLabel(range) {
@@ -1286,18 +1287,21 @@ function renderSpendingTransactions(data) {
   rows = sortCashflowTransactions(rows, state.spendingSort);
   $('#spendingTransactionCount').textContent = `${rows.length} posted`;
   // Keep filters and search comprehensive, but avoid turning a long history
-  // into an endless initial scroll. The page key resets only when the person
-  // changes the result set; loading another page preserves their place.
+  // into an endless scroll. The page resets only when the result set changes.
   const pageKey = [state.spendingRange, state.spendingMonth || '', state.spendingCategory, state.spendingSort, state.spendingTransactionSearch].join('|');
   if (pageKey !== state.spendingTransactionsPageKey) {
     state.spendingTransactionsPageKey = pageKey;
-    state.spendingTransactionsVisible = 50;
+    state.spendingTransactionsPage = 1;
   }
-  const visibleRows = rows.slice(0, state.spendingTransactionsVisible);
+  const pageSize = 25;
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  state.spendingTransactionsPage = Math.min(state.spendingTransactionsPage, totalPages);
+  const pageStart = (state.spendingTransactionsPage - 1) * pageSize;
+  const visibleRows = rows.slice(pageStart, pageStart + pageSize);
   const transactionRows = visibleRows.length ? `<div class="spending-transaction-list">${visibleRows.map((transaction) => {
     const categoryControl = transactionCategoryControl(data, transaction);
     return `<div class="spending-transaction-row ${transaction.bucket === 'income' ? 'income-transaction' : ''} ${transaction.bucket === 'pre_tax_retirement' ? 'payroll-transaction' : ''}"><div><strong>${escapeHtml(transaction.name)}</strong><span>${new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span></div><div class="transaction-plan"><b>${transaction.bucket === 'income' ? '+' : ''}${fmt.format(transaction.amount)}</b>${categoryControl}</div></div>`;
-  }).join('')}${rows.length > visibleRows.length ? `<div class="spending-transactions-more"><span>Showing ${visibleRows.length} of ${rows.length}</span><button class="secondary" type="button" data-spending-transactions-more>Load ${Math.min(50, rows.length - visibleRows.length)} more</button></div>` : rows.length > 50 ? `<div class="spending-transactions-more spending-transactions-complete"><span>Showing all ${rows.length} transactions</span></div>` : ''}</div>` : `<p class="spending-empty">No posted transactions match${state.spendingTransactionSearch ? ` “${escapeHtml(state.spendingTransactionSearch)}”` : ' this category for this period'}.</p>`;
+  }).join('')}${totalPages > 1 ? `<nav class="spending-transaction-pagination" aria-label="Transaction pages"><button class="text-button" type="button" data-spending-transactions-page="previous" ${state.spendingTransactionsPage === 1 ? 'disabled' : ''}>‹ Previous</button><span>Page ${state.spendingTransactionsPage} of ${totalPages}</span><button class="text-button" type="button" data-spending-transactions-page="next" ${state.spendingTransactionsPage === totalPages ? 'disabled' : ''}>Next ›</button></nav>` : ''}</div>` : `<p class="spending-empty">No posted transactions match${state.spendingTransactionSearch ? ` “${escapeHtml(state.spendingTransactionSearch)}”` : ' this category for this period'}.</p>`;
   $('#spendingTransactions').innerHTML = rows.length
     ? `<div class="spending-transaction-layout">${transactionRows}${renderTransactionContextPanel(rows, data)}</div>`
     : transactionRows;
@@ -3082,10 +3086,11 @@ $('#spendingTransactions').addEventListener('change', (event) => {
   void saveTransactionCategory(select);
 });
 $('#spendingTransactions').addEventListener('click', async (event) => {
-  const more = event.target.closest('[data-spending-transactions-more]');
-  if (more) {
-    state.spendingTransactionsVisible += 50;
+  const page = event.target.closest('[data-spending-transactions-page]');
+  if (page) {
+    state.spendingTransactionsPage += page.dataset.spendingTransactionsPage === 'next' ? 1 : -1;
     renderSpendingTransactions(spendingForSelectedMonth(state.spending));
+    $('#spendingTransactions')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     return;
   }
   const forget = event.target.closest('[data-cashflow-forget-rule]');

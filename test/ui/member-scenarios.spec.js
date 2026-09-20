@@ -180,7 +180,7 @@ test('cash-flow activity summary uses the same category label as its active tran
   await expect(page.locator('.spending-transaction-context .spending-context-stat')).not.toContainText('Fixed costs');
 });
 
-test('cash-flow activity reveals a long filtered history in deliberate pages', async ({ page }) => {
+test('cash-flow activity replaces a long filtered history one page at a time', async ({ page }) => {
   await openSignedInScenario(page, (preview) => {
     const source = preview.spending.transactions.find((transaction) => transaction.flowGroup === 'actual_spend');
     preview.spending.transactions = Array.from({ length: 55 }, (_, index) => ({
@@ -194,11 +194,14 @@ test('cash-flow activity reveals a long filtered history in deliberate pages', a
 
   await goToView(page, 'spending');
   await page.locator('#spendingTransactionsPanel summary').click();
-  await expect(page.locator('.spending-transaction-row')).toHaveCount(50);
-  await expect(page.getByRole('button', { name: 'Load 5 more' })).toBeVisible();
-  await page.getByRole('button', { name: 'Load 5 more' }).click();
-  await expect(page.locator('.spending-transaction-row')).toHaveCount(55);
-  await expect(page.locator('.spending-transactions-more')).toContainText('Showing all 55 transactions');
+  await expect(page.locator('.spending-transaction-row')).toHaveCount(25);
+  await expect(page.locator('.spending-transaction-pagination')).toContainText('Page 1 of 3');
+  await page.getByRole('button', { name: 'Next' }).click();
+  await expect(page.locator('.spending-transaction-row')).toHaveCount(25);
+  await expect(page.locator('.spending-transaction-pagination')).toContainText('Page 2 of 3');
+  await page.getByRole('button', { name: 'Next' }).click();
+  await expect(page.locator('.spending-transaction-row')).toHaveCount(5);
+  await expect(page.locator('.spending-transaction-pagination')).toContainText('Page 3 of 3');
 });
 
 test('a Free member can preview investment history before choosing Plus', async ({ page }) => {
