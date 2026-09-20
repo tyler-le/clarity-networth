@@ -2796,6 +2796,10 @@ $('#cashflowDialogContent').addEventListener('click', (event) => {
     renderCashFlowSankey(spendingForSelectedMonth(state.spending), $('#cashflowDialogContent'), true);
     return;
   }
+  if (event.target.closest('[data-cashflow-transactions]')) {
+    openCashflowCategoryActivity('all');
+    return;
+  }
   const node = event.target.closest('[data-cashflow-node]');
   if (!node) return;
   openCashflowCategoryActivity(node.dataset.cashflowNode);

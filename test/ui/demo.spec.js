@@ -442,6 +442,12 @@ test('cash-flow diagram stays readable and opens transactions in-app @critical',
   await page.locator('#cashflowExpand').click();
   await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
   await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
+  const expandedTransactions = page.locator('#cashflowDialogContent [data-cashflow-transactions]');
+  await expect(expandedTransactions).toBeVisible();
+  await expandedTransactions.click();
+  await expect(page.locator('#cashflowDialogContent .cashflow-activity-detail')).toContainText('Cash flow activity');
+  await page.locator('#cashflowDialogContent [data-cashflow-back]').click();
+  await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
   const category = page.locator('#cashflowDialogContent [data-cashflow-category]').first();
   await category.click();
   await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
