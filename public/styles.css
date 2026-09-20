@@ -888,6 +888,8 @@ html[data-theme="dark"] .scrub-dot { fill: #1a201c; }
 .cashflow-plus-preview-footer em { color: var(--muted); font-size: 10px; font-style: normal; font-weight: 620; }
 .cashflow-plus-preview-footer .primary { min-height: 50px; padding: 0 19px; border-radius: 14px; background: linear-gradient(135deg, #1a2a20, #204c35); box-shadow: 0 13px 24px rgba(24, 60, 39, .2); font-size: 13px; }.cashflow-plus-preview-footer .primary:hover { background: linear-gradient(135deg, #132018, #1a5e3d); transform: translateY(-1px); }
 @media (max-width: 640px) { .cashflow-plus-preview { padding: 0 16px calc(18px + env(safe-area-inset-bottom)); }.cashflow-plus-preview-hero { grid-template-columns: 1fr; min-height: 0; padding-top: 25px; }.cashflow-plus-preview-spark { display: none; }.cashflow-plus-preview-footer { align-items: stretch; flex-direction: column; gap: 13px; }.cashflow-plus-preview-footer .primary { width: 100%; }.cashflow-plus-preview-rows { padding: 14px; } }
+.cashflow-action-lock { justify-self: start; margin-top: 3px; padding: 3px 6px; border-radius: 999px; color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 78%, var(--card)); font-size: 9px; font-weight: 750; letter-spacing: 0; }
+.cashflow-action-card:disabled { cursor: default; opacity: .62; }.cashflow-action-card:disabled:hover { border-color: var(--line); background: linear-gradient(145deg, color-mix(in srgb, var(--card) 92%, var(--accent-soft)), var(--card)); box-shadow: 0 5px 15px rgba(24, 38, 27, .035); transform: none; }
 
 /* Full dark-surface audit: interactive controls must never inherit the light
    theme's white surfaces or use the light text token as a background. */

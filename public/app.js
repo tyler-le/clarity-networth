@@ -1206,11 +1206,11 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     categories += block(destinationX, y, destinationW, categoryColor, row.name, row.amount, row.share, row.key, 'left');
   });
   const hiddenCategoryCount = allSpendCategories.length - actualCategories.length;
-  const more = !expanded && hiddenCategoryCount > 0 ? `<button type="button" class="cashflow-more cashflow-action-card" data-cashflow-expand aria-label="Explore all ${hiddenCategoryCount + actualCategories.length} spending categories and their transactions"><span class="cashflow-action-icon" aria-hidden="true">⌘</span><span class="cashflow-action-copy"><small>SPENDING</small><b>Explore ${allSpendCategories.length} categories</b></span><i aria-hidden="true">›</i></button>` : '';
+  const detailsUnlocked = plusFeatureAvailable('canUseCashFlowDetails');
+  const premiumDetailHint = detailsUnlocked ? '' : '<span class="cashflow-action-lock">Details with Plus</span>';
+  const more = !expanded && hiddenCategoryCount > 0 ? `<button type="button" class="cashflow-more cashflow-action-card" data-cashflow-expand aria-label="Explore all ${hiddenCategoryCount + actualCategories.length} spending categories and their transactions"><span class="cashflow-action-icon" aria-hidden="true">⌘</span><span class="cashflow-action-copy"><small>SPENDING</small><b>Explore ${allSpendCategories.length} categories</b>${premiumDetailHint}</span><i aria-hidden="true">›</i></button>` : '';
   const transactionCount = (data.transactions || []).length;
-  const transactionAction = transactionCount
-    ? `<button type="button" class="cashflow-transactions-action cashflow-action-card" data-cashflow-transactions><span class="cashflow-action-icon" aria-hidden="true">≡</span><span class="cashflow-action-copy"><small>ACTIVITY</small><b>View transactions</b><em>${transactionCount} posted</em></span><i aria-hidden="true">›</i></button>`
-    : '';
+  const transactionAction = `<button type="button" class="cashflow-transactions-action cashflow-action-card" data-cashflow-transactions ${transactionCount ? '' : 'disabled'}><span class="cashflow-action-icon" aria-hidden="true">≡</span><span class="cashflow-action-copy"><small>ACTIVITY</small><b>${transactionCount ? 'View transactions' : 'No posted activity'}</b><em>${transactionCount ? `${transactionCount} posted` : 'Try another timeframe'}</em>${transactionCount ? premiumDetailHint : ''}</span><i aria-hidden="true">›</i></button>`;
   const categoryList = compact && expanded && allSpendCategories.length
     ? `<div class="cashflow-category-list" aria-label="Spending categories">${withShare(allSpendCategories, actualSpend).map((row) => `<button type="button" data-cashflow-category="${escapeHtml(row.key)}" data-cashflow-node="${escapeHtml(row.key)}" aria-label="View ${escapeHtml(row.name)} activity" aria-pressed="false"><span><i style="background:${colorFor(row.key, 'var(--outflow-muted)')}"></i>${escapeHtml(row.name)}</span><strong>${fmt.format(row.amount)} <small>${row.share}%</small></strong><b aria-hidden="true">›</b></button>`).join('')}</div>`
     : '';
