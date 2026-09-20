@@ -1728,7 +1728,9 @@ function openHoldingHistoryPreview({ ticker = '', accountId = '' } = {}) {
   $('#holdingHistoryRange').innerHTML = '';
   $('#holdingHistoryNote').textContent = 'Preview the timeline shape below. Your values and dates stay private until you unlock investment history.';
   $('#holdingHistoryChart').innerHTML = '<div class="plus-history-preview" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>';
-  $('#holdingHistoryWhere').innerHTML = '<div class="plus-history-cta"><span class="card-label">CLARITY PLUS</span><strong>Follow verified account and position history</strong><button class="primary" type="button" data-plus-cta>Unlock history <span aria-hidden="true">→</span></button></div>';
+  const teaserPositions = accountId ? (state.investments?.positions || []).filter((position) => position.account_id === accountId).slice(0, 3) : [];
+  const teaserRows = teaserPositions.map((position) => `<div class="plus-history-teaser-row"><span>${escapeHtml(position.ticker || position.name || 'Holding')}</span><b>••••</b></div>`).join('');
+  $('#holdingHistoryWhere').innerHTML = `${teaserRows ? `<div class="plus-history-teasers"><span class="card-label">Your holdings</span>${teaserRows}</div>` : ''}<div class="plus-history-cta"><span class="card-label">CLARITY PLUS</span><strong>Follow verified account and position history</strong><button class="primary" type="button" data-plus-cta>Unlock history <span aria-hidden="true">→</span></button></div>`;
 }
 
 function openHoldingHistoryEntry(options = {}) {
@@ -2716,8 +2718,14 @@ function showCashflowPreviewDrawer(category = 'all') {
   const dialog = $('#cashflowDialog');
   const data = spendingForSelectedMonth(state.spending);
   const label = category === 'all' ? 'Cash flow activity' : cashflowActivityLabel(data, category);
+  const teaserRows = (data.transactions || [])
+    .filter((transaction) => category === 'all' || transaction.flowKey === category || transaction.flowGroup === category)
+    .slice(0, 4);
+  const teaserMarkup = teaserRows.length
+    ? teaserRows.map((transaction) => `<div><i></i><span>${escapeHtml(transaction.name || 'Transaction')}<small>${new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</small></span><b aria-label="Amount hidden in preview">••••</b></div>`).join('')
+    : '<div class="cashflow-plus-preview-empty">A few real transactions will appear here after you unlock Plus.</div>';
   dialog.showModal();
-  $('#cashflowDialogContent').innerHTML = `<section class="cashflow-plus-preview" aria-labelledby="cashflowPreviewTitle"><div class="card-label">CLARITY PLUS · ILLUSTRATIVE PREVIEW</div><h2 id="cashflowPreviewTitle">${escapeHtml(label)}</h2><p>Plus reveals the transactions behind this view. Free keeps your totals and categories private.</p><div class="cashflow-plus-preview-rows" aria-hidden="true"><div class="cashflow-plus-preview-head"><span>Category</span><span>Merchant</span><span>Amount</span></div><div><i></i><span>Groceries</span><b>••••</b></div><div><i></i><span>Restaurant</span><b>••••</b></div><div><i></i><span>Transport</span><b>••••</b></div><div><i></i><span>Subscription</span><b>••••</b></div></div><button class="primary" type="button" data-plus-cta>Unlock transaction detail <span aria-hidden="true">→</span></button></section>`;
+  $('#cashflowDialogContent').innerHTML = `<section class="cashflow-plus-preview" aria-labelledby="cashflowPreviewTitle"><div class="card-label">CLARITY PLUS · YOUR PREVIEW</div><h2 id="cashflowPreviewTitle">${escapeHtml(label)}</h2><p>These are real transactions from this view. Amounts stay hidden until you unlock Plus.</p><div class="cashflow-plus-preview-rows"><div class="cashflow-plus-preview-head"><span>Activity</span><span>Date</span><span>Amount</span></div>${teaserMarkup}</div><button class="primary" type="button" data-plus-cta>Unlock transaction detail <span aria-hidden="true">→</span></button></section>`;
 }
 
 function cashflowActivityLabel(data, category) {
