@@ -475,7 +475,7 @@ integrationTest('categorizing a transaction updates every matching merchant acti
   const changed = await request(app).patch('/api/transactions/latest/category').set('Cookie', signedTestCookie(email)).send({ category: 'fees' });
   assert.equal(changed.status, 200);
   assert.equal(readStore(key).cash_flow_category_rules[0].category_key, 'fees');
-  const forgotten = await request(app).delete('/api/transaction-category-rules/outflow%3Arent').set('Cookie', signedTestCookie(email));
+  const forgotten = await request(app).delete('/api/transaction-category-rules/outflow%3Azelle%3Arent').set('Cookie', signedTestCookie(email));
   assert.equal(forgotten.status, 200);
   assert.deepEqual(readStore(key).cash_flow_category_rules, []);
   const otherEmail = 'other-transaction-category@example.com';
