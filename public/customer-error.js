@@ -6,7 +6,6 @@ const catalog = Object.freeze({
   offline: { message: 'You’re offline. Reconnect to continue.', recovery: 'retry_when_online' },
   rate_limited: { message: 'Please wait before trying again.', recovery: 'wait' },
   institution_limit_reached: { message: 'Your Free plan includes two connected institutions. Unlink one to connect another.', recovery: 'manage_connections' },
-  full_history_required: { message: 'All available history is included with Clarity Plus.', recovery: 'upgrade' },
   reconnect_required: { message: 'Your institution needs you to sign in again to resume updates.', recovery: 'reconnect' },
   institution_unavailable: { message: 'Your institution is temporarily unavailable. Please try again later.', recovery: 'retry_later' },
   data_preparing: { message: 'Your institution is still preparing this data. We’ll keep trying automatically.', recovery: 'automatic_retry' },

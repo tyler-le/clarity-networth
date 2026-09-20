@@ -13,6 +13,8 @@ test('Free plan allows two currently connected institutions and unlinking frees 
   assert.equal(atLimit.linkedInstitutionCount, 2);
   assert.equal(atLimit.linkedInstitutionLimit, 2);
   assert.equal(atLimit.canConnectInstitution, false);
+  assert.equal(atLimit.canUseFullHistory, true);
+  assert.equal(atLimit.canExportData, true);
   assert.equal(atLimit.canUseRetirementScenarios, false);
 
   store.items = [currentItem('two')];

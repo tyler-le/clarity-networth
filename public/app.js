@@ -816,8 +816,8 @@ function renderProfileSettings(d) {
     $('#profilePlanDetail').textContent = plus ? 'Unlimited connected institutions.' : 'Two connected institutions included.';
     $('#profilePlanAction').textContent = plus ? 'Manage plan' : 'Upgrade';
     $('#profilePlanBenefits').innerHTML = plus
-      ? '<li>Compare retirement spending paths</li><li>Use all available history</li>'
-      : '<li>Compare more retirement spending paths</li><li>Use all available history</li>';
+      ? '<li>Compare retirement spending paths</li><li>Unlimited connected institutions</li>'
+      : '<li>Compare more retirement spending paths with Plus</li><li>Core history stays available on Free</li>';
   }
 }
 
@@ -1235,11 +1235,8 @@ function syncPortfolioRangeControls(snapshots) {
   if (!state.investmentRangeInitialized) {
     const latest = snapshots.at(-1)?.date ? new Date(`${snapshots.at(-1).date}T12:00:00`) : new Date();
     const preferredRange = preferredNetWorthRange(snapshots, latest);
-    const range = state.dashboard?.demoMode || state.dashboard?.entitlements?.canUseFullHistory !== false
-      ? preferredRange
-      : preferredRange === 'all' ? '1y' : preferredRange;
-    changed = range !== state.investmentRange;
-    state.investmentRange = range;
+    changed = preferredRange !== state.investmentRange;
+    state.investmentRange = preferredRange;
     state.investmentRangeInitialized = true;
   }
   $$('[data-investment-range]').forEach((control) => {
@@ -2587,10 +2584,6 @@ $$('[data-networth-range]').forEach((button) => button.addEventListener('click',
   renderNetWorthChartWhenVisible();
 }));
 $$('[data-spending-range]').forEach((button) => button.addEventListener('click', async () => {
-  if (button.dataset.spendingRange === 'all' && !state.dashboard?.demoMode && state.dashboard?.entitlements?.canUseFullHistory === false) {
-    $('#upgradeDialog')?.showModal();
-    return;
-  }
   state.spendingRange = button.dataset.spendingRange;
   state.spendingMonth = null;
   $$('[data-spending-range]').forEach((control) => {
@@ -2894,10 +2887,6 @@ $('#spendingTrend').addEventListener('keydown', (event) => {
 });
 $$('[data-investment-range]').forEach((button) => button.addEventListener('click', async () => {
   if (button.disabled) return;
-  if (button.dataset.investmentRange === 'all' && !state.dashboard?.demoMode && state.dashboard?.entitlements?.canUseFullHistory === false) {
-    $('#upgradeDialog')?.showModal();
-    return;
-  }
   state.investmentRange = button.dataset.investmentRange;
   await loadInvestmentRange(state.investmentRange);
 }));

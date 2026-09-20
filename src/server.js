@@ -1527,9 +1527,6 @@ app.get('/api/dashboard', async (req, res) => {
 app.get('/api/spending', async (req, res) => {
   const range = ['1m', '3m', '6m', 'ytd', '1y', 'all'].includes(req.query.range) ? req.query.range : '1m';
   const store = activeStore(await loadStore(req.user));
-  if (range === 'all' && !store.settings?.demo_mode && !entitlementsForStore(store).canUseFullHistory) {
-    return res.status(403).json(publicErrorPayload('full_history_required'));
-  }
   res.json(spendingSummary(store, range));
 });
 
@@ -1537,9 +1534,6 @@ app.get('/api/investments', async (req, res) => {
   const range = ['1m', '3m', '6m', 'ytd', '1y', 'all'].includes(String(req.query.range || '')) ? String(req.query.range) : 'all';
   const persistedStore = await loadStore(req.user);
   const isDemoMode = Boolean(persistedStore.settings?.demo_mode);
-  if (range === 'all' && !isDemoMode && !entitlementsForStore(persistedStore).canUseFullHistory) {
-    return res.status(403).json(publicErrorPayload('full_history_required'));
-  }
   const store = activeStore(persistedStore);
   // Capture the connection-day baseline. Future successful daily syncs add
   // provider-observed account and holding values—no history is inferred.
@@ -1558,9 +1552,6 @@ app.get('/api/investments/history', async (req, res) => {
   if (!accountId && !ticker) return res.status(400).json({ error: 'Choose an investment account or holding.' });
   const persistedStore = await loadStore(req.user);
   const isDemoMode = Boolean(persistedStore.settings?.demo_mode);
-  if (range === 'all' && !isDemoMode && !entitlementsForStore(persistedStore).canUseFullHistory) {
-    return res.status(403).json(publicErrorPayload('full_history_required'));
-  }
   const store = activeStore(persistedStore);
   // Opening an account or holding is also a safe opportunity to persist its
   // current provider-observed value. This guarantees a truthful baseline even

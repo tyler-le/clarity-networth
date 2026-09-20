@@ -90,10 +90,11 @@ export function entitlementsForStore(store = {}, now = Date.now(), enabled = fre
     linkedInstitutionCount,
     linkedInstitutionLimit,
     canConnectInstitution,
-    // Central checks for the subsequent paid surfaces. They are deliberately
-    // not enforced yet; this change only gates institution connections.
-    canUseFullHistory: paid,
-    canExportData: paid,
+    // Core history and export remain available on Free. The paid planning
+    // surface is retirement scenario comparison, alongside the institution
+    // limit above.
+    canUseFullHistory: true,
+    canExportData: true,
     canUseRetirementScenarios: paid
   };
 }
