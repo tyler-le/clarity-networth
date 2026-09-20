@@ -1423,3 +1423,33 @@ html[data-theme="dark"] .plus-history-gate .plus-history-cta { background: linea
 @media (max-width: 560px) {
   .holding-history-dialog .holding-history-shell { touch-action: pan-y; }
 }
+
+/* The grab affordance is intentionally larger than the visible pill. Keep
+   the hit area quiet so tapping it never adds an accent ring to the sheet. */
+@media (max-width: 640px) {
+  .cashflow-dialog-drag-handle {
+    top: 0;
+    width: min(100%, 280px);
+    height: 44px;
+    border-radius: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .cashflow-dialog-drag-handle:focus,
+  .cashflow-dialog-drag-handle:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+}
+@media (max-width: 560px) {
+  .holding-history-drag-handle {
+    width: calc(100% + 36px);
+    margin-inline: -18px;
+    border-radius: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .holding-history-drag-handle:focus,
+  .holding-history-drag-handle:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+}
