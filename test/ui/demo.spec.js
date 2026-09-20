@@ -147,6 +147,15 @@ test('cash flow activity search narrows the visible transactions without changin
   await page.locator('#spendingTransactionsPanel summary').click();
   const search = page.getByRole('searchbox', { name: 'Search cash flow activity' });
   await expect(search).toBeVisible();
+  const controlsFitViewport = await page.locator('.spending-transaction-controls :is(input, select)').evaluateAll((controls) => controls.every((control) => {
+    const bounds = control.getBoundingClientRect();
+    return bounds.left >= 0 && bounds.right <= window.innerWidth;
+  }));
+  expect(controlsFitViewport).toBe(true);
+  await page.locator('#spendingCategoryFilter').selectOption('uncategorized');
+  const uncategorizedSelections = await page.locator('#spendingTransactions [data-transaction-category]').evaluateAll((selects) => selects.length > 0 && selects.every((select) => select.value === 'uncategorized'));
+  expect(uncategorizedSelections).toBe(true);
+  await page.locator('#spendingCategoryFilter').selectOption('all');
   await search.fill('Netflix');
   await expect(page.locator('#spendingTransactions')).toContainText('Netflix');
   await expect(page.locator('#spendingTransactionCount')).toContainText(/posted/);

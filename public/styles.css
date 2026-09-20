@@ -1401,6 +1401,12 @@ html[data-theme="dark"] .plus-history-gate .plus-history-cta { background: linea
 .transaction-category-label-context { color: var(--muted); }
 
 @media (max-width: 760px) {
+  /* Search is the primary way to narrow a long history. Give it a complete
+     first row, then keep the two supporting selectors in a deliberate pair
+     so neither can be pushed beyond a phone viewport. */
+  .spending-transaction-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; padding: 14px 16px; }
+  .spending-transaction-controls input { grid-column: 1 / -1; width: 100%; min-width: 0; min-height: 42px; }
+  .spending-transaction-controls select { width: 100%; min-width: 0; min-height: 42px; text-overflow: ellipsis; }
   .spending-transaction-layout { grid-template-columns: 1fr; }
   .spending-transaction-context { order: -1; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 14px; padding: 15px 18px; border-right: 0; border-bottom: 1px solid var(--line); border-left: 0; }
   .spending-transaction-context > p, .spending-transaction-context .spending-context-stat { grid-column: 1; }

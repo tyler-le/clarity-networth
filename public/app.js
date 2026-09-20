@@ -1246,7 +1246,10 @@ function transactionCategoryControl(data, transaction, { context = 'cashflow', a
     && (transaction.editableCategory ?? ['actual_spend', 'income'].includes(transaction.flowGroup))
     && !state.dashboard?.demoMode;
   const flow = transaction.categoryFlow || (transaction.flowGroup === 'income' || transaction.bucket === 'income' ? 'income' : 'outflow');
-  const options = (data.categoryOptions || []).filter((category) => category.flow === flow && (flow === 'income' || category.key !== 'uncategorized'));
+  // Keep the current “Uncategorized” value in the control. Omitting it made
+  // the browser display the first spending option (often Housing & bills)
+  // even though the underlying transaction had not been categorized.
+  const options = (data.categoryOptions || []).filter((category) => category.flow === flow);
   const label = transaction.category || transaction.flowLabel || 'Transaction';
   if (!editable || !options.length) {
     const payroll = transaction.bucket === 'pre_tax_retirement' || transaction.flowKey === 'payroll_retirement';
