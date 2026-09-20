@@ -125,7 +125,13 @@ function applyConnectionCooldown(seconds) {
 function presentConnectionError(error) {
   if (error?.recovery === 'wait' && error.retryAfterSeconds) applyConnectionCooldown(error.retryAfterSeconds);
   if (error?.recovery === 'manage_connections' && state.dashboard?.entitlements?.billingAvailable) {
-    $('#upgradeDialog')?.showModal();
+    const prompt = $('#accountsPlusPrompt');
+    if (prompt && !prompt.classList.contains('hidden')) {
+      prompt.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      prompt.animate?.([{ transform: 'translateY(0)' }, { transform: 'translateY(-3px)' }, { transform: 'translateY(0)' }], { duration: 280, easing: 'ease-out' });
+    } else {
+      $('#upgradeDialog')?.showModal();
+    }
   }
   showNotice(error?.message || customerError('connection_unavailable').message, 'error');
 }
@@ -870,6 +876,11 @@ function requestPlus(feature) {
   }[feature];
   const preview = previewSelector ? $(previewSelector) : null;
   if (preview && !preview.classList.contains('hidden')) {
+    // Details panels stay collapsed until the user asks for them. Open the
+    // protected preview before moving focus so the CTA always reveals a
+    // visible, useful next state instead of merely changing the scroll
+    // position.
+    if (preview.matches('details')) preview.open = true;
     preview.scrollIntoView({ behavior: 'smooth', block: 'center' });
     preview.animate?.([{ transform: 'translateY(0)' }, { transform: 'translateY(-3px)' }, { transform: 'translateY(0)' }], { duration: 280, easing: 'ease-out' });
     return false;
