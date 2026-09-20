@@ -817,7 +817,7 @@ function renderProfileSettings(d) {
     $('#profilePlanDetail').textContent = entitlement.plan === 'trial' ? 'Your 14-day Plus trial is active.' : subscribed ? 'Your subscription is active.' : 'Core Clarity is free. Try Plus for more depth.';
     $('#profilePlanAction').textContent = subscribed ? 'Manage plan' : 'Start free trial';
     const benefits = [
-      [subscribed, subscribed ? 'Unlimited connected institutions' : 'Two connected institutions'],
+      [true, subscribed ? 'Unlimited connected institutions' : 'Up to two connected institutions'],
       [true, 'All timeframes and available history'],
       [true, 'Core Cash Flow, Investments, and Net Worth'],
       [true, 'Baseline retirement outlook and editable assumptions'],
@@ -825,9 +825,10 @@ function renderProfileSettings(d) {
       [subscribed, 'Holding and investment-account history'],
       [subscribed, 'Side-by-side retirement scenarios']
     ];
+    if (!subscribed) benefits.splice(4, 0, [false, 'Unlimited connected institutions']);
     const included = benefits.filter(([isIncluded]) => isIncluded).map(([, label]) => `<li><span aria-hidden="true">✓</span><span>${label}</span></li>`).join('');
-    const excluded = benefits.filter(([isIncluded]) => !isIncluded).map(([, label]) => `<li><span aria-hidden="true">×</span><span>${label}</span></li>`).join('');
-    $('#profilePlanBenefits').innerHTML = `<div class="profile-plan-benefit-group"><div class="profile-plan-benefit-heading">Included</div><ul>${included}</ul></div><div class="profile-plan-benefit-group excluded"><div class="profile-plan-benefit-heading">Plus unlocks</div><ul>${excluded}</ul></div>`;
+    const excluded = benefits.filter(([isIncluded]) => !isIncluded).map(([, label]) => `<li><span aria-hidden="true">→</span><span>${label}</span></li>`).join('');
+    $('#profilePlanBenefits').innerHTML = `<div class="profile-plan-benefit-group"><div class="profile-plan-benefit-heading">Included with ${subscribed ? 'Plus' : 'Free'}</div><ul>${included}</ul></div>${excluded ? `<div class="profile-plan-benefit-group excluded"><div class="profile-plan-benefit-heading">Plus unlocks</div><ul>${excluded}</ul></div>` : ''}`;
   }
 }
 
@@ -857,6 +858,17 @@ function plusFeatureAvailable(feature) {
 
 function requestPlus(feature) {
   if (plusFeatureAvailable(feature)) return true;
+  const previewSelector = {
+    canUseCashFlowDetails: '#spendingTransactionsPanel',
+    canUseInvestmentDetails: '#investmentPlusPrompt',
+    canUseRetirementScenarios: '#retirementScenarioPaywall'
+  }[feature];
+  const preview = previewSelector ? $(previewSelector) : null;
+  if (preview && !preview.classList.contains('hidden')) {
+    preview.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    preview.animate?.([{ transform: 'translateY(0)' }, { transform: 'translateY(-3px)' }, { transform: 'translateY(0)' }], { duration: 280, easing: 'ease-out' });
+    return false;
+  }
   if (state.dashboard?.entitlements?.billingAvailable) $('#upgradeDialog')?.showModal();
   else showNotice('This Plus feature is not available yet.', 'info');
   return false;
@@ -1824,6 +1836,7 @@ function renderInvestments(data) {
   $('#investmentAllocationCard').classList.toggle('hidden', !data.positionsAvailable);
   $('#investmentAccountsCard').classList.toggle('hidden', accounts.length < 1);
   $('#investmentHoldingsPanel').classList.toggle('hidden', !data.positionsAvailable);
+  $('#investmentPlusPrompt').classList.toggle('hidden', !data.positionsAvailable || plusFeatureAvailable('canUseInvestmentDetails'));
   let cursor = 0;
   const colors = ['#287143', '#7ea98b', '#d5a75f', '#9ca9bd', '#b88692', '#7d91a5'];
   const donut = $('#investmentDonut');
