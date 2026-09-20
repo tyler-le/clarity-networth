@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { annualizedLivingSpend, applyCashFlowCategoryOverride, calculateFire, canonicalEconomicLedger, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentPortfolioRangeProgress, investmentRangeProgress, monthlyFinancialFacts, monthlyReview, reconstructInvestmentHistory, refreshReconstructedInvestmentSnapshots, investmentSummary, recurringCharges, removeEstimatedNetWorthHistory, repairIncomingClassifications, repairTransferClassifications, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
+import { annualizedLivingSpend, applyCashFlowCategoryOverride, applyCashFlowCategoryRule, calculateFire, canonicalEconomicLedger, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, historicalTicker, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentPortfolioRangeProgress, investmentRangeProgress, monthlyFinancialFacts, monthlyReview, reconstructInvestmentHistory, refreshReconstructedInvestmentSnapshots, investmentSummary, recurringCharges, removeCashFlowCategoryRule, removeEstimatedNetWorthHistory, repairIncomingClassifications, repairTransferClassifications, seedDemo, snapshotInvestments, snapshotNetWorth, spendingSummary } from '../src/lib/finance.js';
 import { normalizeCandles } from '../src/lib/market-data.js';
 import { filterSnapshots, preferredNetWorthRange, scrubIndex, uniqueDailySnapshots } from '../public/chart-utils.js';
 
@@ -115,6 +115,10 @@ test('a cash-flow category correction applies to every matching merchant payment
   ] };
   const result = applyCashFlowCategoryOverride(store, 'latest-rent', 'housing_bills');
   assert.deepEqual({ updated: result.updated, matchedDuplicates: result.matchedDuplicates, category: result.category.key }, { updated: 4, matchedDuplicates: 3, category: 'housing_bills' });
+  assert.deepEqual(store.cash_flow_category_rules, [{
+    id: 'outflow:rent', merchant_key: 'rent', flow: 'outflow', category_key: 'housing_bills',
+    created_at: store.cash_flow_category_rules[0].created_at, updated_at: store.cash_flow_category_rules[0].updated_at
+  }]);
   assert.equal(store.transactions.find((transaction) => transaction.id === 'latest-rent').bucket, 'fixed');
   assert.equal(store.transactions.find((transaction) => transaction.id === 'prior-rent').cash_flow_category, 'housing_bills');
   assert.equal(store.transactions.find((transaction) => transaction.id === 'different-recipient').cash_flow_category, undefined);
@@ -126,6 +130,53 @@ test('a cash-flow category correction applies to every matching merchant payment
   assert.deepEqual(store.transactions.filter((transaction) => transaction.id !== 'different-recipient').map((transaction) => transaction.cash_flow_category), ['housing_bills', 'housing_bills', 'housing_bills', 'housing_bills']);
   const summary = spendingSummary(store, '3m', new Date('2026-09-20T12:00:00'));
   assert.equal(summary.transactions.find((transaction) => transaction.id === 'prior-rent').flowLabel, 'Housing & bills');
+});
+
+test('a remembered merchant rule applies to a new Plaid transaction and can be changed or forgotten', () => {
+  const store = { transactions: [
+    { id: 'rent', date: '2026-09-15', amount: 1500, bucket: 'guilt_free', merchant_name: 'Zelle: Rent', pending: false }
+  ] };
+  const first = applyCashFlowCategoryOverride(store, 'rent', 'housing_bills');
+  assert.equal(first.rule.id, 'outflow:rent');
+
+  // This matches the newly normalized record created by a later Plaid sync;
+  // it has no historical, manually set category to preserve yet.
+  const futurePlaidTransaction = {
+    id: 'plaid-new-rent', date: '2026-10-15', amount: 1500, bucket: 'guilt_free',
+    merchant_name: 'Zelle Rent', name: 'Zelle Rent', pending: false
+  };
+  assert.equal(applyCashFlowCategoryRule(store, futurePlaidTransaction), true);
+  assert.equal(futurePlaidTransaction.cash_flow_category, 'housing_bills');
+  assert.equal(futurePlaidTransaction.cash_flow_category_rule_id, first.rule.id);
+
+  const changed = applyCashFlowCategoryOverride(store, 'rent', 'fees');
+  assert.equal(changed.rule.id, first.rule.id);
+  assert.equal(store.cash_flow_category_rules.length, 1);
+  assert.equal(store.cash_flow_category_rules[0].category_key, 'fees');
+  const futureAfterChange = { ...futurePlaidTransaction, id: 'plaid-new-rent-after-change', bucket: 'guilt_free', cash_flow_category: null, cash_flow_category_overridden: false };
+  assert.equal(applyCashFlowCategoryRule(store, futureAfterChange), true);
+  assert.equal(futureAfterChange.cash_flow_category, 'fees');
+
+  assert.equal(removeCashFlowCategoryRule(store, first.rule.id), true);
+  const futureAfterForget = { ...futurePlaidTransaction, id: 'plaid-new-rent-after-forget', bucket: 'guilt_free', cash_flow_category: null, cash_flow_category_overridden: false };
+  assert.equal(applyCashFlowCategoryRule(store, futureAfterForget), false);
+  assert.equal(futureAfterForget.cash_flow_category, null);
+  assert.equal(removeCashFlowCategoryRule(store, first.rule.id), false);
+});
+
+test('remembered category rules never apply to refunds, transfers, or investment proceeds', () => {
+  const store = {
+    cash_flow_category_rules: [{ id: 'income:rent', merchant_key: 'rent', flow: 'income', category_key: 'income_business' }],
+    transactions: []
+  };
+  for (const transaction of [
+    { id: 'refund', amount: -50, bucket: 'income', merchant_name: 'Rent refund', pfc_detailed: 'MERCHANT_REFUND' },
+    { id: 'transfer', amount: -1500, bucket: 'transfer', merchant_name: 'Rent transfer' },
+    { id: 'sale', amount: -250, bucket: 'income', merchant_name: 'Rent proceeds', pfc_detailed: 'INVESTMENT_PROCEEDS' }
+  ]) {
+    assert.equal(applyCashFlowCategoryRule(store, transaction), false);
+    assert.equal(transaction.cash_flow_category, undefined);
+  }
 });
 
 test('an income category rule updates every matching deposit without recategorizing protected inflows', () => {
@@ -157,7 +208,7 @@ test('monthly spending keeps income separate for comparison', () => {
   assert.equal(result.income, 4200);
   assert.deepEqual(result.monthly, [{ month: '2026-09', amount: 900, actual_spend: 900, saved_invested: 0, income: 4200, pre_tax_retirement: 0 }]);
   assert.deepEqual(result.transactions.find((transaction) => transaction.category === 'Paychecks'), {
-    id: undefined, name: 'Payroll', date: '2026-09-01', amount: 4200, category: 'Paychecks', bucket: 'income', cashFlowCategory: 'income_paychecks', flowKey: 'income_paychecks', flowLabel: 'Paychecks', flowGroup: 'income'
+    id: undefined, name: 'Payroll', date: '2026-09-01', amount: 4200, category: 'Paychecks', bucket: 'income', cashFlowCategory: 'income_paychecks', categoryRuleId: null, flowKey: 'income_paychecks', flowLabel: 'Paychecks', flowGroup: 'income'
   });
   assert.deepEqual(result.incomeSources, [{ key: 'income_paychecks', label: 'Paychecks', amount: 4200 }]);
 });

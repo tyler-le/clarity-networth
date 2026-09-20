@@ -1243,8 +1243,12 @@ function transactionCategoryControl(data, transaction, { context = 'cashflow', a
     && !state.dashboard?.demoMode;
   const flow = transaction.categoryFlow || (transaction.flowGroup === 'income' || transaction.bucket === 'income' ? 'income' : 'outflow');
   const options = (data.categoryOptions || []).filter((category) => category.flow === flow && (flow === 'income' || category.key !== 'uncategorized'));
-  if (!editable || !options.length) return `<span class="transaction-category-label">${escapeHtml(transaction.category || transaction.flowLabel || 'Transaction')}</span>`;
-  return `<select data-transaction-category="${escapeHtml(transaction.id)}" data-category-context="${escapeHtml(context)}" data-cashflow-category="${escapeHtml(activityCategory)}" aria-label="Category for ${escapeHtml(transaction.name)}">${options.map((category) => `<option value="${escapeHtml(category.key)}" ${transaction.cashFlowCategory === category.key ? 'selected' : ''}>${escapeHtml(category.label)}</option>`).join('')}</select>`;
+  const label = transaction.category || transaction.flowLabel || 'Transaction';
+  if (!editable || !options.length) {
+    const payroll = transaction.bucket === 'pre_tax_retirement' || transaction.flowKey === 'payroll_retirement';
+    return `<span class="transaction-category-label${payroll ? ' transaction-category-label-payroll' : ''}">${escapeHtml(label)}</span>`;
+  }
+  return `<span class="transaction-category-control"><select data-transaction-category="${escapeHtml(transaction.id)}" data-category-context="${escapeHtml(context)}" data-cashflow-category="${escapeHtml(activityCategory)}" aria-label="Category for ${escapeHtml(transaction.name)}">${options.map((category) => `<option value="${escapeHtml(category.key)}" ${transaction.cashFlowCategory === category.key ? 'selected' : ''}>${escapeHtml(category.label)}</option>`).join('')}</select></span>`;
 }
 
 function renderSpendingTransactions(data) {
@@ -1276,10 +1280,35 @@ function renderSpendingTransactions(data) {
   });
   rows = sortCashflowTransactions(rows, state.spendingSort);
   $('#spendingTransactionCount').textContent = `${rows.length} posted`;
-  $('#spendingTransactions').innerHTML = rows.length ? rows.map((transaction) => {
+  const transactionRows = rows.length ? `<div class="spending-transaction-list">${rows.map((transaction) => {
     const categoryControl = transactionCategoryControl(data, transaction);
     return `<div class="spending-transaction-row ${transaction.bucket === 'income' ? 'income-transaction' : ''} ${transaction.bucket === 'pre_tax_retirement' ? 'payroll-transaction' : ''}"><div><strong>${escapeHtml(transaction.name)}</strong><span>${new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span></div><div class="transaction-plan"><b>${transaction.bucket === 'income' ? '+' : ''}${fmt.format(transaction.amount)}</b>${categoryControl}</div></div>`;
-  }).join('') : `<p class="spending-empty">No posted transactions match${state.spendingTransactionSearch ? ` “${escapeHtml(state.spendingTransactionSearch)}”` : ' this category for this period'}.</p>`;
+  }).join('')}</div>` : `<p class="spending-empty">No posted transactions match${state.spendingTransactionSearch ? ` “${escapeHtml(state.spendingTransactionSearch)}”` : ' this category for this period'}.</p>`;
+  $('#spendingTransactions').innerHTML = rows.length
+    ? `<div class="spending-transaction-layout">${transactionRows}${renderTransactionContextPanel(rows, data)}</div>`
+    : transactionRows;
+}
+
+function renderTransactionContextPanel(rows, data) {
+  const savedRules = new Map();
+  for (const transaction of rows) {
+    if (transaction.categoryRuleId) savedRules.set(transaction.categoryRuleId, transaction);
+  }
+  const total = rows.reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount || 0)), 0);
+  const categories = [...new Set(rows.map((transaction) => transaction.category || transaction.flowLabel).filter(Boolean))];
+  const search = state.spendingTransactionSearch.trim();
+  const category = state.spendingCategory !== 'all' ? cashflowActivityLabel(data, state.spendingCategory) : '';
+  const subject = search ? `“${search}” activity` : category || 'This activity';
+  const savedRule = savedRules.size === 1 ? [...savedRules.values()][0] : null;
+  const direction = savedRule?.bucket === 'income' ? 'income' : 'spending';
+  const categorySummary = categories.length === 1 ? categories[0] : `${categories.length} categories`;
+  return `<aside class="spending-transaction-context" aria-label="Cash flow activity context">
+    <div class="card-label">${savedRule ? 'CLARITY REMEMBERS' : 'ACTIVITY SUMMARY'}</div>
+    <strong>${escapeHtml(subject)}</strong>
+    <p>${rows.length} posted transaction${rows.length === 1 ? '' : 's'} · ${fmt.format(total)} total</p>
+    <div class="spending-context-stat"><span>Category</span><b>${escapeHtml(categorySummary)}</b></div>
+    ${savedRule ? `<div class="spending-memory-note"><span aria-hidden="true">↗</span><p>Clarity will keep matching future ${direction} in <b>${escapeHtml(savedRule.category || savedRule.flowLabel || 'this category')}</b>.</p></div><button class="text-button spending-forget-memory" type="button" data-cashflow-forget-rule="${escapeHtml(savedRule.categoryRuleId)}">Forget this memory</button>` : `<div class="spending-memory-note"><span aria-hidden="true">↗</span><p>When you change a category, Clarity remembers that choice for matching future activity.</p></div>`}
+  </aside>`;
 }
 
 function sortCashflowTransactions(rows, sort) {
@@ -3033,6 +3062,20 @@ $('#spendingTransactions').addEventListener('change', (event) => {
   const select = event.target.closest('[data-transaction-category]');
   if (!select) return;
   void saveTransactionCategory(select);
+});
+$('#spendingTransactions').addEventListener('click', async (event) => {
+  const forget = event.target.closest('[data-cashflow-forget-rule]');
+  if (!forget) return;
+  forget.disabled = true;
+  try {
+    await api(`/api/transaction-category-rules/${encodeURIComponent(forget.dataset.cashflowForgetRule)}`, { method: 'DELETE' });
+    state.spending = await loadSpending();
+    renderSpending(state.spending);
+    showNotice('Clarity will no longer remember that category choice.', 'success');
+  } catch (error) {
+    forget.disabled = false;
+    showNotice(error.message, 'error');
+  }
 });
 $('#spendingTrend').addEventListener('click', (event) => {
   const month = event.target.closest('[data-spending-month]')?.dataset.spendingMonth;

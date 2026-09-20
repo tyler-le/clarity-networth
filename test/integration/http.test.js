@@ -460,6 +460,15 @@ integrationTest('categorizing a transaction updates every matching merchant acti
   assert.equal(stored.transactions.find((transaction) => transaction.id === 'prior').cash_flow_category, 'housing_bills');
   assert.equal(stored.transactions.find((transaction) => transaction.id === 'future').cash_flow_category, 'housing_bills');
   assert.equal(stored.transactions.find((transaction) => transaction.id === 'other-recipient').cash_flow_category, undefined);
+  assert.deepEqual(stored.cash_flow_category_rules.map(({ id, merchant_key, flow, category_key }) => ({ id, merchant_key, flow, category_key })), [{
+    id: 'outflow:rent', merchant_key: 'rent', flow: 'outflow', category_key: 'housing_bills'
+  }]);
+  const changed = await request(app).patch('/api/transactions/latest/category').set('Cookie', signedTestCookie(email)).send({ category: 'fees' });
+  assert.equal(changed.status, 200);
+  assert.equal(readStore(key).cash_flow_category_rules[0].category_key, 'fees');
+  const forgotten = await request(app).delete('/api/transaction-category-rules/outflow%3Arent').set('Cookie', signedTestCookie(email));
+  assert.equal(forgotten.status, 200);
+  assert.deepEqual(readStore(key).cash_flow_category_rules, []);
   const otherEmail = 'other-transaction-category@example.com';
   const otherKey = userStorageKey(otherEmail);
   writeStore({ items: [], accounts: [], snapshots: [], transactions: [{ id: 'latest', merchant_name: 'Zelle Rent', name: 'Zelle Rent', date: '2026-09-15', amount: 1500, bucket: 'guilt_free', pending: false }] }, otherKey);
@@ -485,6 +494,9 @@ integrationTest('categorizing income uses the same canonical category contract a
   const stored = readStore(key);
   assert.equal(stored.transactions.find((transaction) => transaction.id === 'payroll-other').cash_flow_category, 'income_business');
   assert.equal(stored.transactions.find((transaction) => transaction.id === 'refund').cash_flow_category, undefined);
+  assert.deepEqual(stored.cash_flow_category_rules.map(({ id, merchant_key, flow, category_key }) => ({ id, merchant_key, flow, category_key })), [{
+    id: 'income:acme payroll', merchant_key: 'acme payroll', flow: 'income', category_key: 'income_business'
+  }]);
   const rejected = await request(app).patch('/api/transactions/refund/category').set('Cookie', signedTestCookie(email)).send({ category: 'income_business' });
   assert.equal(rejected.status, 400);
   deleteStore(key);

@@ -1317,30 +1317,70 @@ function categoryRuleKey(transaction) {
   return name;
 }
 
+function cashFlowCategoryRuleFlow(transaction) {
+  const flow = cashFlowType(transaction);
+  if (flow === 'external_outflow' && Number(transaction.amount || 0) > 0 && !['savings', 'investments', 'transfer'].includes(transaction.bucket)) return 'outflow';
+  if (flow === 'external_inflow' && Number(transaction.amount || 0) < 0 && !['refund', 'investment_proceeds', 'loan_proceeds'].includes(inflowClassification(transaction))) return 'income';
+  return null;
+}
+
+function applyCategory(transaction, category) {
+  transaction.bucket = category.bucket;
+  transaction.category_overridden = true;
+  transaction.cash_flow_category = category.key;
+  transaction.cash_flow_category_overridden = true;
+}
+
+function categoryRuleForTransaction(store, transaction) {
+  const flow = cashFlowCategoryRuleFlow(transaction);
+  const merchantKey = categoryRuleKey(transaction);
+  if (!flow || !merchantKey) return null;
+  const rule = (store.cash_flow_category_rules || []).find((candidate) => candidate.flow === flow && candidate.merchant_key === merchantKey);
+  const category = rule && cashFlowCategoryOption(rule.category_key);
+  return category?.flow === flow ? { rule, category } : null;
+}
+
+// A correction is remembered at the merchant-and-direction level. Run this
+// after normalizing newly received Plaid records so future matching payments
+// follow the person's own choice instead of reverting to provider labeling.
+export function applyCashFlowCategoryRule(store, transaction) {
+  const match = categoryRuleForTransaction(store, transaction);
+  if (!match) return false;
+  applyCategory(transaction, match.category);
+  transaction.cash_flow_category_rule_id = match.rule.id;
+  return true;
+}
+
+export function removeCashFlowCategoryRule(store, ruleId) {
+  const rules = store.cash_flow_category_rules || [];
+  const index = rules.findIndex((rule) => rule.id === ruleId);
+  if (index < 0) return false;
+  rules.splice(index, 1);
+  return true;
+}
+
 export function applyCashFlowCategoryOverride(store, transactionId, categoryKey) {
   const selected = (store.transactions || []).find((transaction) => transaction.id === transactionId);
   const category = cashFlowCategoryOption(categoryKey);
-  const selectedFlow = cashFlowType(selected || {});
-  const isOutflow = selectedFlow === 'external_outflow' && Number(selected?.amount || 0) > 0
-    && !['savings', 'investments', 'transfer'].includes(selected?.bucket);
-  const isIncome = selectedFlow === 'external_inflow' && Number(selected?.amount || 0) < 0
-    && !['refund', 'investment_proceeds', 'loan_proceeds'].includes(inflowClassification(selected || {}));
+  const selectedFlow = cashFlowCategoryRuleFlow(selected || {});
+  const isOutflow = selectedFlow === 'outflow';
+  const isIncome = selectedFlow === 'income';
   const ruleFlow = category?.flow === 'income' ? 'income' : category?.flow === 'outflow' ? 'outflow' : null;
   if (!selected || !category || selected.demo || selected.pending || (ruleFlow === 'outflow' ? !isOutflow : !isIncome)) return null;
   const ruleKey = categoryRuleKey(selected);
-  const apply = (transaction) => {
-    transaction.bucket = category.bucket;
-    transaction.category_overridden = true;
-    transaction.cash_flow_category = category.key;
-    transaction.cash_flow_category_overridden = true;
-  };
+  if (!ruleKey) return null;
+  store.cash_flow_category_rules ||= [];
+  const ruleId = `${ruleFlow}:${ruleKey}`;
+  const existingRule = store.cash_flow_category_rules.find((rule) => rule.id === ruleId);
+  const rule = existingRule || { id: ruleId, merchant_key: ruleKey, flow: ruleFlow, category_key: category.key, created_at: new Date().toISOString() };
+  rule.category_key = category.key;
+  rule.updated_at = new Date().toISOString();
+  if (!existingRule) store.cash_flow_category_rules.push(rule);
   let updated = 0;
   for (const transaction of store.transactions || []) {
-    const transactionFlow = cashFlowType(transaction);
-    const matchingOutflow = ruleFlow === 'outflow' && transactionFlow === 'external_outflow' && Number(transaction.amount || 0) > 0
-      && !['savings', 'investments', 'transfer'].includes(transaction.bucket);
-    const matchingIncome = ruleFlow === 'income' && transactionFlow === 'external_inflow' && Number(transaction.amount || 0) < 0
-      && !['refund', 'investment_proceeds', 'loan_proceeds'].includes(inflowClassification(transaction));
+    const transactionFlow = cashFlowCategoryRuleFlow(transaction);
+    const matchingOutflow = ruleFlow === 'outflow' && transactionFlow === 'outflow';
+    const matchingIncome = ruleFlow === 'income' && transactionFlow === 'income';
     if (transaction.demo || transaction.pending || (!matchingOutflow && !matchingIncome)) continue;
     const isSelected = transaction.id === selected.id;
     const isMerchantMatch = Boolean(ruleKey) && categoryRuleKey(transaction) === ruleKey;
@@ -1348,10 +1388,11 @@ export function applyCashFlowCategoryOverride(store, transactionId, categoryKey)
     // This is a merchant-level rule, not a one-off row edit. It applies to
     // every safely matched record in either direction of history, so choosing
     // a category on an old transaction does not leave newer duplicates behind.
-    apply(transaction);
+    applyCategory(transaction, category);
+    transaction.cash_flow_category_rule_id = rule.id;
     updated += 1;
   }
-  return { updated, category, matchedDuplicates: Math.max(0, updated - 1) };
+  return { updated, category, rule, matchedDuplicates: Math.max(0, updated - 1) };
 }
 
 function transactionKey(transaction, index) {
@@ -1502,6 +1543,7 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
       category: source.label,
       bucket: 'income',
       cashFlowCategory: source.key,
+      categoryRuleId: categoryRuleForTransaction(store, transaction)?.rule.id || null,
       flowKey: source.key,
       flowLabel: source.label,
       flowGroup: 'income'
@@ -1591,6 +1633,7 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
       category,
       bucket: transaction.bucket,
       cashFlowCategory: flow.key,
+      categoryRuleId: categoryRuleForTransaction(store, transaction)?.rule.id || null,
       flowKey: flow.key,
       flowLabel: flow.label,
       flowGroup: flow.group
@@ -1718,7 +1761,11 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
   const incomeSources = [...incomeSourceMap.values()].sort((a, b) => b.amount - a.amount);
   const preTaxRetirement = [...monthlyPreTaxRetirement.values()].reduce((sum, amount) => sum + amount, 0);
   const actualSpendCategories = [...actualSpendCategoryMap.values()].filter((row) => row.amount > 0).sort((a, b) => b.amount - a.amount);
-  return { range, startDate, endDate, completedMonths, total, income, incomeSources, actualSpend, netCashFlow: income - actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, savedInvested, preTaxRetirement, monthlyAverage: total / monthCount, categories: categoryRows, categoryOptions: CASH_FLOW_CATEGORY_OPTIONS, topMerchants, monthly: monthlyRows, transactions: transactionRows };
+  const categoryRules = (store.cash_flow_category_rules || []).flatMap((rule) => {
+    const category = cashFlowCategoryOption(rule.category_key);
+    return category?.flow === rule.flow ? [{ id: rule.id, categoryKey: category.key, categoryLabel: category.label, flow: rule.flow }] : [];
+  });
+  return { range, startDate, endDate, completedMonths, total, income, incomeSources, actualSpend, netCashFlow: income - actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, savedInvested, preTaxRetirement, monthlyAverage: total / monthCount, categories: categoryRows, categoryOptions: CASH_FLOW_CATEGORY_OPTIONS, categoryRules, topMerchants, monthly: monthlyRows, transactions: transactionRows };
 }
 
 function monthId(dateString) {

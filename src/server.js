@@ -8,7 +8,7 @@ import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { deleteStore, hasLegacyStore, listUserStorageKeys, normalizeStore, readStore, userStorageKey, writeStore, encrypt, decrypt, removeDemoData } from './lib/store.js';
 import { assertSafeFinancialStoreWrite, chooseSaferStore, hasConnectedFinancialData } from './lib/store-safety.js';
 import { consumeRateLimit, databaseEnabled, databaseHealthy, deleteDatabaseStore, listDatabaseStoreKeys, migrateDatabase, readDatabaseStore, recordAuditEvent, writeDatabaseStore } from './lib/database.js';
-import { accountBalanceHistory, applyCashFlowCategoryOverride, calculateFire, cashFlowType, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentSummary, monthlyReview, recurringCharges, removeEstimatedNetWorthHistory, repairIncomingClassifications, repairTransferClassifications, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './lib/finance.js';
+import { accountBalanceHistory, applyCashFlowCategoryOverride, applyCashFlowCategoryRule, calculateFire, cashFlowType, cashRunway, classifyTransaction, clarityCheckin, connectionHealth, debtPayoffPlan, goalProgress, hideDuplicateAccounts, historicalSecurity, investmentContributions, investmentDetailHistory, investmentLinkBalances, investmentSummary, monthlyReview, recurringCharges, removeCashFlowCategoryRule, removeEstimatedNetWorthHistory, repairIncomingClassifications, repairTransferClassifications, spendingSummary, summarizeRange, snapshotInvestments, snapshotNetWorth, seedDemo } from './lib/finance.js';
 import { investmentLedgerPages, plaidConfigured, plaidPost } from './lib/plaid.js';
 import { loadHistoricalPrices } from './lib/market-data.js';
 import { historyStart } from './lib/history.js';
@@ -1013,6 +1013,11 @@ async function syncTransactionsForItem(store, item) {
         pending: transaction.pending, pfc_primary: transaction.personal_finance_category?.primary || '',
         pfc_detailed: transaction.personal_finance_category?.detailed || '', demo: false
       };
+      // Apply a person's remembered merchant category after Plaid's raw
+      // record is normalized. This is intentionally narrower than a blanket
+      // provider override: the same named incoming/outgoing payment must have
+      // the same direction and pass the refund/transfer safety checks.
+      applyCashFlowCategoryRule(store, normalized);
       if (existing) Object.assign(existing, normalized); else store.transactions.push(normalized);
     }
     const removed = new Set((data.removed || []).map((transaction) => transaction.transaction_id));
@@ -1617,6 +1622,13 @@ app.patch('/api/transactions/:id/category', async (req, res) => {
   if (!result) return res.status(400).json({ error: 'Choose a category for a posted income or spending transaction.' });
   await saveStore(req.user, store);
   res.json({ ok: true, updated: result.updated, matchedDuplicates: result.matchedDuplicates, category: result.category });
+});
+
+app.delete('/api/transaction-category-rules/:id', async (req, res) => {
+  const store = await loadStore(req.user);
+  if (!removeCashFlowCategoryRule(store, req.params.id)) return res.status(404).json({ error: 'That remembered category could not be found.' });
+  await saveStore(req.user, store);
+  res.json({ ok: true });
 });
 
 app.patch('/api/accounts/:id/nickname', async (req, res) => {

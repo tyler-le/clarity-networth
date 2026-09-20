@@ -141,6 +141,27 @@ test('cash-flow transaction categories use the same income and spending editor i
   await expect.poll(() => updateRequest?.category).toMatch(/^(income_business|fees)$/);
 });
 
+test('cash-flow activity keeps a remembered category visible without stretching the transaction list', async ({ page }) => {
+  let forgotRule = false;
+  await page.route('**/api/transaction-category-rules/*', async (route) => {
+    forgotRule = route.request().method() === 'DELETE';
+    await route.fulfill({ json: { ok: true } });
+  });
+  await openSignedInScenario(page, (preview) => {
+    const transaction = preview.spending.transactions.find((row) => row.flowGroup === 'actual_spend');
+    transaction.categoryRuleId = 'outflow:remembered-payment';
+    preview.spending.categoryRules = [{ id: transaction.categoryRuleId, categoryKey: transaction.cashFlowCategory, categoryLabel: transaction.flowLabel, flow: 'outflow' }];
+    preview.dashboard.entitlements = { enabled: false, canUseCashFlowDetails: true };
+  });
+
+  await goToView(page, 'spending');
+  await page.locator('#spendingTransactionsPanel summary').click();
+  await expect(page.locator('.spending-transaction-layout')).toBeVisible();
+  await expect(page.locator('.spending-transaction-context')).toContainText('Clarity remembers');
+  await page.locator('[data-cashflow-forget-rule]').click();
+  await expect.poll(() => forgotRule).toBe(true);
+});
+
 test('a Free member can preview investment history before choosing Plus', async ({ page }) => {
   await openSignedInScenario(page, (preview) => {
     preview.dashboard.entitlements = {
