@@ -1619,7 +1619,8 @@ function monthId(dateString) {
   return String(dateString || '').slice(0, 7);
 }
 
-function trailingPostedTransactionWindow(store) {
+function trailingPostedTransactionWindow(store, requestedMonths = 12) {
+  const maxMonths = Math.max(3, Math.min(24, Math.round(Number(requestedMonths) || 12)));
   const posted = (store.transactions || [])
     .filter((transaction) => !transaction.pending && !transaction.excluded && /^\d{4}-\d{2}-\d{2}$/.test(String(transaction.date || '')))
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
@@ -1637,7 +1638,7 @@ function trailingPostedTransactionWindow(store) {
   const earliest = new Date(`${monthId(completed[0].date)}-01T12:00:00`);
   const spanMonths = (latest.getFullYear() - earliest.getFullYear()) * 12 + latest.getMonth() - earliest.getMonth() + 1;
   const start = new Date(latest);
-  start.setMonth(start.getMonth() - Math.min(11, spanMonths - 1));
+  start.setMonth(start.getMonth() - Math.min(maxMonths - 1, spanMonths - 1));
   const startMonth = start.toISOString().slice(0, 7);
   const windowEndMonth = latest.toISOString().slice(0, 7);
   const transactions = completed.filter((transaction) => {
@@ -1806,8 +1807,8 @@ export function estimateOngoingContributions(store) {
   };
 }
 
-export function annualizedLivingSpend(store) {
-  const { transactions, months } = trailingPostedTransactionWindow(store);
+export function annualizedLivingSpend(store, trailingMonths = 12) {
+  const { transactions, months } = trailingPostedTransactionWindow(store, trailingMonths);
   if (!months.length) {
     return {
       annualSpend: 0,
@@ -1821,8 +1822,8 @@ export function annualizedLivingSpend(store) {
   const monthlySpend = months.map((month) => Number(factsByMonth.get(month)?.actualSpend || 0));
   const monthlyEssentials = months.map((month) => Number(factsByMonth.get(month)?.essentialSpend || 0));
   const fullYear = months.length >= 12;
-  const annualSpend = fullYear ? monthlySpend.reduce((sum, value) => sum + value, 0) : median(monthlySpend) * 12;
-  const essentialAnnualSpend = fullYear ? monthlyEssentials.reduce((sum, value) => sum + value, 0) : median(monthlyEssentials) * 12;
+  const annualSpend = fullYear ? monthlySpend.reduce((sum, value) => sum + value, 0) / months.length * 12 : median(monthlySpend) * 12;
+  const essentialAnnualSpend = fullYear ? monthlyEssentials.reduce((sum, value) => sum + value, 0) / months.length * 12 : median(monthlyEssentials) * 12;
   return {
     annualSpend,
     monthlyAverage: annualSpend / 12,
@@ -1830,23 +1831,28 @@ export function annualizedLivingSpend(store) {
     essentialMonthlySpend: essentialAnnualSpend / 12,
     monthsObserved: months.length,
     completeMonthsObserved: months.length,
-    annualizedFromFullYear: fullYear
+    annualizedFromFullYear: fullYear,
+    trailingMonths: Math.max(3, Math.min(24, Math.round(Number(trailingMonths) || 12)))
   };
 }
 
-function annualizedContributions(store, buckets = ['savings', 'investments']) {
-  const { transactions, months } = trailingPostedTransactionWindow(store);
+function annualizedContributions(store, buckets = ['savings', 'investments'], trailingMonths = 12) {
+  const { transactions, months } = trailingPostedTransactionWindow(store, trailingMonths);
   if (!months.length) return { annualContributions: 0, monthlyContributions: 0, monthsObserved: 0 };
   const factsByMonth = new Map(monthlyFinancialFacts(store).map((fact) => [fact.month, fact]));
   const useCashSavings = buckets.length === 1 && buckets[0] === 'savings';
   const monthlyValues = months.map((month) => Number(factsByMonth.get(month)?.[useCashSavings ? 'cashSavings' : 'investmentContributions'] || 0));
   const observedTotal = monthlyValues.reduce((sum, value) => sum + value, 0);
   const fullYear = months.length >= 12;
-  // With fewer than twelve complete months, retain the observed contribution
-  // total and expose its normalized monthly pace. Annualizing a one-off IRA
-  // contribution would manufacture money that was never observed.
-  const annualContributions = observedTotal;
-  return { annualContributions, monthlyContributions: annualContributions / 12, monthsObserved: months.length, completeMonthsObserved: months.length, annualizedFromFullYear: fullYear };
+  const selectedMonths = Math.max(3, Math.min(24, Math.round(Number(trailingMonths) || 12)));
+  // A complete selected window represents a usable pace. If history does not
+  // yet cover the member's selected window, retain only what was observed so
+  // an isolated contribution is never extrapolated into a future promise.
+  const annualContributions = months.length >= selectedMonths
+    ? observedTotal / months.length * 12
+    : observedTotal;
+  const monthlyContributions = annualContributions / 12;
+  return { annualContributions, monthlyContributions, monthsObserved: months.length, completeMonthsObserved: months.length, annualizedFromFullYear: fullYear };
 }
 
 function monthsToTarget({ balance, target, annualContribution = 0, annualReturn = 0 }) {
@@ -1883,19 +1889,20 @@ function monthsToMovingCoastTarget({ balance, retirementTarget, yearsToRetiremen
 
 export function calculateFire(store, netWorth) {
   const settings = store.settings?.fire || {};
-  const defaults = { age: 27, retirement_age: 65, withdrawal_rate: 4, real_return: 5 };
+  const defaults = { age: 27, retirement_age: 65, withdrawal_rate: 4, real_return: 5, trailing_months: 12 };
   const assumptionsConfigured = settings.assumptions_configured === true
-    || ['age', 'retirement_age', 'withdrawal_rate', 'real_return'].some((field) => Number(settings[field]) !== defaults[field]);
+    || ['age', 'retirement_age', 'withdrawal_rate', 'real_return', 'trailing_months'].some((field) => Number(settings[field]) !== defaults[field]);
   const age = Math.max(18, Number(settings.age || 27));
   const retirementAge = Math.max(age, Number(settings.retirement_age || 65));
   const withdrawalRate = Math.max(0, Number(settings.withdrawal_rate ?? 4)) / 100;
   const realReturn = Math.max(-0.9, Number(settings.real_return ?? 5)) / 100;
+  const trailingMonths = Math.max(3, Math.min(24, Math.round(Number(settings.trailing_months) || 12)));
   const leanMultiplier = Math.max(1, Number(settings.lean_multiplier || 70)) / 100;
   const fatMultiplier = Math.max(1, Number(settings.fat_multiplier || 150)) / 100;
-  const spend = annualizedLivingSpend(store);
-  const contributions = annualizedContributions(store);
+  const spend = annualizedLivingSpend(store, trailingMonths);
+  const contributions = annualizedContributions(store, ['savings', 'investments'], trailingMonths);
   const ongoingContributions = estimateOngoingContributions(store);
-  const cashSavings = annualizedContributions(store, ['savings']);
+  const cashSavings = annualizedContributions(store, ['savings'], trailingMonths);
   const investedAssets = (store.accounts || []).filter((account) => !account.hidden && account.type === 'investment').reduce((sum, account) => sum + Math.max(0, Number(account.current_balance || 0)), 0);
   const freedomBalance = investedAssets || Math.max(0, Number(netWorth || 0));
   const cashBalance = (store.accounts || []).filter((account) => !account.hidden && account.type === 'depository').reduce((sum, account) => sum + Math.max(0, Number(account.current_balance || 0)), 0);
@@ -1927,6 +1934,7 @@ export function calculateFire(store, netWorth) {
     // sensible precision at the API boundary.
     withdrawalRate: Number((withdrawalRate * 100).toFixed(2)),
     realReturn: Number((realReturn * 100).toFixed(2)),
+    trailingMonths,
     leanMultiplier: leanMultiplier * 100,
     fatMultiplier: fatMultiplier * 100,
     annualSpend: spend.annualSpend,

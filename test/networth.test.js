@@ -1159,6 +1159,27 @@ test('retirement preserves a genuine annual expense and irregular annual contrib
   assert.equal(plan.monthlyContributions, 7000 / 12);
 });
 
+test('retirement plan uses the selected completed-month history window for spend and contributions', () => {
+  const now = new Date();
+  const transactions = [];
+  for (let offset = 12; offset >= 1; offset -= 1) {
+    const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - offset, 15)).toISOString().slice(0, 10);
+    const recent = offset <= 6;
+    transactions.push({ date, amount: recent ? 600 : 100, bucket: 'guilt_free', pfc_primary: 'GENERAL_MERCHANDISE' });
+    transactions.push({ date, amount: recent ? 200 : 50, bucket: 'investments', account_id: 'checking', pfc_detailed: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS' });
+  }
+  const plan = calculateFire({
+    settings: { fire: { age: 30, retirement_age: 65, withdrawal_rate: 4, real_return: 5, trailing_months: 6 } },
+    accounts: [{ id: 'checking', type: 'depository' }],
+    transactions
+  }, 0);
+  assert.equal(plan.trailingMonths, 6);
+  assert.equal(plan.monthsObserved, 6);
+  assert.equal(plan.monthlySpend, 600);
+  assert.equal(plan.monthlyContributions, 200);
+  assert.equal(plan.annualContributions, 2400);
+});
+
 test('retirement contribution forecast keeps recurring pace separate from historical windfalls', () => {
   const transactions = [
     { date: '2025-01-15', amount: -5000, bucket: 'income', name: 'Payroll', pfc_primary: 'INCOME', pfc_detailed: 'INCOME_PAYCHECK' },

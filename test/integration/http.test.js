@@ -475,8 +475,9 @@ integrationTest('previews a retirement plan without changing the saved assumptio
   const current = await request(app).get('/api/retirement').set('Cookie', cookie);
   assert.equal(current.body.monthlyContributions, 500 / 12);
   assert.equal(current.body.contributionMonthsObserved, 1);
-  const preview = await request(app).post('/api/retirement/preview').set('Cookie', cookie).send({ age: 30, retirement_age: 65, withdrawal_rate: 3.5, real_return: 5 });
+  const preview = await request(app).post('/api/retirement/preview').set('Cookie', cookie).send({ age: 30, retirement_age: 65, withdrawal_rate: 3.5, real_return: 5, trailing_months: 6 });
   assert.equal(preview.status, 200);
+  assert.equal(preview.body.trailingMonths, 6);
   assert.ok(preview.body.coast < current.body.coast);
   assert.ok(preview.body.projectedAtRetirement > current.body.projectedAtRetirement);
   assert.ok(preview.body.standard > current.body.standard);
@@ -487,6 +488,8 @@ integrationTest('previews a retirement plan without changing the saved assumptio
   assert.equal(broadAssumptions.body.realReturn, 15);
   const rejectedAssumptions = await request(app).post('/api/retirement/preview').set('Cookie', cookie).send({ withdrawal_rate: 20.1, real_return: 15.1 });
   assert.equal(rejectedAssumptions.status, 400);
+  const rejectedHistoryWindow = await request(app).post('/api/retirement/preview').set('Cookie', cookie).send({ trailing_months: 2 });
+  assert.equal(rejectedHistoryWindow.status, 400);
   deleteStore(key);
 });
 

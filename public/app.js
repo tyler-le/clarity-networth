@@ -1871,7 +1871,7 @@ function renderRetirement(data) {
     ? `Based on ${fmt.format(data.monthlySpend || 0)} a month in total spending`
     : 'Your spending will shape these targets.';
   $('#retirementSpendContext').textContent = data.monthsObserved
-    ? `${data.annualizedFromFullYear ? 'Based on 12 complete months' : `Based on ${data.monthsObserved} complete month${data.monthsObserved === 1 ? '' : 's'}`}. Full spending sets your Financial Independence target; essentials set your safety-net milestones.`
+    ? `Based on ${data.monthsObserved} complete month${data.monthsObserved === 1 ? '' : 's'}${data.monthsObserved < data.trailingMonths ? ' available' : ''}. Full spending sets your Financial Independence target; essentials set your safety-net milestones.`
     : 'Your targets will reflect your spending once there is enough history.';
   $('#retirementAssumption').textContent = `At retirement · ${data.withdrawalRate}% withdrawal`;
   const estimatedLabel = (months, complete) => {
@@ -1908,6 +1908,7 @@ function renderRetirement(data) {
   form.retirement_age.value = data.retirementAge;
   form.withdrawal_rate.value = data.withdrawalRate;
   form.real_return.value = data.realReturn;
+  form.trailing_months.value = String(data.trailingMonths || 12);
   $('#retirementAgeValue').value = data.age;
   $('#retirementRetireAgeValue').value = data.retirementAge;
   $('#retirementWithdrawalValue').value = data.withdrawalRate;
@@ -2253,6 +2254,7 @@ $$('[data-retirement-value]').forEach((input) => {
   input.addEventListener('change', applyTypedValue);
   input.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); input.blur(); } });
 });
+$('#retirementForm [name="trailing_months"]').addEventListener('change', previewRetirementPlan);
 $('#retirementReset').addEventListener('click', async () => {
   resetRetirementPreview();
   try { renderRetirement(await api('/api/retirement')); }

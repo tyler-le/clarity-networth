@@ -65,6 +65,7 @@ const emptyStore = () => ({
       retirement_age: 65,
       withdrawal_rate: 4,
       real_return: 5,
+      trailing_months: 12,
       lean_multiplier: 70,
       fat_multiplier: 150
     },

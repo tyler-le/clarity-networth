@@ -1138,3 +1138,7 @@ html[data-theme="dark"] .retirement-inputs > span strong { color: var(--ink); }
   .retirement-inputs > span > span { flex: 0 0 100%; }
   .retirement-inputs > span small { align-self: baseline; }
 }
+
+.retirement-history-window { grid-template-columns: 1fr !important; align-content: start; gap: 5px !important; }
+.retirement-history-window select { width: 100%; min-height: 32px; border: 1px solid var(--line); border-radius: 8px; padding: 0 8px; color: var(--ink); background: var(--surface); font: inherit; font-size: 11px; }
+.retirement-history-window small { color: var(--muted); font-size: 10px; font-weight: 500; line-height: 1.25; }

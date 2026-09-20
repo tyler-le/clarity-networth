@@ -874,8 +874,8 @@ test('retirement milestones explain the planning terms on demand @critical', asy
   await expect(page.locator('#retirementPath')).toContainText('Amount needed today to fund retirement by age 65 without further contributions');
   await expect(page.locator('#retirementPath .retirement-milestone')).toHaveCount(4);
   await expect(page.locator('#retirementProjectionContext')).toHaveText('38 years until age 65');
-  await expect(page.locator('#retirementContributionPace')).toContainText(/Saving & investing · \$[\d,]+\/mo/);
-  await expect(page.locator('#retirementEssentialPace')).toContainText(/Essential spend · \$[\d,]+\/mo/);
+  await expect(page.locator('#retirementContributionPace')).toContainText(/Savings? & investing\s*\$[\d,]+\/mo/);
+  await expect(page.locator('#retirementEssentialPace')).toContainText(/Essential spend\s*\$[\d,]+\/mo/);
   await expect(page.locator('#retirementNextMilestone')).toBeVisible();
   await page.locator('#retirementNextMilestone').click();
   await expect(page.locator('#retirementInfoDialog')).toHaveAttribute('open', '');
@@ -890,6 +890,10 @@ test('retirement milestones explain the planning terms on demand @critical', asy
   await expect(page.locator('#retirementForm [name="withdrawal_rate"]')).toHaveAttribute('max', '20');
   await expect(page.locator('#retirementForm [name="real_return"]')).toHaveAttribute('min', '0');
   await expect(page.locator('#retirementForm [name="real_return"]')).toHaveAttribute('max', '15');
+  const historyWindow = page.getByLabel('Completed months used for retirement spending and contribution pace');
+  await expect(historyWindow).toHaveValue('12');
+  await historyWindow.selectOption('6');
+  await expect(historyWindow).toHaveValue('6');
   const retirementAgeInput = page.locator('#retirementRetireAgeValue');
   await retirementAgeInput.fill('66');
   await retirementAgeInput.press('Enter');
