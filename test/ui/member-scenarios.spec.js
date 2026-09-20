@@ -120,6 +120,34 @@ test('a Free member sees an in-context Plus prompt for deeper cash-flow detail',
   await expect(page.locator('#upgradeDialog')).toContainText('No charge during your trial');
 });
 
+test('a Free member can preview investment history before choosing Plus', async ({ page }) => {
+  await openSignedInScenario(page, (preview) => {
+    preview.dashboard.entitlements = {
+      enabled: true,
+      plan: 'free',
+      billingAvailable: true,
+      requiresSubscription: false,
+      canUseApp: true,
+      canUseConnectInstitution: true,
+      canUseCashFlowDetails: false,
+      canUseInvestmentDetails: false,
+      canUseRetirementScenarios: false,
+      linkedInstitutionCount: 1,
+      linkedInstitutionLimit: 2
+    };
+  });
+
+  await goToView(page, 'investments');
+  await page.locator('[data-investment-account-history]').first().click();
+  const dialog = page.locator('#holdingHistoryDialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveClass(/plus-history-gate/);
+  await expect(dialog).toContainText('HISTORY PREVIEW');
+  await expect(dialog).toContainText('Illustrative shape only — not your account values');
+  await expect(dialog).toContainText('$9');
+  await expect(dialog.getByRole('button', { name: /Unlock investment history/i })).toBeVisible();
+});
+
 test('a newly signed-in member with no accounts gets a calm, truthful product preview', async ({ page }) => {
   await openSignedInScenario(page, (preview) => {
     preview.dashboard.accounts = [];

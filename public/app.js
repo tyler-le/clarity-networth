@@ -1784,19 +1784,20 @@ function openHoldingHistoryPreview({ ticker = '', accountId = '' } = {}) {
   const dialog = $('#holdingHistoryDialog');
   const selectedAccount = accountId ? (state.investments?.accounts || []).find((account) => account.account_id === accountId) : null;
   const label = selectedAccount?.name || ticker || 'Investment detail';
+  dialog.classList.add('plus-history-gate');
   dialog.showModal();
   dialog.focus({ preventScroll: true });
   $('#holdingHistoryEyebrow').textContent = accountId ? 'Your account' : 'Your position';
   $('#holdingHistoryTitle').textContent = label;
-  $('#holdingHistorySubtitle').textContent = 'Verified history is available with Clarity Plus';
-  $('#holdingHistoryMetrics').innerHTML = '<div><span>Current value</span><strong>••••••</strong></div><div><span>History</span><strong>Plus</strong></div>';
+  $('#holdingHistorySubtitle').textContent = 'See how this investment changed over time with verified account and position history.';
+  $('#holdingHistoryMetrics').innerHTML = '<div><span>Current value</span><strong>••••••</strong><small>Private until you unlock it</small></div><div><span>History</span><strong>Ready to reveal</strong><small>Verified updates with Plus</small></div>';
   $('#holdingHistoryTabs').innerHTML = '';
   $('#holdingHistoryRange').innerHTML = '';
-  $('#holdingHistoryNote').textContent = 'Preview the timeline shape below. Your values and dates stay private until you unlock investment history.';
-  $('#holdingHistoryChart').innerHTML = '<div class="plus-history-preview" aria-hidden="true"><svg viewBox="0 0 640 220" preserveAspectRatio="none"><path class="plus-history-grid" d="M0 48H640M0 108H640M0 168H640"/><path class="plus-history-area" d="M0 178C70 172 82 148 142 154C204 161 218 113 276 126C336 140 359 93 411 106C474 121 506 63 554 75C593 84 614 45 640 34V220H0Z"/><path class="plus-history-line" d="M0 178C70 172 82 148 142 154C204 161 218 113 276 126C336 140 359 93 411 106C474 121 506 63 554 75C593 84 614 45 640 34"/></svg><span>Illustrative history shape</span></div>';
+  $('#holdingHistoryNote').textContent = 'A protected preview of the timeline is below. Your values and dates stay private until you unlock the full history.';
+  $('#holdingHistoryChart').innerHTML = '<div class="plus-history-preview" aria-label="Illustrative investment history preview"><div class="plus-history-preview-label"><span>HISTORY PREVIEW</span><i aria-hidden="true">+</i></div><svg viewBox="0 0 640 220" preserveAspectRatio="none" aria-hidden="true"><path class="plus-history-grid" d="M0 48H640M0 108H640M0 168H640"/><path class="plus-history-area" d="M0 178C70 172 82 148 142 154C204 161 218 113 276 126C336 140 359 93 411 106C474 121 506 63 554 75C593 84 614 45 640 34V220H0Z"/><path class="plus-history-line" d="M0 178C70 172 82 148 142 154C204 161 218 113 276 126C336 140 359 93 411 106C474 121 506 63 554 75C593 84 614 45 640 34"/></svg><span>Illustrative shape only — not your account values</span></div>';
   const teaserPositions = accountId ? (state.investments?.positions || []).filter((position) => position.account_id === accountId).slice(0, 3) : [];
   const teaserRows = teaserPositions.map((position) => `<div class="plus-history-teaser-row"><span>${escapeHtml(position.ticker || position.name || 'Holding')}</span><b>••••</b></div>`).join('');
-  $('#holdingHistoryWhere').innerHTML = `${teaserRows ? `<div class="plus-history-teasers"><span class="card-label">Your holdings</span>${teaserRows}</div>` : ''}<div class="plus-history-cta"><span class="card-label">CLARITY PLUS</span><strong>Follow verified account and position history</strong><button class="primary" type="button" data-plus-cta data-plus-feature="investment_history">Unlock history <span aria-hidden="true">→</span></button></div>`;
+  $('#holdingHistoryWhere').innerHTML = `${teaserRows ? `<div class="plus-history-teasers"><span class="card-label">Positions ready to follow</span>${teaserRows}</div>` : ''}<section class="plus-history-cta"><div><span class="card-label">INCLUDED WITH CLARITY PLUS</span><strong><b>$9</b> <span>/ month</span></strong><em>Cancel anytime · 14-day free trial</em></div><div class="plus-history-cta-copy"><b>Unlock the story behind your investments</b><small>Follow verified account value and position history.</small><button class="primary" type="button" data-plus-cta data-plus-feature="investment_history">Unlock investment history <span aria-hidden="true">→</span></button></div></section>`;
 }
 
 function openHoldingHistoryEntry(options = {}) {
@@ -1809,6 +1810,7 @@ function openHoldingHistoryEntry(options = {}) {
 
 async function openHoldingHistory({ ticker = '', accountId = '' } = {}, { preserveRange = false } = {}) {
   const dialog = $('#holdingHistoryDialog');
+  dialog.classList.remove('plus-history-gate');
   const selectedAccount = accountId ? (state.investments?.accounts || []).find((account) => account.account_id === accountId) : null;
   const accountLabel = selectedAccount?.name || 'Investment account';
   const accountValue = selectedAccount ? Number(selectedAccount.value || selectedAccount.balance || 0) : 0;
