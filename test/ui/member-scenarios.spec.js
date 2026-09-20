@@ -182,6 +182,8 @@ test('a rate-limited connection gives a safe wait time and prevents repeated att
 
   await page.locator('#connectButton').click();
   await expect(page.locator('#notice')).toHaveText('Please wait before trying again. Try again in 2 minutes.');
+  await expect(page.locator('#notice')).toHaveAttribute('data-tone', 'error');
+  await expect(page.locator('#notice')).toHaveCSS('position', 'fixed');
   await expect(page.locator('#connectButton')).toBeDisabled();
   await expect(page.locator('#connectButton')).toHaveText('Try again in 2 min');
 });
@@ -193,6 +195,7 @@ test('development exposes deterministic connection-recovery states without provi
   await page.locator('#developmentRecoveryScenario').selectOption('institution_unavailable');
   await page.locator('#developmentRecoveryTrigger').click();
   await expect(page.locator('#notice')).toHaveText('Your institution is temporarily unavailable. Please try again later.');
+  await expect(page.locator('#notice')).toHaveAttribute('data-tone', 'error');
 });
 
 test('accounts retain the established collection layout for each account type', async ({ page }) => {

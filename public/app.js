@@ -124,7 +124,7 @@ function applyConnectionCooldown(seconds) {
 
 function presentConnectionError(error) {
   if (error?.recovery === 'wait' && error.retryAfterSeconds) applyConnectionCooldown(error.retryAfterSeconds);
-  showNotice(error?.message || customerError('connection_unavailable').message);
+  showNotice(error?.message || customerError('connection_unavailable').message, 'error');
 }
 
 // Private-beta success telemetry is intentionally tiny and invisible: no
@@ -190,11 +190,14 @@ function institutionMark(account) {
   return `<span class="institution-fallback" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 9.5 12 4l9 5.5M5.5 11h13M6.5 11v7M11 11v7M15.5 11v7M4 20h16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
 }
 
-function showNotice(message, tone = 'warn') {
+let noticeTimer;
+function showNotice(message, tone = 'info') {
   const el = $('#notice');
+  clearTimeout(noticeTimer);
   el.textContent = message;
+  el.dataset.tone = tone;
   el.classList.remove('hidden');
-  if (tone === 'success') setTimeout(() => el.classList.add('hidden'), 3200);
+  noticeTimer = setTimeout(() => el.classList.add('hidden'), tone === 'error' ? 7500 : tone === 'success' ? 3200 : 4800);
 }
 
 function setAppStatus(message = '') {
@@ -1232,7 +1235,7 @@ async function loadInvestmentRange(range) {
     state.investments = investments;
     renderInvestments(investments);
   } catch (error) {
-    if (request === investmentRangeRequest) showNotice(error.message);
+    if (request === investmentRangeRequest) showNotice(error.message, 'error');
   } finally {
     if (request === investmentRangeRequest) $$('[data-investment-range]').forEach((control) => { control.disabled = false; });
   }
@@ -1655,7 +1658,7 @@ async function openHoldingHistory({ ticker = '', accountId = '' } = {}, { preser
   } catch (error) {
     if (request !== holdingHistoryRequest) return;
     if (preserveRange) {
-      showNotice(error.message || 'We could not update this timeframe right now.');
+      showNotice(error.message || 'We could not update this timeframe right now.', 'error');
       return;
     }
     state.holdingHistory = { state: 'unavailable', label: 'Investment detail', ticker, value: 0, history: [], market: [], reason: error.message || 'We could not load this history right now.' };
@@ -1934,9 +1937,8 @@ function renderDashboard() {
   renderClarityLayer(d);
   renderProfileSettings(actual);
   $('#connectButton').classList.toggle('hidden', state.view === 'profile' || Boolean(state.onboardingPreview));
-  // First-run has its own composed preview and CTA. A generic warning toast
-  // makes that deliberate state look like an error or failed load.
-  if (!d.plaidConfigured && !state.demoPreview && !state.onboardingPreview) showNotice('Connect an account when you’re ready to see your own data.');
+  // First-run has its own composed preview and CTA. It should not also create
+  // a generic notification that competes with that intentional next action.
 }
 
 // A new member has no financial facts yet. Preserve the product's real layout
@@ -2120,7 +2122,7 @@ $('#themeToggle').addEventListener('change', async (event) => {
     const appearance = await api('/api/settings/appearance', { method: 'PATCH', body: JSON.stringify({ theme }) });
     state.dashboard.appearance = appearance;
   } catch {
-    showNotice('Your appearance preference will stay on this device, but could not be saved to your profile.');
+    showNotice('Your appearance preference will stay on this device, but could not be saved to your profile.', 'error');
   }
 });
 $('#demoToggle').addEventListener('click', async () => {
@@ -2149,7 +2151,7 @@ $('#demoToggle').addEventListener('click', async () => {
     await api('/api/demo-mode', { method: 'POST', body: JSON.stringify({ enabled: enteringDemo }) });
     await loadAll();
     showNotice(state.dashboard?.demoMode ? 'Demo sandbox is on. Your real data is safely hidden.' : 'Your personal financial picture is back.', 'success');
-  } catch (error) { showNotice(error.message); }
+  } catch (error) { showNotice(error.message, 'error'); }
   finally { button.disabled = false; }
 });
 $('#developmentRecoveryTrigger').addEventListener('click', () => {
@@ -2173,7 +2175,7 @@ $('#exportDataButton').addEventListener('click', async () => {
     link.click();
     URL.revokeObjectURL(link.href);
     showNotice('Your data download is ready.', 'success');
-  } catch (error) { showNotice(error.message); }
+  } catch (error) { showNotice(error.message, 'error'); }
   finally { button.disabled = false; }
 });
 $('#deleteAccountButton').addEventListener('click', async () => {
@@ -2192,7 +2194,7 @@ $('#deleteAccountButton').addEventListener('click', async () => {
     $('#googleSignIn').innerHTML = '';
     $('#authMessage').textContent = 'Your account and saved financial data have been deleted.';
     await startGoogleSignIn();
-  } catch (error) { showNotice(error.message); }
+  } catch (error) { showNotice(error.message, 'error'); }
   finally { button.disabled = false; }
 });
 $$('[data-connect-account]').forEach((button) => button.addEventListener('click', connectPlaid));
@@ -2258,7 +2260,7 @@ $('#retirementForm [name="trailing_months"]').addEventListener('change', preview
 $('#retirementReset').addEventListener('click', async () => {
   resetRetirementPreview();
   try { renderRetirement(await api('/api/retirement')); }
-  catch (error) { showNotice(error.message); }
+  catch (error) { showNotice(error.message, 'error'); }
 });
 $('#retirementReviewPlan').addEventListener('click', () => {
   const assumptions = $('#retirementAdjust');
@@ -2271,15 +2273,22 @@ $('#retirementForm').addEventListener('submit', async (event) => {
   if (state.demoPreview || state.dashboard?.demoMode) { showNotice('Sign in to save changes to your own plan.'); return; }
   const form = new FormData(event.currentTarget);
   const button = event.currentTarget.querySelector('button[type="submit"]');
+  const label = button.textContent;
   button.disabled = true;
+  button.textContent = 'Saving…';
+  button.setAttribute('aria-busy', 'true');
   try {
     state.retirement = await api('/api/settings/retirement', { method: 'PATCH', body: JSON.stringify(Object.fromEntries(form)) });
     renderRetirement(state.retirement);
     resetRetirementPreview();
     $('#retirementAdjust').open = false;
     showNotice('Plan updated — your retirement outlook has been recalculated.', 'success');
-  } catch (error) { showNotice(error.message); }
-  finally { button.disabled = false; }
+  } catch (error) { showNotice(error.message, 'error'); }
+  finally {
+    button.disabled = false;
+    button.textContent = label;
+    button.removeAttribute('aria-busy');
+  }
 });
 function openRetirementMilestone(name) {
   const plan = state.retirement;
@@ -2415,7 +2424,7 @@ $('#debtPayoffCard').addEventListener('click', async (event) => {
         state.dashboard.debtPayoff = await api('/api/settings/debt-strategy', { method: 'PATCH', body: JSON.stringify({ strategy }) });
       }
       renderDebtPayoff(state.dashboard.debtPayoff);
-    } catch (error) { showNotice(error.message); }
+    } catch (error) { showNotice(error.message, 'error'); }
     return;
   }
   if (!event.target.closest('[data-save-debt-rates]')) return;
@@ -2439,7 +2448,7 @@ $('#debtPayoffCard').addEventListener('click', async (event) => {
     }
     renderDebtPayoff(state.dashboard.debtPayoff);
     showNotice('Debt payoff plan updated.', 'success');
-  } catch (error) { showNotice(error.message); } finally { button.disabled = false; }
+  } catch (error) { showNotice(error.message, 'error'); } finally { button.disabled = false; }
 });
 $('#nicknameForm').addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -2451,7 +2460,7 @@ $('#nicknameForm').addEventListener('submit', async (event) => {
     dialog.close();
     await loadAll();
     showNotice('Account name updated.', 'success');
-  } catch (error) { showNotice(error.message); }
+  } catch (error) { showNotice(error.message, 'error'); }
   finally { save.disabled = false; }
 });
 $('#nicknameCancel').addEventListener('click', () => $('#nicknameDialog').close());
@@ -2471,11 +2480,11 @@ $('#manualAccountForm').addEventListener('submit', async (event) => {
   const dialog = $('#manualAccountDialog'); const editing = Boolean(dialog.dataset.accountId); const save = $('#manualAccountSave'); save.disabled = true;
   const body = { name: $('#manualAccountName').value, kind: $('#manualAccountKind').value, subtype: $('#manualAccountSubtype').value, value: $('#manualAccountValue').value };
   try { await api(editing ? `/api/manual-accounts/${encodeURIComponent(dialog.dataset.accountId)}` : '/api/manual-accounts', { method: editing ? 'PATCH' : 'POST', body: JSON.stringify(body) }); dialog.close(); await loadAll(); showNotice(editing ? 'Manual item updated.' : 'Manual item added.', 'success'); }
-  catch (error) { showNotice(error.message); } finally { save.disabled = false; }
+  catch (error) { showNotice(error.message, 'error'); } finally { save.disabled = false; }
 });
 $('#manualAccountDelete').addEventListener('click', async () => {
   const dialog = $('#manualAccountDialog'); if (!dialog.dataset.accountId || !window.confirm('Delete this manual item from your net worth?')) return;
-  try { await api(`/api/manual-accounts/${encodeURIComponent(dialog.dataset.accountId)}`, { method: 'DELETE' }); dialog.close(); await loadAll(); showNotice('Manual item removed.', 'success'); } catch (error) { showNotice(error.message); }
+  try { await api(`/api/manual-accounts/${encodeURIComponent(dialog.dataset.accountId)}`, { method: 'DELETE' }); dialog.close(); await loadAll(); showNotice('Manual item removed.', 'success'); } catch (error) { showNotice(error.message, 'error'); }
 });
 $('#goalAction').addEventListener('click', async () => {
   const goal = state.dashboard?.goals?.[0];
@@ -2500,7 +2509,7 @@ $('#goalRemoveConfirm').addEventListener('click', async () => {
     if (isDemoExperience()) { state.demoGoal = null; $('#goalRemoveDialog').close(); renderClarityLayer(state.dashboard); showNotice('Demo goal removed.', 'success'); return; }
     await api(`/api/goals/${encodeURIComponent(activeGoal.id)}`, { method: 'DELETE' });
     $('#goalRemoveDialog').close(); await loadAll(); showNotice('Goal removed.', 'success');
-  } catch (error) { showNotice(error.message); } finally { $('#goalRemoveConfirm').disabled = false; }
+  } catch (error) { showNotice(error.message, 'error'); } finally { $('#goalRemoveConfirm').disabled = false; }
 });
 $('#goalForm').addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -2512,7 +2521,7 @@ $('#goalForm').addEventListener('submit', async (event) => {
       $('#goalDialog').close(); renderClarityLayer(state.dashboard); showNotice('Demo goal added. It resets when you leave the demo.', 'success'); return;
     }
     await api('/api/goals', { method: 'POST', body: JSON.stringify(goal) }); $('#goalDialog').close(); await loadAll(); showNotice('Goal added.', 'success');
-  } catch (error) { showNotice(error.message); }
+  } catch (error) { showNotice(error.message, 'error'); }
 });
 $('#connectionAttentionAction').addEventListener('click', () => openConnectionManagement());
 $('#clarityCheckinAction').addEventListener('click', () => setView($('#clarityCheckin').dataset.action || 'overview'));
@@ -2528,7 +2537,7 @@ $('#connectionsList').addEventListener('click', async (event) => {
     await loadAll();
     showNotice('Institution unlinked.', 'success');
   } catch (error) {
-    showNotice(error.message);
+    showNotice(error.message, 'error');
     button.disabled = false;
   }
 });
@@ -2553,7 +2562,7 @@ $$('[data-spending-range]').forEach((button) => button.addEventListener('click',
   try {
     state.spending = await loadSpending();
     renderSpending(state.spending);
-  } catch (error) { showNotice(error.message); }
+  } catch (error) { showNotice(error.message, 'error'); }
   finally {
     $('#spendingView').setAttribute('aria-busy', 'false');
     $$('[data-spending-range]').forEach((control) => { control.disabled = false; });
@@ -2820,7 +2829,7 @@ $('#spendingTransactions').addEventListener('change', async (event) => {
     await api(`/api/transactions/${select.dataset.transactionCategory}/category`, { method: 'PATCH', body: JSON.stringify({ bucket: select.value }) });
     state.spending = await loadSpending();
     renderSpending(state.spending);
-  } catch (error) { showNotice(error.message); select.disabled = false; }
+  } catch (error) { showNotice(error.message, 'error'); select.disabled = false; }
 });
 $('#spendingTrend').addEventListener('click', (event) => {
   const month = event.target.closest('[data-spending-month]')?.dataset.spendingMonth;
@@ -2888,7 +2897,7 @@ $('#investmentPositions').addEventListener('change', async (event) => {
     state.investments = select ? await api('/api/investments') : response;
     renderInvestments(state.investments);
     showNotice(select ? (select.value ? 'Holding classification updated.' : 'Automatic classification restored.') : 'Manual holding classification updated.', 'success');
-  } catch (error) { showNotice(error.message); control.disabled = false; }
+  } catch (error) { showNotice(error.message, 'error'); control.disabled = false; }
 });
 $('#investmentPositions').addEventListener('click', async (event) => {
   const add = event.target.closest('[data-add-manual-holding]');
@@ -2918,7 +2927,7 @@ $('#investmentPositions').addEventListener('click', async (event) => {
     state.investments = await api(`/api/manual-holdings/${encodeURIComponent(remove.dataset.removeManualHolding)}`, { method: 'DELETE' });
     renderInvestments(state.investments);
     showNotice('Manual holding removed.', 'success');
-  } catch (error) { showNotice(error.message); remove.disabled = false; }
+  } catch (error) { showNotice(error.message, 'error'); remove.disabled = false; }
 });
 $('#holdingHistoryTabs').addEventListener('click', (event) => {
   const tab = event.target.closest('[data-holding-history-mode]');
@@ -2949,7 +2958,7 @@ $('#holdingHistoryWhere').addEventListener('change', async (event) => {
     renderHoldingHistoryDetail();
     showNotice(control.value ? 'Holding classification updated.' : 'Automatic classification restored.', 'success');
   } catch (error) {
-    showNotice(error.message);
+    showNotice(error.message, 'error');
     control.disabled = false;
   }
 });
@@ -3178,7 +3187,7 @@ $('#manualHoldingForm').addEventListener('submit', async (event) => {
     dialog.close();
     renderInvestments(state.investments);
     showNotice('Manual holding added.', 'success');
-  } catch (error) { showNotice(error.message); }
+  } catch (error) { showNotice(error.message, 'error'); }
   finally { save.disabled = false; }
 });
 $('#manualHoldingCancel').addEventListener('click', () => $('#manualHoldingDialog').close());
@@ -3316,7 +3325,7 @@ async function initializeApp() {
   try {
     await loadAll();
   } catch (error) {
-    showNotice(navigator.onLine ? 'We could not refresh your data. Your next sync will try again.' : 'You’re offline. Reconnect to refresh your financial picture.');
+    showNotice(navigator.onLine ? 'We could not refresh your data. Your next sync will try again.' : 'You’re offline. Reconnect to refresh your financial picture.', 'error');
     setAppStatus('');
   }
 }
@@ -3345,12 +3354,12 @@ $('#updateAppButton').addEventListener('click', () => {
 // The worker intentionally caches no app or financial data. Reloading when it
 // claims a page can interrupt an initial sign-in or demo load, so there is no
 // reason to force a navigation here. New assets take effect on the next launch.
-window.addEventListener('offline', () => showNotice('You’re offline. Reconnect when you’re ready to refresh your data.'));
+window.addEventListener('offline', () => showNotice('You’re offline. Reconnect when you’re ready to refresh your data.', 'error'));
 window.addEventListener('online', async () => {
   if (!state.dashboard || state.demoPreview) return;
   setAppStatus('Back online — refreshing…');
   try { await loadAll(); showNotice('Your financial picture is current again.', 'success'); }
-  catch { showNotice('Back online, but refresh is still unavailable. We’ll try again next time.'); }
+  catch { showNotice('Back online, but refresh is still unavailable. We’ll try again next time.', 'error'); }
 });
 
 $('#demoPreviewButton').addEventListener('click', startDemoPreview);
