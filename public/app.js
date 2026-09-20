@@ -1238,7 +1238,8 @@ function renderSpendingTransactions(data) {
   if (!plusFeatureAvailable('canUseCashFlowDetails')) {
     const count = (data.transactions || []).length;
     $('#spendingTransactionCount').textContent = `${count} posted`;
-    $('#spendingTransactions').innerHTML = `<div class="plus-inline-lock"><div class="plus-preview-copy"><div class="card-label">CLARITY PLUS</div><strong>See the transactions behind each category</strong><p>Preview the detail Plus adds. Your real transactions stay private until you unlock it.</p></div><div class="plus-preview-list" aria-hidden="true"><div><i></i><b></b><em></em></div><div><i></i><b></b><em></em></div><div><i></i><b></b><em></em></div></div><button class="secondary" type="button" data-plus-cta>Unlock with Plus <span aria-hidden="true">→</span></button></div>`;
+    const selectedCategory = state.spendingCategory && state.spendingCategory !== 'all' ? cashflowActivityLabel(data, state.spendingCategory) : 'each category';
+    $('#spendingTransactions').innerHTML = `<div class="plus-inline-lock"><div class="plus-preview-copy"><div class="card-label">CLARITY PLUS</div><strong>See ${escapeHtml(selectedCategory)} transactions</strong><p>Preview the detail Plus adds. Your real transactions stay private until you unlock it.</p></div><div class="plus-preview-list" aria-hidden="true"><div><i></i><b></b><em></em></div><div><i></i><b></b><em></em></div><div><i></i><b></b><em></em></div></div><button class="secondary" type="button" data-plus-cta>Unlock with Plus <span aria-hidden="true">→</span></button></div>`;
     return;
   }
   const filter = $('#spendingCategoryFilter');
@@ -2712,14 +2713,26 @@ function renderCashflowActivityDetail(category) {
 }
 
 function openCashflowCategoryActivity(category) {
-  if (!requestPlus('canUseCashFlowDetails')) return;
   const data = spendingForSelectedMonth(state.spending);
   const transactionKeys = new Set((data.transactions || []).flatMap((transaction) => [transaction.flowKey, transaction.flowGroup]));
   if (category !== 'all' && !transactionKeys.has(category)) return;
+  if (!plusFeatureAvailable('canUseCashFlowDetails')) {
+    revealCashflowPreview(category);
+    return;
+  }
   trackProductEvent('cash_flow_drilldown');
   const dialog = $('#cashflowDialog');
   if (!dialog.open) dialog.showModal();
   renderCashflowActivityDetail(category);
+}
+
+function revealCashflowPreview(category = 'all') {
+  state.spendingCategory = category || 'all';
+  const panel = $('#spendingTransactionsPanel');
+  panel.open = true;
+  renderSpendingTransactions(spendingForSelectedMonth(state.spending));
+  panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  panel.animate?.([{ transform: 'translateY(0)' }, { transform: 'translateY(-3px)' }, { transform: 'translateY(0)' }], { duration: 280, easing: 'ease-out' });
 }
 
 $('#cashflowExpand').addEventListener('click', openCashflowDialog);
@@ -2780,7 +2793,10 @@ $('#spendingCategoryFilter').addEventListener('change', (event) => { state.spend
 $('#spendingSort').addEventListener('change', (event) => { state.spendingSort = event.target.value; renderSpendingTransactions(spendingForSelectedMonth(state.spending)); });
 function openSpendingCategory(category) {
   if (!category) return;
-  if (!requestPlus('canUseCashFlowDetails')) return;
+  if (!plusFeatureAvailable('canUseCashFlowDetails')) {
+    revealCashflowPreview(category);
+    return;
+  }
   trackProductEvent('cash_flow_drilldown');
   state.spendingCategory = category;
   const panel = $('#spendingTransactionsPanel');

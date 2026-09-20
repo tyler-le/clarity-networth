@@ -106,6 +106,10 @@ test('a Free member sees an in-context Plus prompt for deeper cash-flow detail',
   });
 
   await goToView(page, 'spending');
+  const sankeyNode = page.locator('#cashflowSankey [data-cashflow-node]').first();
+  await expect(sankeyNode).toBeVisible();
+  await sankeyNode.click();
+  await expect(page.locator('#spendingTransactionsPanel')).toHaveAttribute('open', '');
   await expect(page.locator('#spendingTransactions')).toContainText('See the transactions behind each category');
   await page.locator('#spendingTransactions [data-plus-cta]').click();
   await expect(page.locator('#upgradeDialog')).toBeVisible();
