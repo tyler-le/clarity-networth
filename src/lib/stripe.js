@@ -12,12 +12,13 @@ export function stripeBillingConfigured() {
     && configured(process.env.PUBLIC_APP_URL);
 }
 
-// Keep Stripe behind one client factory so requests use the current SDK,
-// retries, and API version rather than hand-rolled authenticated fetch calls.
+// Keep Stripe behind one client factory so requests use the current SDK and
+// retries rather than hand-rolled authenticated fetch calls. Managed Payments
+// requires the preview API version specified by the integration blueprint.
 export function stripeClient(secretKey = process.env.STRIPE_SECRET_KEY) {
   if (!configured(secretKey)) throw new Error('Stripe billing is not configured.');
   return new Stripe(secretKey, {
-    apiVersion: '2026-08-26.dahlia',
+    apiVersion: '2026-02-25.preview',
     maxNetworkRetries: 2,
     timeout: 15_000
   });

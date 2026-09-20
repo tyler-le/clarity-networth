@@ -45,7 +45,7 @@ The counters are stored as opaque HMAC-derived identifiers in Postgres, so they 
 
 Configure Stripe to send `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, and `invoice.payment_failed` to `https://YOUR_DOMAIN/api/billing/stripe/webhook`. Signature verification rejects unsigned or stale events. Checkout and the Stripe-hosted customer portal are the only payment surfaces—card details never reach Clarity. Configure the portal to let members update payment methods, see invoices, and cancel; changes take effect only after their signed lifecycle event is received.
 
-Before collecting sales tax, complete the required Stripe Tax registrations for the jurisdictions where Clarity has an obligation. Do not enable `automatic_tax` until those registrations are active; Stripe otherwise calculates and collects no tax.
+The sandbox Clarity Plus Product uses tax code `txcd_10103100` and Checkout enables Stripe Managed Payments. Confirm Clarity remains eligible for Managed Payments before launch. If the integration moves to standard Checkout with `automatic_tax`, complete the required Stripe Tax registrations first; without an active registration Stripe calculates and collects no tax.
 
 ## Edge protection before public signup
 

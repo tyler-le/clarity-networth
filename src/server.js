@@ -1393,10 +1393,10 @@ app.post('/api/billing/checkout', async (req, res) => {
       client_reference_id: req.user.storageKey,
       success_url: `${appUrl}/?billing=success`,
       cancel_url: `${appUrl}/?billing=cancelled`,
-      // Managed Payments requires a Stripe product tax code and active tax
-      // setup. Clarity is not collecting tax yet, so keep this subscription
-      // on standard Checkout until tax registrations are configured.
-      managed_payments: { enabled: false },
+      // The sandbox Product is classified with the blueprint's eligible
+      // digital-service tax code. Stripe owns tax calculation and collection
+      // for this Managed Payments Checkout flow.
+      managed_payments: { enabled: true },
       metadata: { user_key: req.user.storageKey },
       subscription_data: { trial_period_days: 14, metadata: { user_key: req.user.storageKey } },
       line_items: [{ price: process.env.STRIPE_PLUS_PRICE_ID, quantity: 1 }]
