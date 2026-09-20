@@ -105,26 +105,45 @@ test('spending summary excludes transfers and groups only transactions in the se
   assert.deepEqual(result.topMerchants, [{ name: 'Cafe', amount: 80 }]);
 });
 
-test('a cash-flow category correction applies to every prior matching merchant payment and can replace an earlier rule', () => {
+test('a cash-flow category correction applies to every matching merchant payment and can replace an earlier rule', () => {
   const store = { transactions: [
     { id: 'latest-rent', date: '2026-09-15', amount: 1500, bucket: 'guilt_free', merchant_name: 'Zelle: Rent', pending: false },
     { id: 'prior-rent', date: '2026-08-15', amount: 1500, bucket: 'guilt_free', merchant_name: 'Zelle Rent', pending: false },
+    { id: 'future-rent', date: '2026-10-15', amount: 1500, bucket: 'guilt_free', merchant_name: 'Zelle Rent', pending: false },
     { id: 'different-recipient', date: '2026-08-16', amount: 40, bucket: 'guilt_free', merchant_name: 'Zelle: Alex', pending: false },
     { id: 'explicit-choice', date: '2026-07-15', amount: 1500, bucket: 'guilt_free', merchant_name: 'Zelle Rent', pending: false, cash_flow_category: 'shopping', cash_flow_category_overridden: true }
   ] };
   const result = applyCashFlowCategoryOverride(store, 'latest-rent', 'housing_bills');
-  assert.deepEqual({ updated: result.updated, matchedPrior: result.matchedPrior, category: result.category.key }, { updated: 3, matchedPrior: 2, category: 'housing_bills' });
+  assert.deepEqual({ updated: result.updated, matchedDuplicates: result.matchedDuplicates, category: result.category.key }, { updated: 4, matchedDuplicates: 3, category: 'housing_bills' });
   assert.equal(store.transactions.find((transaction) => transaction.id === 'latest-rent').bucket, 'fixed');
   assert.equal(store.transactions.find((transaction) => transaction.id === 'prior-rent').cash_flow_category, 'housing_bills');
   assert.equal(store.transactions.find((transaction) => transaction.id === 'different-recipient').cash_flow_category, undefined);
   assert.equal(store.transactions.find((transaction) => transaction.id === 'explicit-choice').cash_flow_category, 'housing_bills');
   const changedAgain = applyCashFlowCategoryOverride(store, 'latest-rent', 'fees');
-  assert.deepEqual({ updated: changedAgain.updated, matchedPrior: changedAgain.matchedPrior }, { updated: 3, matchedPrior: 2 });
-  assert.deepEqual(store.transactions.filter((transaction) => transaction.id !== 'different-recipient').map((transaction) => transaction.cash_flow_category), ['fees', 'fees', 'fees']);
+  assert.deepEqual({ updated: changedAgain.updated, matchedDuplicates: changedAgain.matchedDuplicates }, { updated: 4, matchedDuplicates: 3 });
+  assert.deepEqual(store.transactions.filter((transaction) => transaction.id !== 'different-recipient').map((transaction) => transaction.cash_flow_category), ['fees', 'fees', 'fees', 'fees']);
   applyCashFlowCategoryOverride(store, 'latest-rent', 'housing_bills');
-  assert.deepEqual(store.transactions.filter((transaction) => transaction.id !== 'different-recipient').map((transaction) => transaction.cash_flow_category), ['housing_bills', 'housing_bills', 'housing_bills']);
+  assert.deepEqual(store.transactions.filter((transaction) => transaction.id !== 'different-recipient').map((transaction) => transaction.cash_flow_category), ['housing_bills', 'housing_bills', 'housing_bills', 'housing_bills']);
   const summary = spendingSummary(store, '3m', new Date('2026-09-20T12:00:00'));
   assert.equal(summary.transactions.find((transaction) => transaction.id === 'prior-rent').flowLabel, 'Housing & bills');
+});
+
+test('an income category rule updates every matching deposit without recategorizing protected inflows', () => {
+  const store = { transactions: [
+    { id: 'current-gig', date: '2026-09-15', amount: -900, bucket: 'income', merchant_name: 'Acme Design LLC', pending: false },
+    { id: 'older-gig', date: '2026-08-15', amount: -750, bucket: 'income', merchant_name: 'Acme Design LLC', pending: false },
+    { id: 'newer-gig', date: '2026-10-15', amount: -1_050, bucket: 'income', merchant_name: 'Acme Design LLC', pending: false },
+    { id: 'refund', date: '2026-09-12', amount: -30, bucket: 'income', merchant_name: 'Acme Design LLC refund', pfc_detailed: 'MERCHANT_REFUND', pending: false },
+    { id: 'loan', date: '2026-09-11', amount: -1000, bucket: 'income', merchant_name: 'Acme Design LLC loan', pfc_detailed: 'LOAN_PROCEEDS', pending: false }
+  ] };
+  const result = applyCashFlowCategoryOverride(store, 'current-gig', 'income_business');
+  assert.deepEqual({ updated: result.updated, matchedDuplicates: result.matchedDuplicates, category: result.category.key }, { updated: 3, matchedDuplicates: 2, category: 'income_business' });
+  assert.deepEqual(store.transactions.filter((transaction) => transaction.id.endsWith('gig')).map((transaction) => transaction.cash_flow_category), ['income_business', 'income_business', 'income_business']);
+  assert.equal(store.transactions.find((transaction) => transaction.id === 'refund').cash_flow_category, undefined);
+  assert.equal(store.transactions.find((transaction) => transaction.id === 'loan').cash_flow_category, undefined);
+  assert.equal(applyCashFlowCategoryOverride(store, 'refund', 'income_business'), null);
+  const summary = spendingSummary(store, 'all', new Date('2026-10-20T12:00:00'));
+  assert.equal(summary.transactions.find((transaction) => transaction.id === 'older-gig').category, 'Business & freelance');
 });
 
 test('monthly spending keeps income separate for comparison', () => {
@@ -138,7 +157,7 @@ test('monthly spending keeps income separate for comparison', () => {
   assert.equal(result.income, 4200);
   assert.deepEqual(result.monthly, [{ month: '2026-09', amount: 900, actual_spend: 900, saved_invested: 0, income: 4200, pre_tax_retirement: 0 }]);
   assert.deepEqual(result.transactions.find((transaction) => transaction.category === 'Paychecks'), {
-    id: undefined, name: 'Payroll', date: '2026-09-01', amount: 4200, category: 'Paychecks', bucket: 'income', flowKey: 'income_paychecks', flowLabel: 'Paychecks', flowGroup: 'income'
+    id: undefined, name: 'Payroll', date: '2026-09-01', amount: 4200, category: 'Paychecks', bucket: 'income', cashFlowCategory: 'income_paychecks', flowKey: 'income_paychecks', flowLabel: 'Paychecks', flowGroup: 'income'
   });
   assert.deepEqual(result.incomeSources, [{ key: 'income_paychecks', label: 'Paychecks', amount: 4200 }]);
 });

@@ -1237,6 +1237,16 @@ function renderSpending(data) {
   if (state.onboardingPreview) applyOnboardingPreviewCopy();
 }
 
+function transactionCategoryControl(data, transaction, { context = 'cashflow', activityCategory = '' } = {}) {
+  const editable = Boolean(transaction.id)
+    && (transaction.editableCategory ?? ['actual_spend', 'income'].includes(transaction.flowGroup))
+    && !state.dashboard?.demoMode;
+  const flow = transaction.categoryFlow || (transaction.flowGroup === 'income' || transaction.bucket === 'income' ? 'income' : 'outflow');
+  const options = (data.categoryOptions || []).filter((category) => category.flow === flow && (flow === 'income' || category.key !== 'uncategorized'));
+  if (!editable || !options.length) return `<span class="transaction-category-label">${escapeHtml(transaction.category || transaction.flowLabel || 'Transaction')}</span>`;
+  return `<select data-transaction-category="${escapeHtml(transaction.id)}" data-category-context="${escapeHtml(context)}" data-cashflow-category="${escapeHtml(activityCategory)}" aria-label="Category for ${escapeHtml(transaction.name)}">${options.map((category) => `<option value="${escapeHtml(category.key)}" ${transaction.cashFlowCategory === category.key ? 'selected' : ''}>${escapeHtml(category.label)}</option>`).join('')}</select>`;
+}
+
 function renderSpendingTransactions(data) {
   if (!plusFeatureAvailable('canUseCashFlowDetails')) {
     const count = (data.transactions || []).length;
@@ -1266,11 +1276,8 @@ function renderSpendingTransactions(data) {
   });
   rows = sortCashflowTransactions(rows, state.spendingSort);
   $('#spendingTransactionCount').textContent = `${rows.length} posted`;
-  const options = (data.categoryOptions || []).filter((category) => category.key !== 'uncategorized');
   $('#spendingTransactions').innerHTML = rows.length ? rows.map((transaction) => {
-    const categoryControl = transaction.flowGroup !== 'actual_spend' || ['income', 'pre_tax_retirement'].includes(transaction.bucket) || state.dashboard?.demoMode
-      ? `<span class="transaction-category-label">${escapeHtml(transaction.category)}</span>`
-      : `<select data-transaction-category="${escapeHtml(transaction.id)}" aria-label="Cash flow category for ${escapeHtml(transaction.name)}">${options.map((category) => `<option value="${escapeHtml(category.key)}" ${transaction.cashFlowCategory === category.key ? 'selected' : ''}>${escapeHtml(category.label)}</option>`).join('')}</select>`;
+    const categoryControl = transactionCategoryControl(data, transaction);
     return `<div class="spending-transaction-row ${transaction.bucket === 'income' ? 'income-transaction' : ''} ${transaction.bucket === 'pre_tax_retirement' ? 'payroll-transaction' : ''}"><div><strong>${escapeHtml(transaction.name)}</strong><span>${new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span></div><div class="transaction-plan"><b>${transaction.bucket === 'income' ? '+' : ''}${fmt.format(transaction.amount)}</b>${categoryControl}</div></div>`;
   }).join('') : `<p class="spending-empty">No posted transactions match${state.spendingTransactionSearch ? ` “${escapeHtml(state.spendingTransactionSearch)}”` : ' this category for this period'}.</p>`;
 }
@@ -1822,7 +1829,7 @@ function renderAccountHistoryDetail() {
   const ranges = [['1m', 'This month', 'This month'], ['3m', '3M', '3 months'], ['6m', '6M', '6 months'], ['ytd', 'YTD', 'Year to date'], ['1y', '1Y', '1 year'], ['all', 'All', 'All time']];
   $('#accountHistoryRange').innerHTML = ranges.map(([value, label, accessibleLabel]) => `<button type="button" class="${state.accountHistoryRange === value ? 'active' : ''}" data-account-history-range="${value}" aria-label="${accessibleLabel}" aria-pressed="${state.accountHistoryRange === value}">${label}</button>`).join('');
   $('#accountHistoryNote').textContent = data.detail || data.reason || 'Your balance history is unavailable.';
-  $('#accountHistoryActivity').innerHTML = data.activity?.length ? `<h3>Recent activity</h3>${data.activity.map((transaction) => `<div><span><b>${escapeHtml(transaction.name)}</b><small>${escapeHtml(new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))}</small></span><strong class="${transaction.amount > 0 ? 'negative' : 'positive'}">${transaction.amount > 0 ? '−' : '+'}${fmt.format(Math.abs(transaction.amount))}</strong></div>`).join('')}` : '';
+  $('#accountHistoryActivity').innerHTML = data.activity?.length ? `<h3>Recent activity</h3>${data.activity.map((transaction) => `<div><span><b>${escapeHtml(transaction.name)}</b><small>${escapeHtml(new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))}</small></span><div class="account-history-activity-value"><strong class="${transaction.amount > 0 ? 'negative' : 'positive'}">${transaction.amount > 0 ? '−' : '+'}${fmt.format(Math.abs(transaction.amount))}</strong>${transactionCategoryControl(data, transaction, { context: 'account-history' })}</div></div>`).join('')}` : '';
   requestAnimationFrame(() => renderHoldingHistoryChart(data.history || [], 'position', data.reason, data.state, data.progress, $('#accountHistoryChart')));
 }
 
@@ -2757,7 +2764,7 @@ function renderCashflowActivityDetail(category) {
   const label = cashflowActivityLabel(data, category);
   const categories = cashflowActivityCategories(data);
   const controls = `<div class="cashflow-activity-controls"><select data-cashflow-activity-category aria-label="Filter cash flow transactions">${[{ key: 'all', label: 'All activity' }, ...categories].map((option) => `<option value="${escapeHtml(option.key)}" ${option.key === category ? 'selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}</select><select data-cashflow-activity-sort data-cashflow-category="${escapeHtml(category)}" aria-label="Sort ${escapeHtml(label)} transactions"><option value="recent" ${state.cashflowActivitySort === 'recent' ? 'selected' : ''}>Most recent</option><option value="largest" ${state.cashflowActivitySort === 'largest' ? 'selected' : ''}>Largest amount</option><option value="smallest" ${state.cashflowActivitySort === 'smallest' ? 'selected' : ''}>Smallest amount</option><option value="oldest" ${state.cashflowActivitySort === 'oldest' ? 'selected' : ''}>Oldest</option></select></div>`;
-  $('#cashflowDialogContent').innerHTML = `<section class="cashflow-activity-detail" aria-labelledby="cashflowActivityTitle"><button class="cashflow-activity-back" type="button" data-cashflow-back aria-label="Back to cash flow diagram">‹</button><div class="card-label">CASH FLOW ACTIVITY</div><div class="cashflow-activity-heading"><div><h2 id="cashflowActivityTitle">${escapeHtml(label)}</h2><p>${rows.length} posted transaction${rows.length === 1 ? '' : 's'} in this period.</p></div>${controls}</div><div class="cashflow-activity-rows">${rows.length ? rows.map((transaction) => `<div><span><strong>${escapeHtml(transaction.name)}</strong><small>${new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</small></span><b class="${transaction.bucket === 'income' ? 'positive' : ''}">${transaction.bucket === 'income' ? '+' : ''}${fmt.format(Number(transaction.amount || 0))}</b></div>`).join('') : '<p class="spending-empty">No posted transactions in this category for this period.</p>'}</div></section>`;
+  $('#cashflowDialogContent').innerHTML = `<section class="cashflow-activity-detail" aria-labelledby="cashflowActivityTitle"><button class="cashflow-activity-back" type="button" data-cashflow-back aria-label="Back to cash flow diagram">‹</button><div class="card-label">CASH FLOW ACTIVITY</div><div class="cashflow-activity-heading"><div><h2 id="cashflowActivityTitle">${escapeHtml(label)}</h2><p>${rows.length} posted transaction${rows.length === 1 ? '' : 's'} in this period.</p></div>${controls}</div><div class="cashflow-activity-rows">${rows.length ? rows.map((transaction) => `<div><span><strong>${escapeHtml(transaction.name)}</strong><small>${new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</small></span><div class="cashflow-activity-value"><b class="${transaction.bucket === 'income' ? 'positive' : ''}">${transaction.bucket === 'income' ? '+' : ''}${fmt.format(Number(transaction.amount || 0))}</b>${transactionCategoryControl(data, transaction, { context: 'cashflow-drawer', activityCategory: category })}</div></div>`).join('') : '<p class="spending-empty">No posted transactions in this category for this period.</p>'}</div></section>`;
 }
 
 function openCashflowCategoryActivity(category) {
@@ -2948,6 +2955,11 @@ $('#cashflowDialogContent').addEventListener('click', (event) => {
   openCashflowCategoryActivity(node.dataset.cashflowNode);
 });
 $('#cashflowDialogContent').addEventListener('change', (event) => {
+  const transactionCategory = event.target.closest('[data-transaction-category]');
+  if (transactionCategory) {
+    void saveTransactionCategory(transactionCategory);
+    return;
+  }
   const category = event.target.closest('[data-cashflow-activity-category]');
   if (category) {
     renderCashflowActivityDetail(category.value || 'all');
@@ -3002,16 +3014,25 @@ $('#investmentDonut').addEventListener('keydown', (event) => {
   state.holdingsExpanded = true;
   renderInvestments(state.investments);
 });
-$('#spendingTransactions').addEventListener('change', async (event) => {
-  const select = event.target.closest('[data-transaction-category]');
-  if (!select) return;
+async function saveTransactionCategory(select) {
+  const context = select.dataset.categoryContext;
+  const activityCategory = select.dataset.cashflowCategory || 'all';
   select.disabled = true;
   try {
     const result = await api(`/api/transactions/${select.dataset.transactionCategory}/category`, { method: 'PATCH', body: JSON.stringify({ category: select.value }) });
     state.spending = await loadSpending();
     renderSpending(state.spending);
-    if (result.matchedPrior) showNotice(`Updated this and ${result.matchedPrior} earlier matching transaction${result.matchedPrior === 1 ? '' : 's'}.`, 'success');
+    if (context === 'cashflow-drawer' && $('#cashflowDialog').open) renderCashflowActivityDetail(activityCategory);
+    if (context === 'account-history' && state.accountHistory?.account?.id) await openAccountHistory(state.accountHistory.account.id, { preserveRange: true });
+    if (result.matchedDuplicates) showNotice(`Updated this and ${result.matchedDuplicates} matching transaction${result.matchedDuplicates === 1 ? '' : 's'}.`, 'success');
+    else showNotice('Transaction category updated.', 'success');
   } catch (error) { showNotice(error.message, 'error'); select.disabled = false; }
+}
+
+$('#spendingTransactions').addEventListener('change', (event) => {
+  const select = event.target.closest('[data-transaction-category]');
+  if (!select) return;
+  void saveTransactionCategory(select);
 });
 $('#spendingTrend').addEventListener('click', (event) => {
   const month = event.target.closest('[data-spending-month]')?.dataset.spendingMonth;
@@ -3143,6 +3164,10 @@ $('#holdingHistoryWhere').addEventListener('change', async (event) => {
 });
 $('#holdingHistoryClose').addEventListener('click', () => $('#holdingHistoryDialog').close());
 $('#accountHistoryClose').addEventListener('click', () => $('#accountHistoryDialog').close());
+$('#accountHistoryActivity').addEventListener('change', (event) => {
+  const select = event.target.closest('[data-transaction-category]');
+  if (select) void saveTransactionCategory(select);
+});
 $('#accountHistoryRange').addEventListener('click', (event) => {
   const range = event.target.closest('[data-account-history-range]')?.dataset.accountHistoryRange;
   if (!range || !state.accountHistory?.account?.id) return;

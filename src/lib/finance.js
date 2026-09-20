@@ -513,12 +513,22 @@ export function accountBalanceHistory(store, { accountId, range = 'all' } = {}) 
     .filter((transaction) => transaction.account_id === accountId && !transaction.pending && !transaction.excluded)
     .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
     .slice(0, 3)
-    .map((transaction) => ({
-      id: transaction.id,
-      date: transaction.date,
-      name: transaction.merchant_name || transaction.name || 'Transaction',
-      amount: Number(transaction.amount || 0)
-    }));
+    .map((transaction) => {
+      const flowType = cashFlowType(transaction);
+      const editable = (flowType === 'external_outflow' && !['savings', 'investments', 'transfer'].includes(transaction.bucket))
+        || (flowType === 'external_inflow' && !['refund', 'investment_proceeds', 'loan_proceeds'].includes(inflowClassification(transaction)));
+      const category = flowType === 'external_inflow' ? incomeSource(transaction) : cashFlowDetail(transaction);
+      return {
+        id: transaction.id,
+        date: transaction.date,
+        name: transaction.merchant_name || transaction.name || 'Transaction',
+        amount: Number(transaction.amount || 0),
+        editableCategory: editable,
+        category: category.label,
+        cashFlowCategory: category.key,
+        categoryFlow: flowType === 'external_inflow' ? 'income' : 'outflow'
+      };
+    });
   return {
     state: progress.state,
     account: {
@@ -533,6 +543,7 @@ export function accountBalanceHistory(store, { accountId, range = 'all' } = {}) 
     history,
     progress,
     activity,
+    categoryOptions: CASH_FLOW_CATEGORY_OPTIONS,
     detail: history.length ? `Based on ${history.length} verified daily update${history.length === 1 ? '' : 's'} from your connected institution.` : undefined,
     reason: 'Daily account tracking will begin with your next verified update.'
   };
@@ -1229,22 +1240,28 @@ function spendingCategory(transaction) {
 // categories remain useful provider evidence, but they are not a vocabulary a
 // person should have to learn in order to correct a transaction.
 export const CASH_FLOW_CATEGORY_OPTIONS = [
-  { key: 'housing_bills', label: 'Housing & bills', bucket: 'fixed' },
-  { key: 'food_dining', label: 'Food & dining', bucket: 'guilt_free' },
-  { key: 'transport', label: 'Transport', bucket: 'fixed' },
-  { key: 'health', label: 'Health', bucket: 'fixed' },
-  { key: 'insurance', label: 'Insurance', bucket: 'fixed' },
-  { key: 'home', label: 'Home', bucket: 'fixed' },
-  { key: 'shopping', label: 'Shopping', bucket: 'guilt_free' },
-  { key: 'travel', label: 'Travel', bucket: 'guilt_free' },
-  { key: 'entertainment', label: 'Entertainment', bucket: 'guilt_free' },
-  { key: 'personal_care', label: 'Personal care', bucket: 'guilt_free' },
-  { key: 'education', label: 'Education', bucket: 'guilt_free' },
-  { key: 'services', label: 'Services', bucket: 'guilt_free' },
-  { key: 'civic', label: 'Civic & giving', bucket: 'guilt_free' },
-  { key: 'taxes', label: 'Taxes', bucket: 'fixed' },
-  { key: 'fees', label: 'Fees', bucket: 'fixed' },
-  { key: 'uncategorized', label: 'Uncategorized', bucket: 'guilt_free' }
+  { key: 'housing_bills', label: 'Housing & bills', bucket: 'fixed', flow: 'outflow' },
+  { key: 'food_dining', label: 'Food & dining', bucket: 'guilt_free', flow: 'outflow' },
+  { key: 'transport', label: 'Transport', bucket: 'fixed', flow: 'outflow' },
+  { key: 'health', label: 'Health', bucket: 'fixed', flow: 'outflow' },
+  { key: 'insurance', label: 'Insurance', bucket: 'fixed', flow: 'outflow' },
+  { key: 'home', label: 'Home', bucket: 'fixed', flow: 'outflow' },
+  { key: 'shopping', label: 'Shopping', bucket: 'guilt_free', flow: 'outflow' },
+  { key: 'travel', label: 'Travel', bucket: 'guilt_free', flow: 'outflow' },
+  { key: 'entertainment', label: 'Entertainment', bucket: 'guilt_free', flow: 'outflow' },
+  { key: 'personal_care', label: 'Personal care', bucket: 'guilt_free', flow: 'outflow' },
+  { key: 'education', label: 'Education', bucket: 'guilt_free', flow: 'outflow' },
+  { key: 'services', label: 'Services', bucket: 'guilt_free', flow: 'outflow' },
+  { key: 'civic', label: 'Civic & giving', bucket: 'guilt_free', flow: 'outflow' },
+  { key: 'taxes', label: 'Taxes', bucket: 'fixed', flow: 'outflow' },
+  { key: 'fees', label: 'Fees', bucket: 'fixed', flow: 'outflow' },
+  { key: 'uncategorized', label: 'Uncategorized', bucket: 'guilt_free', flow: 'outflow' },
+  { key: 'income_paychecks', label: 'Paychecks', bucket: 'income', flow: 'income' },
+  { key: 'income_interest', label: 'Interest', bucket: 'income', flow: 'income' },
+  { key: 'income_dividends', label: 'Dividends', bucket: 'income', flow: 'income' },
+  { key: 'income_benefits', label: 'Benefits', bucket: 'income', flow: 'income' },
+  { key: 'income_business', label: 'Business & freelance', bucket: 'income', flow: 'income' },
+  { key: 'money_in_other', label: 'Other money in', bucket: 'income', flow: 'income' }
 ];
 
 const cashFlowCategoryByKey = new Map(CASH_FLOW_CATEGORY_OPTIONS.map((category) => [category.key, category]));
@@ -1303,9 +1320,14 @@ function categoryRuleKey(transaction) {
 export function applyCashFlowCategoryOverride(store, transactionId, categoryKey) {
   const selected = (store.transactions || []).find((transaction) => transaction.id === transactionId);
   const category = cashFlowCategoryOption(categoryKey);
-  if (!selected || !category || selected.demo || selected.pending || ['savings', 'investments', 'transfer'].includes(selected.bucket) || cashFlowType(selected) !== 'external_outflow' || Number(selected.amount || 0) <= 0) return null;
+  const selectedFlow = cashFlowType(selected || {});
+  const isOutflow = selectedFlow === 'external_outflow' && Number(selected?.amount || 0) > 0
+    && !['savings', 'investments', 'transfer'].includes(selected?.bucket);
+  const isIncome = selectedFlow === 'external_inflow' && Number(selected?.amount || 0) < 0
+    && !['refund', 'investment_proceeds', 'loan_proceeds'].includes(inflowClassification(selected || {}));
+  const ruleFlow = category?.flow === 'income' ? 'income' : category?.flow === 'outflow' ? 'outflow' : null;
+  if (!selected || !category || selected.demo || selected.pending || (ruleFlow === 'outflow' ? !isOutflow : !isIncome)) return null;
   const ruleKey = categoryRuleKey(selected);
-  const selectedDate = String(selected.date || '');
   const apply = (transaction) => {
     transaction.bucket = category.bucket;
     transaction.category_overridden = true;
@@ -1314,17 +1336,22 @@ export function applyCashFlowCategoryOverride(store, transactionId, categoryKey)
   };
   let updated = 0;
   for (const transaction of store.transactions || []) {
-    if (transaction.demo || transaction.pending || cashFlowType(transaction) !== 'external_outflow' || Number(transaction.amount || 0) <= 0) continue;
+    const transactionFlow = cashFlowType(transaction);
+    const matchingOutflow = ruleFlow === 'outflow' && transactionFlow === 'external_outflow' && Number(transaction.amount || 0) > 0
+      && !['savings', 'investments', 'transfer'].includes(transaction.bucket);
+    const matchingIncome = ruleFlow === 'income' && transactionFlow === 'external_inflow' && Number(transaction.amount || 0) < 0
+      && !['refund', 'investment_proceeds', 'loan_proceeds'].includes(inflowClassification(transaction));
+    if (transaction.demo || transaction.pending || (!matchingOutflow && !matchingIncome)) continue;
     const isSelected = transaction.id === selected.id;
-    const isPastMatch = Boolean(ruleKey) && String(transaction.date || '') <= selectedDate && categoryRuleKey(transaction) === ruleKey;
-    if (!isSelected && !isPastMatch) continue;
-    // This is a merchant-level rule, not a one-off row edit. A later choice
-    // for “Zelle Rent” intentionally replaces that same rule on its prior
-    // matching payments, so a person can correct a correction.
+    const isMerchantMatch = Boolean(ruleKey) && categoryRuleKey(transaction) === ruleKey;
+    if (!isSelected && !isMerchantMatch) continue;
+    // This is a merchant-level rule, not a one-off row edit. It applies to
+    // every safely matched record in either direction of history, so choosing
+    // a category on an old transaction does not leave newer duplicates behind.
     apply(transaction);
     updated += 1;
   }
-  return { updated, category, matchedPrior: Math.max(0, updated - 1) };
+  return { updated, category, matchedDuplicates: Math.max(0, updated - 1) };
 }
 
 function transactionKey(transaction, index) {
@@ -1421,19 +1448,21 @@ export function monthlyFinancialFacts(store, options = {}) {
 // calculation broad too, but retain the source so a paycheck is not made to
 // look indistinguishable from HYSA interest, benefits, or self-employment.
 function incomeSource(transaction) {
+  const overridden = transaction.cash_flow_category_overridden && cashFlowCategoryOption(transaction.cash_flow_category);
+  if (overridden?.flow === 'income') return overridden;
   const primary = String(transaction.pfc_primary || '').toUpperCase();
   const detailed = String(transaction.pfc_detailed || '').toUpperCase();
   const name = `${transaction.merchant_name || ''} ${transaction.name || ''}`.toUpperCase();
   const context = `${primary} ${detailed} ${name}`;
-  if (/INTEREST/.test(context)) return { key: 'income_interest', label: 'Interest' };
-  if (/DIVIDEND/.test(context)) return { key: 'income_dividends', label: 'Dividends' };
-  if (/PAYROLL|SALARY|WAGE/.test(context)) return { key: 'income_paychecks', label: 'Paychecks' };
-  if (/BENEFIT|UNEMPLOYMENT|SOCIAL_SECURITY|PENSION/.test(context)) return { key: 'income_benefits', label: 'Benefits' };
-  if (/FREELANCE|CONTRACT|BUSINESS|GIG/.test(context)) return { key: 'income_business', label: 'Business & freelance' };
+  if (/INTEREST/.test(context)) return cashFlowCategoryOption('income_interest');
+  if (/DIVIDEND/.test(context)) return cashFlowCategoryOption('income_dividends');
+  if (/PAYROLL|SALARY|WAGE/.test(context)) return cashFlowCategoryOption('income_paychecks');
+  if (/BENEFIT|UNEMPLOYMENT|SOCIAL_SECURITY|PENSION/.test(context)) return cashFlowCategoryOption('income_benefits');
+  if (/FREELANCE|CONTRACT|BUSINESS|GIG/.test(context)) return cashFlowCategoryOption('income_business');
   // An incoming refund, reimbursement, severance payment, or one-off credit
   // is still real money in, but we must not claim to know that it was earned
   // income when the provider did not tell us so.
-  return { key: 'money_in_other', label: 'Other money in' };
+  return cashFlowCategoryOption('money_in_other');
 }
 
 export function spendingSummary(store, range = '1m', anchor = new Date()) {
@@ -1464,7 +1493,7 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
     const amount = Math.abs(Number(transaction.amount || 0));
     const source = incomeSource(transaction);
     monthlyIncome.set(month, (monthlyIncome.get(month) || 0) + amount);
-    incomeSourceMap.set(source.key, { ...source, amount: (incomeSourceMap.get(source.key)?.amount || 0) + amount });
+    incomeSourceMap.set(source.key, { key: source.key, label: source.label, amount: (incomeSourceMap.get(source.key)?.amount || 0) + amount });
     transactionRows.push({
       id: transaction.id || transaction.plaid_transaction_id,
       name: transaction.merchant_name || transaction.name || 'Income',
@@ -1472,6 +1501,7 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
       amount,
       category: source.label,
       bucket: 'income',
+      cashFlowCategory: source.key,
       flowKey: source.key,
       flowLabel: source.label,
       flowGroup: 'income'
@@ -1645,7 +1675,7 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
     if (row.economicType === 'income') {
       monthlyIncome.set(month, (monthlyIncome.get(month) || 0) + row.value);
       const source = incomeSource(row);
-      incomeSourceMap.set(source.key, { ...source, amount: (incomeSourceMap.get(source.key)?.amount || 0) + row.value });
+      incomeSourceMap.set(source.key, { key: source.key, label: source.label, amount: (incomeSourceMap.get(source.key)?.amount || 0) + row.value });
     } else if (row.economicType === 'expense' || row.economicType === 'refund') {
       actualSpend += row.value;
       const flow = cashFlowDetail(row);

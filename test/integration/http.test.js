@@ -443,20 +443,22 @@ integrationTest('link sync retains complete ledger evidence and removes canceled
   assert.equal(stored.transactions.filter((row) => row.source === 'investment_transaction').length, 1);
 });
 
-integrationTest('categorizing a transaction updates prior matching merchant activity without crossing users', async () => {
+integrationTest('categorizing a transaction updates every matching merchant activity without crossing users', async () => {
   const email = 'transaction-category@example.com';
   const key = userStorageKey(email);
   writeStore({ items: [], accounts: [], snapshots: [], transactions: [
     { id: 'latest', merchant_name: 'Zelle: Rent', name: 'Zelle: Rent', date: '2026-09-15', amount: 1500, bucket: 'guilt_free', pending: false },
     { id: 'prior', merchant_name: 'Zelle Rent', name: 'Zelle Rent', date: '2026-08-15', amount: 1500, bucket: 'guilt_free', pending: false },
+    { id: 'future', merchant_name: 'Zelle Rent', name: 'Zelle Rent', date: '2026-10-15', amount: 1500, bucket: 'guilt_free', pending: false },
     { id: 'other-recipient', merchant_name: 'Zelle: Alex', name: 'Zelle: Alex', date: '2026-08-15', amount: 50, bucket: 'guilt_free', pending: false }
   ] }, key);
   const response = await request(app).patch('/api/transactions/latest/category').set('Cookie', signedTestCookie(email)).send({ category: 'housing_bills' });
   assert.equal(response.status, 200);
-  assert.equal(response.body.updated, 2);
-  assert.equal(response.body.matchedPrior, 1);
+  assert.equal(response.body.updated, 3);
+  assert.equal(response.body.matchedDuplicates, 2);
   const stored = readStore(key);
   assert.equal(stored.transactions.find((transaction) => transaction.id === 'prior').cash_flow_category, 'housing_bills');
+  assert.equal(stored.transactions.find((transaction) => transaction.id === 'future').cash_flow_category, 'housing_bills');
   assert.equal(stored.transactions.find((transaction) => transaction.id === 'other-recipient').cash_flow_category, undefined);
   const otherEmail = 'other-transaction-category@example.com';
   const otherKey = userStorageKey(otherEmail);
@@ -466,6 +468,26 @@ integrationTest('categorizing a transaction updates prior matching merchant acti
   assert.equal(readStore(otherKey).transactions[0].cash_flow_category, undefined);
   deleteStore(key);
   deleteStore(otherKey);
+});
+
+integrationTest('categorizing income uses the same canonical category contract and leaves refunds alone', async () => {
+  const email = 'income-category@example.com';
+  const key = userStorageKey(email);
+  writeStore({ items: [], accounts: [], snapshots: [], transactions: [
+    { id: 'payroll-current', merchant_name: 'Acme payroll', name: 'Acme payroll', date: '2026-09-15', amount: -2_000, bucket: 'income', pending: false },
+    { id: 'payroll-other', merchant_name: 'Acme payroll', name: 'Acme payroll', date: '2026-10-15', amount: -2_000, bucket: 'income', pending: false },
+    { id: 'refund', merchant_name: 'Acme payroll refund', name: 'Acme payroll refund', date: '2026-09-16', amount: -25, bucket: 'income', pfc_detailed: 'MERCHANT_REFUND', pending: false }
+  ] }, key);
+  const response = await request(app).patch('/api/transactions/payroll-current/category').set('Cookie', signedTestCookie(email)).send({ category: 'income_business' });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.updated, 2);
+  assert.equal(response.body.matchedDuplicates, 1);
+  const stored = readStore(key);
+  assert.equal(stored.transactions.find((transaction) => transaction.id === 'payroll-other').cash_flow_category, 'income_business');
+  assert.equal(stored.transactions.find((transaction) => transaction.id === 'refund').cash_flow_category, undefined);
+  const rejected = await request(app).patch('/api/transactions/refund/category').set('Cookie', signedTestCookie(email)).send({ category: 'income_business' });
+  assert.equal(rejected.status, 400);
+  deleteStore(key);
 });
 
 integrationTest('does not expose sign-in configuration secrets', async () => {

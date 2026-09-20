@@ -1614,9 +1614,9 @@ app.delete('/api/account', async (req, res) => {
 app.patch('/api/transactions/:id/category', async (req, res) => {
   const store = await loadStore(req.user);
   const result = applyCashFlowCategoryOverride(store, req.params.id, req.body?.category);
-  if (!result) return res.status(400).json({ error: 'Choose a cash flow category for a posted spending transaction.' });
+  if (!result) return res.status(400).json({ error: 'Choose a category for a posted income or spending transaction.' });
   await saveStore(req.user, store);
-  res.json({ ok: true, updated: result.updated, matchedPrior: result.matchedPrior, category: result.category });
+  res.json({ ok: true, updated: result.updated, matchedDuplicates: result.matchedDuplicates, category: result.category });
 });
 
 app.patch('/api/accounts/:id/nickname', async (req, res) => {

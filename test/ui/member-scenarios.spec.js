@@ -119,6 +119,28 @@ test('a Free member sees an in-context Plus prompt for deeper cash-flow detail',
   await expect(page.locator('#upgradeDialog')).toContainText('No charge during your trial');
 });
 
+test('cash-flow transaction categories use the same income and spending editor in the list and Sankey detail', async ({ page }) => {
+  let updateRequest;
+  await page.route('**/api/transactions/*/category', async (route) => {
+    updateRequest = route.request().postDataJSON();
+    await route.fulfill({ json: { ok: true, updated: 1, matchedDuplicates: 0, category: { key: updateRequest.category } } });
+  });
+  await openSignedInScenario(page, (preview) => {
+    preview.dashboard.entitlements = { enabled: false, canUseCashFlowDetails: true };
+  });
+
+  await goToView(page, 'spending');
+  await page.locator('#spendingTransactionsPanel summary').click();
+  await expect(page.locator('#spendingTransactions [data-transaction-category]').first()).toBeVisible();
+  const sankeyNode = page.locator('#cashflowSankey [data-cashflow-node]').first();
+  await sankeyNode.click();
+  await expect(page.locator('#cashflowDialogContent [data-transaction-category]').first()).toBeVisible();
+  const incomeEditor = page.locator('#cashflowDialogContent [data-transaction-category]').filter({ has: page.locator('option[value="income_paychecks"]') }).first();
+  if (await incomeEditor.count()) await incomeEditor.selectOption('income_business');
+  else await page.locator('#cashflowDialogContent [data-transaction-category]').first().selectOption('fees');
+  await expect.poll(() => updateRequest?.category).toMatch(/^(income_business|fees)$/);
+});
+
 test('a Free member can preview investment history before choosing Plus', async ({ page }) => {
   await openSignedInScenario(page, (preview) => {
     preview.dashboard.entitlements = {
