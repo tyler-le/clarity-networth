@@ -62,7 +62,7 @@ export function cashFlowType(tx) {
   // ordinary investment-account movement must remain investment activity.
   const investmentText = `${tx.merchant_name || ''} ${tx.name || ''} ${tx.pfc_primary || ''} ${tx.pfc_detailed || ''}`.toUpperCase();
   const isContributionRecord = !/ROLLOVER|REBALANC|SALE|SOLD|DIVIDEND|INTEREST/.test(investmentText)
-    && /CONTRIBUT|DEFERRAL|PAYROLL|401\s*\(?K\)?|403\s*\(?B\)?|457\s*\(?B\)?|HSA/.test(investmentText);
+    && /CONTRIBUT|DEFERRAL|PAYROLL|EMPLOYER\s+(?:MATCH|CONTRIBUT)|COMPANY\s+MATCH|401\s*\(?K\)?|403\s*\(?B\)?|457\s*\(?B\)?|HSA/.test(investmentText);
   if (tx.source === 'investment_transaction' && tx.bucket === 'investments' && isContributionRecord) return 'pre_tax_retirement';
   if (tx.source === 'investment_transaction' && tx.bucket === 'investments') return 'investment_activity';
   // A payment-app transfer commonly pays another person, not another one of

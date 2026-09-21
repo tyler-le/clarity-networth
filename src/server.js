@@ -13,7 +13,7 @@ import { investmentLedgerPages, plaidConfigured, plaidPost } from './lib/plaid.j
 import { loadHistoricalPrices } from './lib/market-data.js';
 import { historyStart } from './lib/history.js';
 import { entitlementsForStore } from './lib/entitlements.js';
-import { stripeBillingConfigured, stripeClient, stripeWebhookIsValid } from './lib/stripe.js';
+import { stripeBillingConfigured, stripeClient, stripeWebhookIsValid, subscriptionCheckoutSessionFields } from './lib/stripe.js';
 import { plaidErrorCode, publicErrorPayload } from '../public/customer-error.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1116,7 +1116,7 @@ async function syncRetirementContributionsForItem(store, item, { asyncUpdate = f
         const name = String(transaction.name || '');
         const payrollBenefitAccount = /401\(?k\)?|403\(?b\)?|457|retirement|roth|\bira\b|\bhsa\b|health savings/i.test(`${account?.subtype || ''} ${account?.name || ''}`);
         // Do not treat trades, dividends, or price changes as plan contributions.
-        const contribution = /contribution|employee.*deferral|payroll.*deferral|401\(?k\)?.*deposit|ira.*deposit|hsa.*deposit|health savings.*deposit/i.test(name);
+        const contribution = /contribution|employee.*deferral|payroll.*deferral|employer\s+(?:match|contribution)|company\s+match|401\(?k\)?.*deposit|ira.*deposit|hsa.*deposit|health savings.*deposit/i.test(name);
         if (!payrollBenefitAccount || !contribution) continue;
         const plaid_transaction_id = `investment:${transaction.investment_transaction_id}`;
         const existing = store.transactions.find((record) => record.plaid_transaction_id === plaid_transaction_id);
@@ -1338,26 +1338,14 @@ app.post('/api/billing/checkout', async (req, res) => {
   try {
     const appUrl = billingAppUrl();
     const membership = entitlement.membership;
-    const fields = {
-      mode: 'subscription',
-      // Let members experience Plus without entering billing details up front.
-      // They can add a payment method during the trial before choosing to
-      // continue as a paid subscriber.
-      payment_method_collection: 'if_required',
-      integration_identifier: checkoutIntegrationIdentifier(),
-      client_reference_id: req.user.storageKey,
-      success_url: `${appUrl}/?billing=success`,
-      cancel_url: `${appUrl}/?billing=cancelled`,
-      // The sandbox Product is classified with the blueprint's eligible
-      // digital-service tax code. Stripe owns tax calculation and collection
-      // for this Managed Payments Checkout flow.
-      managed_payments: { enabled: true },
-      metadata: { user_key: req.user.storageKey },
-      subscription_data: { trial_period_days: 14, metadata: { user_key: req.user.storageKey } },
-      line_items: [{ price: process.env.STRIPE_PLUS_PRICE_ID, quantity: 1 }]
-    };
-    if (membership.stripe_customer_id) fields.customer = membership.stripe_customer_id;
-    else fields.customer_email = req.user.email;
+    const fields = subscriptionCheckoutSessionFields({
+      appUrl,
+      userKey: req.user.storageKey,
+      priceId: process.env.STRIPE_PLUS_PRICE_ID,
+      integrationIdentifier: checkoutIntegrationIdentifier(),
+      customerId: membership.stripe_customer_id,
+      customerEmail: req.user.email
+    });
     const checkout = await stripeClient().checkout.sessions.create(fields);
     if (!/^https:\/\//.test(String(checkout.url || ''))) throw new Error('Stripe checkout URL is unavailable.');
     res.json({ url: checkout.url });
