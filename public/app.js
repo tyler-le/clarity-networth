@@ -1033,7 +1033,6 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   // compete with it. Phone labels get a little more vertical room to wrap.
   const rowHeight = compact ? 50 : 46, rowStep = compact ? 62 : 53;
   const middleNodes = [
-    { key: 'actual_spend', label: 'Actual spend', value: actualSpend, color: 'var(--outflow)' },
     { key: 'save_invest', label: 'Saved & invested', value: savedInvested, color: 'var(--invest)' }
   ].filter((node) => hasVisibleAmount(node.value));
   const withShare = (rows, total, valueKey = 'amount') => rows.map((row) => ({
@@ -1044,7 +1043,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   // Sankey as an honest hierarchy: sources feed one period-total node, then
   // that total branches to the known allocations. This removes crossed,
   // proportional source-to-outcome estimates.
-  const knownAllocation = middleNodes.reduce((sum, node) => sum + Number(node.value || 0), 0);
+  const knownAllocation = savedInvested + actualSpend;
   const sourceTotal = incomeSources.reduce((sum, source) => sum + Number(source.amount || 0), 0);
   // “Money in” is limited to provider-reported income; the diagram should not
   // invent a source label for balances or timing differences.
@@ -1055,11 +1054,13 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     ? [...middleNodes, { key: 'money_left', label: 'Money left', value: unallocated, color: 'var(--income)' }]
     : middleNodes;
   const incomeNodes = withShare(fundingRows, bridgeTotal);
-  // Percentages describe the allocation stack itself. During a timing or
-  // funding gap, outflows can legitimately exceed Plaid-categorized income;
-  // dividing those rows by income would misleadingly produce 125%+ labels.
-  const allocationNodes = withShare(allocationRows, Math.max(bridgeTotal, knownAllocation), 'value');
-  const categoryNodes = withShare(actualCategories, actualSpend);
+  // Every allocation percentage uses Money in as its denominator. This makes
+  // the diagram answer the same question for every destination: how much of
+  // the selected period's incoming money went here? When outflows exceed
+  // reported income, the percentages may exceed 100% in aggregate because
+  // existing balances or out-of-range funding can be involved.
+  const allocationNodes = withShare(allocationRows, bridgeTotal, 'value');
+  const categoryNodes = withShare(actualCategories, bridgeTotal);
   const bridgeNode = { key: 'period_funds', label: 'Money in', value: bridgeTotal, color: 'var(--income)' };
   const contentHeight = (rows) => rows.length ? (rows.length - 1) * rowStep + rowHeight : 0;
   const height = Math.max(224, contentHeight(incomeNodes) + 16, contentHeight(allocationNodes) + 16, contentHeight(categoryNodes) + 16);
@@ -1114,7 +1115,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     const accentX = side === 'right' ? x + w - 6 : x;
     const shareMarkup = share == null ? '' : `<tspan dx="4" class="cashflow-share">${share}%</tspan>`;
     const actionMarkup = actionCategory ? `<text x="${x + w - 13}" y="${y + 17}" class="cashflow-action-mark" aria-hidden="true">›</text>` : '';
-    const description = `${label}: ${fmt.format(value)}${share == null ? '' : ` (${share}%)`}`;
+    const description = `${label}: ${fmt.format(value)}${share == null ? '' : ` (${share}% of Money in)`}`;
     return `<g ${actionCategory ? `data-cashflow-category="${escapeHtml(actionCategory)}" data-cashflow-node="${escapeHtml(actionCategory)}" class="cashflow-target" role="button" tabindex="0" aria-label="View ${escapeHtml(label)} transactions"` : ''}><title>${escapeHtml(description)}</title><rect data-testid="cashflow-node-surface" x="${x}" y="${y}" width="${w}" height="${rowHeight}" rx="5" fill="${color}" fill-opacity=".10" stroke="${color}" stroke-opacity=".38"/><rect data-testid="cashflow-node-accent" x="${accentX}" y="${y}" width="6" height="${rowHeight}" rx="2" fill="${color}"/><text x="${x + 11}" y="${y + 14}" class="cashflow-label">${labelMarkup}</text><text x="${x + 11}" y="${valueY}" class="cashflow-value">${fmt.format(value)}${shareMarkup}</text>${actionMarkup}</g>`;
   };
   // Use perceptual (square-root) scaling. Exact dollars stay in each node,
@@ -1145,8 +1146,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   categoryNodes.forEach((row, index) => {
     const y = categoryStart + index * rowStep;
     const categoryColor = colorFor(row.key, 'var(--outflow-muted)');
-    const spendY = middleY.get('actual_spend');
-    if (spendY != null) paths += flow(middleX + middleW, spendY + rowHeight / 2, destinationX, y + rowHeight / 2, Number(row.amount || 0), categoryColor, ['actual_spend', row.key]);
+    paths += flow(bridgeX + bridgeW, bridgeY + rowHeight / 2, destinationX, y + rowHeight / 2, Number(row.amount || 0), categoryColor, [bridgeNode.key, row.key]);
     categories += block(destinationX, y, destinationW, categoryColor, row.name, row.amount, row.share, row.key, 'left');
   });
   const hiddenCategoryCount = allSpendCategories.length - actualCategories.length;

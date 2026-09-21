@@ -304,8 +304,8 @@ test('cash-flow combines income before showing allocations instead of estimating
   await expect(diagram).toContainText('Money in');
   const flows = await diagram.locator('.cashflow-flow').evaluateAll((paths) => paths.map((path) => path.dataset.cashflowFlow));
   expect(flows).toContain('income_paychecks period_funds');
-  expect(flows).toContain('period_funds actual_spend');
-  expect(flows).not.toContain('income_paychecks actual_spend');
+  expect(flows).toContain('period_funds housing_bills');
+  expect(flows).not.toContain('period_funds actual_spend');
   expect(flows).not.toContain('income_paychecks savings');
   expect(flows).not.toContain('income_paychecks investments');
 });
@@ -456,9 +456,15 @@ test('cash-flow diagram stays readable and opens transactions in-app @critical',
     await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
     await closeCashflowDrawer();
   }
-  const actualSpend = page.locator('#cashflowSankey [data-cashflow-node="actual_spend"]');
-  await expect(actualSpend).toBeVisible();
-  await actualSpend.click();
+  const categoryNode = testInfo.project.name === 'phone'
+    ? page.locator('#cashflowDialogContent [data-cashflow-category^="housing_"]').first()
+    : page.locator('#cashflowSankey [data-cashflow-category^="housing_"]').first();
+  if (testInfo.project.name === 'phone') {
+    await page.locator('#cashflowExpand').click();
+    await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
+  }
+  await expect(categoryNode).toBeVisible();
+  await categoryNode.click();
   await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
   if (testInfo.project.name === 'phone') {
     await expect(page.locator('#cashflowDialogContent .cashflow-category-list')).toBeVisible();
