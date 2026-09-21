@@ -944,10 +944,8 @@ function renderSpendingTrend(data) {
     const label = new Date(`${detail.month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     const actualSpend = Number(detail.actual_spend ?? detail.amount ?? 0);
     const savedInvested = Number(detail.saved_invested || 0);
-    const remaining = Number(detail.income || 0) - actualSpend;
-    const balanceLabel = remaining >= 0 ? `${fmt.format(Math.abs(remaining))} more money in than spent` : `${fmt.format(Math.abs(remaining))} more spent than money in`;
     const detailPeriod = state.spendingMonth ? '' : `<span>Latest · ${label}</span>`;
-    $('#trendDetail').innerHTML = `${detailPeriod}<strong><i class="income"></i><small>Money in</small>${fmt.format(detail.income || 0)}</strong><strong><i class="spend"></i><small>Actual spend</small>${fmt.format(actualSpend)}</strong><strong><i class="save"></i><small>Saved &amp; invested</small>${fmt.format(savedInvested)}</strong><b class="${remaining >= 0 ? 'positive' : 'negative'}">${balanceLabel}</b>`;
+    $('#trendDetail').innerHTML = `${detailPeriod}<strong><i class="income"></i><small>Money in</small>${fmt.format(detail.income || 0)}</strong><strong><i class="spend"></i><small>Actual spend</small>${fmt.format(actualSpend)}</strong><strong><i class="save"></i><small>Saved &amp; invested</small>${fmt.format(savedInvested)}</strong>`;
   } else $('#trendDetail').innerHTML = '';
   const chart = $('#spendingTrend');
   if (!months.length) { chart.innerHTML = '<p class="spending-empty">Monthly patterns will appear once transactions arrive.</p>'; return; }
