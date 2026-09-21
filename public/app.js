@@ -1027,12 +1027,11 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
     .map((source) => ({ ...source, label: source.label || source.name || 'Money in' }))
     .filter((source) => hasVisibleAmount(source.amount));
   const transactionCategories = new Set((data.transactions || []).flatMap((transaction) => [transaction.flowKey, transaction.flowGroup]));
-  // On a phone, keep the primary story to three readable columns. Spending
-  // categories are secondary detail, revealed below in the expanded view.
-  // Keep the compact phone view focused on the primary flow. The expanded
-  // phone view uses the same sibling layout as desktop, with categories
-  // branching directly from Money in at the same level as saving.
-  const actualCategories = compact ? (expanded ? allSpendCategories : []) : (expanded ? allSpendCategories : allSpendCategories.slice(0, 4));
+  // Keep the compact phone view readable while showing the five largest
+  // spending children. The expanded view uses the same sibling layout as
+  // desktop, with every category branching directly from Money in.
+  const visibleCategoryLimit = 5;
+  const actualCategories = expanded ? allSpendCategories : allSpendCategories.slice(0, visibleCategoryLimit);
   const width = compact ? 390 : tablet ? 620 : 920;
   // Treat the blocks as compact labels for the flow, rather than cards that
   // compete with it. Phone labels get a little more vertical room to wrap.
@@ -1069,7 +1068,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
       value: row.amount,
       color: colorFor(row.key, 'var(--outflow-muted)')
     }))
-  ];
+  ].sort((a, b) => Number(b.value ?? b.amount ?? 0) - Number(a.value ?? a.amount ?? 0));
   const incomeNodes = withShare(fundingRows, bridgeTotal);
   // Every allocation percentage uses Money in as its denominator. This makes
   // the diagram answer the same question for every destination: how much of

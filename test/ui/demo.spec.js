@@ -444,10 +444,10 @@ test('cash-flow diagram stays readable and opens transactions in-app @critical',
     hasHorizontalOverflow: diagram.scrollWidth > diagram.clientWidth + 1,
     categoryNodes: diagram.querySelectorAll('[data-cashflow-category^="housing_"]').length
   }));
-  // A phone keeps the primary flow to three columns, without sideways panning;
-  // category detail belongs in the explicit expanded view.
+  // A phone keeps the primary flow readable without sideways panning while
+  // showing the same top-five allocation children as wider layouts.
   expect(compactDiagram.hasHorizontalOverflow).toBe(false);
-  if (testInfo.project.name === 'phone') expect(compactDiagram.categoryNodes).toBe(0);
+  if (testInfo.project.name === 'phone') expect(compactDiagram.categoryNodes).toBeLessThanOrEqual(5);
   const moreLabel = page.locator('#cashflowSankey .cashflow-more');
   if (await moreLabel.count()) {
     const [labelBox, diagramBox] = await Promise.all([moreLabel.boundingBox(), page.locator('#cashflowSankey').boundingBox()]);
