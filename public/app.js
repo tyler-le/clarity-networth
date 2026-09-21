@@ -2836,14 +2836,15 @@ function renderCashflowActivityDetail(category) {
   $('#cashflowDialogContent').innerHTML = `<section class="cashflow-activity-detail" aria-labelledby="cashflowActivityTitle"><button class="cashflow-activity-back" type="button" data-cashflow-back aria-label="Back to cash flow diagram">‹</button><div class="card-label">CASH FLOW ACTIVITY</div><div class="cashflow-activity-heading"><div><h2 id="cashflowActivityTitle">${escapeHtml(label)}</h2><p>${rows.length} posted transaction${rows.length === 1 ? '' : 's'} in this period.</p></div>${controls}</div><div class="cashflow-activity-rows">${rows.length ? rows.map((transaction) => `<div><span><strong>${escapeHtml(transaction.name)}</strong><small>${new Date(`${transaction.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</small></span><div class="cashflow-activity-value"><b class="${transaction.bucket === 'income' ? 'positive' : ''}">${transaction.bucket === 'income' ? '+' : ''}${fmt.format(Number(transaction.amount || 0))}</b>${transactionCategoryControl(data, transaction, { context: 'cashflow-drawer', activityCategory: category })}</div></div>`).join('') : '<p class="spending-empty">No posted transactions in this category for this period.</p>'}</div></section>`;
 }
 
-function openCashflowCategoryActivity(category) {
+function openCashflowCategoryActivity(category, { fromExpanded = false } = {}) {
   const data = spendingForSelectedMonth(state.spending);
   const transactionKeys = new Set((data.transactions || []).flatMap((transaction) => [transaction.flowKey, transaction.flowGroup]));
   if (category !== 'all' && !transactionKeys.has(category)) return;
-  // On the compact Sankey, Actual spend is an aggregate doorway. Let people
-  // see the category breakdown before asking them to read a long transaction
+  // Actual spend is an aggregate doorway at every viewport. Let people see
+  // its category breakdown before asking them to read a long transaction
   // list; individual category nodes continue directly to their activity.
-  if (category === 'actual_spend' && window.matchMedia('(max-width: 599px)').matches) {
+  // Nodes inside the already-expanded diagram may still open activity.
+  if (category === 'actual_spend' && !fromExpanded) {
     openCashflowDialog();
     return;
   }
@@ -3077,7 +3078,7 @@ $('#cashflowDialogContent').addEventListener('click', (event) => {
   }
   const node = event.target.closest('[data-cashflow-node]');
   if (!node) return;
-  openCashflowCategoryActivity(node.dataset.cashflowNode);
+  openCashflowCategoryActivity(node.dataset.cashflowNode, { fromExpanded: true });
 });
 $('#cashflowDialogContent').addEventListener('change', (event) => {
   const transactionCategory = event.target.closest('[data-transaction-category]');
@@ -3100,7 +3101,7 @@ $('#cashflowDialogContent').addEventListener('keydown', (event) => {
   const target = event.target.closest('[data-cashflow-node]');
   if (!target) return;
   event.preventDefault();
-  openCashflowCategoryActivity(target.dataset.cashflowNode);
+  openCashflowCategoryActivity(target.dataset.cashflowNode, { fromExpanded: true });
 });
 $('#cashflowPreTax').addEventListener('click', () => openCashflowCategoryActivity('payroll_retirement'));
 function donutSelection(event, element, rows) {
