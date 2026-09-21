@@ -1021,12 +1021,14 @@ test('employer retirement matches stay in payroll contributions, not take-home m
   const store = {
     accounts: [{ plaid_account_id: '401k', type: 'investment', subtype: '401k', name: 'Employer 401(k)' }],
     transactions: [{
-      id: 'employer-match', account_id: '401k', source: 'investment_transaction', bucket: 'investments',
-      date: '2026-09-15', amount: 500, merchant_name: 'Employer match', name: 'Employer match',
+      id: 'employer-match', account_id: '401k', bucket: 'income', account_type: 'investment', account_subtype: '401k',
+      date: '2026-09-15', amount: -500, merchant_name: 'Employer match', name: 'Employer match',
       pfc_primary: 'RETIREMENT_CONTRIBUTION', pending: false, excluded: false
     }]
   };
   assert.equal(cashFlowType(store.transactions[0]), 'pre_tax_retirement');
+  repairIncomingClassifications(store);
+  assert.equal(store.transactions[0].bucket, 'pre_tax_retirement');
   const summary = spendingSummary(store, '1m', new Date('2026-09-20T12:00:00'));
   assert.equal(summary.income, 0);
   assert.equal(summary.preTaxRetirement, 500);

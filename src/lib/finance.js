@@ -52,6 +52,12 @@ function isConfirmedIncome(tx) {
   return inflowClassification(tx) === 'income' || (tx.category_overridden && tx.bucket === 'income');
 }
 
+function isPayrollContributionRecord(tx) {
+  const text = `${tx.merchant_name || ''} ${tx.name || ''} ${tx.pfc_primary || ''} ${tx.pfc_detailed || ''}`.toUpperCase();
+  return !/ROLLOVER|REBALANC|SALE|SOLD|DIVIDEND|INTEREST/.test(text)
+    && /CONTRIBUT|DEFERRAL|PAYROLL|EMPLOYER\s+(?:MATCH|CONTRIBUT)|COMPANY\s+MATCH|401\s*\(?K\)?|403\s*\(?B\)?|457\s*\(?B\)?|HSA/.test(text);
+}
+
 // Cash flow is a signed, posted ledger. A category describes the purpose of a
 // transaction; it does not decide whether money entered or left a person's
 // accounts. Keep the two concepts separate so a provider category correction
@@ -60,10 +66,11 @@ export function cashFlowType(tx) {
   // Investment-ledger rows are only payroll contributions when the provider
   // gives contribution/deferral evidence. A rollover, sale, rebalance, or
   // ordinary investment-account movement must remain investment activity.
-  const investmentText = `${tx.merchant_name || ''} ${tx.name || ''} ${tx.pfc_primary || ''} ${tx.pfc_detailed || ''}`.toUpperCase();
-  const isContributionRecord = !/ROLLOVER|REBALANC|SALE|SOLD|DIVIDEND|INTEREST/.test(investmentText)
-    && /CONTRIBUT|DEFERRAL|PAYROLL|EMPLOYER\s+(?:MATCH|CONTRIBUT)|COMPANY\s+MATCH|401\s*\(?K\)?|403\s*\(?B\)?|457\s*\(?B\)?|HSA/.test(investmentText);
+  const isContributionRecord = isPayrollContributionRecord(tx);
   if (tx.source === 'investment_transaction' && tx.bucket === 'investments' && isContributionRecord) return 'pre_tax_retirement';
+  const accountType = String(tx.account_type || '').toLowerCase();
+  const accountSubtype = String(tx.account_subtype || '').toLowerCase();
+  if ((accountType === 'investment' || accountSubtype === 'hsa') && Number(tx.amount || 0) < 0 && isContributionRecord) return 'pre_tax_retirement';
   if (tx.source === 'investment_transaction' && tx.bucket === 'investments') return 'investment_activity';
   // A payment-app transfer commonly pays another person, not another one of
   // the member's connected accounts. Keep it visible and editable rather
@@ -177,12 +184,24 @@ export function repairTransferClassifications(store) {
 export function repairIncomingClassifications(store) {
   let repaired = 0;
   for (const transaction of store.transactions || []) {
+    const account = (store.accounts || []).find((candidate) => String(candidate.plaid_account_id || candidate.id) === String(transaction.account_id || ''));
+    if (account) {
+      transaction.account_type = account.type || transaction.account_type;
+      transaction.account_subtype = account.subtype || transaction.account_subtype;
+    }
     const flowType = cashFlowType(transaction);
     if (transaction.cash_flow_type !== flowType) {
       transaction.cash_flow_type = flowType;
       repaired += 1;
     }
     if (transaction.category_overridden || transaction.source === 'investment_transaction') continue;
+    if (flowType === 'pre_tax_retirement') {
+      if (transaction.bucket !== 'pre_tax_retirement') {
+        transaction.bucket = 'pre_tax_retirement';
+        repaired += 1;
+      }
+      continue;
+    }
     if (flowType !== 'external_inflow' || (!isConfirmedIncome(transaction) && !isPhysicalCheckDeposit(transaction)) || transaction.bucket === 'income') continue;
     transaction.bucket = 'income';
     repaired += 1;

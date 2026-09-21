@@ -1009,6 +1009,7 @@ async function syncTransactionsForItem(store, item) {
       const baseBucket = classifyTransaction(transaction);
       const transferTarget = plannedTransferTarget(store, transaction, baseBucket);
       const sourceAccount = store.accounts.find((account) => account.plaid_account_id === transaction.account_id);
+      const contextualCashFlowType = cashFlowType({ ...transaction, account_type: sourceAccount?.type, account_subtype: sourceAccount?.subtype });
       // Plaid records a deposit into an investment account as a negative
       // transaction. Preserve its original signed amount, but retain a
       // dedicated contribution value so it can be separated from performance.
@@ -1018,7 +1019,7 @@ async function syncTransactionsForItem(store, item) {
       const normalized = {
         id: existing?.id || crypto.randomUUID(), item_id: item.id, plaid_transaction_id: transaction.transaction_id,
         account_id: transaction.account_id, merchant_name: transaction.merchant_name, name: transaction.name,
-        amount: transaction.amount, date: transaction.date, bucket: existing?.category_overridden ? existing.bucket : (transferTarget?.bucket || baseBucket), cash_flow_category: existing?.cash_flow_category_overridden ? existing.cash_flow_category : null, cash_flow_category_overridden: existing?.cash_flow_category_overridden || false, cash_flow_type: cashFlowType(transaction), investment_contribution_amount: contributionAmount, investment_contribution_account_id: sourceAccount?.type === 'investment' ? sourceAccount.plaid_account_id : transferTarget?.accountId || null, excluded: existing?.excluded || false,
+        amount: transaction.amount, date: transaction.date, bucket: existing?.category_overridden ? existing.bucket : contextualCashFlowType === 'pre_tax_retirement' ? 'pre_tax_retirement' : (transferTarget?.bucket || baseBucket), cash_flow_category: existing?.cash_flow_category_overridden ? existing.cash_flow_category : null, cash_flow_category_overridden: existing?.cash_flow_category_overridden || false, cash_flow_type: contextualCashFlowType, investment_contribution_amount: contributionAmount, investment_contribution_account_id: sourceAccount?.type === 'investment' ? sourceAccount.plaid_account_id : transferTarget?.accountId || null, account_type: sourceAccount?.type || null, account_subtype: sourceAccount?.subtype || null, excluded: existing?.excluded || false,
         iso_currency_code: transaction.iso_currency_code, unofficial_currency_code: transaction.unofficial_currency_code || null,
         pending: transaction.pending, transaction_code: transaction.transaction_code || '', counterparty_types: (transaction.counterparties || []).map((counterparty) => counterparty?.type).filter(Boolean), pfc_primary: transaction.personal_finance_category?.primary || '',
         pfc_detailed: transaction.personal_finance_category?.detailed || '', demo: false
