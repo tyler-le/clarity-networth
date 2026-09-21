@@ -885,6 +885,10 @@ html[data-theme="dark"] .scrub-dot { fill: #1a201c; }
 .cashflow-payroll .cashflow-action-copy p { margin: 2px 0 0; max-width: 35ch; color: var(--muted); font-size: 10px; line-height: 1.35; }
 .cashflow-payroll .cashflow-payroll-lock { grid-column: 1; margin-top: 4px; }
 .cashflow-payroll > .cashflow-action-copy + .cashflow-payroll-chevron { grid-column: 4; }
+@media (min-width: 761px) {
+  .cashflow-detail-cards:has(.cashflow-payroll) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cashflow-detail-cards .cashflow-payroll { grid-column: 1 / -1; }
+}
 @media (max-width: 760px) { .cashflow-detail-cards { grid-template-columns: 1fr; gap: 8px; }.cashflow-action-card, .cashflow-more, .cashflow-transactions-action, .cashflow-payroll { min-height: 64px; }.cashflow-payroll { grid-template-columns: 34px minmax(0, 1fr) 16px; }.cashflow-payroll .cashflow-action-copy strong { font-size: 15px; }.cashflow-payroll .cashflow-action-copy p { display: none; } }
 /* Three small cards make labels feel cramped on an iPad. Keep the two simple
    actions paired, then give the richer payroll explanation a full row. */
@@ -1422,6 +1426,12 @@ html[data-theme="dark"] .plus-history-gate .plus-history-cta { background: linea
 }
 @media (max-width: 560px) {
   .holding-history-dialog .holding-history-shell { touch-action: pan-y; }
+}
+@media (max-width: 760px) {
+  /* The mobile transaction list already has its count, filter, and rows. The
+     desktop context rail repeats those facts and only pushes the useful list
+     farther below the fold on a phone. */
+  .spending-transaction-context { display: none; }
 }
 
 /* The grab affordance is intentionally larger than the visible pill. Keep

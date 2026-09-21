@@ -404,6 +404,21 @@ test('cash flow separates actual spending details from saving and investing', ()
   assert.deepEqual(result.actualSpendCategories.map((row) => [row.key, row.amount]), [['housing_bills', 1800], ['food_dining', 240], ['shopping', 90]]);
 });
 
+test('cash-flow funding sources reconcile allocations without inventing paycheck flow', () => {
+  const store = { transactions: [
+    { date: '2026-09-01', amount: -1000, bucket: 'income', merchant_name: 'Payroll' },
+    { date: '2026-09-02', amount: 1200, bucket: 'fixed', merchant_name: 'Rent' },
+    { date: '2026-09-03', amount: 500, bucket: 'investments', merchant_name: 'Brokerage transfer' }
+  ] };
+  const result = spendingSummary(store, '1m', new Date('2026-09-05T12:00:00'));
+  assert.equal(result.savedInvested, 500);
+  assert.deepEqual(result.cashFlowFundingSources, [
+    { key: 'income_paychecks', label: 'Paychecks', amount: 1000 },
+    { key: 'existing_funds', label: 'Existing balances / timing', amount: 700 }
+  ]);
+  assert.equal(result.cashFlowFundingSources.reduce((sum, source) => sum + source.amount, 0), result.actualSpend + result.savedInvested);
+});
+
 test('cash-flow headline subtracts actual spend only', () => {
   const store = { transactions: [
     { date: '2026-09-01', amount: -5000, bucket: 'income', merchant_name: 'Payroll', pfc_primary: 'INCOME', pfc_detailed: 'INCOME_PAYCHECK' },

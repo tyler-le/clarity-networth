@@ -918,7 +918,11 @@ function spendingForSelectedMonth(data) {
   const savingsAndInvestments = transactions.filter((transaction) => transaction.flowGroup === 'save_invest').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const actualSpendCategories = flowCategoryRows(planTransactions.filter((transaction) => transaction.flowGroup === 'actual_spend'));
   const preTaxRetirement = Number((data.monthly || []).find((row) => row.month === state.spendingMonth)?.pre_tax_retirement || 0);
-  return { ...data, total, income, incomeSources, actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, savedInvested: savingsAndInvestments, preTaxRetirement, monthlyAverage: total, categories: allocationRows(planTransactions.filter((transaction) => transaction.flowGroup === 'actual_spend')), transactions };
+  const existingFunds = Math.max(0, actualSpend + savingsAndInvestments - income);
+  const cashFlowFundingSources = existingFunds > 0.005
+    ? [...incomeSources, { key: 'existing_funds', label: 'Existing balances / timing', amount: existingFunds }]
+    : incomeSources;
+  return { ...data, total, income, incomeSources, cashFlowFundingSources, actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, savedInvested: savingsAndInvestments, preTaxRetirement, monthlyAverage: total, categories: allocationRows(planTransactions.filter((transaction) => transaction.flowGroup === 'actual_spend')), transactions };
 }
 
 function flowCategoryRows(transactions) {
@@ -1018,7 +1022,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const compact = availableWidth < 600;
   const tablet = !compact && availableWidth < 760;
   const allSpendCategories = (data.actualSpendCategories || []).filter((row) => hasVisibleAmount(row.amount));
-  const incomeSources = (data.incomeSources?.length ? data.incomeSources : [{ key: 'money_in', label: 'Money in', amount: income }])
+  const incomeSources = (data.cashFlowFundingSources?.length ? data.cashFlowFundingSources : (data.incomeSources?.length ? data.incomeSources : [{ key: 'money_in', label: 'Money in', amount: income }]))
     .map((source) => ({ ...source, label: source.label || source.name || 'Money in' }))
     .filter((source) => hasVisibleAmount(source.amount));
   const transactionCategories = new Set((data.transactions || []).flatMap((transaction) => [transaction.flowKey, transaction.flowGroup]));
@@ -1043,8 +1047,9 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   // proportional source-to-outcome estimates.
   const knownAllocation = middleNodes.reduce((sum, node) => sum + Number(node.value || 0), 0);
   const sourceTotal = incomeSources.reduce((sum, source) => sum + Number(source.amount || 0), 0);
-  // “Money in” is deliberately limited to transactions Plaid categorized as
-  // income; never invent an inbound source to make the Sankey reconcile.
+  // Sources are either provider-reported income or an explicitly labeled
+  // residual for existing balances/timing. Never imply that all allocations
+  // came from the period's paychecks when the ledger says otherwise.
   const bridgeTotal = sourceTotal;
   const unallocated = Math.max(0, sourceTotal - knownAllocation);
   const fundingRows = incomeSources;
@@ -1057,7 +1062,8 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   // dividing those rows by income would misleadingly produce 125%+ labels.
   const allocationNodes = withShare(allocationRows, Math.max(bridgeTotal, knownAllocation), 'value');
   const categoryNodes = withShare(actualCategories, actualSpend);
-  const bridgeNode = { key: 'period_funds', label: 'Money in', value: bridgeTotal, color: 'var(--income)' };
+  const hasResidualSource = fundingRows.some((source) => source.key === 'existing_funds');
+  const bridgeNode = { key: 'period_funds', label: hasResidualSource ? 'Available funds' : 'Money in', value: bridgeTotal, color: 'var(--income)' };
   const contentHeight = (rows) => rows.length ? (rows.length - 1) * rowStep + rowHeight : 0;
   const height = Math.max(224, contentHeight(incomeNodes) + 16, contentHeight(allocationNodes) + 16, contentHeight(categoryNodes) + 16);
   // A node must visibly meet its flow. Fixed wide, transparent hit areas made
@@ -1149,16 +1155,16 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const hiddenCategoryCount = allSpendCategories.length - actualCategories.length;
   const detailsUnlocked = plusFeatureAvailable('canUseCashFlowDetails');
   const premiumDetailHint = detailsUnlocked ? '' : '<span class="cashflow-action-lock">Details with Plus</span>';
-  const more = !expanded && hiddenCategoryCount > 0 ? `<button type="button" class="cashflow-more cashflow-action-card" data-cashflow-expand aria-label="Explore all ${hiddenCategoryCount + actualCategories.length} spending categories and their transactions"><span class="cashflow-action-icon" aria-hidden="true">⌘</span><span class="cashflow-action-copy"><small>SPENDING</small><b>Explore ${allSpendCategories.length} categories</b>${premiumDetailHint}</span><i aria-hidden="true">›</i></button>` : '';
+  const inlineActions = el.id === 'cashflowSankey';
+  const more = !expanded && hiddenCategoryCount > 0 ? `<button type="button" class="cashflow-more cashflow-action-card" data-cashflow-expand aria-label="Explore all ${hiddenCategoryCount + actualCategories.length} spending categories and their transactions"><span class="cashflow-action-icon" aria-hidden="true">⌘</span><span class="cashflow-action-copy"><small>SPENDING</small><b>Explore all ${allSpendCategories.length} categories</b>${premiumDetailHint}</span><i aria-hidden="true">›</i></button>` : '';
   const transactionCount = (data.transactions || []).length;
-  const transactionAction = `<button type="button" class="cashflow-transactions-action cashflow-action-card" data-cashflow-transactions ${transactionCount ? '' : 'disabled'}><span class="cashflow-action-icon" aria-hidden="true">≡</span><span class="cashflow-action-copy"><small>ACTIVITY</small><b>${transactionCount ? 'View transactions' : 'No posted activity'}</b><em>${transactionCount ? `${transactionCount} posted` : 'Try another timeframe'}</em>${transactionCount ? premiumDetailHint : ''}</span><i aria-hidden="true">›</i></button>`;
+  const transactionAction = inlineActions ? `<button type="button" class="cashflow-transactions-action cashflow-action-card" data-cashflow-transactions ${transactionCount ? '' : 'disabled'}><span class="cashflow-action-icon" aria-hidden="true">≡</span><span class="cashflow-action-copy"><small>ACTIVITY</small><b>${transactionCount ? 'View all transactions' : 'No posted activity'}</b><em>${transactionCount ? `${transactionCount} posted` : 'Try another timeframe'}</em>${transactionCount ? premiumDetailHint : ''}</span><i aria-hidden="true">›</i></button>` : '';
   const categoryList = compact && expanded && allSpendCategories.length
     ? `<div class="cashflow-category-list" aria-label="Spending categories">${withShare(allSpendCategories, actualSpend).map((row) => `<button type="button" data-cashflow-category="${escapeHtml(row.key)}" data-cashflow-node="${escapeHtml(row.key)}" aria-label="View ${escapeHtml(row.name)} activity" aria-pressed="false"><span><i style="background:${colorFor(row.key, 'var(--outflow-muted)')}"></i>${escapeHtml(row.name)}</span><strong>${fmt.format(row.amount)} <small>${row.share}%</small></strong><b aria-hidden="true">›</b></button>`).join('')}</div>`
     : '';
   const sourceBlocks = incomeNodes.map((source, index) => block(sourceX, sourceStart + index * rowStep, sourceW, source.color || colorFor(source.key, 'var(--income)'), source.label, source.amount, source.share, source.key, 'right')).join('');
   const bridgeBlock = sourceTotal >= .5 ? block(bridgeX, bridgeY, bridgeW, bridgeNode.color, bridgeNode.label, bridgeNode.value, null, bridgeNode.key, 'left') : '';
   const middleBlocks = allocationNodes.map((node) => block(middleX, middleY.get(node.key), middleW, node.color, node.label, node.value, node.share, node.key, 'left')).join('');
-  const inlineActions = el.id === 'cashflowSankey';
   el.classList.toggle('has-transaction-action', Boolean(transactionAction) && !inlineActions);
   const detailActions = more || transactionAction
     ? `<div class="cashflow-detail-actions" aria-label="Explore cash flow details">${more}${transactionAction}</div>`

@@ -1915,12 +1915,25 @@ export function spendingSummary(store, range = '1m', anchor = new Date()) {
   const income = canonicalFacts.reduce((sum, fact) => sum + fact.income, 0);
   const incomeSources = [...incomeSourceMap.values()].sort((a, b) => b.amount - a.amount);
   const preTaxRetirement = [...monthlyPreTaxRetirement.values()].reduce((sum, amount) => sum + amount, 0);
+  // A Sankey must reconcile. When actual spending plus post-tax saving is
+  // larger than the period's reported income, the difference may be funded
+  // by balances carried into the period or by timing differences we cannot
+  // attribute to a provider source. Expose that residual explicitly instead
+  // of implying that it came from the displayed paychecks.
+  const knownPostTaxAllocation = actualSpend + savingsAndInvestments;
+  const existingFunds = Math.max(0, knownPostTaxAllocation - income);
+  const cashFlowFundingSources = existingFunds > 0.005
+    ? [...incomeSources, { key: 'existing_funds', label: 'Existing balances / timing', amount: existingFunds }]
+    : incomeSources;
   const actualSpendCategories = [...actualSpendCategoryMap.values()].filter((row) => row.amount > 0).sort((a, b) => b.amount - a.amount);
   const categoryRules = (store.cash_flow_category_rules || []).flatMap((rule) => {
     const category = cashFlowCategoryOption(rule.category_key);
     return category?.flow === rule.flow ? [{ id: rule.id, categoryKey: category.key, categoryLabel: category.label, flow: rule.flow }] : [];
   });
-  return { range, startDate, endDate, completedMonths, total, income, incomeSources, actualSpend, netCashFlow: income - actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, savedInvested, preTaxRetirement, monthlyAverage: total / monthCount, categories: categoryRows, categoryOptions: CASH_FLOW_CATEGORY_OPTIONS, categoryRules, topMerchants, monthly: monthlyRows, transactions: transactionRows };
+  // savedInvested is the post-tax amount represented by the Sankey. Payroll
+  // deferrals remain a separate, clearly labeled companion metric.
+  savedInvested = savingsAndInvestments;
+  return { range, startDate, endDate, completedMonths, total, income, incomeSources, cashFlowFundingSources, actualSpend, netCashFlow: income - actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, savedInvested, preTaxRetirement, monthlyAverage: total / monthCount, categories: categoryRows, categoryOptions: CASH_FLOW_CATEGORY_OPTIONS, categoryRules, topMerchants, monthly: monthlyRows, transactions: transactionRows };
 }
 
 function monthId(dateString) {

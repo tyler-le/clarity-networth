@@ -470,11 +470,9 @@ test('cash-flow diagram stays readable and opens transactions in-app @critical',
   await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
   await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
   const expandedTransactions = page.locator('#cashflowDialogContent [data-cashflow-transactions]');
-  await expect(expandedTransactions).toBeVisible();
-  await expandedTransactions.click();
-  await expect(page.locator('#cashflowDialogContent .cashflow-activity-detail')).toContainText('Cash flow activity');
-  await page.locator('#cashflowDialogContent [data-cashflow-back]').click();
-  await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
+  // The expanded Sankey is already the transaction navigation surface. A
+  // second generic “View transactions” row would duplicate that action.
+  await expect(expandedTransactions).toHaveCount(0);
   const category = page.locator('#cashflowDialogContent [data-cashflow-category]').first();
   await category.click();
   await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
