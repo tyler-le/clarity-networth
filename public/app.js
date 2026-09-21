@@ -1020,14 +1020,19 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const availableWidth = el.clientWidth;
   const compact = availableWidth < 600;
   const tablet = !compact && availableWidth < 760;
-  const allSpendCategories = (data.actualSpendCategories || []).filter((row) => hasVisibleAmount(row.amount));
+  const allSpendCategories = [...(data.actualSpendCategories || [])]
+    .filter((row) => hasVisibleAmount(row.amount))
+    .sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0));
   const incomeSources = (data.incomeSources?.length ? data.incomeSources : [{ key: 'money_in', label: 'Money in', amount: income }])
     .map((source) => ({ ...source, label: source.label || source.name || 'Money in' }))
     .filter((source) => hasVisibleAmount(source.amount));
   const transactionCategories = new Set((data.transactions || []).flatMap((transaction) => [transaction.flowKey, transaction.flowGroup]));
   // On a phone, keep the primary story to three readable columns. Spending
   // categories are secondary detail, revealed below in the expanded view.
-  const actualCategories = compact ? [] : (expanded ? allSpendCategories : allSpendCategories.slice(0, 4));
+  // Keep the compact phone view focused on the primary flow. The expanded
+  // phone view uses the same sibling layout as desktop, with categories
+  // branching directly from Money in at the same level as saving.
+  const actualCategories = compact ? (expanded ? allSpendCategories : []) : (expanded ? allSpendCategories : allSpendCategories.slice(0, 4));
   const width = compact ? 390 : tablet ? 620 : 920;
   // Treat the blocks as compact labels for the flow, rather than cards that
   // compete with it. Phone labels get a little more vertical room to wrap.
@@ -1035,6 +1040,11 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const middleNodes = [
     { key: 'save_invest', label: 'Saved & invested', value: savedInvested, color: 'var(--invest)' }
   ].filter((node) => hasVisibleAmount(node.value));
+  const colorFor = (key, fallback) => ({
+    income_paychecks: 'var(--income)', income_interest: '#b08a4a', income_dividends: '#8a71a5', income_benefits: '#5e91a2', income_business: '#5d9b81', money_in_other: '#7893a8',
+    actual_spend: 'var(--outflow)', save_invest: 'var(--invest)', savings: 'var(--save)', investments: 'var(--invest)',
+    housing_bills: '#c87862', food_dining: '#c69656', shopping: '#9a78a2', transport: '#6996a7', health: '#6a9b88', insurance: '#728aac', services: '#8d87aa', entertainment: '#b47b92', travel: '#6499a0', education: '#8d9a5f', personal_care: '#b98675', home: '#739585', taxes: '#ab8066', civic: '#7d91a4', fees: '#9a8f81', uncategorized: '#9a8f81'
+  }[key] || fallback);
   const withShare = (rows, total, valueKey = 'amount') => rows.map((row) => ({
     ...row,
     share: total > 0 ? Math.round(Number(row[valueKey] || 0) / total * 100) : null
@@ -1050,9 +1060,16 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const bridgeTotal = sourceTotal;
   const unallocated = Math.max(0, sourceTotal - knownAllocation);
   const fundingRows = incomeSources;
-  const allocationRows = unallocated >= .5
-    ? [...middleNodes, { key: 'money_left', label: 'Money left', value: unallocated, color: 'var(--income)' }]
-    : middleNodes;
+  const allocationRows = [
+    ...middleNodes,
+    ...(unallocated >= .5 ? [{ key: 'money_left', label: 'Money left', value: unallocated, color: 'var(--income)' }] : []),
+    ...actualCategories.map((row) => ({
+      ...row,
+      label: row.name,
+      value: row.amount,
+      color: colorFor(row.key, 'var(--outflow-muted)')
+    }))
+  ];
   const incomeNodes = withShare(fundingRows, bridgeTotal);
   // Every allocation percentage uses Money in as its denominator. This makes
   // the diagram answer the same question for every destination: how much of
@@ -1060,10 +1077,9 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   // reported income, the percentages may exceed 100% in aggregate because
   // existing balances or out-of-range funding can be involved.
   const allocationNodes = withShare(allocationRows, bridgeTotal, 'value');
-  const categoryNodes = withShare(actualCategories, bridgeTotal);
   const bridgeNode = { key: 'period_funds', label: 'Money in', value: bridgeTotal, color: 'var(--income)' };
   const contentHeight = (rows) => rows.length ? (rows.length - 1) * rowStep + rowHeight : 0;
-  const height = Math.max(224, contentHeight(incomeNodes) + 16, contentHeight(allocationNodes) + 16, contentHeight(categoryNodes) + 16);
+  const height = Math.max(224, contentHeight(incomeNodes) + 16, contentHeight(allocationNodes) + 16);
   // A node must visibly meet its flow. Fixed wide, transparent hit areas made
   // the bands appear to stop short of their labels on larger screens. Size
   // each column to its actual labels and render it as a quiet tinted block.
@@ -1084,19 +1100,12 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const sourceW = nodeWidth(incomeNodes, compact ? 116 : 82, compact ? 118 : 132);
   const bridgeW = nodeWidth([bridgeNode], compact ? 72 : 88, compact ? 84 : 120);
   const middleW = nodeWidth(allocationNodes, compact ? 100 : 86, compact ? 116 : 128);
-  const destinationW = nodeWidth(categoryNodes.map((row) => ({ label: row.name })), 92, 142);
   const sourceX = compact ? 5 : tablet ? 8 : 20;
   // Keep visible breathing room between the compact phone columns. The prior
   // positions left only a few pixels between node edges, making the thickest
   // flows visually merge at the bridge and obscuring their relative weight.
   const bridgeX = compact ? 145 : tablet ? 166 : 230;
   const middleX = compact ? 260 : tablet ? 330 : 482;
-  const destinationX = compact ? 0 : tablet ? 488 : 758;
-  const colorFor = (key, fallback) => ({
-    income_paychecks: 'var(--income)', income_interest: '#b08a4a', income_dividends: '#8a71a5', income_benefits: '#5e91a2', income_business: '#5d9b81', money_in_other: '#7893a8',
-    actual_spend: 'var(--outflow)', save_invest: 'var(--invest)', savings: 'var(--save)', investments: 'var(--invest)',
-    housing_bills: '#c87862', food_dining: '#c69656', shopping: '#9a78a2', transport: '#6996a7', health: '#6a9b88', insurance: '#728aac', services: '#8d87aa', entertainment: '#b47b92', travel: '#6499a0', education: '#8d9a5f', personal_care: '#b98675', home: '#739585', taxes: '#ab8066', civic: '#7d91a4', fees: '#9a8f81', uncategorized: '#9a8f81'
-  }[key] || fallback);
   const block = (x, y, w, color, label, value, share, category = '', side = 'left') => {
     const actionCategory = category && transactionCategories.has(category) ? category : '';
     const maxChars = Math.max(7, Math.floor((w - 19) / (compact ? 5.4 : 6.2)));
@@ -1131,7 +1140,6 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const verticallyCenter = (rows) => Math.max(8, (height - contentHeight(rows)) / 2);
   const sourceStart = verticallyCenter(incomeNodes);
   const middleStart = verticallyCenter(allocationNodes);
-  const categoryStart = verticallyCenter(categoryNodes);
   const bridgeY = Math.max(8, (height - rowHeight) / 2);
   const middleY = new Map(allocationNodes.map((node, index) => [node.key, middleStart + index * rowStep]));
   let paths = '';
@@ -1142,13 +1150,6 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   if (sourceTotal >= .5) allocationNodes.forEach((node) => {
     paths += flow(bridgeX + bridgeW, bridgeY + rowHeight / 2, middleX, middleY.get(node.key) + rowHeight / 2, node.value, node.color, [bridgeNode.key, node.key]);
   });
-  let categories = '';
-  categoryNodes.forEach((row, index) => {
-    const y = categoryStart + index * rowStep;
-    const categoryColor = colorFor(row.key, 'var(--outflow-muted)');
-    paths += flow(bridgeX + bridgeW, bridgeY + rowHeight / 2, destinationX, y + rowHeight / 2, Number(row.amount || 0), categoryColor, [bridgeNode.key, row.key]);
-    categories += block(destinationX, y, destinationW, categoryColor, row.name, row.amount, row.share, row.key, 'left');
-  });
   const hiddenCategoryCount = allSpendCategories.length - actualCategories.length;
   const detailsUnlocked = plusFeatureAvailable('canUseCashFlowDetails');
   const premiumDetailHint = detailsUnlocked ? '' : '<span class="premium-badge">Details with Plus</span>';
@@ -1157,7 +1158,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const transactionCount = (data.transactions || []).length;
   const transactionAction = `<button type="button" class="cashflow-transactions-action cashflow-action-card" data-cashflow-transactions ${transactionCount ? '' : 'disabled'}><span class="cashflow-action-icon" aria-hidden="true">≡</span><span class="cashflow-action-copy"><small>ACTIVITY</small><b>${transactionCount ? 'View all transactions' : 'No posted activity'}</b><em>${transactionCount ? `${transactionCount} posted` : 'Try another timeframe'}</em>${transactionCount ? premiumDetailHint : ''}</span><i aria-hidden="true">›</i></button>`;
   const categoryList = compact && expanded && allSpendCategories.length
-    ? `<div class="cashflow-category-list" aria-label="Spending categories">${withShare(allSpendCategories, actualSpend).map((row) => `<button type="button" data-cashflow-category="${escapeHtml(row.key)}" data-cashflow-node="${escapeHtml(row.key)}" aria-label="View ${escapeHtml(row.name)} activity" aria-pressed="false"><span><i style="background:${colorFor(row.key, 'var(--outflow-muted)')}"></i>${escapeHtml(row.name)}</span><strong>${fmt.format(row.amount)} <small>${row.share}%</small></strong><b aria-hidden="true">›</b></button>`).join('')}</div>`
+    ? `<div class="cashflow-category-list" aria-label="Spending categories">${withShare(allSpendCategories, bridgeTotal).map((row) => `<button type="button" data-cashflow-category="${escapeHtml(row.key)}" data-cashflow-node="${escapeHtml(row.key)}" aria-label="View ${escapeHtml(row.name)} activity" aria-pressed="false"><span><i style="background:${colorFor(row.key, 'var(--outflow-muted)')}"></i>${escapeHtml(row.name)}</span><strong>${fmt.format(row.amount)} <small>${row.share}%</small></strong><b aria-hidden="true">›</b></button>`).join('')}</div>`
     : '';
   const sourceBlocks = incomeNodes.map((source, index) => block(sourceX, sourceStart + index * rowStep, sourceW, source.color || colorFor(source.key, 'var(--income)'), source.label, source.amount, source.share, source.key, 'right')).join('');
   const bridgeBlock = sourceTotal >= .5 ? block(bridgeX, bridgeY, bridgeW, bridgeNode.color, bridgeNode.label, bridgeNode.value, null, bridgeNode.key, 'left') : '';
@@ -1166,7 +1167,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const detailActions = more || transactionAction
     ? `<div class="cashflow-detail-actions ${inlineActions ? '' : 'cashflow-detail-actions-grounded'}" aria-label="Explore cash flow details">${more}${transactionAction}</div>`
     : '';
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="External money in flows into spending, saving, and investing">${paths}${sourceBlocks}${bridgeBlock}${middleBlocks}${categories}</svg>${categoryList}${inlineActions ? '' : detailActions}`;
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="External money in flows into spending, saving, and investing">${paths}${sourceBlocks}${bridgeBlock}${middleBlocks}</svg>${categoryList}${inlineActions ? '' : detailActions}`;
   if (inlineActions) {
     const actions = $('#cashflowActions');
     actions.innerHTML = `${more}${transactionAction}`;
