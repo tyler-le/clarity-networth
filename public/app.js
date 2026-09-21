@@ -918,11 +918,7 @@ function spendingForSelectedMonth(data) {
   const savingsAndInvestments = transactions.filter((transaction) => transaction.flowGroup === 'save_invest').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const actualSpendCategories = flowCategoryRows(planTransactions.filter((transaction) => transaction.flowGroup === 'actual_spend'));
   const preTaxRetirement = Number((data.monthly || []).find((row) => row.month === state.spendingMonth)?.pre_tax_retirement || 0);
-  const existingFunds = Math.max(0, actualSpend + savingsAndInvestments - income);
-  const cashFlowFundingSources = existingFunds > 0.005
-    ? [...incomeSources, { key: 'existing_funds', label: 'Existing balances / timing', amount: existingFunds }]
-    : incomeSources;
-  return { ...data, total, income, incomeSources, cashFlowFundingSources, actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, savedInvested: savingsAndInvestments, preTaxRetirement, monthlyAverage: total, categories: allocationRows(planTransactions.filter((transaction) => transaction.flowGroup === 'actual_spend')), transactions };
+  return { ...data, total, income, incomeSources, actualSpend, actualSpendCategories, savings, investments, savingsAndInvestments, savedInvested: savingsAndInvestments, preTaxRetirement, monthlyAverage: total, categories: allocationRows(planTransactions.filter((transaction) => transaction.flowGroup === 'actual_spend')), transactions };
 }
 
 function flowCategoryRows(transactions) {
@@ -1022,7 +1018,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   const compact = availableWidth < 600;
   const tablet = !compact && availableWidth < 760;
   const allSpendCategories = (data.actualSpendCategories || []).filter((row) => hasVisibleAmount(row.amount));
-  const incomeSources = (data.cashFlowFundingSources?.length ? data.cashFlowFundingSources : (data.incomeSources?.length ? data.incomeSources : [{ key: 'money_in', label: 'Money in', amount: income }]))
+  const incomeSources = (data.incomeSources?.length ? data.incomeSources : [{ key: 'money_in', label: 'Money in', amount: income }])
     .map((source) => ({ ...source, label: source.label || source.name || 'Money in' }))
     .filter((source) => hasVisibleAmount(source.amount));
   const transactionCategories = new Set((data.transactions || []).flatMap((transaction) => [transaction.flowKey, transaction.flowGroup]));
@@ -1047,9 +1043,8 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   // proportional source-to-outcome estimates.
   const knownAllocation = middleNodes.reduce((sum, node) => sum + Number(node.value || 0), 0);
   const sourceTotal = incomeSources.reduce((sum, source) => sum + Number(source.amount || 0), 0);
-  // Sources are either provider-reported income or an explicitly labeled
-  // residual for existing balances/timing. Never imply that all allocations
-  // came from the period's paychecks when the ledger says otherwise.
+  // “Money in” is limited to provider-reported income; the diagram should not
+  // invent a source label for balances or timing differences.
   const bridgeTotal = sourceTotal;
   const unallocated = Math.max(0, sourceTotal - knownAllocation);
   const fundingRows = incomeSources;
@@ -1062,8 +1057,7 @@ function renderCashFlowSankey(data, el = $('#cashflowSankey'), expanded = false)
   // dividing those rows by income would misleadingly produce 125%+ labels.
   const allocationNodes = withShare(allocationRows, Math.max(bridgeTotal, knownAllocation), 'value');
   const categoryNodes = withShare(actualCategories, actualSpend);
-  const hasResidualSource = fundingRows.some((source) => source.key === 'existing_funds');
-  const bridgeNode = { key: 'period_funds', label: hasResidualSource ? 'Available funds' : 'Money in', value: bridgeTotal, color: 'var(--income)' };
+  const bridgeNode = { key: 'period_funds', label: 'Money in', value: bridgeTotal, color: 'var(--income)' };
   const contentHeight = (rows) => rows.length ? (rows.length - 1) * rowStep + rowHeight : 0;
   const height = Math.max(224, contentHeight(incomeNodes) + 16, contentHeight(allocationNodes) + 16, contentHeight(categoryNodes) + 16);
   // A node must visibly meet its flow. Fixed wide, transparent hit areas made
@@ -2810,16 +2804,24 @@ function showCashflowPreviewDrawer(category = 'all') {
 
 function cashflowActivityLabel(data, category) {
   if (category === 'all') return 'Cash flow activity';
+  // Aggregate Sankey nodes should keep their own label. Looking up the first
+  // matching transaction first made an Actual spend tap inherit an arbitrary
+  // merchant category such as Insurance.
+  const aggregateLabels = { actual_spend: 'Actual spend', save_invest: 'Saved & invested', savings: 'Saved & invested', investments: 'Saved & invested', income: 'Money in' };
+  if (aggregateLabels[category]) return aggregateLabels[category];
   const transaction = (data.transactions || []).find((row) => row.flowKey === category || row.flowGroup === category);
-  return transaction?.flowLabel || ({ actual_spend: 'Actual spend', save_invest: 'Saved & invested', savings: 'Saved & invested', investments: 'Saved & invested', income: 'Money in' }[category] || 'Cash flow activity');
+  return transaction?.flowLabel || 'Cash flow activity';
 }
 
 function cashflowActivityCategories(data) {
   const categories = new Map();
-  for (const transaction of data.transactions || []) {
+  const transactions = data.transactions || [];
+  if (transactions.some((transaction) => transaction.flowGroup === 'actual_spend')) categories.set('actual_spend', 'Actual spend');
+  if (transactions.some((transaction) => transaction.flowGroup === 'save_invest')) categories.set('save_invest', 'Saved & invested');
+  for (const transaction of transactions) {
     const key = transaction.flowGroup === 'save_invest' ? 'save_invest' : transaction.flowKey || transaction.flowGroup;
     if (!key || categories.has(key)) continue;
-    categories.set(key, key === 'save_invest' ? 'Saved & invested' : transaction.flowLabel || cashflowActivityLabel(data, key));
+    categories.set(key, transaction.flowLabel || cashflowActivityLabel(data, key));
   }
   return [...categories.entries()]
     .map(([key, label]) => ({ key, label }))
@@ -2840,6 +2842,13 @@ function openCashflowCategoryActivity(category) {
   const data = spendingForSelectedMonth(state.spending);
   const transactionKeys = new Set((data.transactions || []).flatMap((transaction) => [transaction.flowKey, transaction.flowGroup]));
   if (category !== 'all' && !transactionKeys.has(category)) return;
+  // On the compact Sankey, Actual spend is an aggregate doorway. Let people
+  // see the category breakdown before asking them to read a long transaction
+  // list; individual category nodes continue directly to their activity.
+  if (category === 'actual_spend' && window.matchMedia('(max-width: 599px)').matches) {
+    openCashflowDialog();
+    return;
+  }
   if (!plusFeatureAvailable('canUseCashFlowDetails')) {
     showCashflowPreviewDrawer(category);
     return;

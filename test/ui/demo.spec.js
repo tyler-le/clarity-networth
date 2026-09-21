@@ -454,6 +454,14 @@ test('cash-flow diagram stays readable and opens transactions in-app @critical',
     await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
     await closeCashflowDrawer();
   }
+  if (testInfo.project.name === 'phone') {
+    const actualSpend = page.locator('#cashflowSankey [data-cashflow-node="actual_spend"]');
+    await expect(actualSpend).toBeVisible();
+    await actualSpend.click();
+    await expect(page.locator('#cashflowDialogContent .cashflow-category-list')).toBeVisible();
+    await expect(page.locator('#cashflowDialogContent .cashflow-category-list [data-cashflow-category]').first()).toBeVisible();
+    await closeCashflowDrawer();
+  }
   // Transaction access is always explicit. A person need not infer that a
   // diagram tap filtered a drawer farther down the page.
   const transactions = page.locator('#cashflowSankey [data-cashflow-transactions]');
