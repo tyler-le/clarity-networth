@@ -24,6 +24,43 @@ export function stripeClient(secretKey = process.env.STRIPE_SECRET_KEY) {
   });
 }
 
+// Promotion codes are created and governed in Stripe. Keeping redemption in
+// Checkout means code validity, product restrictions, and redemption limits
+// are enforced by Stripe instead of being duplicated in our application.
+export function subscriptionCheckoutSessionFields({
+  appUrl,
+  userKey,
+  priceId,
+  integrationIdentifier,
+  customerId,
+  customerEmail
+}) {
+  const fields = {
+    mode: 'subscription',
+    // Let members experience Plus without entering billing details up front.
+    // They can add a payment method during the trial before choosing to
+    // continue as a paid subscriber.
+    payment_method_collection: 'if_required',
+    integration_identifier: integrationIdentifier,
+    client_reference_id: userKey,
+    success_url: `${appUrl}/?billing=success`,
+    cancel_url: `${appUrl}/?billing=cancelled`,
+    // This makes Stripe Checkout show its promotion-code entry. It must not be
+    // combined with a pre-applied discount on the same Checkout Session.
+    allow_promotion_codes: true,
+    // The sandbox Product is classified with the blueprint's eligible
+    // digital-service tax code. Stripe owns tax calculation and collection
+    // for this Managed Payments Checkout flow.
+    managed_payments: { enabled: true },
+    metadata: { user_key: userKey },
+    subscription_data: { trial_period_days: 14, metadata: { user_key: userKey } },
+    line_items: [{ price: priceId, quantity: 1 }]
+  };
+  if (customerId) fields.customer = customerId;
+  else if (customerEmail) fields.customer_email = customerEmail;
+  return fields;
+}
+
 export function stripeWebhookIsValid(rawBody, signatureHeader, secret = process.env.STRIPE_WEBHOOK_SECRET, now = Date.now()) {
   if (!Buffer.isBuffer(rawBody) || !configured(secret) || typeof signatureHeader !== 'string') return false;
   const parts = signatureHeader.split(',').map((part) => part.trim());
