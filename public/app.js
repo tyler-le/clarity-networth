@@ -935,13 +935,18 @@ function flowCategoryRows(transactions) {
 function renderSpendingTrend(data) {
   const months = data.monthly || [];
   if (state.spendingMonth && !months.some((row) => row.month === state.spendingMonth)) state.spendingMonth = null;
-  const detail = months.find((row) => row.month === state.spendingMonth) || months.at(-1);
+  const selectedDetail = months.find((row) => row.month === state.spendingMonth);
+  const summaryRows = selectedDetail ? [selectedDetail] : months;
+  const summary = summaryRows.reduce((totals, row) => ({
+    income: totals.income + Number(row.income || 0),
+    actualSpend: totals.actualSpend + Number(row.actual_spend ?? row.amount ?? 0),
+    savedInvested: totals.savedInvested + Number(row.saved_invested || 0),
+  }), { income: 0, actualSpend: 0, savedInvested: 0 });
+  const detail = selectedDetail || months.at(-1);
   if (detail) {
     const label = new Date(`${detail.month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-    const actualSpend = Number(detail.actual_spend ?? detail.amount ?? 0);
-    const savedInvested = Number(detail.saved_invested || 0);
-    const detailPeriod = state.spendingMonth ? '' : `<span>Latest · ${label}</span>`;
-    $('#trendDetail').innerHTML = `${detailPeriod}<strong><i class="income"></i><small>Money in</small>${fmt.format(detail.income || 0)}</strong><strong><i class="spend"></i><small>Actual spend</small>${fmt.format(actualSpend)}</strong><strong><i class="save"></i><small>Saved &amp; invested</small>${fmt.format(savedInvested)}</strong>`;
+    const detailPeriod = state.spendingMonth ? '' : '<span>Selected timeframe total</span>';
+    $('#trendDetail').innerHTML = `${detailPeriod}<strong><i class="income"></i><small>Money in</small>${fmt.format(summary.income)}</strong><strong><i class="spend"></i><small>Actual spend</small>${fmt.format(summary.actualSpend)}</strong><strong><i class="save"></i><small>Saved &amp; invested</small>${fmt.format(summary.savedInvested)}</strong>`;
   } else $('#trendDetail').innerHTML = '';
   const chart = $('#spendingTrend');
   if (!months.length) { chart.innerHTML = '<p class="spending-empty">Monthly patterns will appear once transactions arrive.</p>'; return; }
@@ -1205,6 +1210,7 @@ function renderSpending(data) {
   const rangeLabel = ({ '1m': 'this month to date', '3m': 'last 3 completed months', '6m': 'last 6 completed months', ytd: `year to date through ${completedThrough}`, '1y': 'last 12 completed months', all: 'all available history' })[data.range] || 'this month to date';
   const selectedMonthLabel = state.spendingMonth && new Date(`${state.spendingMonth}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   $('#spendingPeriodSummary').textContent = selectedMonthLabel || rangeLabel;
+  $('#monthlyCashFlowLabel').textContent = selectedMonthLabel ? 'Monthly cash flow' : 'Cash flow summary';
   $('#monthlyCashFlowPeriod').textContent = selectedMonthLabel || rangeLabel;
   $('.spending-period-selector').toggleAttribute('data-month-selected', Boolean(selectedMonthLabel));
   $('#clearSpendingMonth').classList.toggle('hidden', !selectedMonthLabel);

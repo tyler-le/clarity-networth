@@ -422,6 +422,8 @@ test('monthly cash-flow values stay self-labeled instead of relying on a detache
   await openDemo(page);
   await goToView(page, 'spending');
   const detail = page.locator('#trendDetail');
+  await expect(page.locator('#monthlyCashFlowLabel')).toHaveText('Cash flow summary');
+  await expect(detail).toContainText('Selected timeframe total');
   await expect(detail).toContainText('Money in');
   await expect(detail).toContainText('Actual spend');
   await expect(detail).toContainText('Saved & invested');
