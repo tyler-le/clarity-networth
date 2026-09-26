@@ -1734,7 +1734,7 @@ function renderHoldingHistoryDetail() {
   const isAccountDetail = Boolean(data.accountId);
   const isMarket = state.holdingHistoryMode === 'market';
   const history = isMarket ? data.market : data.history;
-  $('#holdingHistoryEyebrow').textContent = isMarket ? 'Market price' : (isAccountDetail ? 'Your account' : 'Your position');
+  $('#holdingHistoryEyebrow').textContent = isMarket ? 'Market price' : (isAccountDetail ? 'Account history' : 'Position history');
   $('#holdingHistoryTitle').textContent = isAccountDetail ? (data.label || 'Investment account') : (data.ticker || data.label || 'Investment detail');
   $('#holdingHistorySubtitle').textContent = isAccountDetail
     ? 'Your account value over time'
@@ -1776,7 +1776,7 @@ function renderHoldingHistoryDetail() {
       ? `${Math.round(Math.max(0, Number(position.value || 0)) / Number(state.investments.total) * 100)}% of portfolio`
       : '';
     const rowTitle = isAccountDetail ? holdingLabel(position, account) : accountName;
-    const rowDetail = [isAccountDetail ? accountName : assetClass, portfolioShare].filter(Boolean).join(' · ');
+    const rowDetail = [isAccountDetail ? `${accountName} · ${assetClass}` : assetClass, portfolioShare].filter(Boolean).join(' · ');
     const snapshotKey = position.id || `${position.account_id}:${position.security_id || position.ticker || position.name}`;
     const positionMetric = holdingRangeMetric(data.holdingProgress?.[snapshotKey] || position.rangeProgress);
     const percent = positionMetric?.detail.split(' · ').at(-1);
@@ -1803,7 +1803,7 @@ function openHoldingHistoryPreview({ ticker = '', accountId = '' } = {}) {
   dialog.classList.add('plus-history-gate');
   dialog.showModal();
   dialog.focus({ preventScroll: true });
-  $('#holdingHistoryEyebrow').textContent = accountId ? 'Your account' : 'Your position';
+  $('#holdingHistoryEyebrow').textContent = accountId ? 'Account history' : 'Position history';
   $('#holdingHistoryTitle').textContent = label;
   $('#holdingHistorySubtitle').textContent = 'See how this investment changed over time with verified account and position history.';
   $('#holdingHistoryMetrics').innerHTML = '<div><span>Current value</span><strong>••••••</strong><small>Private until you unlock it</small></div><div><span>History</span><strong>Ready to reveal</strong><small>Verified updates with Plus</small></div>';
@@ -2058,7 +2058,7 @@ const holdingClassOptions = [
 function holdingClassControl(position) {
   const value = position.asset_class_override || '';
   const attribute = position.manual ? 'data-history-manual-holding-class' : 'data-history-position-class';
-  return `<label class="holding-history-class">Asset type <select ${attribute}="${escapeHtml(position.id)}" aria-label="Asset type for ${escapeHtml(position.name || position.ticker || 'holding')}; Automatic uses your institution's classification" title="Automatic uses your institution's classification">${holdingClassOptions.map(([option, label]) => `<option value="${option}" ${value === option ? 'selected' : ''}>${label}</option>`).join('')}</select></label>`;
+  return `<label class="holding-history-class">Type <select ${attribute}="${escapeHtml(position.id)}" aria-label="Asset type for ${escapeHtml(position.name || position.ticker || 'holding')}; Automatic uses your institution's classification" title="Automatic uses your institution's classification">${holdingClassOptions.map(([option, label]) => `<option value="${option}" ${value === option ? 'selected' : ''}>${label}</option>`).join('')}</select></label>`;
 }
 
 function renderRetirement(data) {

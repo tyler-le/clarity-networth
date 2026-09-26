@@ -662,7 +662,7 @@ test('holding details preserve account context without crowding the overview', a
   await page.locator('[data-holding-history]').first().click();
   const dialog = page.locator('#holdingHistoryDialog');
   await expect(dialog).toBeVisible();
-  await expect(dialog.locator('#holdingHistoryEyebrow')).toHaveText('Your position');
+  await expect(dialog.locator('#holdingHistoryEyebrow')).toHaveText('Position history');
   await expect(dialog.locator('#holdingHistoryWhere')).toContainText('Held in');
   await expect(dialog.locator('#holdingHistoryWhere')).toContainText('% of portfolio');
   await expect(page.locator('.holding-row').first()).not.toHaveAttribute('open', '');
@@ -707,7 +707,7 @@ test('account detail names each holding instead of repeating the account name', 
   await goToView(page, 'investments');
   await page.getByRole('button', { name: /View 401\(k\) performance history/i }).click();
   const where = page.locator('#holdingHistoryWhere');
-  await expect(page.locator('#holdingHistoryEyebrow')).toHaveText('Your account');
+  await expect(page.locator('#holdingHistoryEyebrow')).toHaveText('Account history');
   await expect(page.locator('#holdingHistoryTitle')).toHaveText('401(k)');
   await expect(where).toContainText('Holdings in this account');
   await expect(where.locator('b').first()).toContainText(/VTI|VXUS|BND/);

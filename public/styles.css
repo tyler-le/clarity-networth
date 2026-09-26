@@ -1174,6 +1174,15 @@ html[data-theme="dark"] :is(
   .investment-range-chip
 ) { color: var(--text-tertiary); }
 
+/* Classification is an optional edit, so it should recede beneath the
+   verified value and performance rather than read like a second headline. */
+.holding-history-class { align-items: baseline; gap: 4px; margin-top: 4px; color: var(--muted); font-size: 10px; font-weight: 650; opacity: .78; }
+.holding-history-class:hover, .holding-history-class:focus-within { opacity: 1; }
+.holding-history-class select { min-height: 20px; max-width: 150px; border: 0; border-bottom: 1px solid transparent; border-radius: 0; padding: 1px 13px 1px 0; color: inherit; background: transparent; font-size: 10px; font-weight: 720; }
+.holding-history-class select:hover { border-bottom-color: color-mix(in srgb, var(--muted) 45%, transparent); color: var(--ink); }
+.holding-history-class select:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 30%, transparent); outline-offset: 2px; }
+html[data-theme="dark"] .holding-history-class { color: var(--text-tertiary); }
+
 /* Public legal pages deliberately use the same quiet visual system as the app. */
 .legal-body { min-height: 100vh; background: radial-gradient(circle at 12% -12%, #e3f1e6 0, transparent 33%), var(--bg); }
 .legal-page { width: min(760px, calc(100% - 40px)); margin: 0 auto; padding: clamp(25px, 5vw, 52px) 0 72px; color: var(--ink); line-height: 1.65; }
@@ -1691,3 +1700,101 @@ html[data-theme="dark"] .investment-range-chip { border-color: #365440; color: #
 .holding-name { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .holding-copy { gap: 3px; }
 html[data-theme="dark"] .investment-account-value small.negative::before { color: var(--outflow); }
+
+/* Drawers should read as a separate layer in dark mode. Keep the page visible
+   for orientation, but lower its luminance and give the open surface a quiet
+   neutral lift instead of another green treatment. */
+html[data-theme="dark"] dialog::backdrop {
+  background: rgba(0, 0, 0, .62);
+  backdrop-filter: blur(5px) saturate(.82);
+}
+html[data-theme="dark"] :is(
+  .cashflow-dialog,
+  .holding-history-dialog,
+  .upgrade-dialog,
+  .retirement-info-dialog,
+  .nickname-dialog,
+  .connection-onboarding-dialog
+) {
+  border-color: #4a535d;
+  background: #20252b;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .04);
+}
+html[data-theme="dark"] :is(
+  .cashflow-dialog,
+  .holding-history-dialog,
+  .upgrade-dialog,
+  .retirement-info-dialog,
+  .nickname-dialog,
+  .connection-onboarding-dialog
+)::backdrop {
+  background: rgba(0, 0, 0, .62);
+  backdrop-filter: blur(5px) saturate(.82);
+}
+html[data-theme="dark"] .holding-history-head {
+  background: #20252b;
+}
+html[data-theme="dark"] .holding-history-dialog.plus-history-gate {
+  background: #20252b;
+}
+@media (max-width: 640px) {
+  html[data-theme="dark"] .cashflow-dialog {
+    border-top-color: #4a535d;
+    box-shadow: 0 -18px 52px rgba(0, 0, 0, .55);
+  }
+}
+@media (max-width: 560px) {
+  html[data-theme="dark"] .holding-history-dialog {
+    border-top: 1px solid #4a535d !important;
+    box-shadow: 0 -18px 52px rgba(0, 0, 0, .55);
+  }
+}
+
+/* Retirement dark mode: reserve green for outcomes and progress. Ordinary
+   planning inputs and containers stay neutral so the page has a clear focal
+   point instead of reading as one large green panel. */
+html[data-theme="dark"] .retirement-hero {
+  border-color: #353b43;
+  background: #181b1f;
+}
+html[data-theme="dark"] .retirement-inputs > span {
+  border-color: transparent;
+  background: transparent;
+}
+html[data-theme="dark"] .retirement-inputs > span + span {
+  border-left-color: #353b43;
+}
+html[data-theme="dark"] .retirement-next-milestone {
+  border-color: #353b43;
+  background: #20252b;
+}
+html[data-theme="dark"] .retirement-next-milestone:hover {
+  border-color: #4a535d;
+  background: #252b32;
+}
+html[data-theme="dark"] .retirement-milestone,
+html[data-theme="dark"] .retirement-milestone.complete,
+html[data-theme="dark"] .retirement-milestone.featured {
+  border-color: #353b43;
+  background: #1c2025;
+}
+html[data-theme="dark"] .retirement-milestone[data-retirement-milestone]:hover {
+  border-color: #4a535d;
+  background: #222830;
+}
+html[data-theme="dark"] .retirement-milestone i {
+  background: #343b43;
+}
+html[data-theme="dark"] .retirement-milestone em {
+  background: #24302a;
+  color: #9dd4ac;
+}
+html[data-theme="dark"] .retirement-spend,
+html[data-theme="dark"] .retirement-adjust,
+html[data-theme="dark"] .retirement-lifestyles {
+  border-color: #353b43;
+  background: #181b1f;
+}
+html[data-theme="dark"] .retirement-form {
+  background: #20252b;
+}
