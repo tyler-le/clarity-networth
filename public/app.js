@@ -1954,6 +1954,15 @@ function renderInvestments(data) {
   const started = snapshots[0]?.date ? new Date(`${snapshots[0].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : null;
   const changeCopy = periodChange == null ? (started ? `Tracking since ${started}` : 'Sync to begin tracking') : `${periodChange >= 0 ? '+' : '−'}${fmt.format(Math.abs(periodChange))} ${changePeriodLabel}`;
   $('#investmentContext').textContent = accounts.length ? changeCopy : 'Connect an investment account to begin.';
+  const rangeChip = $('#investmentRangeChip');
+  if (rangeChip) rangeChip.textContent = `${periodLabel} view`;
+  const rangeChange = $('#investmentRangeChange');
+  if (rangeChange) {
+    rangeChange.textContent = periodChange == null ? '—' : `${periodChange >= 0 ? '+' : '−'}${fmt.format(Math.abs(periodChange))}`;
+    rangeChange.className = periodChange == null ? '' : periodChange >= 0 ? 'positive' : 'negative';
+  }
+  const snapshotCount = $('#investmentSnapshotCount');
+  if (snapshotCount) snapshotCount.textContent = snapshots.length ? String(snapshots.length) : '—';
   $('#investmentChartDate').textContent = '';
   $('#investmentChartContext').classList.add('hidden');
   renderPortfolioChart(data);
@@ -1980,8 +1989,10 @@ function renderInvestments(data) {
   $('#investmentAccounts').innerHTML = accounts.length ? accounts.map((account) => {
     const change = account.rangeProgress?.state === 'ready' ? Number(account.rangeProgress.valueChange) : null;
     const showChange = change != null && Number.isFinite(change) && Math.round(Math.abs(change) * 100) > 0;
-    const changeLine = showChange ? `<small class="${change >= 0 ? 'positive' : 'negative'}">${change >= 0 ? '+' : '−'}${fmt.format(Math.abs(change))} · ${investmentRangeLabel(account.rangeProgress.range)}</small>` : '';
-    return `<button type="button" class="investment-account-row" data-investment-account-history="${escapeHtml(account.account_id)}" aria-label="View ${escapeHtml(account.name)} performance history"><div><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || '')} · View history</span></div><div class="investment-account-value"><b>${fmt.format(account.value)}</b>${changeLine}</div><i aria-hidden="true">›</i></button>`;
+    const changeLine = showChange ? `<small class="${change >= 0 ? 'positive' : 'negative'}">${change >= 0 ? '+' : '−'}${fmt.format(Math.abs(change))} · ${investmentRangeLabel(account.rangeProgress.range)}</small>` : '<small class="investment-account-tracking">Verified balance</small>';
+    const share = data.total ? Math.min(100, Math.max(0, Number(account.value || 0) / Number(data.total) * 100)) : 0;
+    const mark = String(account.institution_name || account.name || 'A').trim().charAt(0).toUpperCase();
+    return `<button type="button" class="investment-account-row" data-investment-account-history="${escapeHtml(account.account_id)}" aria-label="View ${escapeHtml(account.name)} performance history"><span class="investment-account-leading"><span class="investment-account-mark" aria-hidden="true">${escapeHtml(mark)}</span><span class="investment-account-copy"><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || '')}${account.subtype ? ` · ${escapeHtml(account.subtype)}` : ''}</span><i class="investment-account-meter" aria-hidden="true"><b style="width:${share.toFixed(1)}%"></b></i></span></span><span class="investment-account-value"><b>${fmt.format(account.value)}</b>${changeLine}</span><i class="investment-account-chevron" aria-hidden="true">›</i></button>`;
   }).join('') : '<p class="spending-empty">No investment accounts connected.</p>';
   const names = new Map(accounts.map((account) => [account.account_id, account.name]));
   const isUnclassified = state.investmentFilter === 'Cash & unclassified';
