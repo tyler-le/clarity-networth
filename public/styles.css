@@ -1806,6 +1806,10 @@ html[data-theme="dark"] .holding-history-controls[data-timeframe-scope="detail"]
   box-shadow: none;
   background: var(--control);
 }
+html[data-theme="dark"] .holding-history-controls {
+  background: transparent;
+  border-bottom-color: transparent;
+}
 
 /* Classification is an infrequent correction, so keep it behind deliberate
    disclosure instead of repeating an editor in every holding row. */
