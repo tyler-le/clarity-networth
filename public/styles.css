@@ -1811,6 +1811,59 @@ html[data-theme="dark"] .holding-history-controls {
   border-bottom-color: transparent;
 }
 
+/* Accounts scan hierarchy: category totals, then account balances, then
+   institution metadata. This keeps the inventory legible without hiding any
+   of the verified identity details. */
+html[data-theme="dark"] .accounts-summary span,
+html[data-theme="dark"] .account-collection-total span {
+  color: var(--text-tertiary);
+}
+html[data-theme="dark"] .accounts-summary strong,
+html[data-theme="dark"] .account-collection-total strong,
+html[data-theme="dark"] .account-item .account-name,
+html[data-theme="dark"] .account-inline-balance {
+  color: var(--text-primary);
+}
+html[data-theme="dark"] .accounts-summary strong {
+  font-size: 24px;
+  letter-spacing: -.04em;
+}
+html[data-theme="dark"] .account-collection-head h2 {
+  color: var(--text-primary);
+  font-size: 18px;
+  letter-spacing: -.025em;
+}
+html[data-theme="dark"] .account-collection-head p,
+html[data-theme="dark"] .account-item .account-inst {
+  color: var(--text-tertiary);
+}
+html[data-theme="dark"] .account-inline-balance {
+  margin-top: 7px;
+  font-size: 18px;
+}
+html[data-theme="dark"] .account-collection-icon,
+html[data-theme="dark"] .institution-logo,
+html[data-theme="dark"] .institution-fallback {
+  border-color: #353b43;
+  background: #252a30;
+}
+html[data-theme="dark"] .institution-fallback {
+  color: var(--text-tertiary);
+}
+html[data-theme="dark"] .account-group-more {
+  border-top-color: #353b43;
+  background: #20252b;
+  color: var(--text-secondary);
+}
+html[data-theme="dark"] .account-group-more:hover {
+  background: #252a30;
+  color: var(--text-primary);
+}
+html[data-theme="dark"] .account-detail > i,
+html[data-theme="dark"] .account-rename {
+  color: var(--text-tertiary);
+}
+
 /* Classification is an infrequent correction, so keep it behind deliberate
    disclosure instead of repeating an editor in every holding row. */
 .holding-history-class-editor {
