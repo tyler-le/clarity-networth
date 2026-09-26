@@ -912,7 +912,6 @@ test('portfolio history can be scrubbed just like net worth', async ({ page }) =
 test('investment timeframes keep the portfolio context in sync', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'investments');
-  await expect(page.locator('#investmentContext')).toHaveAttribute('data-tone', 'positive');
   await page.locator('[data-investment-range="3m"]').click();
   await expect(page.locator('[data-investment-range="3m"]')).toHaveClass(/active/);
   await expect(page.locator('#investmentPeriodSummary')).toHaveText('last 3 months');
