@@ -100,6 +100,9 @@ html[data-theme="dark"] {
   --control: #282d34;
   --premium-surface: #1d3025;
   --premium-line: #386248;
+  --text-primary: #edf0f2;
+  --text-secondary: #b2bac3;
+  --text-tertiary: #7f8994;
   --shadow: 0 10px 30px rgba(0,0,0,.16);
 }
 html[data-theme="dark"] .notice { border-color: #364239; background: #202720; box-shadow: 0 12px 34px rgba(0,0,0,.3); }html[data-theme="dark"] .notice[data-tone="success"] { border-color: #3f6148; background: #1f2a22; color: #a8cfb1; }html[data-theme="dark"] .notice[data-tone="error"] { border-color: #694842; background: #2c211f; color: #e7aaa3; }
@@ -1144,6 +1147,32 @@ html[data-theme="dark"] .cashflow-label,
 html[data-theme="dark"] .cashflow-share { fill: #aab2bc; }
 html[data-theme="dark"] .sankey-value,
 html[data-theme="dark"] .cashflow-value { fill: var(--ink); }
+
+/* Keep equivalent text roles equivalent across the investment overview. */
+html[data-theme="dark"] :is(
+  .investment-account-copy strong,
+  .holding-ticker,
+  .position-value b,
+  .investment-allocation-row span,
+  .investment-allocation-row strong,
+  .investment-card-heading strong,
+  .holdings-head strong
+) { color: var(--text-primary); }
+html[data-theme="dark"] :is(
+  .investment-account-copy > span,
+  .holding-name,
+  .holding-copy > span,
+  .holding-weight span,
+  .investment-account-tracking,
+  .investment-card .spending-context,
+  .holdings-head .spending-context
+) { color: var(--text-secondary); }
+html[data-theme="dark"] :is(
+  .investment-card .card-label,
+  .holdings-head .card-label,
+  .investment-allocation-row small,
+  .investment-range-chip
+) { color: var(--text-tertiary); }
 
 /* Public legal pages deliberately use the same quiet visual system as the app. */
 .legal-body { min-height: 100vh; background: radial-gradient(circle at 12% -12%, #e3f1e6 0, transparent 33%), var(--bg); }
