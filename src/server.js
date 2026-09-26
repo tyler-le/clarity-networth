@@ -342,11 +342,11 @@ function seedDevelopmentMockHistory(store, item, fixture) {
   const targetAccountIds = new Set([...targetAccounts.values()].map((account) => account.plaid_account_id));
   const targetPositions = new Map((store.positions || [])
     .filter((position) => {
-      const sourceId = [...targetAccounts.entries()].find(([, account]) => account.id === position.account_id)?.[0];
+      const sourceId = [...targetAccounts.entries()].find(([, account]) => account.id === position.account_id || account.plaid_account_id === position.account_id)?.[0];
       return Boolean(sourceId);
     })
     .map((position) => {
-      const sourceId = [...targetAccounts.entries()].find(([, account]) => account.id === position.account_id)?.[0];
+      const sourceId = [...targetAccounts.entries()].find(([, account]) => account.id === position.account_id || account.plaid_account_id === position.account_id)?.[0];
       return [`demo-position-${position.ticker}-${sourceId}`, position];
     }));
 
@@ -448,7 +448,26 @@ function seedDevelopmentMockHistory(store, item, fixture) {
 function addDevelopmentMockInstitution(store) {
   const existing = store.items.find((item) => item.development_mock);
   if (existing) {
-    seedDevelopmentMockHistory(store, existing, demoPreviewStore());
+    const fixture = demoPreviewStore();
+    const targetAccounts = new Map(store.accounts
+      .filter((account) => account.item_id === existing.id)
+      .map((account) => [String(account.plaid_account_id || '').replace(/^development-mock-/, ''), account]));
+    const existingPositions = store.positions.filter((position) => position.item_id === existing.id);
+    // Older versions of the mock copied an internal account UUID into
+    // position.account_id. Normalize those records to the same Plaid account
+    // identifier used by investmentSummary, and restore missing fixture
+    // positions for an already-linked development item.
+    for (const position of existingPositions) {
+      const sourceId = [...targetAccounts.entries()].find(([, account]) => account.id === position.account_id || account.plaid_account_id === position.account_id)?.[0];
+      const target = sourceId ? targetAccounts.get(sourceId) : null;
+      if (target) position.account_id = target.plaid_account_id;
+    }
+    if (!existingPositions.length) {
+      store.positions.push(...fixture.positions
+        .filter((position) => targetAccounts.has(position.account_id))
+        .map((position) => ({ ...position, id: crypto.randomUUID(), item_id: existing.id, account_id: targetAccounts.get(position.account_id).plaid_account_id, demo: false })));
+    }
+    seedDevelopmentMockHistory(store, existing, fixture);
     return { item: existing, alreadyLinked: true };
   }
 
@@ -481,9 +500,12 @@ function addDevelopmentMockInstitution(store) {
     updated_at: now,
     demo: false
   })));
+  const targetAccounts = new Map(store.accounts
+    .filter((account) => account.item_id === item.id)
+    .map((account) => [String(account.plaid_account_id || '').replace(/^development-mock-/, ''), account]));
   store.positions.push(...fixture.positions
-    .filter((position) => accountIds.has(position.account_id))
-    .map((position) => ({ ...position, id: crypto.randomUUID(), item_id: item.id, account_id: accountIds.get(position.account_id), demo: false })));
+    .filter((position) => targetAccounts.has(position.account_id))
+    .map((position) => ({ ...position, id: crypto.randomUUID(), item_id: item.id, account_id: targetAccounts.get(position.account_id).plaid_account_id, demo: false })));
   store.transactions.push(...fixture.transactions.map((transaction) => ({
     ...transaction,
     id: crypto.randomUUID(),

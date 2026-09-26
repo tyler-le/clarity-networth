@@ -1528,6 +1528,27 @@ html[data-theme="dark"] .plus-history-gate .plus-history-cta { background: linea
   }
 }
 
+/* Keep the two account performance metrics above the fold on phones. A
+   single metric still spans the available width via the existing `.single`
+   state. */
+@media (max-width: 560px) {
+  #accountHistoryMetrics:not(.single) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  #accountHistoryMetrics:not(.single) > div {
+    min-width: 0;
+    padding: 11px 10px;
+  }
+  #accountHistoryMetrics:not(.single) strong {
+    overflow-wrap: anywhere;
+    font-size: clamp(16px, 5vw, 20px);
+  }
+  #accountHistoryMetrics:not(.single) small {
+    overflow-wrap: anywhere;
+  }
+}
+
 /* Investment overview refinements: a stronger focal point and clearer
    performance hierarchy without changing the underlying investment data. */
 .portfolio-card .card-top { gap: 18px; }

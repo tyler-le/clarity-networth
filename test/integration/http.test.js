@@ -667,6 +667,8 @@ integrationTest('staging mock connection is explicitly gated, seeded, and remova
     ].sort((a, b) => a[0].localeCompare(b[0]))
   );
   assert.ok(stored.positions.length > 0);
+  const investmentAccountIds = new Set(stored.accounts.filter((account) => account.type === 'investment').map((account) => account.plaid_account_id));
+  assert.ok(stored.positions.every((position) => investmentAccountIds.has(position.account_id)));
   assert.ok(stored.transactions.length > 0);
   assert.ok(stored.snapshots.length > 0);
   // The development connection is a testing fixture, but it must behave like
@@ -686,10 +688,16 @@ integrationTest('staging mock connection is explicitly gated, seeded, and remova
   assert.ok(accountSnapshotsByDate.size >= 365);
   assert.ok([...accountSnapshotsByDate.values()].every((ids) => ids.size === mockInvestmentIds.size));
 
+  // Existing dev mock records created by the older mapper used internal
+  // account UUIDs. Re-linking should repair that shape without losing rows.
+  const legacyStore = readStore(key);
+  legacyStore.positions[0].account_id = legacyStore.accounts.find((account) => account.type === 'investment').id;
+  writeStore(legacyStore, key);
   const repeated = await request(app).post('/api/plaid/development_mock_connect').set('Cookie', cookie).send({});
   assert.equal(repeated.status, 200);
   assert.equal(repeated.body.already_linked, true);
   assert.equal(readStore(key).items.length, 1);
+  assert.ok(readStore(key).positions.every((position) => investmentAccountIds.has(position.account_id)));
 
   const dashboard = await request(app).get('/api/dashboard').set('Cookie', cookie);
   assert.equal(dashboard.status, 200);
@@ -697,6 +705,9 @@ integrationTest('staging mock connection is explicitly gated, seeded, and remova
   assert.equal(dashboard.body.demoMode, false);
   assert.equal(dashboard.body.items[0].development_mock, true);
   assert.equal(dashboard.body.connectionHealth[0].state, 'healthy');
+  const investments = await request(app).get('/api/investments?range=all').set('Cookie', cookie);
+  assert.equal(investments.status, 200);
+  assert.ok(investments.body.positions.length > 0);
 
   const unlinked = await request(app).delete(`/api/items/${connected.body.item.id}`).set('Cookie', cookie);
   assert.equal(unlinked.status, 200);
