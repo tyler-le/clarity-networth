@@ -1547,6 +1547,21 @@ html[data-theme="dark"] .plus-history-gate .plus-history-cta { background: linea
   #accountHistoryMetrics:not(.single) small {
     overflow-wrap: anywhere;
   }
+  #holdingHistoryMetrics:not(.single) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  #holdingHistoryMetrics:not(.single) > div {
+    min-width: 0;
+    padding: 11px 10px;
+  }
+  #holdingHistoryMetrics:not(.single) strong {
+    overflow-wrap: anywhere;
+    font-size: clamp(16px, 5vw, 20px);
+  }
+  #holdingHistoryMetrics:not(.single) small {
+    overflow-wrap: anywhere;
+  }
 }
 
 /* Investment overview refinements: a stronger focal point and clearer
