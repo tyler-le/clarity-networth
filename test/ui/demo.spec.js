@@ -657,11 +657,14 @@ test('mobile sheets dismiss from a broad downward swipe or the backdrop', async 
 test('holding details preserve account context without crowding the overview', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'investments');
+  await expect(page.locator('.holding-row').first()).not.toContainText(/% of portfolio/);
+  await expect(page.locator('.holding-row .holding-weight')).toHaveCount(0);
   await page.locator('[data-holding-history]').first().click();
   const dialog = page.locator('#holdingHistoryDialog');
   await expect(dialog).toBeVisible();
   await expect(dialog.locator('#holdingHistoryEyebrow')).toHaveText('Your position');
   await expect(dialog.locator('#holdingHistoryWhere')).toContainText('Held in');
+  await expect(dialog.locator('#holdingHistoryWhere')).toContainText('% of portfolio');
   await expect(page.locator('.holding-row').first()).not.toHaveAttribute('open', '');
 });
 

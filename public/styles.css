@@ -1584,3 +1584,13 @@ html[data-theme="dark"] .investment-range-chip { border-color: #365440; color: #
 .investment-account-value { display: grid; gap: 3px; justify-items: end; text-align: right; }
 .investment-account-copy > span { display: block; overflow-wrap: anywhere; white-space: normal; }
 .investment-account-copy strong { overflow-wrap: anywhere; }
+
+/* A directional cue is enough here; the amount and selected range already
+   carry the meaning, so the arrow stays outside the text flow. */
+.investment-account-value small { position: relative; }
+.investment-account-value small.positive::before, .investment-account-value small.negative::before { position: absolute; right: calc(100% + 4px); top: 50%; font-size: 11px; font-weight: 800; line-height: 1; transform: translateY(-50%); }
+.investment-account-value small.positive::before { color: var(--accent); content: '↑'; }
+.investment-account-value small.negative::before { color: var(--outflow); content: '↓'; }
+.holding-name { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.holding-copy { gap: 3px; }
+html[data-theme="dark"] .investment-account-value small.negative::before { color: var(--outflow); }

@@ -1772,8 +1772,11 @@ function renderHoldingHistoryDetail() {
     const account = accounts.get(position.account_id);
     const accountName = account?.name || 'Investment account';
     const assetClass = assetClassLabel(position.type, position.asset_class_override);
+    const portfolioShare = Number(state.investments?.total || 0) > 0
+      ? `${Math.round(Math.max(0, Number(position.value || 0)) / Number(state.investments.total) * 100)}% of portfolio`
+      : '';
     const rowTitle = isAccountDetail ? holdingLabel(position, account) : accountName;
-    const rowDetail = isAccountDetail ? `${accountName} · ${assetClass}` : assetClass;
+    const rowDetail = [isAccountDetail ? accountName : assetClass, portfolioShare].filter(Boolean).join(' · ');
     const snapshotKey = position.id || `${position.account_id}:${position.security_id || position.ticker || position.name}`;
     const positionMetric = holdingRangeMetric(data.holdingProgress?.[snapshotKey] || position.rangeProgress);
     const percent = positionMetric?.detail.split(' · ').at(-1);
@@ -2024,9 +2027,7 @@ function renderInvestments(data) {
     const performance = change == null
       ? (progress?.state === 'tracking' ? 'Tracking started' : '')
       : hasVisibleChange ? `${change >= 0 ? '+' : '−'}${fmt.format(Math.abs(change))}${progress.marketChange != null && progress.marketChangePct != null ? ` · ${change >= 0 ? '+' : '−'}${Math.abs(progress.marketChangePct * 100).toFixed(1)}%` : ''}` : '';
-    const share = data.total ? Math.max(0, Number(position.value || 0) / Number(data.total) * 100) : 0;
-    const location = position.positions.length === 1 ? 'Held in 1 account' : `Held in ${position.positions.length} accounts`;
-    return `<button type="button" class="holding-row" data-holding-history="${escapeHtml(position.ticker || '')}" aria-label="View ${escapeHtml(position.name)} history"><div class="position-symbol">${escapeHtml(position.ticker || '•')}</div><div class="holding-copy"><strong class="holding-ticker">${escapeHtml(position.ticker || 'Holding')}</strong><span>${escapeHtml(position.name)} · ${location}</span><div class="holding-weight"><i><b style="width:${Math.min(100, share).toFixed(1)}%"></b></i><span>${Math.round(share)}% of portfolio</span></div></div><div class="position-value"><b>${fmt.format(position.value)}</b>${performance ? `<small class="${change == null ? '' : change >= 0 ? 'positive' : 'negative'}">${performance}</small>` : ''}</div><i class="holding-chevron" aria-hidden="true">›</i></button>`;
+    return `<button type="button" class="holding-row" data-holding-history="${escapeHtml(position.ticker || '')}" aria-label="View ${escapeHtml(position.name)} history"><div class="position-symbol">${escapeHtml(position.ticker || '•')}</div><div class="holding-copy"><strong class="holding-ticker">${escapeHtml(position.ticker || 'Holding')}</strong><span class="holding-name">${escapeHtml(position.name)}</span></div><div class="position-value"><b>${fmt.format(position.value)}</b>${performance ? `<small class="${change == null ? '' : change >= 0 ? 'positive' : 'negative'}">${performance}</small>` : ''}</div><i class="holding-chevron" aria-hidden="true">›</i></button>`;
   }).join('') : '<p class="positions-empty">Position details aren’t available from this connection yet. Your investment account balances still count toward your portfolio and net worth.</p>';
   const more = $('#investmentHoldingsMore');
   more.classList.toggle('hidden', positions.length <= 3);
