@@ -1953,7 +1953,20 @@ function renderInvestments(data) {
   $('#investmentPeriodSummary').textContent = periodLabel;
   const started = snapshots[0]?.date ? new Date(`${snapshots[0].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : null;
   const changeCopy = periodChange == null ? (started ? `Tracking since ${started}` : 'Sync to begin tracking') : `${periodChange >= 0 ? '+' : '−'}${fmt.format(Math.abs(periodChange))} ${changePeriodLabel}`;
-  $('#investmentContext').textContent = accounts.length ? changeCopy : 'Connect an investment account to begin.';
+  const investmentContext = $('#investmentContext');
+  const contextTone = !accounts.length || periodChange == null ? 'neutral' : periodChange > 0 ? 'positive' : periodChange < 0 ? 'negative' : 'neutral';
+  const contextLabel = !accounts.length
+    ? 'Connect an investment account to begin.'
+    : periodChange == null
+      ? (started ? `Portfolio tracking since ${started}.` : 'Sync to begin tracking.')
+      : periodChange > 0
+        ? `Your portfolio grew by ${fmt.format(Math.abs(periodChange))} over ${changePeriodLabel}.`
+        : periodChange < 0
+          ? `Your portfolio decreased by ${fmt.format(Math.abs(periodChange))} over ${changePeriodLabel}.`
+          : `Your portfolio was unchanged over ${changePeriodLabel}.`;
+  investmentContext.textContent = accounts.length ? changeCopy : contextLabel;
+  investmentContext.dataset.tone = contextTone;
+  investmentContext.setAttribute('aria-label', contextLabel);
   const rangeChip = $('#investmentRangeChip');
   if (rangeChip) {
     const chipLabel = state.investmentRange === '1m' ? 'This month' : periodLabel;
