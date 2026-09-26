@@ -73,33 +73,33 @@ html[data-theme="dark"] .investment-account-meter, html[data-theme="dark"] .hold
 }
 html[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #111513;
-  --card: #1a201c;
+  --bg: #101214;
+  --card: #181b1f;
   /* Avoid pure white against charcoal. A soft mineral white maintains an
      accessible hierarchy without making every heading compete for attention. */
-  --ink: #d9e0da;
-  --muted: #98a49a;
-  --line: #303a32;
+  --ink: #edf0f2;
+  --muted: #9aa3ad;
+  --line: #353b43;
   /* Green is reserved for actions and genuinely positive financial signals.
      Supporting surfaces stay neutral so those signals retain their meaning. */
-  --accent: #8fb799;
-  --accent-soft: #262d28;
-  --income: #719b7b;
-  --outflow: #c98274;
-  --outflow-muted: #b98d7a;
-  --outflow-warm: #ad9671;
-  --save: #80aab4;
-  --invest: #92a4c5;
-  --save-invest: #92a4c5;
-  --sankey-surface: #202720;
-  --sankey-border: #354238;
-  --danger: #eb9691;
-  --warning: #dfb566;
-  --warning-soft: #3a3020;
-  --surface-subtle: #222522;
-  --control: #262d27;
-  --premium-surface: #26352b;
-  --premium-line: #3b5945;
+  --accent: #5bc486;
+  --accent-soft: #252a30;
+  --income: #67cf91;
+  --outflow: #df887d;
+  --outflow-muted: #c28b82;
+  --outflow-warm: #b79b75;
+  --save: #7fa9c2;
+  --invest: #91a9d9;
+  --save-invest: #91a9d9;
+  --sankey-surface: #1d2126;
+  --sankey-border: #3b424b;
+  --danger: #ed918a;
+  --warning: #e0b36b;
+  --warning-soft: #352d22;
+  --surface-subtle: #20242a;
+  --control: #282d34;
+  --premium-surface: #1d3025;
+  --premium-line: #386248;
   --shadow: 0 10px 30px rgba(0,0,0,.16);
 }
 html[data-theme="dark"] .notice { border-color: #364239; background: #202720; box-shadow: 0 12px 34px rgba(0,0,0,.3); }html[data-theme="dark"] .notice[data-tone="success"] { border-color: #3f6148; background: #1f2a22; color: #a8cfb1; }html[data-theme="dark"] .notice[data-tone="error"] { border-color: #694842; background: #2c211f; color: #e7aaa3; }
@@ -1076,6 +1076,74 @@ html[data-theme="dark"] .holding-history-skeleton i {
   background: linear-gradient(90deg, var(--control) 25%, var(--surface-subtle) 42%, var(--control) 58%);
 }
 html[data-theme="dark"] .debt-rate-list input { color: var(--ink); }
+
+/* Dark mode uses charcoal layers for structure. Green is intentionally scarce:
+   it marks positive movement and primary actions, rather than every surface. */
+html[data-theme="dark"] .sidebar { background: #15181c; }
+html[data-theme="dark"] .nav-item:hover,
+html[data-theme="dark"] .nav-item.active,
+html[data-theme="dark"] .account-investment-detail:hover,
+html[data-theme="dark"] .account-detail:hover,
+html[data-theme="dark"] .connection-row-focused { background: #252a30; }
+html[data-theme="dark"] .secondary,
+html[data-theme="dark"] input,
+html[data-theme="dark"] select { background: #22272d; }
+html[data-theme="dark"] .mobile-nav { border-color: var(--line); background: rgba(22,25,29,.96); }
+html[data-theme="dark"] .mobile-nav button.active { background: #292e35; }
+html[data-theme="dark"] .range-control,
+html[data-theme="dark"] .allocation-toggle,
+html[data-theme="dark"] .holding-history-tabs,
+html[data-theme="dark"] .holding-history-range { background: var(--control); }
+html[data-theme="dark"] .range-control button.active,
+html[data-theme="dark"] .allocation-toggle button.active,
+html[data-theme="dark"] .holding-history-tabs button.active,
+html[data-theme="dark"] .holding-history-range button.active { background: #343a42; }
+html[data-theme="dark"] .investment-account-mark,
+html[data-theme="dark"] .institution-logo,
+html[data-theme="dark"] .institution-fallback,
+html[data-theme="dark"] .connection-logo,
+html[data-theme="dark"] .connection-fallback { background: #252a30; }
+html[data-theme="dark"] .investment-account-row:hover,
+html[data-theme="dark"] .holding-row:hover,
+html[data-theme="dark"] .holdings-card summary:hover { background: #252a30; }
+html[data-theme="dark"] .investment-range-chip { border-color: #414851; color: var(--muted); background: #252a30; }
+html[data-theme="dark"] .portfolio-card,
+html[data-theme="dark"] .retirement-hero,
+html[data-theme="dark"] .card,
+html[data-theme="dark"] .account-collection,
+html[data-theme="dark"] .accounts-summary,
+html[data-theme="dark"] .connections-panel,
+html[data-theme="dark"] .data-controls,
+html[data-theme="dark"] dialog,
+html[data-theme="dark"] .nickname-dialog,
+html[data-theme="dark"] .retirement-info-dialog,
+html[data-theme="dark"] .auth-card { border-color: #353b43; background: var(--card); }
+html[data-theme="dark"] .retirement-milestone,
+html[data-theme="dark"] .retirement-milestone.featured,
+html[data-theme="dark"] .holding-detail,
+html[data-theme="dark"] .holding-account,
+html[data-theme="dark"] .holding-account-list,
+html[data-theme="dark"] .holdings-more,
+html[data-theme="dark"] .spending-transaction-controls,
+html[data-theme="dark"] .retirement-form,
+html[data-theme="dark"] .account-preview-group,
+html[data-theme="dark"] .account-group-head,
+html[data-theme="dark"] .transaction-toolbar { border-color: #3b424b; background: #22272d; }
+html[data-theme="dark"] :is(.onboarding-preview-banner, .onboarding-tab-cta) { border-color: #3b424b !important; background: #20252b !important; }
+html[data-theme="dark"] :is(.onboarding-preview-banner, .onboarding-tab-cta) span { color: var(--muted); }
+html[data-theme="dark"] .investment-donut::before,
+html[data-theme="dark"] .spending-donut::before { background: var(--card); }
+html[data-theme="dark"] .notice { border-color: #3b424b; background: #22272d; }
+html[data-theme="dark"] .notice[data-tone="success"] { border-color: #386248; background: #1d3025; color: #8dd8a9; }
+html[data-theme="dark"] .update-toast { border-color: #3b424b; background: #22272d; }
+html[data-theme="dark"] .portfolio-chart { border-color: rgba(198,205,213,.14); }
+html[data-theme="dark"] .chart-grid { stroke: #353b43; }
+html[data-theme="dark"] .chart-axis-label { fill: #8f99a4; }
+html[data-theme="dark"] .sankey-label,
+html[data-theme="dark"] .cashflow-label,
+html[data-theme="dark"] .cashflow-share { fill: #aab2bc; }
+html[data-theme="dark"] .sankey-value,
+html[data-theme="dark"] .cashflow-value { fill: var(--ink); }
 
 /* Public legal pages deliberately use the same quiet visual system as the app. */
 .legal-body { min-height: 100vh; background: radial-gradient(circle at 12% -12%, #e3f1e6 0, transparent 33%), var(--bg); }
