@@ -31,7 +31,6 @@
 .investment-support-grid { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr); gap: 16px; margin-top: 16px; }
 .investment-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .investment-card-heading .spending-context { margin: 5px 0 0; }
-.investment-heading-mark { display: grid; flex: 0 0 auto; width: 32px; height: 32px; place-items: center; border: 1px solid #dce9df; border-radius: 11px; color: var(--accent); background: var(--accent-soft); font-size: 17px; font-weight: 760; }
 .allocation-heading-mark { color: var(--invest); background: color-mix(in srgb, var(--invest) 13%, var(--card)); border-color: color-mix(in srgb, var(--invest) 25%, var(--line)); }
 .investment-accounts-card, .allocation-card { margin-top: 0; }
 .investment-accounts { gap: 0; margin-top: 16px; }
@@ -62,7 +61,7 @@
 .holding-weight > i b { background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #a5cfad)); }
 .position-value b { font-size: 15px; }
 .position-value small { font-weight: 720; }
-html[data-theme="dark"] .investment-heading-mark, html[data-theme="dark"] .investment-account-mark { border-color: var(--line); background: #253027; }
+html[data-theme="dark"] .investment-account-mark { border-color: var(--line); background: #253027; }
 html[data-theme="dark"] .investment-account-row:hover, html[data-theme="dark"] .holding-row:hover { background: #222a24; }
 html[data-theme="dark"] .investment-account-meter, html[data-theme="dark"] .holding-weight > i { background: #303a32; }
 @media (max-width: 760px) {
@@ -1533,21 +1532,19 @@ html[data-theme="dark"] .plus-history-gate .plus-history-cta { background: linea
    performance hierarchy without changing the underlying investment data. */
 .portfolio-card .card-top { gap: 18px; }
 .investment-range-chip { flex: 0 0 auto; align-self: flex-start; padding: 7px 10px; border: 1px solid #cfe2d3; border-radius: 999px; color: var(--accent); background: rgba(232,244,235,.72); font-size: 10px; font-weight: 750; letter-spacing: .02em; }
-.investment-hero-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
-.investment-hero-meta > span { display: grid; gap: 3px; min-width: 126px; padding: 10px 12px; border: 1px solid rgba(31,111,74,.12); border-radius: 12px; background: rgba(255,255,255,.64); }
-.investment-hero-meta b { font-size: 14px; font-variant-numeric: tabular-nums; }
-.investment-hero-meta b.positive { color: var(--accent); }
-.investment-hero-meta b.negative { color: var(--red); }
-.investment-hero-meta small { color: var(--muted); font-size: 10px; font-weight: 650; }
 .investment-support-grid > .investment-card, .investment-support-grid > .allocation-card { margin-top: 0; }
 .investment-support-grid .investment-card-heading { min-height: 41px; }
 .investment-support-grid .investment-accounts { margin-top: 13px; }
 .investment-account-row:focus-visible, .holding-row:focus-visible { outline-offset: -3px; }
 html[data-theme="dark"] .investment-range-chip { border-color: #365440; color: #b9e0c2; background: #1f3024; }
-html[data-theme="dark"] .investment-hero-meta > span { border-color: #35463a; background: rgba(29,37,30,.72); }
 @media (max-width: 760px) {
   .portfolio-card .card-top { align-items: flex-start; }
   .investment-range-chip { padding: 6px 8px; font-size: 9px; }
-  .investment-hero-meta { gap: 8px; margin-top: 16px; }
-  .investment-hero-meta > span { flex: 1 1 120px; min-width: 0; }
 }
+
+/* Account rows stay stable while hovering and give copy room to breathe. */
+.investment-account-row { transition: background .16s ease; }
+.investment-account-row:hover { padding-inline: 0; transform: none; }
+.investment-account-value { display: grid; gap: 3px; justify-items: end; text-align: right; }
+.investment-account-copy > span { display: block; overflow-wrap: anywhere; white-space: normal; }
+.investment-account-copy strong { overflow-wrap: anywhere; }

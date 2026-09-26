@@ -1955,21 +1955,22 @@ function renderInvestments(data) {
   const changeCopy = periodChange == null ? (started ? `Tracking since ${started}` : 'Sync to begin tracking') : `${periodChange >= 0 ? '+' : '−'}${fmt.format(Math.abs(periodChange))} ${changePeriodLabel}`;
   $('#investmentContext').textContent = accounts.length ? changeCopy : 'Connect an investment account to begin.';
   const rangeChip = $('#investmentRangeChip');
-  if (rangeChip) rangeChip.textContent = `${periodLabel} view`;
-  const rangeChange = $('#investmentRangeChange');
-  if (rangeChange) {
-    rangeChange.textContent = periodChange == null ? '—' : `${periodChange >= 0 ? '+' : '−'}${fmt.format(Math.abs(periodChange))}`;
-    rangeChange.className = periodChange == null ? '' : periodChange >= 0 ? 'positive' : 'negative';
+  if (rangeChip) {
+    const chipLabel = state.investmentRange === '1m' ? 'This month' : periodLabel;
+    rangeChip.textContent = `${chipLabel} view`;
   }
-  const snapshotCount = $('#investmentSnapshotCount');
-  if (snapshotCount) snapshotCount.textContent = snapshots.length ? String(snapshots.length) : '—';
   $('#investmentChartDate').textContent = '';
   $('#investmentChartContext').classList.add('hidden');
   renderPortfolioChart(data);
   const allocation = data.allocation || [];
-  $('#investmentAllocationCard').classList.toggle('hidden', !data.positionsAvailable);
+  // Keep the allocation surface present for accounts whose provider has not
+  // returned position detail yet; renderInvestments below supplies the honest
+  // empty state instead of making the card disappear.
+  $('#investmentAllocationCard').classList.toggle('hidden', accounts.length < 1);
   $('#investmentAccountsCard').classList.toggle('hidden', accounts.length < 1);
-  $('#investmentHoldingsPanel').classList.toggle('hidden', !data.positionsAvailable);
+  // Keep holdings discoverable when a provider has not returned position
+  // detail yet; the panel will explain the limitation instead of vanishing.
+  $('#investmentHoldingsPanel').classList.toggle('hidden', accounts.length < 1);
   $('#investmentPlusPrompt').classList.toggle('hidden', !data.positionsAvailable || plusFeatureAvailable('canUseInvestmentDetails'));
   let cursor = 0;
   const colors = ['#287143', '#7ea98b', '#d5a75f', '#9ca9bd', '#b88692', '#7d91a5'];
