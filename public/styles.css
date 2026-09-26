@@ -1798,3 +1798,37 @@ html[data-theme="dark"] .retirement-lifestyles {
 html[data-theme="dark"] .retirement-form {
   background: #20252b;
 }
+
+/* The detail range is already a segmented control; the extra outline reads
+   like an accidental nested input in dark mode. */
+html[data-theme="dark"] .holding-history-controls[data-timeframe-scope="detail"] .holding-history-range {
+  border: 0;
+  box-shadow: none;
+  background: var(--control);
+}
+
+/* Classification is an infrequent correction, so keep it behind deliberate
+   disclosure instead of repeating an editor in every holding row. */
+.holding-history-class-editor {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 11px;
+}
+.holding-history-class-editor summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+.holding-history-class-editor summary::-webkit-details-marker { display: none; }
+.holding-history-class-editor summary::after { color: var(--muted); content: '›'; font-size: 16px; line-height: 1; transform: rotate(90deg); }
+.holding-history-class-editor[open] summary::after { transform: rotate(-90deg); }
+.holding-history-class-editor > div { display: grid; gap: 8px; margin-top: 10px; }
+.holding-history-class-editor-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid color-mix(in srgb, var(--line) 72%, transparent); }
+.holding-history-class-editor-row > span { min-width: 0; overflow: hidden; color: var(--ink); font-size: 11px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.holding-history-class-editor-row .holding-history-class { flex: 0 0 auto; margin-top: 0; }
+html[data-theme="dark"] .holding-history-class-editor-row > span { color: var(--text-primary); }

@@ -1768,7 +1768,7 @@ function renderHoldingHistoryDetail() {
     return `Unnamed ${assetClassLabel(position.type, position.asset_class_override).toLowerCase()} holding`;
   };
   const rangeLabel = investmentRangeLabel(data.progress?.range || state.holdingHistoryRange);
-  $('#holdingHistoryWhere').innerHTML = positions.length ? `<div class="holding-history-where-heading"><span>${isAccountDetail ? 'Holdings in this account' : 'Held in'}</span>${isAccountDetail ? `<small data-testid="holding-history-performance-period">${escapeHtml(rangeLabel)} performance</small>` : ''}</div>${positions.map((position) => {
+  const positionRows = positions.map((position) => {
     const account = accounts.get(position.account_id);
     const accountName = account?.name || 'Investment account';
     const assetClass = assetClassLabel(position.type, position.asset_class_override);
@@ -1780,8 +1780,9 @@ function renderHoldingHistoryDetail() {
     const snapshotKey = position.id || `${position.account_id}:${position.security_id || position.ticker || position.name}`;
     const positionMetric = holdingRangeMetric(data.holdingProgress?.[snapshotKey] || position.rangeProgress);
     const percent = positionMetric?.detail.split(' · ').at(-1);
-    return `<div><b>${escapeHtml(rowTitle)}</b><small>${escapeHtml(rowDetail)}</small><strong>${fmt.format(Number(position.value || 0))}</strong>${positionMetric ? `<em class="holding-history-performance ${positionMetric.tone}" data-testid="holding-history-performance" aria-label="${escapeHtml(`${positionMetric.label}: ${positionMetric.value}, ${positionMetric.detail}`)}" title="${escapeHtml(`${positionMetric.label}: ${positionMetric.detail}`)}">${escapeHtml(positionMetric.value)}${percent && percent !== positionMetric.detail ? `<small>${escapeHtml(percent)}</small>` : ''}</em>` : ''}${canEditClass ? holdingClassControl(position) : ''}</div>`;
-  }).join('')}` : '';
+    return { position, account, rowTitle, rowDetail, value: Number(position.value || 0), positionMetric, percent };
+  });
+  $('#holdingHistoryWhere').innerHTML = positions.length ? `<div class="holding-history-where-heading"><span>${isAccountDetail ? 'Holdings in this account' : 'Held in'}</span>${isAccountDetail ? `<small data-testid="holding-history-performance-period">${escapeHtml(rangeLabel)} performance</small>` : ''}</div>${positionRows.map(({ rowTitle, rowDetail, value, positionMetric, percent }) => `<div><b>${escapeHtml(rowTitle)}</b><small>${escapeHtml(rowDetail)}</small><strong>${fmt.format(value)}</strong>${positionMetric ? `<em class="holding-history-performance ${positionMetric.tone}" data-testid="holding-history-performance" aria-label="${escapeHtml(`${positionMetric.label}: ${positionMetric.value}, ${positionMetric.detail}`)}" title="${escapeHtml(`${positionMetric.label}: ${positionMetric.detail}`)}">${escapeHtml(positionMetric.value)}${percent && percent !== positionMetric.detail ? `<small>${escapeHtml(percent)}</small>` : ''}</em>` : ''}</div>`).join('')}${canEditClass ? `<details class="holding-history-class-editor"><summary>Edit classifications</summary><div>${positionRows.map(({ position, rowTitle }) => `<div class="holding-history-class-editor-row"><span>${escapeHtml(rowTitle)}</span>${holdingClassControl(position)}</div>`).join('')}</div></details>` : ''}` : '';
 }
 
 let holdingHistoryRequest = 0;
@@ -2058,7 +2059,7 @@ const holdingClassOptions = [
 function holdingClassControl(position) {
   const value = position.asset_class_override || '';
   const attribute = position.manual ? 'data-history-manual-holding-class' : 'data-history-position-class';
-  return `<label class="holding-history-class">Type <select ${attribute}="${escapeHtml(position.id)}" aria-label="Asset type for ${escapeHtml(position.name || position.ticker || 'holding')}; Automatic uses your institution's classification" title="Automatic uses your institution's classification">${holdingClassOptions.map(([option, label]) => `<option value="${option}" ${value === option ? 'selected' : ''}>${label}</option>`).join('')}</select></label>`;
+  return `<label class="holding-history-class">Asset class <select ${attribute}="${escapeHtml(position.id)}" aria-label="Asset class for ${escapeHtml(position.name || position.ticker || 'holding')}; Automatic uses your institution's classification" title="Automatic uses your institution's classification">${holdingClassOptions.map(([option, label]) => `<option value="${option}" ${value === option ? 'selected' : ''}>${label}</option>`).join('')}</select></label>`;
 }
 
 function renderRetirement(data) {
