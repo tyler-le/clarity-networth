@@ -733,6 +733,7 @@ test('holding and account drill-ins show only a person’s verified position his
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('tab', { name: 'Your position' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('#holdingHistoryChart svg')).toBeVisible();
+  await expect(page.locator('#holdingHistoryChart .chart-y-axis-label')).toHaveCount(3);
   await expect(page.locator('#holdingHistoryNote')).toContainText(/verified.*updates/i);
   await expect(dialog.getByRole('tab', { name: 'Market price' })).toHaveCount(0);
   await page.keyboard.press('Escape');
@@ -792,7 +793,7 @@ test('investment detail distinguishes loading, preparing, and first-snapshot tra
   });
   await page.locator('[data-holding-history]').first().click();
   await expect(chart.locator('[data-history-state="tracking"]')).toBeVisible();
-  await expect(chart).toContainText(/tracking began/i);
+  await expect(chart.locator('.chart-start-detail')).toHaveCount(0);
   await expect(chart).not.toContainText(/personal history unavailable/i);
   await expect(chart.locator('svg')).toBeVisible();
 });

@@ -38,6 +38,10 @@ const userSyncQueues = new Map();
 const providerLimitFallback = new Map();
 const plaidWebhookKeyCache = new Map();
 const reconnectSessions = new Map();
+// Keep a member signed in across normal gaps between visits. The cookie is
+// still bounded, but active members receive a fresh expiry before it runs out.
+const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const SESSION_REFRESH_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 
 const productionSecurityErrors = [
   !dataEncryptionSecret || dataEncryptionSecret === 'development-only-key-change-me' ? 'DATA_ENCRYPTION_KEY is required.' : null,
@@ -548,13 +552,17 @@ function verifySession(req) {
     if (typeof payload.email !== 'string' || payload.email.length > 320 || !Number.isFinite(payload.exp) || payload.exp < Date.now()) return null;
     const email = payload.email.trim().toLowerCase();
     if (!email) return null;
-    return { email, name: String(payload.name || ''), storageKey: userStorageKey(email) };
+    return { email, name: String(payload.name || ''), expiresAt: payload.exp, storageKey: userStorageKey(email) };
   } catch { return null; }
 }
 
 function setSession(res, user) {
-  const value = encodeSession({ email: user.email, name: user.name, exp: Date.now() + 7 * 24 * 60 * 60 * 1000 });
-  res.cookie('clarity_session', value, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 60 * 60 * 1000, path: '/' });
+  const value = encodeSession({ email: user.email, name: user.name, exp: Date.now() + SESSION_MAX_AGE_MS });
+  res.cookie('clarity_session', value, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: SESSION_MAX_AGE_MS, path: '/' });
+}
+
+function refreshSessionIfNeeded(res, user) {
+  if (user?.expiresAt && user.expiresAt - Date.now() <= SESSION_REFRESH_WINDOW_MS) setSession(res, user);
 }
 
 function authConfigured() {
@@ -1246,6 +1254,7 @@ app.get('/api/auth/config', (_req, res) => {
 app.get('/api/auth/me', (req, res) => {
   const user = verifySession(req);
   if (!user) return res.status(401).json({ error: 'Sign in required.' });
+  refreshSessionIfNeeded(res, user);
   res.json({ user: publicUser(user) });
 });
 
@@ -1320,6 +1329,7 @@ app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/auth/') || req.path === '/health' || req.path === '/plaid/webhook' || req.path === '/billing/stripe/webhook' || req.path === '/demo-investments' || req.path === '/demo-investments/history') return next();
   const user = verifySession(req);
   if (!user) return res.status(401).json({ error: 'Sign in required.' });
+  refreshSessionIfNeeded(res, user);
   if (!securityReady()) return res.status(503).json({ error: 'The service is not securely configured.' });
   if (['POST', 'PATCH', 'DELETE'].includes(req.method) && req.headers.origin) {
     const expectedOrigin = `${req.protocol}://${req.get('host')}`;

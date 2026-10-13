@@ -475,11 +475,10 @@ function renderLineChart(snapshots, summary, rangeStart = null) {
     ? [endpointTicks[1]]
     : endpointTicks;
   const xAxis = visibleTickTimes.map((time, index, times) => `<text x="${(plotLeft + ((time - domainStart) / (domainEnd - domainStart)) * (width - plotLeft - plotRight)).toFixed(1)}" y="${height - 5}" text-anchor="${times.length === 1 || index === times.length - 1 ? 'end' : index === 0 ? 'start' : 'middle'}" class="chart-axis-label chart-x-axis-label">${dateLabel(time)}</text>`).join('');
-  const trackingDate = new Date(`${snapshots[0].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   const unavailableLead = hasUntrackedLead
-    ? `<path class="chart-unavailable-line" d="M ${plotLeft} ${points[0][1].toFixed(1)} L ${points[0][0].toFixed(1)} ${points[0][1].toFixed(1)}"/><text x="${(points[0][0] - 8).toFixed(1)}" y="${Math.max(plotTop + 13, points[0][1] - 10).toFixed(1)}" text-anchor="end" class="chart-unavailable-label">Tracking began ${trackingDate}</text>`
+    ? `<path class="chart-unavailable-line" d="M ${plotLeft} ${points[0][1].toFixed(1)} L ${points[0][0].toFixed(1)} ${points[0][1].toFixed(1)}"/>`
     : '';
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Net worth history${domainStart < firstObserved ? '; earlier time is not tracked' : ''}">
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Net worth history">
     <defs><linearGradient id="areaFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f6f4a" stop-opacity=".16"/><stop offset="1" stop-color="#1f6f4a" stop-opacity="0"/></linearGradient></defs>
     ${yAxis}${xAxis}<path d="${area}" fill="url(#areaFade)"/><path class="main-history-line" pathLength="1" d="${d}" fill="none" stroke="#1f6f4a" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>${unavailableLead}
     <line class="scrub-line" x1="0" y1="${plotTop}" x2="0" y2="${plotBottom}"/>
@@ -546,7 +545,6 @@ function renderLineChart(snapshots, summary, rangeStart = null) {
 function renderTimelineStart(el, snapshot, summary, rangeStart = null) {
   const value = Number(snapshot?.net_worth ?? summary?.netWorth ?? 0);
   const date = snapshot?.date ? new Date(`${snapshot.date}T12:00:00`) : new Date();
-  const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const width = Math.max(1, Math.round(el.clientWidth || 700));
   const height = Math.max(1, Math.round(el.clientHeight || 150));
   const baseline = Math.round(height * .62);
@@ -555,12 +553,11 @@ function renderTimelineStart(el, snapshot, summary, rangeStart = null) {
   const naturalPoint = 24 + ((date.getTime() - rangeStartTime) / (rangeEndTime - rangeStartTime)) * (width - 48);
   const pointX = Math.round(Math.max(width * .58, Math.min(width - 24, naturalPoint)));
   const connectorStart = Math.max(18, pointX - 24);
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Net worth tracking began ${label}; earlier time is not tracked">
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Net worth history">
     <line class="chart-unavailable-line" x1="18" y1="${baseline}" x2="${connectorStart}" y2="${baseline}"/>
     <line class="chart-start-line" x1="${connectorStart}" y1="${baseline}" x2="${pointX}" y2="${baseline}"/>
     <circle class="chart-start-point" cx="${pointX}" cy="${baseline}" r="8"/>
     <text x="${pointX}" y="${baseline - 16}" text-anchor="middle" class="chart-start-value">${fmt.format(value)}</text>
-    <text x="${pointX}" y="${height - 10}" text-anchor="middle" class="chart-start-detail">Tracking began ${label}</text>
   </svg>`;
 }
 
@@ -1502,11 +1499,10 @@ function renderPortfolioChart(data) {
     ? [endpointIndices[1]]
     : endpointIndices;
   const xAxis = xAxisIndices.map((index, position, indices) => `<text x="${points[index][0]}" y="${height - 5}" text-anchor="${indices.length === 1 || position === indices.length - 1 ? 'end' : position === 0 ? 'start' : 'middle'}" class="chart-axis-label chart-x-axis-label">${label(index)}</text>`).join('');
-  const trackingDate = firstDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   const unavailableLead = hasUntrackedLead
-    ? `<path class="chart-unavailable-line" d="M ${plot.left} ${points[0][1].toFixed(1)} L ${points[0][0]} ${points[0][1]}"/><text x="${(points[0][0] - 8).toFixed(1)}" y="${Math.max(plot.top + 13, points[0][1] - 10).toFixed(1)}" text-anchor="end" class="chart-unavailable-label">Tracking began ${trackingDate}</text>`
+    ? `<path class="chart-unavailable-line" d="M ${plot.left} ${points[0][1].toFixed(1)} L ${points[0][0]} ${points[0][1]}"/>`
     : '';
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Scrubbable portfolio value history${domainStart < firstObservedTime ? '; earlier time is not tracked' : ''}"><defs><linearGradient id="portfolioFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".16"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs>${grid}${xAxis}<path d="${area}" fill="url(#portfolioFade)"/><path class="main-history-line" pathLength="1" d="${line}" fill="none" stroke="#287143" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>${unavailableLead}${points.length === 1 ? `<circle cx="${points[0][0]}" cy="${points[0][1]}" r="5" fill="#287143"/>` : ''}<line class="scrub-line" x1="0" y1="${plot.top}" x2="0" y2="${plot.bottom}"/><circle class="scrub-dot" cx="0" cy="0" r="5"/></svg><div class="chart-tooltip hidden"></div>`;
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Scrubbable portfolio value history"><defs><linearGradient id="portfolioFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".16"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs>${grid}${xAxis}<path d="${area}" fill="url(#portfolioFade)"/><path class="main-history-line" pathLength="1" d="${line}" fill="none" stroke="#287143" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>${unavailableLead}${points.length === 1 ? `<circle cx="${points[0][0]}" cy="${points[0][1]}" r="5" fill="#287143"/>` : ''}<line class="scrub-line" x1="0" y1="${plot.top}" x2="0" y2="${plot.bottom}"/><circle class="scrub-dot" cx="0" cy="0" r="5"/></svg><div class="chart-tooltip hidden"></div>`;
   if (snapshots.length < 2) return;
   const scrubLine = el.querySelector('.scrub-line');
   const scrubDot = el.querySelector('.scrub-dot');
@@ -1548,18 +1544,16 @@ function renderPortfolioTrackingStart(el, snapshot, total, rangeStart = null) {
   const baseline = Math.round(height * .62);
   const value = Number(snapshot?.value ?? total ?? 0);
   const date = new Date(`${snapshot.date}T12:00:00`);
-  const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const rangeStartTime = rangeStart ? new Date(`${rangeStart}T12:00:00`).getTime() : date.getTime();
   const rangeEndTime = Math.max(rangeStartTime + 86_400_000, date.getTime());
   const naturalPoint = 24 + ((date.getTime() - rangeStartTime) / (rangeEndTime - rangeStartTime)) * (width - 48);
   const pointX = Math.round(Math.max(width * .58, Math.min(width - 24, naturalPoint)));
   const connectorStart = Math.max(18, pointX - 24);
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Portfolio tracking began ${label}; earlier time is not tracked">
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Portfolio value history">
     <line class="chart-unavailable-line" x1="18" y1="${baseline}" x2="${connectorStart}" y2="${baseline}"/>
     <line class="chart-start-line" x1="${connectorStart}" y1="${baseline}" x2="${pointX}" y2="${baseline}"/>
     <circle class="chart-start-point" cx="${pointX}" cy="${baseline}" r="8"/>
     <text x="${pointX}" y="${baseline - 16}" text-anchor="middle" class="chart-start-value">${fmt.format(value)}</text>
-    <text x="${pointX}" y="${height - 10}" text-anchor="middle" class="chart-start-detail">Tracking began ${label}</text>
   </svg>`;
 }
 
@@ -1645,7 +1639,10 @@ function renderHoldingHistoryChart(history, kind, emptyMessage = null, historySt
   const pointsData = historyForRange(history, state.holdingHistoryRange, progress);
   const width = Math.max(1, Math.round(el.clientWidth));
   const height = Math.max(1, Math.round(el.clientHeight));
-  const plot = { left: 12, right: 12, top: 12, bottom: height - 28 };
+  // Reserve a readable gutter for dollar values. The chart used to devote the
+  // full width to the line, which made a performance trend impossible to
+  // interpret without hovering every point.
+  const plot = { left: 46, right: 12, top: 12, bottom: height - 28 };
   const values = pointsData.map((entry) => Number(entry.value || 0));
   let min = Math.min(...values); let max = Math.max(...values);
   const spread = max - min || Math.max(Math.abs(max) * .08, 1);
@@ -1669,7 +1666,11 @@ function renderHoldingHistoryChart(history, kind, emptyMessage = null, historySt
   const historyAxis = startLabel === endLabel
     ? `<span class="holding-history-axis end">${endLabel}</span>`
     : `<span class="holding-history-axis start">${startLabel}</span><span class="holding-history-axis end">${endLabel}</span>`;
-  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${kind === 'market' ? 'Market price' : 'Your position value'} history"><defs><linearGradient id="holdingHistoryFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".18"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs><path d="${area}" fill="url(#holdingHistoryFade)"/><path class="holding-history-line" pathLength="1" d="${line}" fill="none" stroke="#287143" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><line class="holding-scrub-line" x1="0" y1="${plot.top}" x2="0" y2="${plot.bottom}"/><circle class="holding-scrub-dot" cx="0" cy="0" r="4"/></svg>${historyAxis}<div class="chart-tooltip hidden"></div>`;
+  const yAxis = [max, (max + min) / 2, min].map((value) => {
+    const y = plot.bottom - (value - min) / (max - min) * (plot.bottom - plot.top);
+    return `<line x1="${plot.left}" y1="${y}" x2="${width - plot.right}" y2="${y}" class="chart-grid"/><text x="${plot.left - 7}" y="${y + 3}" text-anchor="end" class="chart-axis-label chart-y-axis-label">${axisCurrency(value)}</text>`;
+  }).join('');
+  el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${kind === 'market' ? 'Market price' : 'Your position value'} history"><defs><linearGradient id="holdingHistoryFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#287143" stop-opacity=".18"/><stop offset="1" stop-color="#287143" stop-opacity="0"/></linearGradient></defs>${yAxis}<path d="${area}" fill="url(#holdingHistoryFade)"/><path class="holding-history-line" pathLength="1" d="${line}" fill="none" stroke="#287143" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><line class="holding-scrub-line" x1="0" y1="${plot.top}" x2="0" y2="${plot.bottom}"/><circle class="holding-scrub-dot" cx="0" cy="0" r="4"/></svg>${historyAxis}<div class="chart-tooltip hidden"></div>`;
   if (pointsData.length < 2) return;
   const svg = el.querySelector('svg'); const tooltip = el.querySelector('.chart-tooltip'); const scrubLine = el.querySelector('.holding-scrub-line'); const scrubDot = el.querySelector('.holding-scrub-dot');
   const showPoint = (event) => {
@@ -1694,14 +1695,11 @@ function renderHoldingTrackingStart(el, snapshot, kind) {
   const height = Math.max(1, Math.round(el.clientHeight || 196));
   const baseline = Math.round(height * .58);
   const pointX = Math.round(width * .72);
-  const date = new Date(`${snapshot.date}T12:00:00`);
-  const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  el.innerHTML = `<svg data-history-state="tracking" viewBox="0 0 ${width} ${height}" role="img" aria-label="${kind === 'market' ? 'Market price' : 'Your position'} tracking began ${label}">
+  el.innerHTML = `<svg data-history-state="tracking" viewBox="0 0 ${width} ${height}" role="img" aria-label="${kind === 'market' ? 'Market price' : 'Your position'} history">
     <line class="chart-unavailable-line" x1="18" y1="${baseline}" x2="${pointX - 24}" y2="${baseline}"/>
     <line class="chart-start-line" x1="${pointX - 24}" y1="${baseline}" x2="${pointX}" y2="${baseline}"/>
     <circle class="chart-start-point" cx="${pointX}" cy="${baseline}" r="7"/>
     <text x="${pointX}" y="${baseline - 15}" text-anchor="middle" class="chart-start-value">${fmt.format(Number(snapshot.value || 0))}</text>
-    <text x="${pointX}" y="${height - 10}" text-anchor="middle" class="chart-start-detail">Tracking began ${label}</text>
   </svg>`;
 }
 
@@ -3760,7 +3758,13 @@ async function validateAccessCode() {
 async function initializeApp() {
   try {
     await api('/api/auth/me');
-  } catch {
+  } catch (error) {
+    // A temporary outage or dropped connection must not look like a logout.
+    // Only an explicit 401 means the session is no longer valid.
+    if (error.status !== 401) {
+      $('#authMessage').textContent = 'We couldn’t verify your session right now. Your sign-in is still saved; try again shortly.';
+      return;
+    }
     await startGoogleSignIn();
     return;
   }

@@ -14,17 +14,6 @@ async function goToView(page, view) {
   return page.locator(`.sidebar [data-view="${view}"]`).click();
 }
 
-async function trackingLabelPrecedesVerifiedLine(page, chartSelector) {
-  return page.locator(chartSelector).evaluate((chart) => {
-    const label = chart.querySelector('.chart-unavailable-label');
-    const line = chart.querySelector('.main-history-line');
-    const firstX = Number((line?.getAttribute('d') || '').match(/^M\s+([\d.]+)/)?.[1]);
-    if (!label || !Number.isFinite(firstX)) return false;
-    const box = label.getBBox();
-    return box.x + box.width <= firstX - 2;
-  });
-}
-
 async function selectHoldingHistoryRange(page, range) {
   const control = page.locator(`#holdingHistoryRange [data-holding-history-range="${range}"]`);
   await expect(control).toBeVisible();
@@ -577,8 +566,7 @@ test('a newly connected portfolio shows the selected period before tracking bega
   await goToView(page, 'investments');
   await page.locator('[data-investment-range="1m"]').click();
   await expect(page.locator('#investmentChart .chart-unavailable-line')).toBeVisible();
-  await expect(page.locator('#investmentChart .chart-unavailable-label')).toContainText('Tracking began Sep 2026');
-  expect(await trackingLabelPrecedesVerifiedLine(page, '#investmentChart')).toBe(true);
+  await expect(page.locator('#investmentChart .chart-unavailable-label')).toHaveCount(0);
 });
 
 test('a short portfolio window spanning months still uses distinct calendar dates', async ({ page }) => {
@@ -619,8 +607,7 @@ test('a one-month net-worth view never repeats a calendar label @critical', asyn
   expect(labels.length).toBeGreaterThanOrEqual(1);
   expect(labels.every((label) => /^[A-Z][a-z]{2} \d+$/.test(label))).toBe(true);
   expect(new Set(labels).size).toBe(labels.length);
-  await expect(page.locator('#netWorthChart .chart-unavailable-label')).toHaveText(/Since|Tracking began/);
-  expect(await trackingLabelPrecedesVerifiedLine(page, '#netWorthChart')).toBe(true);
+  await expect(page.locator('#netWorthChart .chart-unavailable-label')).toHaveCount(0);
 });
 
 test('a long net-worth range with only recent history does not overlap right-edge dates @critical', async ({ page }) => {
@@ -635,7 +622,7 @@ test('a long net-worth range with only recent history does not overlap right-edg
   await page.locator('[data-networth-range="1y"]').click();
   const labels = await page.locator('#netWorthChart .chart-x-axis-label').allTextContents();
   expect(labels).toEqual(['Sep 7']);
-  await expect(page.locator('#netWorthChart .chart-unavailable-label')).toHaveText(/Since|Tracking began/);
+  await expect(page.locator('#netWorthChart .chart-unavailable-label')).toHaveCount(0);
 });
 
 test('an incomplete portfolio timeframe retains its verified endpoint dates', async ({ page }) => {
@@ -651,10 +638,9 @@ test('an incomplete portfolio timeframe retains its verified endpoint dates', as
   await yearRange.click();
   const labels = await page.locator('#investmentChart .chart-x-axis-label').allTextContents();
   // When two verified points sit at the far end of a long requested range,
-  // the latest date wins rather than overlapping labels. The tracking note
-  // still preserves the first verified endpoint.
+  // the latest date wins rather than overlapping labels.
   expect(labels).toEqual(['Sep 7']);
-  await expect(page.locator('#investmentChart .chart-unavailable-label')).toHaveText(/Since|Tracking began/);
+  await expect(page.locator('#investmentChart .chart-unavailable-label')).toHaveCount(0);
 });
 
 test('portfolio timeframe controls redraw the verified window instead of relabeling the same short trend', async ({ page }) => {
