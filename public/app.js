@@ -31,6 +31,7 @@ const state = {
   investmentRangeInitialized: false,
   investmentFilter: 'all',
   investmentSort: 'value',
+  investmentMoverPeriod: 'daily',
   holdingHistory: null,
   holdingHistoryMode: 'position',
   holdingHistoryRange: '1y',
@@ -838,18 +839,14 @@ function showPlusUpgrade(feature = 'general') {
 }
 
 function plusPromptsAvailable() {
-  const entitlement = state.dashboard?.entitlements;
-  return Boolean(entitlement?.enabled && entitlement?.billingAvailable && !state.dashboard?.demoMode && !['plus', 'trial'].includes(entitlement.plan));
+  return false;
 }
 
-function plusFeatureAvailable(feature) {
-  if (isDemoExperience()) return true;
-  const entitlements = state.dashboard?.entitlements;
-  // A disabled freemium switch is an explicit product kill switch. When the
-  // switch is on, missing Plus capability data must fail closed so a stale or
-  // partial dashboard payload cannot accidentally expose a paid surface.
-  if (!entitlements?.enabled) return true;
-  return entitlements[feature] === true;
+function plusFeatureAvailable() {
+  // Product access is currently open to every member. Keep this helper so
+  // older callers remain harmless while stale entitlement payloads cannot
+  // reintroduce a Plus paywall in the UI.
+  return true;
 }
 
 function requestPlus(feature) {
@@ -1935,6 +1932,13 @@ function renderInvestmentMovers(movers = {}) {
   const groups = [['daily', '#investmentDailyMovers'], ['weekly', '#investmentWeeklyMovers']];
   const hasMovers = groups.some(([period]) => (movers[period] || []).length);
   card.classList.toggle('hidden', !hasMovers);
+  $('#investmentDailyMoverGroup')?.classList.toggle('hidden', state.investmentMoverPeriod !== 'daily');
+  $('#investmentWeeklyMoverGroup')?.classList.toggle('hidden', state.investmentMoverPeriod !== 'weekly');
+  $$('[data-investment-mover-period]').forEach((button) => {
+    const active = button.dataset.investmentMoverPeriod === state.investmentMoverPeriod;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', String(active));
+  });
   for (const [period, selector] of groups) {
     const rows = movers[period] || [];
     $(selector).innerHTML = rows.length ? rows.map((row) => {
@@ -3348,6 +3352,12 @@ $('#investmentAccounts').addEventListener('click', (event) => {
     if (account) openHoldingHistoryEntry({ accountId: account.dataset.investmentAccountHistory });
 });
 $('#investmentMoversCard').addEventListener('click', (event) => {
+  const period = event.target.closest('[data-investment-mover-period]');
+  if (period) {
+    state.investmentMoverPeriod = period.dataset.investmentMoverPeriod;
+    renderInvestments(state.investments);
+    return;
+  }
   const holding = event.target.closest('[data-holding-history]');
   if (holding) openHoldingHistoryEntry({ ticker: holding.dataset.holdingHistory });
 });
