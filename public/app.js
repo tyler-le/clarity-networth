@@ -1940,7 +1940,8 @@ function renderInvestmentMovers(movers = {}) {
     $(selector).innerHTML = rows.length ? rows.map((row) => {
       const change = Number(row.change || 0);
       const pct = row.changePct == null ? '' : `${change >= 0 ? '+' : '−'}${Math.abs(Number(row.changePct) * 100).toFixed(1)}%`;
-      return `<button type="button" class="investment-mover-row" data-holding-history="${escapeHtml(row.ticker || row.key)}" aria-label="View ${escapeHtml(row.name)} history"><span class="investment-mover-copy"><strong>${escapeHtml(row.ticker || row.name)}</strong><span>${escapeHtml(row.name || 'Holding')}</span></span><span class="investment-mover-change ${change >= 0 ? 'positive' : 'negative'}">${change >= 0 ? '+' : '−'}${fmt.format(Math.abs(change))}<small>${pct}</small></span></button>`;
+      const path = change >= 0 ? 'M2 27 L10 25 L18 26 L27 18 L35 20 L44 10 L53 13 L62 4' : 'M2 5 L10 7 L18 6 L27 14 L35 12 L44 22 L53 19 L62 27';
+      return `<button type="button" class="investment-mover-row ${change >= 0 ? 'is-positive' : 'is-negative'}" data-holding-history="${escapeHtml(row.ticker || row.key)}" aria-label="View ${escapeHtml(row.name)} history"><span class="investment-mover-heading"><strong>${escapeHtml(row.ticker || row.name)}</strong><span>${escapeHtml(row.name || 'Holding')}</span></span><svg class="investment-mover-sparkline" viewBox="0 0 64 32" aria-hidden="true"><path d="${path}" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="investment-mover-change">${change >= 0 ? '+' : '−'}${fmt.format(Math.abs(change))}<small>${pct}</small></span></button>`;
     }).join('') : '<p class="investment-movers-empty">Movers appear after Clarity has two verified holding updates.</p>';
   }
 }

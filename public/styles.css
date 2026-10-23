@@ -52,13 +52,17 @@
 .investment-movers-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; margin-top: 16px; }
 .investment-mover-group { min-width: 0; }
 .investment-mover-group h3 { margin: 0 0 8px; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
-.investment-mover-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; width: 100%; padding: 10px 0; border: 0; border-top: 1px solid var(--line); color: var(--ink); background: transparent; text-align: left; cursor: pointer; font: inherit; }
-.investment-mover-copy { display: grid; min-width: 0; gap: 2px; }
-.investment-mover-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
-.investment-mover-copy span { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.investment-mover-change { display: grid; justify-items: end; gap: 2px; font-size: 12px; font-weight: 750; white-space: nowrap; }
+.investment-mover-row { display: grid; grid-template-columns: minmax(0, 1fr) 70px auto; align-items: center; gap: 13px; width: 100%; padding: 13px 14px; border: 1px solid var(--line); border-radius: 13px; color: var(--ink); background: var(--surface-subtle); text-align: left; cursor: pointer; font: inherit; transition: border-color .16s ease, background .16s ease; }
+.investment-mover-row + .investment-mover-row { margin-top: 8px; }
+.investment-mover-heading { display: grid; min-width: 0; gap: 3px; }
+.investment-mover-heading strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.investment-mover-heading span { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.investment-mover-sparkline { width: 70px; height: 34px; color: var(--accent); }
+.investment-mover-row.is-negative .investment-mover-sparkline { color: var(--outflow); }
+.investment-mover-change { display: grid; justify-items: end; gap: 2px; color: var(--accent); font-size: 13px; font-weight: 780; white-space: nowrap; }
+.investment-mover-row.is-negative .investment-mover-change { color: var(--outflow); }
 .investment-mover-change small { color: inherit; font-size: 10px; }
-.investment-mover-row:hover { background: var(--surface-subtle); }
+.investment-mover-row:hover { border-color: color-mix(in srgb, var(--accent) 38%, var(--line)); background: color-mix(in srgb, var(--accent-soft) 68%, var(--card)); }
 .investment-movers-empty { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
 html[data-theme="dark"] .investment-mover-row:hover { background: #222a24; }
 .holdings-card { margin-top: 16px; }
