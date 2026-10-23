@@ -48,7 +48,7 @@
 .investment-account-value small { font-size: 10px; }
 .investment-account-tracking { color: var(--muted) !important; }
 .investment-account-chevron { color: var(--muted); font-size: 20px; font-style: normal; }
-.investment-movers-card { margin-top: 16px; }
+.investment-movers-card { margin-top: 16px; padding: 21px; }
 .investment-movers-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 3px 2px 4px; }
 .investment-movers-heading .spending-context { margin: 5px 0 0; }
 .investment-mover-tabs { display: inline-flex; flex: 0 0 auto; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-subtle); }
@@ -88,6 +88,7 @@ html[data-theme="dark"] .investment-account-row:hover, html[data-theme="dark"] .
 html[data-theme="dark"] .investment-account-meter, html[data-theme="dark"] .holding-weight > i { background: #303a32; }
 @media (max-width: 760px) {
   .investment-support-grid { grid-template-columns: 1fr; gap: 14px; }
+  .investment-movers-card { padding: 18px 16px; }
   .investment-movers-heading { gap: 12px; }
   .investment-mover-tabs button { min-width: 58px; padding-inline: 8px; }
   .investment-movers-grid { grid-template-columns: 1fr; gap: 18px; }
