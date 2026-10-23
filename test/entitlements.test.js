@@ -5,19 +5,19 @@ import { connectedInstitutionCount, entitlementsForStore, hasPaidAccess, normali
 const now = Date.parse('2026-09-19T12:00:00.000Z');
 const currentItem = (id) => ({ id, demo: false });
 
-test('Free state keeps the core product open and limits active institutions', () => {
+test('all members receive the full product without subscription gating', () => {
   const store = { items: [currentItem('one'), currentItem('two')], settings: { membership: { plan: 'free' } } };
   const atLimit = entitlementsForStore(store, now, true);
-  assert.equal(atLimit.enabled, true);
-  assert.equal(atLimit.plan, 'free');
+  assert.equal(atLimit.enabled, false);
+  assert.equal(atLimit.plan, null);
   assert.equal(atLimit.linkedInstitutionCount, 2);
-  assert.equal(atLimit.linkedInstitutionLimit, 2);
-  assert.equal(atLimit.canConnectInstitution, false);
+  assert.equal(atLimit.linkedInstitutionLimit, null);
+  assert.equal(atLimit.canConnectInstitution, true);
   assert.equal(atLimit.canUseFullHistory, true);
   assert.equal(atLimit.canExportData, true);
-  assert.equal(atLimit.canUseRetirementScenarios, false);
-  assert.equal(atLimit.canUseCashFlowDetails, false);
-  assert.equal(atLimit.canUseInvestmentDetails, false);
+  assert.equal(atLimit.canUseRetirementScenarios, true);
+  assert.equal(atLimit.canUseCashFlowDetails, true);
+  assert.equal(atLimit.canUseInvestmentDetails, true);
   assert.equal(atLimit.canUseApp, true);
   assert.equal(atLimit.requiresSubscription, false);
 
@@ -29,15 +29,15 @@ test('Free state keeps the core product open and limits active institutions', ()
   assert.equal(afterUnlink.canUseApp, true);
 });
 
-test('Plus and trial plans unlock retirement comparisons without changing the primary plan editor', () => {
+test('legacy membership records do not change unrestricted product access', () => {
   const plus = entitlementsForStore({ settings: { membership: { plan: 'plus', subscription_status: 'active', subscription_ends_at: '2026-10-01T00:00:00Z' } } }, now, true);
   const trial = entitlementsForStore({ settings: { membership: { plan: 'trial', trial_ends_at: '2026-09-20T00:00:00Z' } } }, now, true);
   assert.equal(plus.canUseRetirementScenarios, true);
   assert.equal(trial.canUseRetirementScenarios, true);
   assert.equal(plus.canUseCashFlowDetails, true);
   assert.equal(trial.canUseInvestmentDetails, true);
-  assert.equal(plus.plan, 'plus');
-  assert.equal(trial.plan, 'trial');
+  assert.equal(plus.plan, null);
+  assert.equal(trial.plan, null);
   assert.equal(plus.requiresSubscription, false);
   assert.equal(trial.requiresSubscription, false);
 });

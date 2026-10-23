@@ -62,6 +62,10 @@ export function hasPaidAccess(membership = {}, now = Date.now()) {
 }
 
 export function entitlementsForStore(store = {}, now = Date.now(), enabled = freemiumEnabled()) {
+  // Clarity is currently operating as an ungated product. Keep the
+  // entitlement shape stable for existing clients, but do not block features
+  // or connections based on legacy membership records.
+  enabled = false;
   const membership = normalizeMembership(store.settings?.membership);
   const paid = hasPaidAccess(membership, now);
   const demo = Boolean(store.settings?.demo_mode) || (store.items || []).some((item) => item?.demo);
