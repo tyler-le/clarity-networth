@@ -141,7 +141,7 @@ integrationTest('keeps a bounded encrypted recovery snapshot and removes it on d
 integrationTest('serves a complete public demo without a session', async () => {
   const response = await request(app).get('/api/demo-preview?range=1y');
   assert.equal(response.status, 200);
-  for (const period of ['daily', 'weekly']) {
+  for (const period of ['weekly', 'monthly']) {
     const movers = response.body.investments.movers[period];
     assert.ok(movers.length > 0);
     assert.ok(movers.every((row) => row.history.length >= 2 && row.history.every((point) => Number.isFinite(point.value))));

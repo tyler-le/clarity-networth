@@ -31,7 +31,7 @@ const state = {
   investmentRangeInitialized: false,
   investmentFilter: 'all',
   investmentSort: 'value',
-  investmentMoverPeriod: 'daily',
+  investmentMoverPeriod: 'weekly',
   holdingHistory: null,
   holdingHistoryMode: 'position',
   holdingHistoryRange: '1y',
@@ -1929,11 +1929,11 @@ async function openAccountHistory(accountId, { preserveRange = false } = {}) {
 function renderInvestmentMovers(movers = {}) {
   const card = $('#investmentMoversCard');
   if (!card) return;
-  const groups = [['daily', '#investmentDailyMovers'], ['weekly', '#investmentWeeklyMovers']];
+  const groups = [['weekly', '#investmentWeeklyMovers'], ['monthly', '#investmentMonthlyMovers']];
   const hasMovers = groups.some(([period]) => (movers[period] || []).length);
   card.classList.toggle('hidden', !hasMovers);
-  $('#investmentMoversTitle').textContent = state.investmentMoverPeriod === 'weekly' ? 'Weekly movers' : 'Daily movers';
-  $('#investmentDailyMoverGroup')?.classList.toggle('hidden', state.investmentMoverPeriod !== 'daily');
+  $('#investmentMoversTitle').textContent = state.investmentMoverPeriod === 'monthly' ? 'Monthly movers' : 'Weekly movers';
+  $('#investmentMonthlyMoverGroup')?.classList.toggle('hidden', state.investmentMoverPeriod !== 'monthly');
   $('#investmentWeeklyMoverGroup')?.classList.toggle('hidden', state.investmentMoverPeriod !== 'weekly');
   $$('[data-investment-mover-period]').forEach((button) => {
     const active = button.dataset.investmentMoverPeriod === state.investmentMoverPeriod;
@@ -1953,13 +1953,13 @@ function renderInvestmentMovers(movers = {}) {
       const duration = Date.parse(history.at(-1)?.date) - start;
       const path = history.length > 1 && duration > 0 ? history.map((point, index) => `${index ? 'L' : 'M'}${(2 + (Date.parse(point.date) - start) / duration * 116).toFixed(2)} ${(spread ? 32 - (Number(point.value) - low) / spread * 28 : 18).toFixed(2)}`).join(' ') : '';
       return `<button type="button" class="investment-mover-row ${change >= 0 ? 'is-positive' : 'is-negative'}" data-holding-history="${escapeHtml(row.ticker || row.key)}" aria-label="View ${escapeHtml(row.name)} history"><span class="investment-mover-heading"><strong>${escapeHtml(row.ticker || row.name)}</strong><span>${escapeHtml(row.name || 'Holding')}</span></span><svg class="investment-mover-sparkline" viewBox="0 0 120 36" preserveAspectRatio="none" aria-hidden="true"><path d="${path}" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="investment-mover-change">${change >= 0 ? '+' : '−'}${fmt.format(Math.abs(change))}<small>${pct}</small></span></button>`;
-    }).join('') : '<p class="investment-movers-empty">Movers appear after Clarity has two verified holding updates.</p>';
+    }).join('') : '<p class="investment-movers-empty">No comparable holding changes are available for this period yet.</p>';
   }
   requestAnimationFrame(syncMoverNavigation);
 }
 
 function syncMoverNavigation() {
-  const track = $(state.investmentMoverPeriod === 'weekly' ? '#investmentWeeklyMovers' : '#investmentDailyMovers');
+  const track = $(state.investmentMoverPeriod === 'monthly' ? '#investmentMonthlyMovers' : '#investmentWeeklyMovers');
   if (!track) return;
   const end = track.scrollWidth - track.clientWidth;
   $('[data-mover-scroll="previous"]').disabled = track.scrollLeft <= 1;
@@ -3370,7 +3370,7 @@ $('#investmentAccounts').addEventListener('click', (event) => {
 $('#investmentMoversCard').addEventListener('click', (event) => {
   const scroll = event.target.closest('[data-mover-scroll]');
   if (scroll) {
-    const track = $(state.investmentMoverPeriod === 'weekly' ? '#investmentWeeklyMovers' : '#investmentDailyMovers');
+    const track = $(state.investmentMoverPeriod === 'monthly' ? '#investmentMonthlyMovers' : '#investmentWeeklyMovers');
     track.scrollBy({ left: (scroll.dataset.moverScroll === 'next' ? 1 : -1) * track.clientWidth * .8, behavior: 'smooth' });
     return;
   }
@@ -3383,7 +3383,7 @@ $('#investmentMoversCard').addEventListener('click', (event) => {
   const holding = event.target.closest('[data-holding-history]');
   if (holding) openHoldingHistoryEntry({ ticker: holding.dataset.holdingHistory });
 });
-for (const selector of ['#investmentDailyMovers', '#investmentWeeklyMovers']) $(selector).addEventListener('scroll', syncMoverNavigation, { passive: true });
+for (const selector of ['#investmentMonthlyMovers', '#investmentWeeklyMovers']) $(selector).addEventListener('scroll', syncMoverNavigation, { passive: true });
 window.addEventListener('resize', syncMoverNavigation);
 $('#investmentPositions').addEventListener('change', async (event) => {
   const select = event.target.closest('[data-position-class]');

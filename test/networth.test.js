@@ -663,11 +663,12 @@ test('investment summaries attach the requested observed range to holdings', () 
   assert.equal(result.positions[0].rangeProgress.marketChange, 100);
 });
 
-test('investment movers use only verified holding snapshots and expose daily and weekly changes', () => {
+test('investment movers use observed weekly and monthly windows without filling missing history', () => {
   const store = {
     accounts: [{ plaid_account_id: 'ira', name: 'IRA', type: 'investment', current_balance: 1_250, hidden: false }],
     positions: [{ id: 'ira:vti', account_id: 'ira', security_id: 'vti', ticker: 'VTI', name: 'Total stock', type: 'etf', value: 1_250 }],
     investment_position_snapshots: [
+      { date: '2026-08-09', kind: 'holding', key: 'ira:vti', account_id: 'ira', ticker: 'VTI', value: 900, source: 'verified' },
       { date: '2026-09-01', kind: 'holding', key: 'ira:vti', account_id: 'ira', ticker: 'VTI', value: 1_000, source: 'verified' },
       { date: '2026-09-07', kind: 'holding', key: 'ira:vti', account_id: 'ira', ticker: 'VTI', value: 1_100, source: 'verified' },
       { date: '2026-09-08', kind: 'holding', key: 'ira:vti', account_id: 'ira', ticker: 'VTI', value: 1_250, source: 'verified' },
@@ -677,10 +678,15 @@ test('investment movers use only verified holding snapshots and expose daily and
     ]
   };
   const movers = investmentSummary(store).movers;
-  assert.deepEqual(movers.daily.map((row) => [row.ticker, row.change, row.changePct]), [['VTI', 150, 150 / 1100]]);
+  assert.equal(movers.daily, undefined);
+  assert.deepEqual(movers.monthly.map((row) => [row.ticker, row.change, row.changePct]), [['VTI', 350, 350 / 900]]);
   assert.deepEqual(movers.weekly.map((row) => [row.ticker, row.change]), [['VTI', 250]]);
-  assert.deepEqual(movers.daily[0].history, [{ date: '2026-09-07', value: 1100 }, { date: '2026-09-08', value: 1250 }]);
+  assert.deepEqual(movers.monthly[0].history, [{ date: '2026-08-09', value: 900 }, { date: '2026-09-01', value: 1000 }, { date: '2026-09-07', value: 1100 }, { date: '2026-09-08', value: 1250 }]);
   assert.deepEqual(movers.weekly[0].history, [{ date: '2026-09-01', value: 1000 }, { date: '2026-09-07', value: 1100 }, { date: '2026-09-08', value: 1250 }]);
+  store.investment_position_snapshots = store.investment_position_snapshots.filter((row) => row.date >= '2026-09-01');
+  assert.deepEqual(investmentSummary(store).movers.monthly, []);
+  store.investment_position_snapshots = store.investment_position_snapshots.filter((row) => row.date >= '2026-09-07');
+  assert.deepEqual(investmentSummary(store).movers.weekly, []);
 });
 
 test('a holding never borrows a same-ticker snapshot from another account', () => {

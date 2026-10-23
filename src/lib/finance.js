@@ -285,7 +285,7 @@ function investmentMovers(store, providerPositions, accountIds, limit = 5) {
     rows.push(record);
     snapshotsByKey.set(record.key, rows);
   }
-  const grouped = { daily: new Map(), weekly: new Map() };
+  const grouped = { weekly: new Map(), monthly: new Map() };
   const add = (period, position, latest, prior, records) => {
     if (!latest || !prior) return;
     const current = Number(latest.value);
@@ -305,15 +305,14 @@ function investmentMovers(store, providerPositions, accountIds, limit = 5) {
     const records = (snapshotsByKey.get(positionSnapshotKey(position)) || []).sort((a, b) => String(a.date).localeCompare(String(b.date)));
     if (records.length < 2) continue;
     const latest = records.at(-1);
-    const previous = records.at(-2);
-    const dailyDays = (Date.parse(`${latest.date}T12:00:00Z`) - Date.parse(`${previous.date}T12:00:00Z`)) / 86_400_000;
-    if (dailyDays >= 1 && dailyDays <= 3) add('daily', position, latest, previous, records);
-    const weeklyCandidates = records.slice(0, -1).filter((record) => {
-      const days = (Date.parse(`${latest.date}T12:00:00Z`) - Date.parse(`${record.date}T12:00:00Z`)) / 86_400_000;
-      return days >= 5 && days <= 10;
-    });
-    const weekly = weeklyCandidates.sort((a, b) => Math.abs((Date.parse(`${latest.date}T12:00:00Z`) - Date.parse(`${a.date}T12:00:00Z`)) / 86_400_000 - 7) - Math.abs((Date.parse(`${latest.date}T12:00:00Z`) - Date.parse(`${b.date}T12:00:00Z`)) / 86_400_000 - 7))[0];
-    if (weekly) add('weekly', position, latest, weekly, records);
+    for (const [period, targetDays, minDays, maxDays] of [['weekly', 7, 5, 10], ['monthly', 30, 25, 35]]) {
+      const daysBetween = (record) => (Date.parse(`${latest.date}T12:00:00Z`) - Date.parse(`${record.date}T12:00:00Z`)) / 86_400_000;
+      // Pick an observed point near the requested rolling window. Do not
+      // substitute a short history or fill missing days to imply coverage.
+      const prior = records.slice(0, -1).filter((record) => daysBetween(record) >= minDays && daysBetween(record) <= maxDays)
+        .sort((a, b) => Math.abs(daysBetween(a) - targetDays) - Math.abs(daysBetween(b) - targetDays))[0];
+      if (prior) add(period, position, latest, prior, records);
+    }
   }
   return Object.fromEntries(Object.entries(grouped).map(([period, rows]) => [period, [...rows.values()]
     .map(({ histories, ...row }) => ({ ...row, change: row.value - row.priorValue, changePct: row.priorValue ? (row.value - row.priorValue) / row.priorValue : null,

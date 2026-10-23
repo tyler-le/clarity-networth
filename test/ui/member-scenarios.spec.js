@@ -64,17 +64,17 @@ test('movers have inset spacing, compact real charts and one active period @crit
   await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
   const card = page.locator('#investmentMoversCard');
   await expect(card).toBeVisible();
-  const daily = card.getByRole('tab', { name: 'Daily', exact: true });
   const weekly = card.getByRole('tab', { name: 'Weekly', exact: true });
-  await expect(daily).toHaveAttribute('aria-selected', 'true');
-  await expect(page.locator('#investmentWeeklyMoverGroup')).toBeHidden();
-  await expect(card.getByRole('heading', { name: 'Daily movers', exact: true })).toBeVisible();
+  const monthly = card.getByRole('tab', { name: 'Monthly', exact: true });
+  await expect(weekly).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#investmentMonthlyMoverGroup')).toBeHidden();
+  await expect(card.getByRole('heading', { name: 'Weekly movers', exact: true })).toBeVisible();
   await expect(card.getByText('Verified holding changes from your connected institutions.')).toHaveCount(0);
-  await expect(page.locator('#investmentDailyMovers').getByRole('button').first()).toHaveAccessibleName(/^View /);
+  await expect(page.locator('#investmentWeeklyMovers').getByRole('button').first()).toHaveAccessibleName(/^View /);
   await expect(card.getByText('Largest dollar changes', { exact: true })).toHaveCount(0);
   const metrics = await card.evaluate((element) => {
     const heading = element.querySelector('.investment-movers-heading');
-    const row = element.querySelector('.investment-mover-row');
+    const row = element.querySelector('#investmentWeeklyMovers .investment-mover-row');
     const value = row.querySelector('.investment-mover-change');
     const chart = row.querySelector('svg');
     return { inset: heading.getBoundingClientRect().left - element.getBoundingClientRect().left, top: heading.getBoundingClientRect().top - element.getBoundingClientRect().top,
@@ -92,13 +92,13 @@ test('movers have inset spacing, compact real charts and one active period @crit
   const next = card.getByRole('button', { name: 'Next movers', exact: true });
   if (await next.isEnabled()) {
     await next.click();
-    await expect.poll(() => page.locator('#investmentDailyMovers').evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+    await expect.poll(() => page.locator('#investmentWeeklyMovers').evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
   }
-  await weekly.click();
-  await expect(weekly).toHaveAttribute('aria-selected', 'true');
-  await expect(page.locator('#investmentDailyMoverGroup')).toBeHidden();
-  await expect(page.locator('#investmentWeeklyMoverGroup')).toBeVisible();
-  await expect(card.getByRole('heading', { name: 'Weekly movers', exact: true })).toBeVisible();
+  await monthly.click();
+  await expect(monthly).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#investmentWeeklyMoverGroup')).toBeHidden();
+  await expect(page.locator('#investmentMonthlyMoverGroup')).toBeVisible();
+  await expect(card.getByRole('heading', { name: 'Monthly movers', exact: true })).toBeVisible();
   await card.screenshot({ path: `/tmp/clarity-movers-${test.info().project.name}.png` });
 });
 
