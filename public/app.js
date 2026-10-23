@@ -1929,6 +1929,22 @@ async function openAccountHistory(accountId, { preserveRange = false } = {}) {
   }
 }
 
+function renderInvestmentMovers(movers = {}) {
+  const card = $('#investmentMoversCard');
+  if (!card) return;
+  const groups = [['daily', '#investmentDailyMovers'], ['weekly', '#investmentWeeklyMovers']];
+  const hasMovers = groups.some(([period]) => (movers[period] || []).length);
+  card.classList.toggle('hidden', !hasMovers);
+  for (const [period, selector] of groups) {
+    const rows = movers[period] || [];
+    $(selector).innerHTML = rows.length ? rows.map((row) => {
+      const change = Number(row.change || 0);
+      const pct = row.changePct == null ? '' : `${change >= 0 ? '+' : '−'}${Math.abs(Number(row.changePct) * 100).toFixed(1)}%`;
+      return `<button type="button" class="investment-mover-row" data-holding-history="${escapeHtml(row.ticker || row.key)}" aria-label="View ${escapeHtml(row.name)} history"><span class="investment-mover-copy"><strong>${escapeHtml(row.ticker || row.name)}</strong><span>${escapeHtml(row.name || 'Holding')}</span></span><span class="investment-mover-change ${change >= 0 ? 'positive' : 'negative'}">${change >= 0 ? '+' : '−'}${fmt.format(Math.abs(change))}<small>${pct}</small></span></button>`;
+    }).join('') : '<p class="investment-movers-empty">Movers appear after Clarity has two verified holding updates.</p>';
+  }
+}
+
 function renderInvestments(data) {
   if (!data) return;
   const accounts = data.accounts || [];
@@ -1970,6 +1986,7 @@ function renderInvestments(data) {
   // empty state instead of making the card disappear.
   $('#investmentAllocationCard').classList.toggle('hidden', accounts.length < 1);
   $('#investmentAccountsCard').classList.toggle('hidden', accounts.length < 1);
+  renderInvestmentMovers(data.movers);
   // Keep holdings discoverable when a provider has not returned position
   // detail yet; the panel will explain the limitation instead of vanishing.
   $('#investmentHoldingsPanel').classList.toggle('hidden', accounts.length < 1);
@@ -3328,6 +3345,10 @@ $('#investmentHoldingsMore').addEventListener('click', () => {
 $('#investmentAccounts').addEventListener('click', (event) => {
   const account = event.target.closest('[data-investment-account-history]');
     if (account) openHoldingHistoryEntry({ accountId: account.dataset.investmentAccountHistory });
+});
+$('#investmentMoversCard').addEventListener('click', (event) => {
+  const holding = event.target.closest('[data-holding-history]');
+  if (holding) openHoldingHistoryEntry({ ticker: holding.dataset.holdingHistory });
 });
 $('#investmentPositions').addEventListener('change', async (event) => {
   const select = event.target.closest('[data-position-class]');

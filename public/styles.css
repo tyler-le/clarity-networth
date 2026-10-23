@@ -48,6 +48,19 @@
 .investment-account-value small { font-size: 10px; }
 .investment-account-tracking { color: var(--muted) !important; }
 .investment-account-chevron { color: var(--muted); font-size: 20px; font-style: normal; }
+.investment-movers-card { margin-top: 16px; }
+.investment-movers-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; margin-top: 16px; }
+.investment-mover-group { min-width: 0; }
+.investment-mover-group h3 { margin: 0 0 8px; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.investment-mover-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; width: 100%; padding: 10px 0; border: 0; border-top: 1px solid var(--line); color: var(--ink); background: transparent; text-align: left; cursor: pointer; font: inherit; }
+.investment-mover-copy { display: grid; min-width: 0; gap: 2px; }
+.investment-mover-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.investment-mover-copy span { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.investment-mover-change { display: grid; justify-items: end; gap: 2px; font-size: 12px; font-weight: 750; white-space: nowrap; }
+.investment-mover-change small { color: inherit; font-size: 10px; }
+.investment-mover-row:hover { background: var(--surface-subtle); }
+.investment-movers-empty { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+html[data-theme="dark"] .investment-mover-row:hover { background: #222a24; }
 .holdings-card { margin-top: 16px; }
 .holdings-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 21px 22px 14px; }
 .holdings-head .spending-context { margin: 5px 0 0; }
@@ -66,6 +79,7 @@ html[data-theme="dark"] .investment-account-row:hover, html[data-theme="dark"] .
 html[data-theme="dark"] .investment-account-meter, html[data-theme="dark"] .holding-weight > i { background: #303a32; }
 @media (max-width: 760px) {
   .investment-support-grid { grid-template-columns: 1fr; gap: 14px; }
+  .investment-movers-grid { grid-template-columns: 1fr; gap: 18px; }
   .investment-account-row { min-height: 72px; }
   .investment-account-mark { width: 35px; height: 35px; border-radius: 11px; }
   .investment-account-meter { width: min(120px, 100%); }

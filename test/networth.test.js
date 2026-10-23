@@ -663,6 +663,24 @@ test('investment summaries attach the requested observed range to holdings', () 
   assert.equal(result.positions[0].rangeProgress.marketChange, 100);
 });
 
+test('investment movers use only verified holding snapshots and expose daily and weekly changes', () => {
+  const store = {
+    accounts: [{ plaid_account_id: 'ira', name: 'IRA', type: 'investment', current_balance: 1_250, hidden: false }],
+    positions: [{ id: 'ira:vti', account_id: 'ira', security_id: 'vti', ticker: 'VTI', name: 'Total stock', type: 'etf', value: 1_250 }],
+    investment_position_snapshots: [
+      { date: '2026-09-01', kind: 'holding', key: 'ira:vti', account_id: 'ira', ticker: 'VTI', value: 1_000, source: 'verified' },
+      { date: '2026-09-07', kind: 'holding', key: 'ira:vti', account_id: 'ira', ticker: 'VTI', value: 1_100, source: 'verified' },
+      { date: '2026-09-08', kind: 'holding', key: 'ira:vti', account_id: 'ira', ticker: 'VTI', value: 1_250, source: 'verified' },
+      { date: '2026-09-01', kind: 'account', key: 'ira', account_id: 'ira', value: 1_000, source: 'verified' },
+      { date: '2026-09-08', kind: 'account', key: 'ira', account_id: 'ira', value: 1_250, source: 'verified' },
+      { date: '2026-09-08', kind: 'holding', key: 'ira:other', account_id: 'ira', ticker: 'OTHER', value: 500, source: 'estimated' }
+    ]
+  };
+  const movers = investmentSummary(store).movers;
+  assert.deepEqual(movers.daily.map((row) => [row.ticker, row.change, row.changePct]), [['VTI', 150, 150 / 1100]]);
+  assert.deepEqual(movers.weekly.map((row) => [row.ticker, row.change]), [['VTI', 250]]);
+});
+
 test('a holding never borrows a same-ticker snapshot from another account', () => {
   const store = {
     accounts: [

@@ -274,6 +274,52 @@ function investmentHistoryStatus(store, accounts) {
   return { state: 'tracking' };
 }
 
+// Movers are deliberately derived only from provider-observed holding
+// snapshots. They describe verified balance changes, not deposits, inferred
+// returns, or market data that Plaid did not report for the holding.
+function investmentMovers(store, providerPositions, accountIds, limit = 5) {
+  const snapshotsByKey = new Map();
+  for (const record of (store.investment_position_snapshots || [])) {
+    if (record.kind !== 'holding' || record.source !== 'verified' || !accountIds.has(record.account_id)) continue;
+    const rows = snapshotsByKey.get(record.key) || [];
+    rows.push(record);
+    snapshotsByKey.set(record.key, rows);
+  }
+  const grouped = { daily: new Map(), weekly: new Map() };
+  const add = (period, position, latest, prior) => {
+    if (!latest || !prior) return;
+    const current = Number(latest.value);
+    const previous = Number(prior.value);
+    if (!Number.isFinite(current) || !Number.isFinite(previous) || Math.abs(current - previous) < 0.005) return;
+    const key = String(position.ticker || position.provider_ticker || position.name || position.id || '').trim().toUpperCase();
+    if (!key) return;
+    const row = grouped[period].get(key) || { key, ticker: position.ticker || position.provider_ticker || null, name: position.name || position.ticker || 'Holding', value: 0, priorValue: 0, date: latest.date, priorDate: prior.date };
+    row.value += current;
+    row.priorValue += previous;
+    row.date = row.date > latest.date ? row.date : latest.date;
+    row.priorDate = row.priorDate < prior.date ? row.priorDate : prior.date;
+    grouped[period].set(key, row);
+  };
+  for (const position of providerPositions) {
+    const records = (snapshotsByKey.get(positionSnapshotKey(position)) || []).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    if (records.length < 2) continue;
+    const latest = records.at(-1);
+    const previous = records.at(-2);
+    const dailyDays = (Date.parse(`${latest.date}T12:00:00Z`) - Date.parse(`${previous.date}T12:00:00Z`)) / 86_400_000;
+    if (dailyDays >= 1 && dailyDays <= 3) add('daily', position, latest, previous);
+    const weeklyCandidates = records.slice(0, -1).filter((record) => {
+      const days = (Date.parse(`${latest.date}T12:00:00Z`) - Date.parse(`${record.date}T12:00:00Z`)) / 86_400_000;
+      return days >= 5 && days <= 10;
+    });
+    const weekly = weeklyCandidates.sort((a, b) => Math.abs((Date.parse(`${latest.date}T12:00:00Z`) - Date.parse(`${a.date}T12:00:00Z`)) / 86_400_000 - 7) - Math.abs((Date.parse(`${latest.date}T12:00:00Z`) - Date.parse(`${b.date}T12:00:00Z`)) / 86_400_000 - 7))[0];
+    if (weekly) add('weekly', position, latest, weekly);
+  }
+  return Object.fromEntries(Object.entries(grouped).map(([period, rows]) => [period, [...rows.values()]
+    .map((row) => ({ ...row, change: row.value - row.priorValue, changePct: row.priorValue ? (row.value - row.priorValue) / row.priorValue : null }))
+    .sort((a, b) => Math.abs(b.change) - Math.abs(a.change))
+    .slice(0, limit)]));
+}
+
 export function investmentSummary(store, { range = 'all' } = {}) {
   const accounts = store.accounts.filter((account) => !account.hidden && account.type === 'investment');
   const accountIds = new Set(accounts.map((account) => account.plaid_account_id));
@@ -346,6 +392,7 @@ export function investmentSummary(store, { range = 'all' } = {}) {
     })),
     allocation: allocationRows,
     unclassifiedAccounts,
+    movers: investmentMovers(store, providerPositions, accountIds),
     positions: positions.map((position) => ({ ...position, gain: position.cost_basis == null ? null : Number(position.value || 0) - Number(position.cost_basis), gain_pct: position.cost_basis ? (Number(position.value || 0) - Number(position.cost_basis)) / Number(position.cost_basis) : null, rangeProgress: position.manual || !position.ticker ? null : investmentRangeProgress(store, { ticker: position.ticker, holdingKeys: [positionSnapshotKey(position)], range }) })).sort((a, b) => Number(b.value || 0) - Number(a.value || 0)),
     snapshots: portfolio.snapshots.slice(-3650),
     historyStatus: investmentHistoryStatus(store, accounts),
