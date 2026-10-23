@@ -70,7 +70,8 @@ test('movers have inset spacing, compact real charts and one active period @crit
   await expect(page.locator('#investmentWeeklyMoverGroup')).toBeHidden();
   await expect(card.getByRole('heading', { name: 'Daily movers', exact: true })).toBeVisible();
   await expect(card.getByText('Verified holding changes from your connected institutions.')).toHaveCount(0);
-  await expect(page.locator('#investmentDailyMovers').getByRole('button').first()).toHaveAccessibleName(/^Rank 1:/);
+  await expect(page.locator('#investmentDailyMovers').getByRole('button').first()).toHaveAccessibleName(/^View /);
+  await expect(card.getByText('Largest dollar changes', { exact: true })).toHaveCount(0);
   const metrics = await card.evaluate((element) => {
     const heading = element.querySelector('.investment-movers-heading');
     const row = element.querySelector('.investment-mover-row');

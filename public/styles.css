@@ -60,9 +60,7 @@
 .investment-mover-group h3 { display: none; }
 .investment-mover-group > div { display: grid; grid-auto-flow: column; grid-auto-columns: 176px; gap: 12px; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x mandatory; scrollbar-width: thin; scrollbar-color: var(--muted) transparent; }
 .investment-mover-row { scroll-snap-align: start; }
-.investment-mover-rank { color: var(--muted); font-size: 10px; font-weight: 600; margin-right: 7px; }
-.investment-mover-navigation { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 10px; color: var(--muted); }
-.investment-mover-navigation small { font-size: 10px; }
+.investment-mover-navigation { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 10px; color: var(--muted); }
 .investment-mover-navigation > div { display: flex; gap: 6px; }
 .investment-mover-navigation button { width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 50%; color: var(--ink); background: transparent; font: inherit; font-size: 22px; cursor: pointer; }
 .investment-mover-navigation button:disabled { opacity: .35; cursor: default; }
