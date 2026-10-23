@@ -693,7 +693,11 @@ async function refreshAccountsForItem(store, item) {
   const institution = item.institution_name || 'Connected institution';
 
   for (const account of data.accounts || []) {
-    const existing = store.accounts.find((a) => a.plaid_account_id === account.account_id);
+    // Preserve a nickname from any matching provider record. A prior sync can
+    // leave a hidden duplicate, and choosing the first blank record would reset
+    // an existing user label on refresh.
+    const matchingRecords = store.accounts.filter((a) => a.plaid_account_id === account.account_id);
+    const existing = matchingRecords.find((record) => String(record.nickname || '').trim()) || matchingRecords[0];
     const normalized = {
       id: existing?.id || crypto.randomUUID(),
       item_id: item.id,
@@ -1683,11 +1687,15 @@ app.patch('/api/accounts/:id/nickname', async (req, res) => {
     // internal id that the current dashboard rendered. The Plaid account id
     // is also scoped to this member's store, so accepting it here safely
     // keeps rename actions working across those records.
+    const requestedId = decodeURIComponent(String(req.params.id || ''));
     const account = store.accounts.find((record) => !record.demo && (
-      record.id === req.params.id || record.plaid_account_id === req.params.id
+      record.id === requestedId || record.plaid_account_id === requestedId
     ));
     if (!account) return res.status(404).json({ error: 'Account not found.' });
-    account.nickname = nickname || null;
+    // Keep duplicate representations of the same provider account in sync so
+    // a later refresh or de-duplication pass cannot restore the old label.
+    const matchingRecords = store.accounts.filter((record) => !record.demo && record.plaid_account_id === account.plaid_account_id);
+    for (const record of matchingRecords) record.nickname = nickname || null;
     await saveStore(req.user, store);
     res.json({ ok: true, nickname: account.nickname });
   } catch (error) {
