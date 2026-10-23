@@ -2676,7 +2676,7 @@ $('#nicknameForm').addEventListener('submit', async (event) => {
   const save = $('#nicknameSave');
   save.disabled = true;
   try {
-    await api(`/api/accounts/${dialog.dataset.accountId}/nickname`, { method: 'PATCH', body: JSON.stringify({ nickname: $('#nicknameInput').value }) });
+    await api(`/api/accounts/${encodeURIComponent(dialog.dataset.accountId)}/nickname`, { method: 'PATCH', body: JSON.stringify({ nickname: $('#nicknameInput').value }) });
     dialog.close();
     await loadAll();
     showNotice('Account name updated.', 'success');

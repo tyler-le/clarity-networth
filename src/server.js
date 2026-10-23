@@ -1677,12 +1677,23 @@ app.delete('/api/transaction-category-rules/:id', async (req, res) => {
 app.patch('/api/accounts/:id/nickname', async (req, res) => {
   const nickname = String(req.body?.nickname || '').trim().replace(/\s+/g, ' ');
   if (nickname.length > 60) return res.status(400).json({ error: 'Account name must be 60 characters or fewer.' });
-  const store = await loadStore(req.user);
-  const account = store.accounts.find((record) => record.id === req.params.id && !record.demo);
-  if (!account) return res.status(404).json({ error: 'Account not found.' });
-  account.nickname = nickname || null;
-  await saveStore(req.user, store);
-  res.json({ ok: true, nickname: account.nickname });
+  try {
+    const store = await loadStore(req.user);
+    // Older stores and some provider refresh paths may not have the same
+    // internal id that the current dashboard rendered. The Plaid account id
+    // is also scoped to this member's store, so accepting it here safely
+    // keeps rename actions working across those records.
+    const account = store.accounts.find((record) => !record.demo && (
+      record.id === req.params.id || record.plaid_account_id === req.params.id
+    ));
+    if (!account) return res.status(404).json({ error: 'Account not found.' });
+    account.nickname = nickname || null;
+    await saveStore(req.user, store);
+    res.json({ ok: true, nickname: account.nickname });
+  } catch (error) {
+    logOperationalError('Account nickname update failed', error, 'error');
+    throw error;
+  }
 });
 
 app.patch('/api/settings/debt-strategy', async (req, res) => {

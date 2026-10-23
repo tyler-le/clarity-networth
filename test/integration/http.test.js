@@ -204,6 +204,44 @@ integrationTest('serves an authenticated dashboard for an existing member sessio
   deleteStore(key);
 });
 
+integrationTest('renames a connected credit-card account using either account identifier', async () => {
+  const email = 'rename-credit-card@example.test';
+  const key = userStorageKey(email);
+  writeStore({
+    items: [{ id: 'item-card', institution_name: 'Test Bank', demo: false }],
+    accounts: [{
+      id: 'clarity-card-id',
+      plaid_account_id: 'plaid-card-id',
+      item_id: 'item-card',
+      type: 'credit',
+      subtype: 'credit card',
+      name: 'Credit Card',
+      nickname: null,
+      current_balance: 125,
+      demo: false
+    }],
+    transactions: [],
+    snapshots: []
+  }, key);
+  const cookie = signedTestCookie(email);
+
+  const internalIdResponse = await request(app)
+    .patch('/api/accounts/clarity-card-id/nickname')
+    .set('Cookie', cookie)
+    .send({ nickname: 'Everyday card' });
+  assert.equal(internalIdResponse.status, 200);
+  assert.equal(internalIdResponse.body.nickname, 'Everyday card');
+
+  const plaidIdResponse = await request(app)
+    .patch('/api/accounts/plaid-card-id/nickname')
+    .set('Cookie', cookie)
+    .send({ nickname: 'Bills card' });
+  assert.equal(plaidIdResponse.status, 200);
+  assert.equal(plaidIdResponse.body.nickname, 'Bills card');
+  assert.equal(readStore(key).accounts[0].nickname, 'Bills card');
+  deleteStore(key);
+});
+
 integrationTest('repairs a miscategorized posted inbound credit before serving cash flow', async () => {
   const email = 'cash-flow-reconciliation@example.com';
   const key = userStorageKey(email);
