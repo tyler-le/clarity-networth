@@ -679,6 +679,8 @@ test('investment movers use only verified holding snapshots and expose daily and
   const movers = investmentSummary(store).movers;
   assert.deepEqual(movers.daily.map((row) => [row.ticker, row.change, row.changePct]), [['VTI', 150, 150 / 1100]]);
   assert.deepEqual(movers.weekly.map((row) => [row.ticker, row.change]), [['VTI', 250]]);
+  assert.deepEqual(movers.daily[0].history, [{ date: '2026-09-07', value: 1100 }, { date: '2026-09-08', value: 1250 }]);
+  assert.deepEqual(movers.weekly[0].history, [{ date: '2026-09-01', value: 1000 }, { date: '2026-09-07', value: 1100 }, { date: '2026-09-08', value: 1250 }]);
 });
 
 test('a holding never borrows a same-ticker snapshot from another account', () => {

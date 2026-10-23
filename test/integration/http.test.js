@@ -141,6 +141,16 @@ integrationTest('keeps a bounded encrypted recovery snapshot and removes it on d
 integrationTest('serves a complete public demo without a session', async () => {
   const response = await request(app).get('/api/demo-preview?range=1y');
   assert.equal(response.status, 200);
+  for (const period of ['daily', 'weekly']) {
+    const movers = response.body.investments.movers[period];
+    assert.ok(movers.length > 0);
+    assert.ok(movers.every((row) => row.history.length >= 2 && row.history.every((point) => Number.isFinite(point.value))));
+    assert.ok(movers.every((row, index) => !index || Math.abs(movers[index - 1].change) >= Math.abs(row.change)));
+  }
+  const styles = await request(app).get('/runtime/styles.css');
+  assert.equal(styles.status, 200);
+  assert.match(styles.headers['cache-control'], /no-store/);
+  assert.match(styles.headers['content-type'], /text\/css/);
   assert.equal(response.body.dashboard.demoMode, true);
   assert.deepEqual(response.body.dashboard.items.map((item) => item.institution_name), ['Chase', 'Ally', 'Fidelity', 'Capital One']);
   assert.ok(response.body.dashboard.items.every((item) => item.demo));
@@ -754,7 +764,7 @@ integrationTest('staging mock connection is explicitly gated, seeded, and remova
   deleteStore(key);
 });
 
-integrationTest('freemium limits only current Free-plan institutions and an unlink frees a slot', async (t) => {
+integrationTest('legacy freemium configuration does not gate additional institutions', async (t) => {
   const previousMockSetting = process.env.DEV_MOCK_CONNECTIONS;
   const previousFreemiumSetting = process.env.FREEMIUM_ENABLED;
   process.env.DEV_MOCK_CONNECTIONS = 'true';
@@ -787,18 +797,12 @@ integrationTest('freemium limits only current Free-plan institutions and an unli
       linkedInstitutionLimit: dashboard.body.entitlements.linkedInstitutionLimit,
       canConnectInstitution: dashboard.body.entitlements.canConnectInstitution
     },
-    { enabled: true, linkedInstitutionCount: 2, linkedInstitutionLimit: 2, canConnectInstitution: false }
+    { enabled: false, linkedInstitutionCount: 2, linkedInstitutionLimit: null, canConnectInstitution: true }
   );
 
-  // Block before opening Link so a member cannot spend a provider attempt on
-  // a connection the plan will not allow.
-  const blocked = await request(app).post('/api/plaid/create_link_token').set('Cookie', cookie).send({});
-  assert.equal(blocked.status, 403);
-  assert.deepEqual(blocked.body, {
-    error: 'Your Free plan includes two connected institutions. Unlink one to connect another.',
-    error_code: 'institution_limit_reached',
-    recovery: 'manage_connections'
-  });
+  const available = await request(app).post('/api/plaid/create_link_token').set('Cookie', cookie).send({});
+  assert.equal(available.status, 200);
+  assert.deepEqual(available.body, { development_mock: true });
 
   const unlinked = await request(app).delete('/api/items/first').set('Cookie', cookie);
   assert.equal(unlinked.status, 200);

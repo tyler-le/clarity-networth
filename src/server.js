@@ -223,6 +223,13 @@ app.get('/runtime/app.js', (_req, res) => {
   res.type('js').sendFile(path.join(projectRoot, 'public', 'app.js'));
 });
 
+app.get('/runtime/styles.css', (_req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store, no-cache, max-age=0, must-revalidate');
+  res.setHeader('CDN-Cache-Control', 'no-store');
+  res.setHeader('Surrogate-Control', 'no-store');
+  res.type('css').sendFile(path.join(projectRoot, 'public', 'styles.css'));
+});
+
 function escapeLegalText(value) {
   return String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 }

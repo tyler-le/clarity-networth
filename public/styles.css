@@ -48,23 +48,31 @@
 .investment-account-value small { font-size: 10px; }
 .investment-account-tracking { color: var(--muted) !important; }
 .investment-account-chevron { color: var(--muted); font-size: 20px; font-style: normal; }
-.investment-movers-card { margin-top: 16px; padding: 21px; }
+.investment-movers-card { margin-top: 16px; padding: 24px; min-width: 0; }
 .investment-movers-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 3px 2px 4px; }
+.investment-movers-heading h2 { margin: 0; align-self: center; color: var(--ink); font-size: 15px; font-weight: 700; letter-spacing: -.02em; }
 .investment-movers-heading .spending-context { margin: 5px 0 0; }
 .investment-mover-tabs { display: inline-flex; flex: 0 0 auto; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-subtle); }
 .investment-mover-tabs button { min-width: 66px; padding: 7px 11px; border: 0; border-radius: 999px; color: var(--muted); background: transparent; cursor: pointer; font: inherit; font-size: 11px; font-weight: 720; }
 .investment-mover-tabs button.active { color: var(--ink); background: var(--card); box-shadow: 0 2px 8px rgba(24, 33, 25, .12); }
-.investment-movers-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; margin-top: 16px; }
+.investment-movers-grid { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: 18px; }
 .investment-mover-group { min-width: 0; }
-.investment-mover-group h3 { margin: 0 0 8px; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
-.investment-mover-group > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.investment-mover-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto 50px auto; align-items: center; gap: 11px; min-height: 156px; padding: 17px 16px; border: 1px solid var(--line); border-radius: 16px; color: var(--ink); background: var(--surface-subtle); text-align: left; cursor: pointer; font: inherit; transition: border-color .16s ease, background .16s ease; }
+.investment-mover-group h3 { display: none; }
+.investment-mover-group > div { display: grid; grid-auto-flow: column; grid-auto-columns: 176px; gap: 12px; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x mandatory; scrollbar-width: thin; scrollbar-color: var(--muted) transparent; }
+.investment-mover-row { scroll-snap-align: start; }
+.investment-mover-rank { color: var(--muted); font-size: 10px; font-weight: 600; margin-right: 7px; }
+.investment-mover-navigation { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 10px; color: var(--muted); }
+.investment-mover-navigation small { font-size: 10px; }
+.investment-mover-navigation > div { display: flex; gap: 6px; }
+.investment-mover-navigation button { width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 50%; color: var(--ink); background: transparent; font: inherit; font-size: 22px; cursor: pointer; }
+.investment-mover-navigation button:disabled { opacity: .35; cursor: default; }
+.investment-mover-row { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 36px auto; align-items: center; gap: 12px; min-width: 0; min-height: 0; padding: 16px; border: 1px solid var(--line); border-radius: 14px; color: var(--ink); background: var(--surface-subtle); text-align: left; cursor: pointer; font: inherit; transition: border-color .16s ease, background .16s ease; }
 .investment-mover-heading { display: grid; min-width: 0; gap: 3px; }
 .investment-mover-heading strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 .investment-mover-heading span { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.investment-mover-sparkline { grid-column: 1 / -1; width: 100%; height: 50px; color: var(--accent); }
+.investment-mover-sparkline { display: block; width: 100%; height: 36px; color: var(--accent); }
 .investment-mover-row.is-negative .investment-mover-sparkline { color: var(--outflow); }
-.investment-mover-change { display: grid; justify-items: end; gap: 2px; color: var(--accent); font-size: 14px; font-weight: 780; white-space: nowrap; }
+.investment-mover-change { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--accent); font-size: 14px; font-weight: 780; white-space: nowrap; }
 .investment-mover-row.is-negative .investment-mover-change { color: var(--outflow); }
 .investment-mover-change small { color: inherit; font-size: 10px; }
 .investment-mover-row:hover { border-color: color-mix(in srgb, var(--accent) 38%, var(--line)); background: color-mix(in srgb, var(--accent-soft) 68%, var(--card)); }
@@ -88,12 +96,12 @@ html[data-theme="dark"] .investment-account-row:hover, html[data-theme="dark"] .
 html[data-theme="dark"] .investment-account-meter, html[data-theme="dark"] .holding-weight > i { background: #303a32; }
 @media (max-width: 760px) {
   .investment-support-grid { grid-template-columns: 1fr; gap: 14px; }
-  .investment-movers-card { padding: 18px 16px; }
-  .investment-movers-heading { gap: 12px; }
+  .investment-movers-card { padding: 22px 20px; }
+  .investment-movers-heading { gap: 12px; flex-wrap: wrap; padding: 0; }
   .investment-mover-tabs button { min-width: 58px; padding-inline: 8px; }
   .investment-movers-grid { grid-template-columns: 1fr; gap: 18px; }
-  .investment-mover-group > div { grid-template-columns: repeat(3, minmax(172px, 1fr)); overflow-x: auto; padding-bottom: 4px; scroll-snap-type: x proximity; }
-  .investment-mover-row { scroll-snap-align: start; }
+  .investment-mover-group > div { grid-auto-columns: 44%; gap: 10px; }
+  .investment-mover-navigation button { width: 44px; height: 44px; }
   .investment-account-row { min-height: 72px; }
   .investment-account-mark { width: 35px; height: 35px; border-radius: 11px; }
   .investment-account-meter { width: min(120px, 100%); }

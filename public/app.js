@@ -1932,6 +1932,7 @@ function renderInvestmentMovers(movers = {}) {
   const groups = [['daily', '#investmentDailyMovers'], ['weekly', '#investmentWeeklyMovers']];
   const hasMovers = groups.some(([period]) => (movers[period] || []).length);
   card.classList.toggle('hidden', !hasMovers);
+  $('#investmentMoversTitle').textContent = state.investmentMoverPeriod === 'weekly' ? 'Weekly movers' : 'Daily movers';
   $('#investmentDailyMoverGroup')?.classList.toggle('hidden', state.investmentMoverPeriod !== 'daily');
   $('#investmentWeeklyMoverGroup')?.classList.toggle('hidden', state.investmentMoverPeriod !== 'weekly');
   $$('[data-investment-mover-period]').forEach((button) => {
@@ -1941,13 +1942,28 @@ function renderInvestmentMovers(movers = {}) {
   });
   for (const [period, selector] of groups) {
     const rows = movers[period] || [];
-    $(selector).innerHTML = rows.length ? rows.map((row) => {
+    $(selector).innerHTML = rows.length ? rows.map((row, index) => {
       const change = Number(row.change || 0);
       const pct = row.changePct == null ? '' : `${change >= 0 ? '+' : '−'}${Math.abs(Number(row.changePct) * 100).toFixed(1)}%`;
-      const path = change >= 0 ? 'M2 27 L10 25 L18 26 L27 18 L35 20 L44 10 L53 13 L62 4' : 'M2 5 L10 7 L18 6 L27 14 L35 12 L44 22 L53 19 L62 27';
-      return `<button type="button" class="investment-mover-row ${change >= 0 ? 'is-positive' : 'is-negative'}" data-holding-history="${escapeHtml(row.ticker || row.key)}" aria-label="View ${escapeHtml(row.name)} history"><span class="investment-mover-heading"><strong>${escapeHtml(row.ticker || row.name)}</strong><span>${escapeHtml(row.name || 'Holding')}</span></span><svg class="investment-mover-sparkline" viewBox="0 0 64 32" aria-hidden="true"><path d="${path}" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="investment-mover-change">${change >= 0 ? '+' : '−'}${fmt.format(Math.abs(change))}<small>${pct}</small></span></button>`;
+      const history = (row.history || []).filter((point) => Number.isFinite(Number(point.value)) && Number.isFinite(Date.parse(point.date)));
+      const values = history.map((point) => Number(point.value));
+      const low = Math.min(...values);
+      const spread = Math.max(...values) - low;
+      const start = Date.parse(history[0]?.date);
+      const duration = Date.parse(history.at(-1)?.date) - start;
+      const path = history.length > 1 && duration > 0 ? history.map((point, index) => `${index ? 'L' : 'M'}${(2 + (Date.parse(point.date) - start) / duration * 116).toFixed(2)} ${(spread ? 32 - (Number(point.value) - low) / spread * 28 : 18).toFixed(2)}`).join(' ') : '';
+      return `<button type="button" class="investment-mover-row ${change >= 0 ? 'is-positive' : 'is-negative'}" data-holding-history="${escapeHtml(row.ticker || row.key)}" aria-label="Rank ${index + 1}: view ${escapeHtml(row.name)} history"><span class="investment-mover-heading"><strong><span class="investment-mover-rank">${index + 1}</span>${escapeHtml(row.ticker || row.name)}</strong><span>${escapeHtml(row.name || 'Holding')}</span></span><svg class="investment-mover-sparkline" viewBox="0 0 120 36" preserveAspectRatio="none" aria-hidden="true"><path d="${path}" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="investment-mover-change">${change >= 0 ? '+' : '−'}${fmt.format(Math.abs(change))}<small>${pct}</small></span></button>`;
     }).join('') : '<p class="investment-movers-empty">Movers appear after Clarity has two verified holding updates.</p>';
   }
+  requestAnimationFrame(syncMoverNavigation);
+}
+
+function syncMoverNavigation() {
+  const track = $(state.investmentMoverPeriod === 'weekly' ? '#investmentWeeklyMovers' : '#investmentDailyMovers');
+  if (!track) return;
+  const end = track.scrollWidth - track.clientWidth;
+  $('[data-mover-scroll="previous"]').disabled = track.scrollLeft <= 1;
+  $('[data-mover-scroll="next"]').disabled = track.scrollLeft >= end - 1;
 }
 
 function renderInvestments(data) {
@@ -3352,6 +3368,12 @@ $('#investmentAccounts').addEventListener('click', (event) => {
     if (account) openHoldingHistoryEntry({ accountId: account.dataset.investmentAccountHistory });
 });
 $('#investmentMoversCard').addEventListener('click', (event) => {
+  const scroll = event.target.closest('[data-mover-scroll]');
+  if (scroll) {
+    const track = $(state.investmentMoverPeriod === 'weekly' ? '#investmentWeeklyMovers' : '#investmentDailyMovers');
+    track.scrollBy({ left: (scroll.dataset.moverScroll === 'next' ? 1 : -1) * track.clientWidth * .8, behavior: 'smooth' });
+    return;
+  }
   const period = event.target.closest('[data-investment-mover-period]');
   if (period) {
     state.investmentMoverPeriod = period.dataset.investmentMoverPeriod;
@@ -3361,6 +3383,8 @@ $('#investmentMoversCard').addEventListener('click', (event) => {
   const holding = event.target.closest('[data-holding-history]');
   if (holding) openHoldingHistoryEntry({ ticker: holding.dataset.holdingHistory });
 });
+for (const selector of ['#investmentDailyMovers', '#investmentWeeklyMovers']) $(selector).addEventListener('scroll', syncMoverNavigation, { passive: true });
+window.addEventListener('resize', syncMoverNavigation);
 $('#investmentPositions').addEventListener('change', async (event) => {
   const select = event.target.closest('[data-position-class]');
   const manualSelect = event.target.closest('[data-manual-holding-class]');

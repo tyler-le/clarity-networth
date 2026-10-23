@@ -58,6 +58,49 @@ async function openSignedInScenario(page, transform = () => {}) {
   await expect(page.locator('#appShell')).toHaveAttribute('aria-busy', 'false');
 }
 
+test('movers have inset spacing, compact real charts and one active period @critical', async ({ page }) => {
+  await openSignedInScenario(page);
+  await goToView(page, 'investments');
+  await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
+  const card = page.locator('#investmentMoversCard');
+  await expect(card).toBeVisible();
+  const daily = card.getByRole('tab', { name: 'Daily', exact: true });
+  const weekly = card.getByRole('tab', { name: 'Weekly', exact: true });
+  await expect(daily).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#investmentWeeklyMoverGroup')).toBeHidden();
+  await expect(card.getByRole('heading', { name: 'Daily movers', exact: true })).toBeVisible();
+  await expect(card.getByText('Verified holding changes from your connected institutions.')).toHaveCount(0);
+  await expect(page.locator('#investmentDailyMovers').getByRole('button').first()).toHaveAccessibleName(/^Rank 1:/);
+  const metrics = await card.evaluate((element) => {
+    const heading = element.querySelector('.investment-movers-heading');
+    const row = element.querySelector('.investment-mover-row');
+    const value = row.querySelector('.investment-mover-change');
+    const chart = row.querySelector('svg');
+    return { inset: heading.getBoundingClientRect().left - element.getBoundingClientRect().left, top: heading.getBoundingClientRect().top - element.getBoundingClientRect().top,
+      height: row.getBoundingClientRect().height, chartHeight: chart.getBoundingClientRect().height,
+      background: getComputedStyle(value).backgroundColor, padding: getComputedStyle(value).padding,
+      overflow: document.documentElement.scrollWidth > innerWidth };
+  });
+  expect(metrics.inset).toBeGreaterThanOrEqual(20);
+  expect(metrics.top).toBeGreaterThanOrEqual(20);
+  expect(metrics.height).toBeLessThan(180);
+  expect(metrics.chartHeight).toBeLessThanOrEqual(36);
+  expect(metrics.background).toBe('rgba(0, 0, 0, 0)');
+  expect(metrics.padding).toBe('0px');
+  expect(metrics.overflow).toBe(false);
+  const next = card.getByRole('button', { name: 'Next movers', exact: true });
+  if (await next.isEnabled()) {
+    await next.click();
+    await expect.poll(() => page.locator('#investmentDailyMovers').evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+  }
+  await weekly.click();
+  await expect(weekly).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#investmentDailyMoverGroup')).toBeHidden();
+  await expect(page.locator('#investmentWeeklyMoverGroup')).toBeVisible();
+  await expect(card.getByRole('heading', { name: 'Weekly movers', exact: true })).toBeVisible();
+  await card.screenshot({ path: `/tmp/clarity-movers-${test.info().project.name}.png` });
+});
+
 test('a Free member can use the core product before choosing Plus', async ({ page }) => {
   await openSignedInScenario(page, (preview) => {
     preview.dashboard.entitlements = {
