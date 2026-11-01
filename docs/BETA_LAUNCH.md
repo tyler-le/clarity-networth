@@ -11,8 +11,8 @@ Clarity is ready for a small, invite-only beta after every item below is true. T
 - Google sign-in, signed secure cookies, origin checks, rate limits, and production security configuration are required before private API access.
 - Users can unlink institutions, export their stored data, and permanently delete their account and financial data.
 - The public Privacy Policy, Terms, and Help & Feedback pages are available before sign-in.
-- Every push runs unit, integration, and browser journeys at phone, tablet, laptop, and desktop breakpoints; production deploys only after staging and its smoke check pass.
-- GitHub checks production availability hourly through `/api/health`.
+- Run `npm run test:ci` locally before pushing and browser journeys when UI behavior changes. The manual production workflow tests the exact `dev` commit before deployment and runs smoke checks afterward; staging is retired.
+- Production availability checks through GitHub are manual-only.
 
 ## One-time owner setup before inviting anyone
 

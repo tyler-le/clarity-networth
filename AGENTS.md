@@ -118,7 +118,9 @@ clarity in existing core flows over adding a marginal feature.
 ## Delivery
 
 - Keep commits narrowly scoped and descriptive.
-- A push to `main` runs: full test suite → staging deployment and smoke test →
-  production promotion and smoke test. Never bypass staging in code or CI.
+- There is no hosted staging environment. Develop locally; production deploys
+  only through the manual `deploy-to-prod` workflow, which tests the exact
+  `dev` commit before deployment and runs production smoke checks afterward.
+  Never bypass the production test gate.
 - Do not make unrelated refactors while fixing a bug. Preserve user changes in
   the working tree.
