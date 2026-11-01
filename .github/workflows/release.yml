@@ -5,8 +5,8 @@ on:
   # tests that exact branch, then deploys that exact commit to production.
   workflow_dispatch:
 
-# Development deploys are intentionally fast and ungated in deploy-to-dev.yml.
-# Production has one guarded path: manually dispatch this workflow. Railway
+# Development runs locally. Production has one guarded path: manually
+# dispatch this workflow. Railway
 # GitHub autodeploy must remain disconnected for production.
 permissions:
   contents: read
@@ -57,8 +57,7 @@ jobs:
         run: npx --yes @railway/cli@latest up --ci --project "$RAILWAY_PROJECT_ID" --service "$RAILWAY_SERVICE" --environment "$RAILWAY_PRODUCTION_ENVIRONMENT" --message "Production from dev $(git rev-parse HEAD)"
       - name: Smoke test production
         run: |
-          # Same cold-start handling as staging. Production is only promoted
-          # once the exact staged commit has passed its health check.
+          # Allow for cold starts, then verify the tested production deployment.
           for attempt in {1..12}; do
             health="$(curl --silent --show-error --max-time 60 "$PRODUCTION_URL/api/health" 2>&1 || true)"
             if printf '%s' "$health" | grep -q '"ok":true'; then

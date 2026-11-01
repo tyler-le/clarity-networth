@@ -104,9 +104,10 @@ for the failure mode and assert the safe result (for example, an unavailable
 state or an actionable recovery code) rather than relying on a browser flow.
 
 The optional browser suite covers journeys at phone, tablet, laptop, and
-desktop breakpoints. Development pushes deploy without this release gate;
-production promotion is manual and runs `npm run test:ci` against the exact
-development commit before deployment.
+desktop breakpoints. Development runs locally to avoid the cost of a hosted
+staging environment. Pushing `dev` does not deploy anything. Production
+promotion is manual through `deploy-to-prod`, which runs `npm run test:ci`
+against the exact development commit before deployment and smoke checks afterward.
 
 See [`AGENTS.md`](AGENTS.md) for the product, accessibility, financial-data,
 testing, and UX standards that guide changes.

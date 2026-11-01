@@ -3,15 +3,13 @@
 ## Environments
 
 - **Production** serves real users and only accepts production credentials.
-- **Staging** is isolated: separate Railway Postgres and volume, separate encryption and session secrets, and no production Plaid credentials. Do not connect real financial institutions to staging.
-
-Before staging sign-in is enabled, add `https://clarity-networth-staging.up.railway.app` to a dedicated Google OAuth client’s Authorized JavaScript origins, then set that client ID only in staging.
+- **Development** runs locally. There is no hosted staging environment; do not recreate staging services, databases, or volumes through automation.
 
 ## Deployments
 
-`main` is the only release branch. GitHub Actions runs the complete unit, integration, and browser suite for the exact commit, deploys it to staging, checks the live staging health endpoint and public pages, and only then deploys the same commit to production. Production is never deployed when an earlier stage fails.
+Push changes to `dev` after local checks. Pushes do not deploy a hosted development app. Manually dispatch `deploy-to-prod` to run `npm run test:ci`, deploy the exact tested `dev` commit to Railway production, and smoke-test production health and public pages. Failed checks block production deployment.
 
-The Railway service source is intentionally disconnected in both environments. Direct GitHub autodeploys would bypass the staging gate. The workflow uses two environment-scoped GitHub Actions secrets: `RAILWAY_STAGING_TOKEN` can deploy only to staging and `RAILWAY_TOKEN` can deploy only to production. Neither is an application environment variable or committed to Git.
+The production Railway service source must remain disconnected from GitHub autodeploys so releases go through the test gate. The production workflow uses the `RAILWAY_TOKEN` Actions secret. The staging deployment workflow, token, and local deployment helper have been retired.
 
 ## Backups and recovery
 
@@ -22,7 +20,7 @@ This protects against a bad application write or database loss, but it is not an
 ## Monitoring
 
 - Railway calls `/api/health` for deploy health checks. The endpoint fails closed if secure production configuration or PostgreSQL is unavailable.
-- GitHub Actions checks the production health endpoint hourly. A failed run is a signal to investigate immediately.
+- The production availability Action is manual-only; there are no hourly GitHub checks.
 - Railway logs must never contain financial payloads, access tokens, cursors, or secrets.
 - Use Railway Observability—not the Clarity customer app—for deployment health, resource use, logs, and availability. Private product-health measurement is documented in [Launch metrics](LAUNCH_METRICS.md). Any visual product report must be a separate private, read-only service.
 
@@ -62,7 +60,7 @@ Put the production custom domain behind Cloudflare before removing the email all
 ## Release checklist
 
 1. Merge only after CI passes.
-2. Test the change in staging using demo data.
+2. Test the change locally using demo data.
 3. Verify `/api/health`, sign-in, account link/update/unlink, export, and deletion.
 4. Deploy production and check logs and health endpoint.
 5. Roll back promptly for a data-isolation, security, or data-integrity issue.
