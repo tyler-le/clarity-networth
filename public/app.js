@@ -1,5 +1,6 @@
 import { filterSnapshots, netWorthRangeBounds, preferredNetWorthRange, uniqueDailySnapshots } from '/chart-utils.js';
 import { customerError, httpErrorCode, plaidErrorCode } from '/customer-error.js';
+import { investmentAccountGroups, holdingMarketChange, investmentClassColor } from '/investment-view.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -38,11 +39,11 @@ const state = {
   accountHistory: null,
   accountHistoryRange: '1m',
   expandedAccountGroups: new Set(),
-  collapsedAccountGroups: new Set(),
+  openAccountGroups: new Set(),
   holdingsExpanded: false,
+  expandedInvestmentAccounts: new Set(),
   demoGoal: null,
   demoGoalInitialized: false,
-  debtPlanExpanded: false,
   view: 'overview',
   returnView: 'overview',
   demoPreview: false,
@@ -651,9 +652,9 @@ function renderAccounts(accounts) {
     const total = items.reduce((sum, account) => sum + Math.abs(Number(account.current_balance || 0)), 0);
     const sorted = [...items].sort((a, b) => Math.abs(Number(b.current_balance || 0)) - Math.abs(Number(a.current_balance || 0)));
     const expanded = state.expandedAccountGroups.has(name);
-    const collapsed = state.collapsedAccountGroups?.has(name) || false;
+    const collapsed = !state.openAccountGroups.has(name);
     const previewCount = 2;
-    return `<section class="account-collection ${debt ? 'debt' : 'asset'}">
+    return `<section aria-label="${escapeHtml(name)} accounts" class="account-collection ${debt ? 'debt' : 'asset'}">
       <button type="button" class="account-collection-head ${collapsed ? 'is-collapsed' : ''}" data-account-collapse="${escapeHtml(name)}" aria-expanded="${String(!collapsed)}"><span class="account-collection-icon" aria-hidden="true">${accountGroupIcons[name] || '◇'}</span><span><h2>${name}</h2><p>${items.length} account${items.length === 1 ? '' : 's'}</p></span><span class="account-collection-total ${debt ? 'negative' : ''}"><span>${debt ? 'Owed' : 'Held'}</span><strong>${fmt.format(total)}</strong></span><i class="account-collection-chevron" aria-hidden="true">⌄</i></button>
       <div class="account-collection-items ${collapsed ? 'is-collapsed' : ''}">${sorted.map((account, index) => {
         const investment = account.type === 'investment' && account.plaid_account_id;
@@ -670,37 +671,11 @@ function renderAccounts(accounts) {
   }).join('');
 }
 
-function debtPlanForStrategy(plan, strategy) {
-  const debts = plan?.debts || [];
-  const priority = strategy === 'snowball'
-    ? [...debts].sort((a, b) => Number(a.balance) - Number(b.balance))[0] || null
-    : [...debts].filter((a) => a.interestRate != null).sort((a, b) => Number(b.interestRate) - Number(a.interestRate) || Number(a.balance) - Number(b.balance))[0] || null;
-  return { ...plan, strategy, priority };
-}
-
 // Public preview and signed-in demo mode must behave like the same safe,
 // throwaway scenario. The latter has a real session, so checking only
 // demoPreview accidentally attempted to save a real member setting.
 function isDemoExperience() {
   return Boolean(state.demoPreview || state.dashboard?.demoMode);
-}
-
-function renderDebtPayoff(plan) {
-  const card = $('#debtPayoffCard');
-  if (!plan?.accountCount) { card.classList.add('hidden'); card.innerHTML = ''; return; }
-  card.classList.remove('hidden');
-  const avalanche = plan.strategy !== 'snowball';
-  const expanded = state.debtPlanExpanded;
-  const priority = plan.priority;
-  const target = priority ? `<strong>${escapeHtml(priority.name)}</strong>` : null;
-  const nextStep = avalanche
-    ? target ? `Put any extra payment toward ${target}${priority.interestRate != null ? ` at ${Number(priority.interestRate).toFixed(2).replace(/\.00$/, '')}% APR` : ''}.`
-      : 'Add interest rates to see which balance is costing you the most.'
-    : target ? `Put any extra payment toward ${target}, your smallest balance.` : 'Your balances will appear here once they are available.';
-  const rateEditor = `<details class="debt-rate-editor"><summary>${plan.missingRates ? (plan.missingRates === 1 ? 'Add 1 interest rate' : `Add ${plan.missingRates} interest rates`) : 'Edit interest rates'} <span>Optional</span></summary><p>Rates make “Save most interest” specific. Update a rate anytime, or clear a manually entered rate to use your institution’s next available update.</p><div class="debt-rate-list">${plan.debts.map((debt) => { const rate = debt.interestRate == null ? '' : String(Number(debt.interestRate)); return `<label>${escapeHtml(debt.name)}<span><input data-debt-rate="${escapeHtml(debt.id)}" data-initial-rate="${escapeHtml(rate)}" value="${escapeHtml(rate)}" type="number" min="0" max="100" step="0.01" inputmode="decimal" aria-label="Annual interest rate for ${escapeHtml(debt.name)}" placeholder="APR" /><b>%</b></span></label>`; }).join('')}</div><button class="secondary debt-rate-save" type="button" data-save-debt-rates>Save rates</button></details>`;
-  const summary = `<button class="debt-plan-summary" type="button" data-toggle-debt-plan aria-expanded="${expanded}"><span class="debt-plan-mark" aria-hidden="true">↘</span><span><small>DEBT PLAN</small><strong>One clear next step, when you’re ready</strong></span><b>${expanded ? 'Hide' : 'View plan'} <i aria-hidden="true">›</i></b></button>`;
-  const planBody = `<div class="debt-plan-expanded"><div class="debt-payoff-head"><div><div class="card-label">DEBT PAYOFF</div><h2>${fmt.format(plan.totalDebt)} to pay down</h2><p>${plan.accountCount} balance${plan.accountCount === 1 ? '' : 's'} · choose the approach that fits you.</p></div></div><div class="debt-strategy-choice" role="group" aria-label="Debt payoff approach"><button type="button" class="${avalanche ? 'active' : ''}" data-debt-strategy="avalanche"><strong>Save most interest</strong><span>Highest rate first</span></button><button type="button" class="${!avalanche ? 'active' : ''}" data-debt-strategy="snowball"><strong>Small wins first</strong><span>Smallest balance first</span></button></div><div class="debt-next-step"><span>Next step</span><p>${nextStep}</p></div>${rateEditor}</div>`;
-  card.innerHTML = `${summary}${expanded ? planBody : ''}`;
 }
 
 function renderConnections(items) {
@@ -1966,6 +1941,30 @@ function syncMoverNavigation() {
   $('[data-mover-scroll="next"]').disabled = track.scrollLeft >= end - 1;
 }
 
+function renderInvestmentAccountGroups(data) {
+  return investmentAccountGroups(data.accounts, data.positions).map(({ account, positions }) => {
+    const change = account.rangeProgress?.state === 'ready' && account.rangeProgress.valueChange != null
+      ? Number(account.rangeProgress.valueChange) : null;
+    const changeLine = change != null && Number.isFinite(change) && Math.round(Math.abs(change) * 100) > 0
+      ? `<small class="${change >= 0 ? 'positive' : 'negative'}">${change >= 0 ? '+' : '−'}${fmt.format(Math.abs(change))} · ${investmentRangeLabel(account.rangeProgress.range)}</small>`
+      : '<small class="investment-account-tracking">Verified balance</small>';
+    const groupId = String(account.account_id || account.id || '');
+    const rows = positions.map((position) => {
+      const classification = assetClassLabel(position.type, position.asset_class_override);
+      const change = holdingMarketChange(position.rangeProgress);
+      const performance = change == null ? '' : `<small class="${change >= 0 ? 'positive' : 'negative'}">${change >= 0 ? '+' : '−'}${fmt.format(Math.abs(change))}</small>`;
+      const ticker = String(position.ticker || '').trim();
+      const tag = ticker ? 'button' : 'div';
+      const action = ticker ? `type="button" data-holding-history="${escapeHtml(ticker)}" aria-label="View ${escapeHtml(position.name || ticker)} history"` : '';
+      return `<${tag} class="account-holding-row" data-testid="account-holding" ${action}><span class="account-holding-mark" style="--holding-color:${investmentClassColor(classification)}" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20h16M7 16V9m5 7V4m5 12v-5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span><span class="account-holding-copy"><strong>${escapeHtml(ticker || position.name || 'Holding')}</strong>${ticker && position.name ? `<span>${escapeHtml(position.name)}</span>` : ''}</span><span class="account-holding-value"><b>${fmt.format(position.value)}</b>${performance}</span>${ticker ? '<span class="account-holding-chevron" aria-hidden="true">›</span>' : ''}</${tag}>`;
+    }).join('');
+    const discrepancy = (data.unclassifiedAccounts || []).find((entry) => entry.account_id === account.account_id);
+    const notice = positions.length && discrepancy
+      ? '<p class="account-holdings-note">Returned holdings do not fully match this account balance. Review “Cash &amp; unclassified” in your investment mix.</p>' : '';
+    return `<details class="investment-account-group" data-testid="investment-account-group" data-investment-account="${escapeHtml(groupId)}" ${state.expandedInvestmentAccounts.has(groupId) ? 'open' : ''}><summary class="investment-account-row" aria-label="Holdings in ${escapeHtml(account.name)}"><span class="investment-account-leading"><span class="investment-account-copy"><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || '')}${account.subtype ? ` · ${escapeHtml(account.subtype)}` : ''}</span></span></span><span class="investment-account-value"><b>${fmt.format(account.value)}</b>${changeLine}</span><svg class="account-disclosure-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></summary><div class="account-holdings-label"><span>Holding</span><span>Value · market change</span></div><div class="account-holdings">${rows || '<p class="account-holdings-note">Holdings aren’t available from this connection yet. This account’s verified balance is still included in your portfolio.</p>'}</div>${notice}<div class="account-history-action"><button type="button" data-investment-account-history="${escapeHtml(account.account_id)}" aria-label="View ${escapeHtml(account.name)} performance history">View account history <span aria-hidden="true">›</span></button></div></details>`;
+  }).join('');
+}
+
 function renderInvestments(data) {
   if (!data) return;
   const accounts = data.accounts || [];
@@ -1993,6 +1992,9 @@ function renderInvestments(data) {
   const started = snapshots[0]?.date ? new Date(`${snapshots[0].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : null;
   const changeCopy = periodChange == null ? (started ? `Tracking since ${started}` : 'Sync to begin tracking') : `${periodChange >= 0 ? '+' : '−'}${fmt.format(Math.abs(periodChange))} ${changePeriodLabel}`;
   $('#investmentContext').textContent = accounts.length ? changeCopy : 'Connect an investment account to begin.';
+  $('#investmentContext').classList.toggle('positive', periodChange != null && periodChange >= 0);
+  $('#investmentContext').classList.toggle('negative', periodChange != null && periodChange < 0);
+  $('#investmentAccountCount').textContent = accounts.length ? `Across ${accounts.length} investment account${accounts.length === 1 ? '' : 's'}` : '';
   const rangeChip = $('#investmentRangeChip');
   if (rangeChip) {
     const chipLabel = state.investmentRange === '1m' ? 'This month' : periodLabel;
@@ -2013,7 +2015,8 @@ function renderInvestments(data) {
   $('#investmentHoldingsPanel').classList.toggle('hidden', accounts.length < 1);
   $('#investmentPlusPrompt').classList.toggle('hidden', !data.positionsAvailable || plusFeatureAvailable('canUseInvestmentDetails'));
   let cursor = 0;
-  const colors = ['#287143', '#7ea98b', '#d5a75f', '#9ca9bd', '#b88692', '#7d91a5'];
+  const colors = allocation.map((row) => investmentClassColor(row.name));
+  $('#investmentAllocationBar').innerHTML = allocation.map((row, index) => `<span style="flex:${Math.max(0, Number(row.share) || 0)};background:${colors[index]}"></span>`).join('');
   const donut = $('#investmentDonut');
   if (allocation.length) {
     const largest = allocation[0];
@@ -2027,12 +2030,7 @@ function renderInvestments(data) {
     $('#investmentAllocationInsight').textContent = 'Allocation appears when your institution provides holdings.';
     $('#investmentAllocation').innerHTML = '<p class="spending-empty">Allocation appears when your institution provides holdings.</p>';
   }
-  $('#investmentAccounts').innerHTML = accounts.length ? accounts.map((account) => {
-    const change = account.rangeProgress?.state === 'ready' ? Number(account.rangeProgress.valueChange) : null;
-    const showChange = change != null && Number.isFinite(change) && Math.round(Math.abs(change) * 100) > 0;
-    const changeLine = showChange ? `<small class="${change >= 0 ? 'positive' : 'negative'}">${change >= 0 ? '+' : '−'}${fmt.format(Math.abs(change))} · ${investmentRangeLabel(account.rangeProgress.range)}</small>` : '<small class="investment-account-tracking">Verified balance</small>';
-    return `<button type="button" class="investment-account-row" data-investment-account-history="${escapeHtml(account.account_id)}" aria-label="View ${escapeHtml(account.name)} performance history"><span class="investment-account-leading"><span class="investment-account-copy"><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.institution_name || '')}${account.subtype ? ` · ${escapeHtml(account.subtype)}` : ''}</span></span></span><span class="investment-account-value"><b>${fmt.format(account.value)}</b>${changeLine}</span><i class="investment-account-chevron" aria-hidden="true">›</i></button>`;
-  }).join('') : '<p class="spending-empty">No investment accounts connected.</p>';
+  $('#investmentAccounts').innerHTML = accounts.length ? renderInvestmentAccountGroups(data) : '<p class="spending-empty">No investment accounts connected.</p>';
   const names = new Map(accounts.map((account) => [account.account_id, account.name]));
   const isUnclassified = state.investmentFilter === 'Cash & unclassified';
   const unclassifiedAccounts = data.unclassifiedAccounts || [];
@@ -2189,7 +2187,6 @@ function renderDashboard() {
   renderOverviewBriefing(d);
   if (state.view === 'overview') renderNetWorthChartWhenVisible();
   renderAccounts(d.accounts || []);
-  renderDebtPayoff(d.debtPayoff);
   renderConnections(actual.items || []);
   renderClarityLayer(d);
   renderProfileSettings(actual);
@@ -2611,9 +2608,9 @@ $('#accountGrid').addEventListener('click', (event) => {
   const collapseButton = event.target.closest('[data-account-collapse]');
   if (collapseButton) {
     const group = collapseButton.dataset.accountCollapse;
-    if (!state.collapsedAccountGroups) state.collapsedAccountGroups = new Set();
-    if (state.collapsedAccountGroups.has(group)) state.collapsedAccountGroups.delete(group);
-    else state.collapsedAccountGroups.add(group);
+    if (!state.openAccountGroups) state.openAccountGroups = new Set();
+    if (state.openAccountGroups.has(group)) state.openAccountGroups.delete(group);
+    else state.openAccountGroups.add(group);
     renderAccounts(state.dashboard?.accounts || []);
     return;
   }
@@ -2665,48 +2662,6 @@ $('#accountGrid').addEventListener('click', (event) => {
   dialog.showModal();
   $('#nicknameInput').focus();
   $('#nicknameInput').select();
-});
-$('#debtPayoffCard').addEventListener('click', async (event) => {
-  if (event.target.closest('[data-toggle-debt-plan]')) {
-    state.debtPlanExpanded = !state.debtPlanExpanded;
-    renderDebtPayoff(state.dashboard?.debtPayoff);
-    return;
-  }
-  const strategyButton = event.target.closest('[data-debt-strategy]');
-  if (strategyButton) {
-    const strategy = strategyButton.dataset.debtStrategy;
-    try {
-      if (isDemoExperience()) {
-        state.dashboard.debtPayoff = debtPlanForStrategy(state.dashboard.debtPayoff, strategy);
-      } else {
-        state.dashboard.debtPayoff = await api('/api/settings/debt-strategy', { method: 'PATCH', body: JSON.stringify({ strategy }) });
-      }
-      renderDebtPayoff(state.dashboard.debtPayoff);
-    } catch (error) { showNotice(error.message, 'error'); }
-    return;
-  }
-  if (!event.target.closest('[data-save-debt-rates]')) return;
-  const button = event.target.closest('[data-save-debt-rates]');
-  const inputs = [...$('#debtPayoffCard').querySelectorAll('[data-debt-rate]')];
-  const entries = inputs.filter((input) => input.value.trim() !== String(input.dataset.initialRate || ''));
-  if (!entries.length) { showNotice('Change a rate before saving.'); return; }
-  button.disabled = true;
-  try {
-    if (isDemoExperience()) {
-      for (const input of entries) {
-        const debt = state.dashboard.debtPayoff.debts.find((entry) => entry.id === input.dataset.debtRate);
-        if (debt) debt.interestRate = input.value.trim() === '' ? null : Number(input.value);
-      }
-      state.dashboard.debtPayoff.missingRates = state.dashboard.debtPayoff.debts.filter((debt) => debt.interestRate == null).length;
-      state.dashboard.debtPayoff = debtPlanForStrategy(state.dashboard.debtPayoff, state.dashboard.debtPayoff.strategy);
-    } else {
-      let plan = state.dashboard.debtPayoff;
-      for (const input of entries) plan = await api(`/api/accounts/${encodeURIComponent(input.dataset.debtRate)}/debt-details`, { method: 'PATCH', body: JSON.stringify({ interest_rate: input.value }) });
-      state.dashboard.debtPayoff = plan;
-    }
-    renderDebtPayoff(state.dashboard.debtPayoff);
-    showNotice('Debt payoff plan updated.', 'success');
-  } catch (error) { showNotice(error.message, 'error'); } finally { button.disabled = false; }
 });
 $('#nicknameForm').addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -3349,6 +3304,7 @@ $('#investmentAllocation').addEventListener('click', (event) => {
   const allocationTop = $('#investmentAllocationCard').getBoundingClientRect().top;
   state.investmentFilter = filter;
   state.holdingsExpanded = false;
+  $('#investmentHoldingsPanel').open = true;
   renderInvestments(state.investments);
   requestAnimationFrame(() => {
     const shift = $('#investmentAllocationCard').getBoundingClientRect().top - allocationTop;
@@ -3364,9 +3320,20 @@ $('#investmentHoldingsMore').addEventListener('click', () => {
   renderInvestments(state.investments);
 });
 $('#investmentAccounts').addEventListener('click', (event) => {
+  const holding = event.target.closest('[data-holding-history]');
+  if (holding) {
+    openHoldingHistoryEntry({ ticker: holding.dataset.holdingHistory });
+    return;
+  }
   const account = event.target.closest('[data-investment-account-history]');
     if (account) openHoldingHistoryEntry({ accountId: account.dataset.investmentAccountHistory });
 });
+$('#investmentAccounts').addEventListener('toggle', (event) => {
+  const group = event.target.closest('.investment-account-group');
+  if (!group) return;
+  if (group.open) state.expandedInvestmentAccounts.add(group.dataset.investmentAccount);
+  else state.expandedInvestmentAccounts.delete(group.dataset.investmentAccount);
+}, true);
 $('#investmentMoversCard').addEventListener('click', (event) => {
   const scroll = event.target.closest('[data-mover-scroll]');
   if (scroll) {

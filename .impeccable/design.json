@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-01T01:40:23.867291+00:00",
+  "title": "Design System: Clarity",
+  "extensions": {
+    "motion": [
+      {
+        "name": "disclosure",
+        "value": "160ms ease-out",
+        "purpose": "Account disclosure chevrons."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "560px"
+      },
+      {
+        "name": "mobile-navigation",
+        "value": "900px"
+      },
+      {
+        "name": "investment-columns",
+        "value": "1100px"
+      }
+    ]
+  },
+  "components": [],
+  "narrative": {
+    "northStar": "A calm financial check-in",
+    "overview": "One dominant answer, a plain-language interpretation, then detail on demand. Shared hierarchy and semantic color connect every app destination.",
+    "keyCharacteristics": [
+      "One clear answer",
+      "Semantic financial color",
+      "Grouped accounts",
+      "Verified progress graphs",
+      "Detail on demand"
+    ],
+    "rules": [
+      {
+        "name": "Contrast on answer surfaces",
+        "body": "Use answer-specific text and gain/loss tokens on dark financial answer surfaces.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Preserve graphs and the Sankey diagram.",
+      "Keep account totals visible while groups are collapsed.",
+      "Verify both themes at supported device widths."
+    ],
+    "donts": [
+      "Do not use dark green text on dark green surfaces.",
+      "Do not fabricate provider history or performance.",
+      "Do not put every supporting row in a separate card."
+    ]
+  }
+}

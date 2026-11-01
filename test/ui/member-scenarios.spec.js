@@ -7,6 +7,18 @@ test.beforeEach(async ({ page }) => {
   await page.setExtraHTTPHeaders({ 'X-Forwarded-For': `198.51.100.${nextTestClient++}` });
 });
 
+async function expandInvestmentAccount(page, name = null) {
+  const groups = page.getByTestId('investment-account-group');
+  const group = name ? groups.filter({ hasText: name }).first() : groups.first();
+  if (await group.getAttribute('open') == null) await group.locator('summary').click();
+}
+
+async function expandAccountCollections(page) {
+  for (const button of await page.locator('[data-account-collapse]').all()) {
+    if (await button.getAttribute('aria-expanded') === 'false') await button.click();
+  }
+}
+
 async function goToView(page, view) {
   if (view === 'profile') return page.locator('#profileButton').click();
   const mobile = page.locator(`.mobile-nav [data-view="${view}"]`);
@@ -34,7 +46,13 @@ async function openSignedInScenario(page, transform = () => {}) {
   // dashboard routes below model that member's own scenario. Keep these
   // contracts separate so a range fetch cannot silently escape the mock.
   const onboardingPreview = structuredClone(preview);
+  const originalSnapshots = JSON.stringify(preview.investments.snapshots);
+  const originalProgress = JSON.stringify(preview.investments.progress);
   transform(preview);
+  // A transformed snapshot fixture must not keep the unrelated demo's
+  // canonical dates. Explicitly supplied progress remains authoritative.
+  if (JSON.stringify(preview.investments.snapshots) !== originalSnapshots
+      && JSON.stringify(preview.investments.progress) === originalProgress) preview.investments.progress = null;
   preview.dashboard.demoMode = false;
   preview.dashboard.appearance = { theme: 'light' };
   preview.dashboard.plaidConfigured = true;
@@ -244,7 +262,7 @@ test('cash-flow activity replaces a long filtered history one page at a time', a
   await expect(page.locator('.spending-transaction-pagination')).toContainText('Page 3 of 3');
 });
 
-test('a Free member can preview investment history before choosing Plus', async ({ page }) => {
+test('a legacy Free entitlement payload does not hide investment history', async ({ page }) => {
   await openSignedInScenario(page, (preview) => {
     preview.dashboard.entitlements = {
       enabled: true,
@@ -261,15 +279,16 @@ test('a Free member can preview investment history before choosing Plus', async 
     };
   });
 
+  const history = await (await page.request.get('/api/demo-investments/history?account_id=demo-brokerage&range=all')).json();
+  await page.route('**/api/investments/history**', route => route.fulfill({ json: history }));
   await goToView(page, 'investments');
+  await expandInvestmentAccount(page);
   await page.locator('[data-investment-account-history]').first().click();
   const dialog = page.locator('#holdingHistoryDialog');
   await expect(dialog).toBeVisible();
-  await expect(dialog).toHaveClass(/plus-history-gate/);
-  await expect(dialog).toContainText('HISTORY PREVIEW');
-  await expect(dialog).toContainText('Illustrative shape only — not your account values');
-  await expect(dialog).toContainText('$9');
-  await expect(dialog.getByRole('button', { name: /Unlock investment history/i })).toBeVisible();
+  await expect(dialog).not.toHaveClass(/plus-history-gate/);
+  await expect(page.locator('#holdingHistoryChart svg')).toBeVisible();
+  await expect(dialog.getByRole('button', { name: /Unlock investment history/i })).toHaveCount(0);
 });
 
 test('a newly signed-in member with no accounts gets a calm, truthful product preview', async ({ page }) => {
@@ -458,6 +477,7 @@ test('an investment account in Accounts opens its verified performance detail', 
   } }));
 
   await goToView(page, 'accounts');
+  await expandAccountCollections(page);
   const investmentRow = page.locator('#accountGrid [data-account-investment-history]').first();
   await expect(investmentRow).toBeVisible();
   await expect(investmentRow).toHaveAttribute('aria-label', /performance/i);
@@ -485,6 +505,7 @@ test('a connected cash or debt account opens its own verified detail without lea
   } }));
 
   await goToView(page, 'accounts');
+  await expandAccountCollections(page);
   const accountRow = page.locator('#accountGrid [data-account-history]').first();
   await expect(accountRow).toBeVisible();
   await expect(accountRow).toHaveAttribute('aria-label', /account detail/i);
@@ -506,6 +527,7 @@ test('an account with a connection issue routes to its focused management row', 
   });
 
   await goToView(page, 'accounts');
+  await expandAccountCollections(page);
   const connectionAction = page.locator('#accountGrid [data-account-connection]').first();
   await expect(connectionAction).toBeVisible();
   await expect(connectionAction).toHaveAttribute('aria-label', /Reconnect/i);
@@ -542,6 +564,7 @@ test('historical charts use only observed snapshots @critical', async ({ page })
     state: 'ready', label: 'Investment account', value: 1300, reconstructed: false, history, market: [],
     detail: 'Based on 4 verified daily updates from your connected institution.'
   } }));
+  await expandInvestmentAccount(page);
   await page.getByRole('button', { name: /View .+ performance history/ }).first().click();
   await expect(page.locator('#holdingHistoryDialog')).toBeVisible();
   await expect(page.locator('#holdingHistoryNote')).toContainText('verified daily updates');
@@ -609,7 +632,10 @@ test('a newly connected portfolio shows the selected period before tracking bega
 
   await goToView(page, 'investments');
   await page.locator('[data-investment-range="1m"]').click();
-  await expect(page.locator('#investmentChart .chart-unavailable-line')).toBeVisible();
+  // A horizontal SVG path has a zero-height DOM box even while its stroke
+  // is painted. Assert the plotted segment and visible stroke instead.
+  await expect(page.locator('#investmentChart .chart-unavailable-line')).toHaveAttribute('d', /M .+ L .+/);
+  await expect(page.locator('#investmentChart .chart-unavailable-line')).toHaveCSS('stroke-width', '2px');
   await expect(page.locator('#investmentChart .chart-unavailable-label')).toHaveCount(0);
 });
 
@@ -638,15 +664,18 @@ test('a short portfolio window spanning months still uses distinct calendar date
 });
 
 test('a one-month net-worth view never repeats a calendar label @critical', async ({ page }) => {
+  const today = new Date();
+  const recentDate = (days) => new Date(today.getTime() - days * 86400000).toISOString().slice(0, 10);
   await openSignedInScenario(page, (preview) => {
     preview.dashboard.snapshots = [
-      { date: '2026-09-05', net_worth: 237_200, source: 'verified' },
-      { date: '2026-09-06', net_worth: 240_663, source: 'verified' },
-      { date: '2026-09-07', net_worth: 240_603, source: 'verified' }
+      { date: recentDate(3), net_worth: 237_200, source: 'verified' },
+      { date: recentDate(2), net_worth: 240_663, source: 'verified' },
+      { date: recentDate(1), net_worth: 240_603, source: 'verified' }
     ];
   });
 
   await page.locator('[data-networth-range="1m"]').click();
+  await expect(page.locator('#netWorthChart .chart-x-axis-label').first()).toBeVisible();
   const labels = await page.locator('#netWorthChart .chart-x-axis-label').allTextContents();
   expect(labels.length).toBeGreaterThanOrEqual(1);
   expect(labels.every((label) => /^[A-Z][a-z]{2} \d+$/.test(label))).toBe(true);
@@ -688,13 +717,15 @@ test('an incomplete portfolio timeframe retains its verified endpoint dates', as
 });
 
 test('portfolio timeframe controls redraw the verified window instead of relabeling the same short trend', async ({ page }) => {
-  const today = new Date().toISOString().slice(0, 10);
+  // A fixed mid-month endpoint includes multiple calendar-month observations
+  // even when this test runs on the first day of the actual month.
+  const today = '2026-09-18';
   const ago = (days) => new Date(Date.parse(`${today}T00:00:00Z`) - days * 86_400_000).toISOString().slice(0, 10);
   await openSignedInScenario(page, (preview) => {
     // Deliberately span more than one selectable range. This is the failure
     // mode behind a portfolio chart that appeared to remain on Sep 5–Sep 7
     // regardless of the selected control.
-    preview.investments.snapshots = [390, 160, 88, 31, 5, 0].map((days, index) => ({
+    preview.investments.snapshots = [390, 160, 88, 31, 17, 0].map((days, index) => ({
       date: ago(days), value: 200_000 + index * 1_000, source: 'verified'
     }));
     preview.investments.total = 205_000;
@@ -715,7 +746,8 @@ test('portfolio timeframe controls redraw the verified window instead of relabel
   await expect(sixMonthRange).toBeEnabled();
   await sixMonthRange.click();
   await expect(page.locator('[data-investment-range="6m"]')).toHaveClass(/active/);
-  await expect(page.locator('#investmentContext')).toContainText('last 6 months');
+  await expect(page.locator('#investmentPeriodSummary')).toHaveText('last 6 months');
+  await expect(page.locator('#investmentContext')).toContainText('since Apr 11');
   const sixMonthSegments = await lineSegments();
 
   // More verified observations belong to six months than one month. Checking
@@ -759,6 +791,7 @@ test('investment account and holding rows keep names and values independently sc
   const valueEdges = accountLayout.map(({ value }) => Math.round(value.right));
   expect(Math.max(...valueEdges) - Math.min(...valueEdges)).toBeLessThanOrEqual(1);
 
+  await page.getByText('All holdings across accounts', { exact: true }).click();
   const holdings = page.locator('#investmentPositions .holding-row');
   await expect(holdings).toHaveCount(3);
   const holdingsRemainLegible = await holdings.evaluateAll((rows) => rows.every((row) => {
@@ -807,7 +840,7 @@ test('investment portfolio and account rows present one reconciled verified chan
   await expect(rows.nth(1)).toContainText('−$100 · all history');
 });
 
-test('a member with debt receives one optional next step, not an alarming wall of payoff controls', async ({ page }) => {
+test('a member can inspect debt accounts without a debt planning section', async ({ page }) => {
   await openSignedInScenario(page, (preview) => {
     const credit = preview.dashboard.accounts.find((account) => account.type === 'credit');
     credit.name = 'Everyday card';
@@ -826,13 +859,12 @@ test('a member with debt receives one optional next step, not an alarming wall o
   });
 
   await goToView(page, 'accounts');
-  const payoff = page.locator('#debtPayoffCard');
-  await expect(payoff).toBeVisible();
-  await expect(payoff.getByRole('button', { name: /view plan/i })).toBeVisible();
-  await expect(payoff.getByRole('button', { name: /save most interest/i })).toHaveCount(0);
-  await payoff.getByRole('button', { name: /view plan/i }).click();
-  await expect(payoff.getByRole('button', { name: /save most interest/i })).toBeVisible();
-  await expect(payoff).toContainText('Everyday card');
+  await expect(page.locator('#debtPayoffCard')).toHaveCount(0);
+  const credit = page.getByRole('region', { name: 'Credit cards accounts', exact: true });
+  await expect(credit.locator('[data-account-collapse]')).toHaveAttribute('aria-expanded', 'false');
+  await expect(credit).toContainText('$3,400');
+  await credit.locator('[data-account-collapse]').click();
+  await expect(credit.getByRole('button', { name: /View Everyday card account detail/i })).toBeVisible();
 });
 
 test('a provider holding gap stays actionable without inventing a classification', async ({ page }) => {

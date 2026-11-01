@@ -204,7 +204,7 @@ app.get('/manifest.webmanifest', (req, res) => {
 app.use(express.static(path.join(projectRoot, 'public'), {
   setHeaders(res, filePath) {
     // The PWA intentionally serves no cached shell or financial data.
-    if (/\/(index\.html|app\.js|styles\.css|chart-utils\.js|customer-error\.js|sw\.js|manifest\.webmanifest)$/.test(filePath)) {
+    if (/\/(index\.html|app\.js|styles\.css|chart-utils\.js|customer-error\.js|investment-view\.js|sw\.js|manifest\.webmanifest)$/.test(filePath)) {
       res.setHeader('Cache-Control', 'private, no-store, no-cache, max-age=0, must-revalidate');
       res.setHeader('CDN-Cache-Control', 'no-store');
       res.setHeader('Surrogate-Control', 'no-store');

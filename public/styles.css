@@ -1,10 +1,10 @@
 :root {
-  --bg: #f6f7f4;
+  --bg: #f4f6f2;
   --card: #ffffff;
-  --ink: #171a17;
-  --muted: #747a74;
+  --ink: #1d2b26;
+  --muted: #606f67;
   --line: #e5e8e2;
-  --accent: #1f6f4a;
+  --accent: #1d6c48;
   --accent-soft: #e8f3ec;
   --income: #357e57;
   --outflow: #bd6b5d;
@@ -15,7 +15,7 @@
   --save-invest: #7489af;
   --sankey-surface: #ffffff;
   --sankey-border: #e4e9e4;
-  --danger: #a84444;
+  --danger: #a23f3e;
   --warning: #9a6b22;
   --warning-soft: #fbf1dc;
   --surface-subtle: #fbfcfa;
@@ -1924,3 +1924,308 @@ html[data-theme="dark"] .account-rename {
 .holding-history-class-editor-row .holding-history-class { flex: 0 0 auto; margin-top: 0; }
 html[data-theme="dark"] .holding-history-class-editor-row > span { color: var(--text-primary); }
 .holding-history-tabs:empty { display: none; }
+
+/* Investment check-in: one answer, a compact verified trend, then accounts
+   containing their holdings. Other primary views keep their existing UI. */
+#investmentsView { --investment-gain: #1d6c48; --investment-loss: #a23f3e; }
+#investmentsView .portfolio-card { padding: 0; overflow: hidden; background: var(--card); border: 1px solid var(--line); box-shadow: none; border-radius: 16px; }
+#investmentsView .portfolio-card::after { display: none; }
+#investmentsView .portfolio-answer { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 26px 30px; background: #173f31; color: #f6fbf5; }
+#investmentsView .portfolio-heading { color: #d2e4d8; font-size: 14px; font-weight: 550; letter-spacing: 0; margin: 0 0 6px; }
+#investmentsView .portfolio-total { color: #f6fbf5; font-size: 44px; font-weight: 650; letter-spacing: -.03em; line-height: 1.15; }
+#investmentsView .portfolio-account-count { margin: 10px 0 0; color: #d2e4d8; font-size: 13px; }
+#investmentsView .portfolio-movement { padding-left: 26px; border-left: 1px solid #527261; }
+#investmentsView .portfolio-change-label, #investmentsView .portfolio-movement > small { display: block; color: #d2e4d8; font-size: 12px; }
+#investmentsView .portfolio-movement .spending-context { color: #f6fbf5; font-size: 18px; line-height: 1.5; font-weight: 600; margin: 5px 0; }
+#investmentsView .portfolio-movement .positive { color: #c6f2d7 !important; }
+#investmentsView .portfolio-movement .negative { color: #ffcac3 !important; }
+#investmentsView .investment-range-chip { display: none; }
+#investmentsView .portfolio-trend-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 20px 24px 0; }
+#investmentsView .portfolio-trend-heading h2 { font-size: 15px; font-weight: 600; margin: 0; }
+#investmentsView .portfolio-trend-heading span { color: var(--muted); font-size: 12px; }
+#investmentsView .portfolio-chart { height: 170px; min-height: 170px; margin: 10px 24px 18px; border: 0; }
+#investmentsView .investment-support-grid { grid-template-columns: minmax(0, 1fr) minmax(250px, .42fr); align-items: start; gap: 28px; margin-top: 28px; }
+#investmentsView .investment-accounts-card { padding: 0; border: 0; background: transparent; box-shadow: none; }
+#investmentsView .investment-card-heading { min-height: 0; align-items: baseline; gap: 12px; }
+#investmentsView .investment-card-heading h2 { font-size: 18px; font-weight: 650; letter-spacing: -.015em; margin: 0; }
+#investmentsView .account-values-label { font-size: 12px; color: var(--muted); text-align: right; }
+#investmentsView .investment-accounts { display: grid; gap: 16px; margin-top: 15px; }
+#investmentsView .investment-account-group { min-width: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--card); overflow: hidden; }
+#investmentsView .investment-account-row { min-height: 86px; padding: 18px; border-radius: 0; list-style: none; background: #edf2eb; grid-template-columns: minmax(0, 1fr) minmax(8ch, max-content) 16px; gap: 12px; }
+#investmentsView .investment-account-row::-webkit-details-marker { display: none; }
+#investmentsView .investment-account-row:hover { padding-inline: 18px; color: var(--ink); background: #e7eee4; transform: none; }
+#investmentsView .investment-account-copy { min-width: 0; }
+#investmentsView .investment-account-copy strong { color: var(--ink); font-size: 15px; line-height: 1.4; white-space: normal; overflow-wrap: anywhere; }
+#investmentsView .investment-account-copy > span { color: var(--muted); font-size: 12px; white-space: normal; overflow-wrap: anywhere; }
+#investmentsView .investment-account-value b { color: var(--ink); font-size: 16px; }
+#investmentsView .investment-account-value small { font-size: 12px; line-height: 1.4; font-weight: 500; }
+#investmentsView .investment-account-value small::before { display: none; }
+#investmentsView .investment-account-value small.positive, #investmentsView .account-holding-value small.positive { color: var(--investment-gain); }
+#investmentsView .investment-account-value small.negative, #investmentsView .account-holding-value small.negative { color: var(--investment-loss); }
+#investmentsView .account-disclosure-icon { width: 16px; height: 16px; color: var(--muted); transition: transform .16s ease-out; }
+#investmentsView .investment-account-group[open] > summary .account-disclosure-icon { transform: rotate(180deg); }
+#investmentsView .account-holdings-label { display: flex; justify-content: space-between; gap: 12px; padding: 14px 18px 5px 56px; font-size: 12px; color: var(--muted); }
+#investmentsView .account-holdings { padding-inline: 18px; }
+#investmentsView .account-holding-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 72px; padding: 13px 0; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); text-align: left; border-radius: 0; font: inherit; }
+#investmentsView button.account-holding-row { cursor: pointer; }
+#investmentsView button.account-holding-row:hover { background: var(--surface-subtle); }
+#investmentsView .account-holding-row:last-child { border-bottom: 0; }
+#investmentsView .account-holding-mark { display: grid; place-items: center; flex: 0 0 28px; height: 28px; border-radius: 7px; color: var(--holding-color); background: color-mix(in srgb, var(--holding-color) 12%, var(--card)); }
+#investmentsView .account-holding-mark svg { width: 17px; height: 17px; }
+#investmentsView .account-holding-copy { flex: 1; min-width: 0; display: grid; gap: 4px; }
+#investmentsView .account-holding-copy strong { font-size: 13px; font-weight: 650; overflow-wrap: anywhere; }
+#investmentsView .account-holding-copy > span { font-size: 12px; color: var(--muted); line-height: 1.4; overflow-wrap: anywhere; }
+#investmentsView .account-holding-value { flex-shrink: 0; display: grid; gap: 4px; text-align: right; }
+#investmentsView .account-holding-value b { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#investmentsView .account-holding-value small { font-size: 12px; font-weight: 500; }
+#investmentsView .account-holding-chevron { color: var(--muted); font-size: 20px; flex-shrink: 0; }
+#investmentsView .account-history-action { padding: 0 18px; border-top: 1px solid var(--line); }
+#investmentsView .account-history-action button { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 9px 0; background: transparent; border: 0; color: var(--accent); font: inherit; font-size: 12px; font-weight: 600; text-align: left; cursor: pointer; }
+#investmentsView .account-holdings-note { margin: 0; padding: 16px 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+#investmentsView .investment-account-group > .account-holdings-note { padding: 14px 18px; }
+#investmentsView .allocation-card { padding: 0; border: 0; box-shadow: none; background: transparent; }
+#investmentsView .investment-allocation-bar { display: flex; gap: 2px; overflow: hidden; height: 12px; border-radius: 4px; margin-top: 18px; }
+#investmentsView .investment-allocation-bar:empty { display: none; }
+#investmentsView .investment-allocation-bar span { min-width: 0; }
+#investmentsView .investment-donut { display: none; }
+#investmentsView .allocation-visual { display: block; margin-top: 10px; }
+#investmentsView .investment-allocation-row { min-height: 44px; }
+#investmentsView .investment-retirement-link { min-height: 44px; margin-top: 16px; padding: 12px 0; width: 100%; text-align: left; border-top: 1px solid var(--line); }
+#investmentsView .combined-holdings { padding: 0; }
+#investmentsView .combined-holdings > summary { min-height: 56px; padding: 18px 22px; cursor: pointer; color: var(--ink); font-size: 15px; font-weight: 600; }
+#investmentsView .combined-holdings .holdings-head h2 { font-size: 16px; margin: 0; }
+#investmentsView :is(.account-holding-row, .investment-account-row, .account-history-action button):focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+html[data-theme="dark"] #investmentsView { --investment-gain: #9bdab1; --investment-loss: #f0aaa0; }
+html[data-theme="dark"] #investmentsView .portfolio-answer { background: #1e322a; }
+html[data-theme="dark"] #investmentsView .investment-account-row { background: #252d29; }
+html[data-theme="dark"] #investmentsView .investment-account-row:hover { background: #2c3730; }
+@media (max-width: 1100px) {
+  #investmentsView .investment-support-grid { grid-template-columns: minmax(0, 1fr); }
+  #investmentsView .allocation-card { padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
+}
+
+/* Shared Clarity visual system. The same reading order, controls and surfaces
+   apply to every destination; financial graphs and tools keep their behavior. */
+:root {
+  --answer-bg: #173f31;
+  --answer-text: #f6fbf5;
+  --answer-muted: #d2e4d8;
+  --answer-gain: #c6f2d7;
+  --answer-loss: #ffcac3;
+  --navigation-bg: #eef2ec;
+  --navigation-selected: #dcebe0;
+  --navigation-ink: #19543a;
+  --button-bg: #1d6c48;
+  --button-hover: #155838;
+  --button-ink: #ffffff;
+  --control-border: #87988d;
+}
+html[data-theme="dark"] {
+  --muted: #b2bab5;
+  --answer-bg: #24332c;
+  --answer-text: #edf0f2;
+  --answer-muted: #c5d5ca;
+  --answer-gain: #b5eac9;
+  --answer-loss: #ffc6bf;
+  --navigation-bg: #171c1a;
+  --navigation-selected: #293a30;
+  --navigation-ink: #c1e8ce;
+  --button-bg: #b5dfc5;
+  --button-hover: #c8ecd6;
+  --button-ink: #153423;
+  --control-border: #77867d;
+}
+body { line-height: 1.45; }
+.sidebar { background: var(--navigation-bg); border-right: 1px solid var(--line); padding: 30px 20px; }
+.brand > span:last-child { font-family: Georgia, serif; font-size: 30px; letter-spacing: -.03em; }
+.nav-item { min-height: 46px; font-size: 14px; border-radius: 10px; color: var(--muted); }
+.nav-item:hover { color: var(--ink); background: var(--control); }
+.nav-item.active { color: var(--navigation-ink); background: var(--navigation-selected); box-shadow: none; }
+.main { padding-top: 30px; }
+.topbar { margin-bottom: 24px; }
+h1 { font-size: 27px; font-weight: 650; letter-spacing: -.025em; }
+h2 { font-size: 18px; font-weight: 650; letter-spacing: -.018em; }
+.page-context { color: var(--muted); font-size: 13px; margin-top: 5px; font-weight: 400; }
+.card { border: 1px solid var(--line); border-radius: 16px; background: var(--card); box-shadow: none; }
+.card-label { font-size: 12px; font-weight: 600; letter-spacing: .01em; text-transform: none; color: var(--muted); }
+.primary, #connectButton { min-height: 44px; padding: 11px 16px; border-radius: 10px; background: var(--button-bg); color: var(--button-ink); box-shadow: none; font-weight: 600; }
+.primary:hover { transform: none; filter: brightness(.96); }
+.primary, .secondary, .demo-preview-button, .manual-account-option { transition: border-color .16s ease-out; }
+.secondary { min-height: 44px; border-radius: 10px; border: 1px solid var(--control-border); background: var(--card); color: var(--ink); }
+.profile-button, #profileButton { min-width: 44px; min-height: 44px; background: var(--control); color: var(--ink); border-color: var(--line); }
+.text-button { min-height: 44px; font-size: 13px; font-weight: 600; }
+:is(button, summary, a, input, select):focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+:is(input, select, textarea) { color: var(--ink); }
+:is(input, select, textarea)::placeholder { color: var(--muted); opacity: 1; }
+:is(.search, .spending-transaction-controls input, .spending-transaction-controls select, .retirement-form input, .retirement-form select) { min-height: 44px; border-color: var(--control-border); border-radius: 9px; background: var(--card); }
+.range-control button { min-height: 40px; border-radius: 8px; font-size: 12px; }
+.range-control button.active { background: var(--navigation-selected); color: var(--navigation-ink); box-shadow: none; }
+.financial-answer, #investmentsView .portfolio-answer { background: var(--answer-bg); color: var(--answer-text); }
+.financial-answer :is(h2, .card-label, .portfolio-heading, .portfolio-change-label) { color: var(--answer-muted); font-size: 14px; letter-spacing: 0; }
+.financial-answer :is(.hero-number, .spending-total, .retirement-total), #investmentsView .portfolio-total { color: var(--answer-text); font-size: 44px; font-weight: 650; letter-spacing: -.03em; }
+.financial-answer :is(p, small, .spending-context, .portfolio-account-count), #investmentsView .portfolio-account-count, #investmentsView .portfolio-movement > small, #investmentsView .portfolio-change-label { color: var(--answer-muted); }
+.financial-answer .positive, .financial-answer .delta, #investmentsView .portfolio-movement .positive { color: var(--answer-gain) !important; }
+.financial-answer .negative, #investmentsView .portfolio-movement .negative { color: var(--answer-loss) !important; }
+.financial-answer .cashflow-headline { color: var(--answer-gain); font-size: 14px; }
+.financial-answer .delta { font-size: 14px; min-height: 0; margin-top: 8px; }
+.financial-answer #retirementReviewPlan { background: #f6fbf5; color: #173f31; border: 0; border-radius: 10px; padding: 10px 12px; min-height: 44px; font-size: 12px; align-self: start; }
+.financial-answer #retirementProjection { color: var(--answer-text); }
+.financial-answer .retirement-inputs > span { color: var(--answer-muted); background: transparent; border-color: #527261; }
+.financial-answer .retirement-inputs :is(span, small) { color: var(--answer-muted); }
+.financial-answer .retirement-inputs :is(strong, b) { color: var(--answer-text); }
+.spending-period-selector, .investment-period-selector { border: 1px solid var(--line); background: var(--card); border-radius: 12px; padding: 12px 16px; box-shadow: none; }
+.spending-period-selector::after, .investment-period-selector::after { display: none; }
+.networth-card { padding: 0 24px 18px; overflow: hidden; }
+.networth-answer { margin: 0 -24px 20px; padding: 26px 24px; }
+.networth-answer h2 { margin: 0 0 7px; font-weight: 500; }
+.networth-movement-inline { padding-top: 18px; margin-top: 16px; gap: 7px; }
+.networth-movement-inline p { font-size: 13px; line-height: 1.5; }
+.overview-side-rail { gap: 20px; }
+.balance-sheet-card, .goal-insight { padding: 24px; }
+.overview-glance-values strong { font-size: 22px; font-weight: 600; }
+.overview-guidance { margin-top: 24px; }
+.clarity-checkin, .connection-attention { background: var(--surface-subtle); }
+.clarity-checkin .checkin-mark { background: var(--accent-soft); color: var(--accent); }
+.cashflow-answer { padding: 24px; margin: -24px -24px 20px; border-radius: 15px 15px 0 0; }
+.cashflow-answer h2 { font-weight: 500; margin-bottom: 6px; }
+.spending-hero-card { overflow: hidden; }
+.spending-context { font-size: 13px; line-height: 1.6; }
+.cashflow-visual-tools { color: var(--muted); padding-top: 12px; }
+.cashflow-sankey { border-radius: 12px; }
+.spending-trend-card, .spending-transactions, .recurring-card { margin-top: 24px; }
+.retirement-hero { padding: 0 24px 24px; overflow: visible; }
+.retirement-answer { margin: 0 -24px 24px; padding: 26px 24px; border-radius: 15px 15px 0 0; }
+.retirement-answer .spending-context { margin-bottom: 0; }
+.retirement-path { margin-top: 18px; }
+.retirement-milestone { border-radius: 12px; box-shadow: none; }
+.retirement-spending-card, .retirement-spending-targets { border-radius: 16px; }
+.accounts-summary { background: var(--card); border-color: var(--line); margin-bottom: 26px; }
+.accounts-summary > div { padding: 21px 22px; }
+.accounts-summary strong { color: var(--ink); font-size: 26px; font-weight: 600; }
+.account-collection { border-radius: 14px; border-color: var(--line); background: var(--card); box-shadow: none; overflow: hidden; }
+.account-collection-head { background: var(--surface-subtle); min-height: 84px; }
+.account-collection-head h2 { font-size: 16px; }
+.account-collection-icon { border-radius: 9px; background: var(--control); color: var(--ink); }
+.account-groups:not(:has(.empty)) { display: block; overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--card); }
+.account-groups .account-collection { margin: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.account-groups .account-collection + .account-collection { border-top: 1px solid var(--line); }
+.account-groups .account-collection-head { min-height: 76px; background: transparent; padding: 16px 20px; }
+.account-groups .account-collection-head:hover { background: var(--surface-subtle); }
+.account-groups .account-collection-head h2 { font-size: 15px; }
+.account-groups .account-collection-head p { font-size: 12px; }
+.account-groups .account-collection.asset .account-collection-total > span { display: none; }
+.account-groups .account-collection-items { margin-inline: 20px; }
+.account-groups .account-collection-icon { width: 32px; height: 32px; border-radius: 8px; }
+#accountsView #debtPayoffCard { border: 0; border-radius: 0; background: transparent; box-shadow: none; padding: 18px 4px; margin-top: 4px; }
+#accountsView #debtPayoffCard .card-label { display: none; }
+#accountsView .manual-account-prompt { border: 0; background: transparent; padding: 22px 0 0; margin-top: 8px; }
+#accountsView .manual-account-heading .card-label { display: none; }
+.manual-account-prompt { background: var(--card); }
+.manual-account-option { border-radius: 10px; box-shadow: none; }
+.profile-identity { padding: 24px; border-radius: 16px; background: var(--answer-bg); color: var(--answer-text); }
+.profile-identity :is(h2, p, .card-label) { color: var(--answer-text); }
+.profile-identity .profile-monogram { background: #d9e9dc; color: #173f31; border-radius: 12px; }
+.profile-settings-panel { border-radius: 16px; background: var(--card); border-color: var(--line); box-shadow: none; }
+.profile-group { padding: 24px; }
+.profile-group-head h3 { font-size: 17px; }
+.profile-group-head p, .appearance-setting p, .demo-setting p { font-size: 13px; line-height: 1.5; color: var(--muted); }
+dialog { border-radius: 16px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+dialog input, dialog select { border-color: var(--control-border); color: var(--ink); background: var(--card); }
+.auth-screen { background: var(--bg); }
+.auth-halo { display: none; }
+.auth-card { border-radius: 20px; background: var(--card); border: 1px solid var(--line); box-shadow: 0 16px 48px rgba(25,45,33,.07); }
+.auth-card h1 { color: var(--ink); font-size: 42px; line-height: 1.1; letter-spacing: -.03em; }
+.auth-card h1 em { color: var(--accent); font-style: normal; }
+.auth-intro, .auth-demo-note { color: var(--muted); }
+.auth-preview { border-radius: 12px; background: var(--surface-subtle); border-color: var(--line); }
+.demo-preview-button { min-height: 46px; border-radius: 10px; background: var(--button-bg); color: var(--button-ink); border: 0; }
+.demo-preview-button span { color: inherit; }
+.manual-account-option.primary { background: var(--button-bg); color: var(--button-ink); border-color: transparent; }
+.manual-account-option.primary .manual-account-option-icon { background: #dcefe2; color: #173f31; }
+.manual-account-option.primary small { opacity: 1; }
+.primary:is(:hover, :focus-visible, :active),
+.demo-preview-button:is(:hover, :focus-visible, :active),
+.manual-account-option.primary:is(:hover, :focus-visible, :active),
+#connectButton:is(:hover, :focus-visible, :active) { background: var(--button-hover); color: var(--button-ink); background-image: none; transform: none; }
+.financial-answer :is(button, a):focus-visible { outline-color: var(--answer-gain); }
+.fresh-account-state { border-radius: 16px; background: var(--card); border-color: var(--line); box-shadow: none; }
+.fresh-account-copy h2 { font-size: 26px; letter-spacing: -.025em; }
+.fresh-account-copy p { font-size: 14px; line-height: 1.6; color: var(--muted); }
+.fresh-feature-card { border-radius: 12px; background: var(--surface-subtle); box-shadow: none; }
+html[data-theme="dark"] .sidebar { background: var(--navigation-bg); }
+html[data-theme="dark"] .nav-item.active { color: var(--navigation-ink); background: var(--navigation-selected); }
+html[data-theme="dark"] .card { box-shadow: none; }
+html[data-theme="dark"] #connectButton { background: var(--button-bg); color: var(--button-ink); }
+html[data-theme="dark"] #profileButton { background: var(--control); color: var(--ink); }
+html[data-theme="dark"] .mobile-nav button.active { color: var(--navigation-ink); background: var(--navigation-selected); }
+html[data-theme="dark"] .retirement-hero { background: var(--card); }
+html[data-theme="dark"] .auth-card { background: var(--card); border-color: var(--line); }
+html[data-theme="dark"] .demo-preview-button { background: var(--button-bg); color: var(--button-ink); }
+html[data-theme="dark"] .primary:is(:hover, :focus-visible, :active),
+html[data-theme="dark"] .demo-preview-button:is(:hover, :focus-visible, :active),
+html[data-theme="dark"] #connectButton:is(:hover, :focus-visible, :active) { background: var(--button-hover); color: var(--button-ink); }
+@media (max-width: 900px) {
+  .main { padding-top: 24px; }
+  .mobile-nav { background: var(--card); border-top: 1px solid var(--line); }
+  .mobile-nav button { min-height: 48px; color: var(--muted); border-radius: 10px; }
+  .mobile-nav button.active { color: var(--navigation-ink); background: var(--navigation-selected); }
+  .mobile-nav button span { font-size: 12px; }
+  #connectButton { width: 44px; height: 44px; min-width: 44px; flex: 0 0 44px; font-size: 0; padding: 0; }
+  #connectButton::after { content: '+'; font-size: 24px; line-height: 1; }
+}
+@media (max-width: 560px) {
+  .main { padding: 22px 18px 112px; }
+  .topbar { margin-bottom: 22px; gap: 12px; }
+  .top-actions { gap: 8px; }
+  h1 { font-size: 25px; }
+  #connectButton { padding: 0; font-size: 0; width: 44px; height: 44px; flex: 0 0 44px; }
+  #connectButton::after { content: '+'; font-size: 24px; }
+  .top-actions { flex-shrink: 0; }
+  .spending-period-selector, .investment-period-selector { gap: 8px; padding: 10px 12px; }
+  .spending-period-selector > div:first-child, .investment-period-selector > div:first-child { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; width: 100%; }
+  .spending-period-selector p, .investment-period-selector p { font-size: 12px; font-weight: 400; margin: 0; }
+  .page-context { font-size: 12px; }
+  .financial-answer :is(.hero-number, .spending-total, .retirement-total), #investmentsView .portfolio-total { font-size: 38px; }
+  .networth-card { padding: 0 16px 16px; }
+  .networth-answer { margin: 0 -16px 18px; padding: 24px 20px; }
+  .balance-sheet-card, .goal-insight { padding: 20px; }
+  .cashflow-answer { padding: 22px 20px; margin: -18px -18px 18px; }
+  .retirement-hero { padding: 0 18px 20px; }
+  .retirement-answer { margin: 0 -18px 20px; padding: 24px 20px; }
+  .accounts-summary > div { padding: 18px 12px; }
+  .accounts-summary strong { font-size: 20px; }
+  .accounts-summary span { font-size: 12px; line-height: 1.5; }
+  .account-groups .account-collection-head { min-height: 74px; padding: 15px 16px; }
+  .account-groups .account-collection-items { margin-inline: 16px; }
+  .profile-group { padding: 20px; }
+  .profile-identity { padding: 22px; }
+  .auth-card h1 { font-size: 36px; }
+}
+@media (max-width: 560px) {
+  #investmentsView .portfolio-answer { display: block; padding: 22px; }
+  #investmentsView .portfolio-total { font-size: 38px; }
+  #investmentsView .portfolio-movement { border: 0; padding: 0; margin-top: 16px; }
+  #investmentsView .portfolio-movement .spending-context { font-size: 16px; }
+  #investmentsView .portfolio-change-label { display: none; }
+  #investmentsView .portfolio-trend-heading { padding: 18px 16px 0; }
+  #investmentsView .portfolio-trend-heading span { max-width: 120px; text-align: right; line-height: 1.4; }
+  #investmentsView .portfolio-chart { height: 145px; min-height: 145px; margin: 10px 14px 14px; }
+  #investmentsView .investment-support-grid { gap: 24px; margin-top: 24px; }
+  #investmentsView .investment-card-heading h2 { font-size: 17px; }
+  #investmentsView .investment-account-row { padding: 15px 14px; min-height: 84px; gap: 9px; }
+  #investmentsView .investment-account-row:hover { padding-inline: 14px; }
+  #investmentsView .investment-account-copy strong { font-size: 14px; }
+  #investmentsView .investment-account-value b { font-size: 15px; }
+  #investmentsView .investment-account-value small { max-width: 125px; white-space: normal; }
+  #investmentsView .account-holdings { padding-inline: 14px; }
+  #investmentsView .account-holdings-label { padding-inline: 48px 14px; }
+  #investmentsView .account-holding-row { gap: 9px; min-height: 70px; }
+  #investmentsView .account-holding-mark { flex-basis: 25px; height: 25px; }
+  #investmentsView .account-holding-chevron { display: none; }
+  #investmentsView .account-history-action { padding-inline: 14px; }
+  #investmentsView .account-values-label { max-width: 140px; font-size: 12px; }
+}
+html[data-onboarding-preview="true"] .account-holding-copy,
+html[data-onboarding-preview="true"] .account-holding-value,
+#investmentsView.investment-coverage-preview .account-holding-copy,
+#investmentsView.investment-coverage-preview .account-holding-value { filter: blur(4px); opacity: .58; }

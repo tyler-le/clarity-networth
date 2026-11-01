@@ -56,6 +56,18 @@ test('a verified access code unlocks the single Google sign-in action', async ({
   await expect(page.locator('#beginGoogleSignIn')).toHaveCount(0);
 });
 
+async function expandInvestmentAccount(page, name = null) {
+  const groups = page.getByTestId('investment-account-group');
+  const group = name ? groups.filter({ hasText: name }).first() : groups.first();
+  if (await group.getAttribute('open') == null) await group.locator('summary').click();
+}
+
+async function expandAccountCollections(page) {
+  for (const button of await page.locator('[data-account-collapse]').all()) {
+    if (await button.getAttribute('aria-expanded') === 'false') await button.click();
+  }
+}
+
 async function goToView(page, view) {
   const mobile = page.locator(`.mobile-nav [data-view="${view}"]`);
   if (await mobile.isVisible()) {
@@ -103,12 +115,12 @@ test('a new visitor can explore the complete demo without signing in @critical',
   page.on('pageerror', (error) => pageErrors.push(error.message));
   await openDemo(page);
 
-  await expect(page.getByRole('heading', { name: 'Net Worth' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Net Worth', exact: true })).toBeVisible();
   await expect(page.locator('#netWorth')).toHaveText(/\$/);
   await expect(page.locator('#netWorthChart svg')).toBeVisible();
 
   await goToView(page, 'spending');
-  await expect(page.getByRole('heading', { name: 'Cash flow' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Cash flow', exact: true })).toBeVisible();
   await page.locator('[data-spending-range="1y"]').click();
   await expect(page.locator('.trend-column')).toHaveCount(12);
   const oneYearLabelCount = await page.locator('.trend-month').count();
@@ -127,7 +139,12 @@ test('a new visitor can explore the complete demo without signing in @critical',
   await expect(page.locator('#cashflowSankey svg')).toBeVisible();
   await expect(page.locator('#recurringCharges')).toBeVisible();
   await expect(page.locator('#recurringCharges')).toContainText('Netflix');
-  await expect(page.locator('#recurringCharges .recurring-context')).toContainText('Next likely');
+  await expect(page.locator('#recurringHint')).toHaveText(/\d+ tracked/);
+  // An upcoming estimate is optional when the selected history has no
+  // future occurrence; never require the UI to invent one.
+  if (await page.locator('#recurringCharges .recurring-context').count()) {
+    await expect(page.locator('#recurringCharges .recurring-context')).toContainText('NEXT LIKELY');
+  }
   await expect(page.locator('#goalTitle')).toHaveText('Emergency fund');
   await expect(page.locator('#goalDetail')).toContainText('Demo only');
 
@@ -219,27 +236,20 @@ test('a demo visitor can exit from Profile and return to sign-in', async ({ page
   await expect(page.locator('#inviteCode')).toBeVisible();
 });
 
-test('accounts makes a simple debt payoff choice actionable without a separate dashboard', async ({ page }) => {
+test('accounts groups start minimized and keep debt balances without a debt plan @critical', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'accounts');
-  const card = page.locator('#debtPayoffCard');
-  await expect(card).toBeVisible();
-  await expect(card).toContainText('One clear next step, when you’re ready');
-  await expect(card.getByRole('button', { name: /view plan/i })).toBeVisible();
-  await expect(card.getByRole('button', { name: /save most interest/i })).toHaveCount(0);
-  await card.getByRole('button', { name: /view plan/i }).click();
-  await expect(card).toContainText(/debt payoff/i);
-  await expect(card).toContainText('Save most interest');
-  await expect(card).toContainText('Chase Sapphire Preferred');
-  await card.getByRole('button', { name: /small wins first/i }).click();
-  await expect(card.getByRole('button', { name: /small wins first/i })).toHaveClass(/active/);
-  await expect(card).toContainText('Capital One Venture, your smallest balance');
-  await expect(page.locator('#accountGrid')).toContainText('••4821');
-  const manualPrompt = page.locator('.manual-account-prompt');
-  await expect(manualPrompt).toContainText('Something not connected?');
-  await expect(manualPrompt.getByRole('button', { name: 'Add item' })).toBeVisible();
-  const [gridBox, promptBox] = await Promise.all([page.locator('#accountGrid').boundingBox(), manualPrompt.boundingBox()]);
-  expect(gridBox && promptBox && promptBox.y >= gridBox.y + gridBox.height).toBe(true);
+  await expect(page.locator('#debtPayoffCard')).toHaveCount(0);
+  const headings = page.locator('[data-account-collapse]');
+  for (const heading of await headings.all()) await expect(heading).toHaveAttribute('aria-expanded', 'false');
+  const credit = page.getByRole('region', { name: 'Credit cards accounts', exact: true });
+  await expect(credit).toContainText('$1,800');
+  await credit.locator('[data-account-collapse]').click();
+  await expect(credit.getByRole('button', { name: /View Chase Sapphire Preferred account detail/i })).toBeVisible();
+  await goToView(page, 'overview');
+  await goToView(page, 'accounts');
+  await expect(credit.locator('[data-account-collapse]')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('button', { name: /save most interest|small wins first/i })).toHaveCount(0);
 });
 
 test('demo visitors can try a goal without creating personal data', async ({ page }) => {
@@ -266,21 +276,6 @@ test('demo visitors can try a goal without creating personal data', async ({ pag
   await page.locator('#goalAction').click();
   await page.locator('#goalRemoveConfirm').click();
   await expect(page.locator('#goalAction')).toHaveText('Add goal');
-});
-
-test('debt rates remain editable after a first entry', async ({ page }) => {
-  await openDemo(page);
-  await goToView(page, 'accounts');
-  const card = page.locator('#debtPayoffCard');
-  await card.getByRole('button', { name: /view plan/i }).click();
-  await card.locator('.debt-rate-editor summary').click();
-  const rate = card.locator('[data-debt-rate="demo-credit"]');
-  await expect(rate).toHaveValue('24.49');
-  await rate.fill('18.5');
-  await card.getByRole('button', { name: 'Save rates' }).click();
-  await expect(card.locator('.debt-rate-editor summary')).toContainText('Edit interest rates');
-  await card.locator('.debt-rate-editor summary').click();
-  await expect(card.locator('[data-debt-rate="demo-credit"]')).toHaveValue('18.5');
 });
 
 test('cash-flow taps show category activity without moving the reader away from the diagram', async ({ page }) => {
@@ -338,6 +333,7 @@ test('asset-allocation filters preserve the reader position', async ({ page }) =
   await goToView(page, 'investments');
   const allocation = page.locator('#investmentAllocationCard');
   await allocation.scrollIntoViewIfNeeded();
+  await page.locator('[data-investment-filter="Funds"]').evaluate(element => element.scrollIntoView({ block: 'center', behavior: 'instant' }));
   const before = await allocation.evaluate((element) => element.getBoundingClientRect().top);
   await page.locator('[data-investment-filter="Funds"]').click();
   await expect.poll(async () => allocation.evaluate((element) => element.getBoundingClientRect().top)).toBeCloseTo(before, 0);
@@ -400,7 +396,8 @@ test('cash-flow timeframe stays available while reading the full view @critical'
   await goToView(page, 'spending');
   const control = page.locator('.spending-period-selector');
   await expect(control).toBeVisible();
-  await expect(control).not.toHaveCSS('box-shadow', 'none');
+  // A solid surface and border separate the sticky control from the content.
+  await expect(control).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await page.evaluate(() => window.scrollTo(0, 700));
   await expect.poll(() => control.evaluate((element) => Math.round(element.getBoundingClientRect().top))).toBeGreaterThanOrEqual(0);
   await expect.poll(() => control.evaluate((element) => Math.round(element.getBoundingClientRect().top))).toBeLessThanOrEqual(12);
@@ -435,6 +432,8 @@ test('monthly cash-flow values stay self-labeled instead of relying on a detache
 test('cash-flow diagram stays readable and opens transactions in-app @critical', async ({ page }, testInfo) => {
   await openDemo(page);
   await goToView(page, 'spending');
+  // Exercise a populated period even on the first day of a calendar month.
+  await page.locator('[data-spending-range="1y"]').click();
   const closeCashflowDrawer = async () => {
     if (testInfo.project.name === 'phone') await page.locator('#cashflowDialogDragHandle').click();
     else await page.locator('#cashflowDialogClose').click();
@@ -465,17 +464,14 @@ test('cash-flow diagram stays readable and opens transactions in-app @critical',
   }
   await expect(categoryNode).toBeVisible();
   await categoryNode.click();
-  await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
-  if (testInfo.project.name === 'phone') {
-    await expect(page.locator('#cashflowDialogContent .cashflow-category-list')).toBeVisible();
-    await expect(page.locator('#cashflowDialogContent .cashflow-category-list [data-cashflow-category]').first()).toBeVisible();
-  } else {
-    await expect(page.locator('#cashflowDialogContent [data-cashflow-category]').first()).toBeVisible();
-  }
+  // Selecting a category opens that category's actual transactions. The
+  // expanded Sankey remains available through the drawer's Back action.
+  await expect(page.locator('#cashflowDialogContent .cashflow-activity-detail')).toBeVisible();
+  await expect(page.locator('#cashflowDialogContent .cashflow-activity-rows')).toContainText('Rent');
   await closeCashflowDrawer();
   // Transaction access is always explicit. A person need not infer that a
   // diagram tap filtered a drawer farther down the page.
-  const transactions = page.locator('#cashflowSankey [data-cashflow-transactions]');
+  const transactions = page.getByRole('button', { name: /view all transactions/i });
   await expect(transactions).toBeVisible();
   await transactions.click();
   await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
@@ -520,12 +516,13 @@ test('cash-flow diagram stays readable and opens transactions in-app @critical',
   await expect(page.locator('#cashflowDialogContent .cashflow-activity-rows b.positive')).not.toHaveCount(0);
   await page.locator('#cashflowDialogContent [data-cashflow-back]').click();
   await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
-  await page.locator('#cashflowDialogClose').click();
+  await closeCashflowDrawer();
 });
 
 test('cash-flow quality holds at every supported viewport @critical', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'spending');
+  await page.locator('[data-spending-range="1y"]').click();
   const diagram = page.locator('#cashflowSankey');
   await expect(diagram.locator('svg')).toBeVisible();
   await expect(diagram).toContainText('Paychecks');
@@ -552,7 +549,9 @@ test('cash-flow quality holds at every supported viewport @critical', async ({ p
   await page.locator('#cashflowExpand').click();
   await expect(page.locator('#cashflowDialog')).toHaveAttribute('open', '');
   await expect(page.locator('#cashflowDialogContent svg')).toBeVisible();
-  await page.locator('#cashflowDialogClose').click();
+  const dragHandle = page.locator('#cashflowDialogDragHandle');
+  if (await dragHandle.isVisible()) await dragHandle.click();
+  else await page.locator('#cashflowDialogClose').click();
 });
 
 test('the complete app stays navigable and coherent at every supported viewport', async ({ page }) => {
@@ -572,7 +571,7 @@ test('the complete app stays navigable and coherent at every supported viewport'
   const homeBrand = page.locator('#homeBrand');
   if (await homeBrand.isVisible()) {
     await homeBrand.click();
-    await expect(page.getByRole('heading', { name: 'Net Worth' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Net Worth', exact: true })).toBeVisible();
   }
   await expect(page.locator('#appShell')).toBeVisible();
 });
@@ -659,6 +658,7 @@ test('holding details preserve account context without crowding the overview', a
   await goToView(page, 'investments');
   await expect(page.locator('.holding-row').first()).not.toContainText(/% of portfolio/);
   await expect(page.locator('.holding-row .holding-weight')).toHaveCount(0);
+  await expandInvestmentAccount(page);
   await page.locator('[data-holding-history]').first().click();
   const dialog = page.locator('#holdingHistoryDialog');
   await expect(dialog).toBeVisible();
@@ -671,6 +671,7 @@ test('holding details preserve account context without crowding the overview', a
 test('holding detail performance follows its own selected timeframe', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'investments');
+  await expandInvestmentAccount(page);
   await page.locator('[data-holding-history]').first().click();
   const metric = page.locator('#holdingHistoryWhere').getByTestId('holding-history-performance').first();
   await expect(metric).toBeVisible();
@@ -681,6 +682,7 @@ test('holding detail performance follows its own selected timeframe', async ({ p
 test('changing a holding detail timeframe keeps the sheet stable while it updates @critical', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'investments');
+  await expandInvestmentAccount(page);
   await page.locator('[data-holding-history]').first().click();
   const dialog = page.locator('#holdingHistoryDialog');
   const chart = page.locator('#holdingHistoryChart');
@@ -705,6 +707,7 @@ test('changing a holding detail timeframe keeps the sheet stable while it update
 test('account detail names each holding instead of repeating the account name', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'investments');
+  await expandInvestmentAccount(page, '401(k)');
   await page.getByRole('button', { name: /View 401\(k\) performance history/i }).click();
   const where = page.locator('#holdingHistoryWhere');
   await expect(page.locator('#holdingHistoryEyebrow')).toHaveText('Account history');
@@ -728,6 +731,7 @@ test('account detail names each holding instead of repeating the account name', 
 test('holding and account drill-ins show only a person’s verified position history', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'investments');
+  await expandInvestmentAccount(page);
   await page.locator('[data-holding-history]').first().click();
   const dialog = page.locator('#holdingHistoryDialog');
   await expect(dialog).toBeVisible();
@@ -738,6 +742,7 @@ test('holding and account drill-ins show only a person’s verified position his
   await expect(dialog.getByRole('tab', { name: 'Market price' })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
+  await expandInvestmentAccount(page);
   await page.locator('[data-investment-account-history]').first().click();
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('tab', { name: 'Your position' })).toBeVisible();
@@ -764,6 +769,7 @@ test('investment detail distinguishes loading, preparing, and first-snapshot tra
   });
   await openDemo(page);
   await goToView(page, 'investments');
+  await expandInvestmentAccount(page);
   await page.locator('[data-holding-history]').first().click();
   const chart = page.locator('#holdingHistoryChart');
   await expect(chart.locator('[data-history-state="loading"]')).toBeVisible();
@@ -791,6 +797,7 @@ test('investment detail distinguishes loading, preparing, and first-snapshot tra
       })
     });
   });
+  await expandInvestmentAccount(page);
   await page.locator('[data-holding-history]').first().click();
   await expect(chart.locator('[data-history-state="tracking"]')).toBeVisible();
   await expect(chart.locator('.chart-start-detail')).toHaveCount(0);
@@ -804,6 +811,7 @@ test('holding detail timeframes stay local to the drill-in chart', async ({ page
   const portfolioRange = page.locator('[data-investment-range].active');
   await expect(portfolioRange).toHaveCount(1);
   const portfolioRangeName = await portfolioRange.getAttribute('data-investment-range');
+  await expandInvestmentAccount(page);
   await page.locator('[data-holding-history]').first().click();
   await page.locator('[data-holding-history-range="1m"]').click();
   await expect(page.locator('[data-holding-history-range="1m"]')).toHaveClass(/active/);
@@ -817,6 +825,7 @@ test('holding detail timeframes stay local to the drill-in chart', async ({ page
 test('account chart endpoints use the exact verified window behind its metric', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'investments');
+  await expandInvestmentAccount(page);
   await page.locator('[data-investment-account-history]').first().click();
   const responsePromise = page.waitForResponse((response) => response.url().includes('/api/demo-investments/history')
     && new URL(response.url()).searchParams.get('range') === '1m');
@@ -831,6 +840,7 @@ test('account chart endpoints use the exact verified window behind its metric', 
 test('holding-chart values stay inside the chart at both timeline boundaries', async ({ page }) => {
   await openDemo(page);
   await goToView(page, 'investments');
+  await expandInvestmentAccount(page);
   await page.locator('[data-holding-history]').first().click();
   const chart = page.locator('#holdingHistoryChart');
   await expect(chart.locator('svg')).toBeVisible();
@@ -849,6 +859,7 @@ test('investment detail cards stay readable without horizontal overflow on a pho
   test.skip(testInfo.project.name !== 'phone', 'Phone-specific responsive coverage.');
   await openDemo(page);
   await goToView(page, 'investments');
+  await expandInvestmentAccount(page);
   await page.locator('[data-holding-history]').first().click();
   const dialog = page.locator('#holdingHistoryDialog');
   await expect(dialog).toBeVisible();
@@ -884,6 +895,7 @@ test('investment detail cards stay readable without horizontal overflow on a pho
 
   // Do not let a mouse-only gesture test mask a broken phone path. Synthetic
   // touch-pointer events exercise the same capture/fallback path iOS uses.
+  await expandInvestmentAccount(page);
   await page.locator('[data-holding-history]').first().click();
   await expect(dialog).toBeVisible();
   await handle.dispatchEvent('pointerdown', { pointerType: 'touch', pointerId: 41, clientY: 100 });
@@ -894,6 +906,7 @@ test('investment detail cards stay readable without horizontal overflow on a pho
 
   // A bottom sheet also dismisses from its dimmed backdrop. Dispatch on the
   // native dialog itself, which is the browser's event target for that area.
+  await expandInvestmentAccount(page);
   await page.locator('[data-holding-history]').first().click();
   await expect(dialog).toBeVisible();
   expect(await dialog.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe('none');
@@ -1057,21 +1070,24 @@ test('dark mode is a calm, persistent profile setting', async ({ page }) => {
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.getByRole('button', { name: /explore the demo/i }).click();
   await expect(page.locator('#appShell')).toBeVisible();
+  await expect(page.locator('#appShell')).toHaveAttribute('aria-busy', 'false');
   await goToView(page, 'investments');
-  // Dark surfaces are deliberately neutral rather than green-tinted, so the
-  // accent color keeps its visual meaning.
-  await expect(page.locator('.investment-card')).toHaveCSS('background-color', 'rgb(24, 27, 31)');
+  // Supporting account groups stay neutral; only the main answer receives
+  // the shared darker surface. Verify those roles rather than the old card.
+  await expect(page.locator('#investmentAccountsCard')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await expect(page.locator('#investmentTotal')).toHaveCSS('color', 'rgb(237, 240, 242)');
   await goToView(page, 'retirement');
-  await expect(page.locator('#retirementNextMilestone')).toHaveCSS('background-color', 'rgb(34, 42, 36)');
+  await expect(page.locator('#retirementNextMilestone')).toHaveCSS('background-color', 'rgb(32, 37, 43)');
   await expect(page.locator('#retirementReviewPlan')).toBeVisible();
   await goToView(page, 'accounts');
+  await expandAccountCollections(page);
   // Account balances describe where money is, not investment performance.
   // Keep those neutral so green remains a useful signal for an actual gain.
   await expect(page.locator('.account-collection.asset .account-inline-balance').first()).not.toHaveClass(/positive/);
   await expect(page.locator('.account-collection.asset .account-inline-balance').first()).toHaveCSS('color', 'rgb(189, 200, 192)');
-  await expect(page.locator('#connectButton')).toHaveCSS('background-color', 'rgb(45, 116, 74)');
-  await expect(page.locator('#profileButton')).toHaveCSS('background-color', 'rgb(32, 39, 32)');
+  await expect(page.locator('#connectButton')).toHaveCSS('background-color', 'rgb(181, 223, 197)');
+  await expect(page.locator('#connectButton')).toHaveCSS('color', 'rgb(21, 52, 35)');
+  await expect(page.locator('#profileButton')).toHaveCSS('background-color', 'rgb(40, 45, 52)');
   await page.locator('#profileButton').click();
   await page.locator('#profileBack').click();
   await expect(page.getByRole('heading', { name: 'Accounts' })).toBeVisible();
